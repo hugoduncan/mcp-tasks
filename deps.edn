@@ -1,0 +1,2 @@
+{:deps {org.hugpduncan/mcp-clj {:local/root "../mcp-clj/projects/server"}
+        org.clojure/clojure    {:mvn/version "1.12.3"}}}
