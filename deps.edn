@@ -1,2 +1,14 @@
-{:deps {org.hugpduncan/mcp-clj {:local/root "../mcp-clj/projects/server"}
-        org.clojure/clojure    {:mvn/version "1.12.3"}}}
+{:deps
+ {org.hugpduncan/mcp-clj {:git/url   "https://github.com/hugoduncan/mcp-clj"
+                          :git/sha   "77ca1a2df2c9d261a127272417e92e0728b528fd"
+                          :deps/root "projects/server"}
+  org.clojure/clojure    {:mvn/version "1.12.3"}}
+
+ :aliases
+ {:dev   {}
+  :test  {:extra-paths ["test"]
+          :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+          :main-opts   ["-m" "kaocha.runner"]}
+  :run   {:exec-fn mcp-tasks.main/start}
+  :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
+          :main-opts  ["-m" "nrepl.cmdline"]}}}

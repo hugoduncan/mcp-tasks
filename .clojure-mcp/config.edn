@@ -1,0 +1,3 @@
+{:cljfnt              false
+ :start-nrepl-cmd     ["clj" "-M:nrepl:dev"]
+ :allowed-directories ["."]}
