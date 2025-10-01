@@ -68,7 +68,7 @@
   "Generate prompt text for completing and tracking a task."
   [category]
   (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to end, mark as complete with `- [x]`)
-- Remove the task from .mcp-tasks/tasks/%s.md
+- Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave the file empty rather than deleting it)
 - Commit the task tracking changes in the .mcp-tasks git repository
 "
           category category))
