@@ -30,7 +30,7 @@ Add the following alias to your `~/.clojure/deps.edn` file:
 Add the mcp-tasks server using the Claude Code CLI:
 
 ```bash
-claude mcp add mcp-tasks -- $(which clojure) -M:mcp-tasks
+claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
 ```
 
 ### Claude Desktop
@@ -48,7 +48,7 @@ Add to your Claude Desktop MCP settings:
   "mcpServers": {
     "mcp-tasks": {
       "command": "clojure",
-      "args": ["-M:mcp-tasks"]
+      "args": ["-X:mcp-tasks"]
     }
   }
 }
@@ -63,7 +63,7 @@ Add to your Codex MCP configuration file (location varies by installation):
   "mcpServers": {
     "mcp-tasks": {
       "command": "clojure",
-      "args": ["-M:mcp-tasks"]
+      "args": ["-X:mcp-tasks"]
     }
   }
 }
