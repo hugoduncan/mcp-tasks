@@ -37,3 +37,8 @@ clj-kondo --lint src test
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
 - **Default Categories**: Server provides defaults, but system is fully configurable
 - **Task Lifecycle**: Tasks move from incomplete → complete → archived
+
+
+## Other
+
+- Use semantic commit messages, and semantic pull request titles
