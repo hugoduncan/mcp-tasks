@@ -5,17 +5,10 @@ This guide describes how to install the mcp-tasks MCP server for use with variou
 ## Prerequisites
 
 - Clojure CLI tools installed
-- Git (to clone the repository)
 
 ## Setup
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/hugoduncan/mcp-tasks.git ~/projects/hugoduncan/mcp-tasks
-```
-
-### 2. Configure Global Clojure Alias
+### Configure Global Clojure Alias
 
 Add the following alias to your `~/.clojure/deps.edn` file:
 
@@ -24,28 +17,20 @@ Add the following alias to your `~/.clojure/deps.edn` file:
  {:mcp-tasks
   {:replace-paths []
    :replace-deps {org.hugpduncan/mcp-tasks
-                  {:local/root "~/projects/hugoduncan/mcp-tasks"}
+                  {:git/url "https://github.com/hugoduncan/mcp-tasks"
+                   :git/sha "2d82cffb53e3f03deced02365f5be314c7377f0b"}
                   org.clojure/clojure {:mvn/version "1.12.3"}}
    :exec-fn mcp-tasks.main/start}}}
 ```
-
-**Note:** Adjust the `:local/root` path if you cloned the repository to a different location.
 
 ## Client Configuration
 
 ### Claude Code
 
-Add to your Claude Code MCP settings (typically `~/.config/claude-code/mcp-config.json`):
+Add the mcp-tasks server using the Claude Code CLI:
 
-```json
-{
-  "mcpServers": {
-    "mcp-tasks": {
-      "command": "clojure",
-      "args": ["-M:mcp-tasks"]
-    }
-  }
-}
+```bash
+claude mcp add mcp-tasks -- $(which clojure) -M:mcp-tasks
 ```
 
 ### Claude Desktop
@@ -95,6 +80,6 @@ You can verify the installation by:
 
 ## Troubleshooting
 
-- **Server fails to start:** Verify that the `:local/root` path in `~/.clojure/deps.edn` points to the correct location
+- **Server fails to start:** Verify that the `:git/sha` in `~/.clojure/deps.edn` is correct and accessible
 - **Dependencies missing:** Ensure you have Clojure 1.12.3 or compatible version installed
-- **Permission issues:** Make sure the mcp-tasks directory and all files are readable by your user
+- **Git access issues:** Make sure you can access GitHub and clone repositories
