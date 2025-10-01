@@ -49,27 +49,27 @@
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category."
   [category]
-  (format "1. Read the file .mcp-tasks/tasks/%s.md
-2. Find the first incomplete task (marked with `- [ ]`)
-3. Show the task description
+  (format "- Read the file .mcp-tasks/tasks/%s.md
+- Find the first incomplete task (marked with `- [ ]`)
+- Show the task description
 "
           category))
 
 (defn- default-prompt-text
   "Generate default execution instructions for a category."
   []
-  "4. Analyze the task specification in the context of the project
-5. Plan an implementation approach
-6. Implement the solution
+  "- Analyze the task specification in the context of the project
+- Plan an implementation approach
+- Implement the solution
+- Create a git commit with the code changes in the main repository
 ")
 
 (defn- complete-task-prompt-text
   "Generate prompt text for completing and tracking a task."
   [category]
-  (format "7. Create a git commit with the code changes in the main repository
-8. Move the completed task to .mcp-tasks/complete/%s.md (append to end, mark as complete with `- [x]`)
-9. Remove the task from .mcp-tasks/tasks/%s.md
-10. Commit the task tracking changes in the .mcp-tasks git repository
+  (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to end, mark as complete with `- [x]`)
+- Remove the task from .mcp-tasks/tasks/%s.md
+- Commit the task tracking changes in the .mcp-tasks git repository
 "
           category category))
 
