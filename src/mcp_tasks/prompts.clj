@@ -46,23 +46,32 @@
                          md-files)]
     (vec categories)))
 
-(defn- default-prompt-text
-  "Generate default prompt text for a category based on the next-simple template."
+(defn- read-task-prompt-text
+  "Generate prompt text for reading the next task from a category."
   [category]
-  (format "Please complete the next %s task following these steps:
-
-1. Read the file .mcp-tasks/tasks/%s.md
+  (format "1. Read the file .mcp-tasks/tasks/%s.md
 2. Find the first incomplete task (marked with `- [ ]`)
 3. Show the task description
-4. Analyze the task specification in the context of the project
+"
+          category))
+
+(defn- default-prompt-text
+  "Generate default execution instructions for a category."
+  []
+  "4. Analyze the task specification in the context of the project
 5. Plan an implementation approach
 6. Implement the solution
-7. Create a git commit with the code changes in the main repository
+")
+
+(defn- complete-task-prompt-text
+  "Generate prompt text for completing and tracking a task."
+  [category]
+  (format "7. Create a git commit with the code changes in the main repository
 8. Move the completed task to .mcp-tasks/complete/%s.md (append to end, mark as complete with `- [x]`)
 9. Remove the task from .mcp-tasks/tasks/%s.md
 10. Commit the task tracking changes in the .mcp-tasks git repository
 "
-          category category category category))
+          category category))
 
 (defn- read-prompt-instructions
   "Read custom prompt instructions from .mcp-tasks/prompts/<category>.md if it exists.
@@ -83,12 +92,21 @@
   - Moves completed tasks to .mcp-tasks/complete/<category>.md
   - Commits changes to the .mcp-tasks repository
 
+  The prompt text is automatically composed from three parts:
+  1. read-task-prompt-text - instructions for reading the next task
+  2. custom instructions or default-prompt-text - category-specific execution logic
+  3. complete-task-prompt-text - instructions for committing and tracking completion
+
   Returns a vector of prompt maps suitable for registration with the MCP server."
   [categories]
   (vec
    (for [category categories]
      (let [custom-instructions (read-prompt-instructions category)
-           prompt-text (or custom-instructions (default-prompt-text category))]
+           execution-instructions (or custom-instructions (default-prompt-text))
+           prompt-text (str "Please complete the next " category " task following these steps:\n\n"
+                            (read-task-prompt-text category)
+                            execution-instructions
+                            (complete-task-prompt-text category))]
        (prompts/valid-prompt?
         {:name (str "next-" category)
          :description (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category)
