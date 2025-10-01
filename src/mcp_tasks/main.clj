@@ -4,14 +4,7 @@
   (:require
    [mcp-clj.log :as log]
    [mcp-clj.mcp-server.core :as mcp-server]
-   [mcp-clj.mcp-server.prompts :as prompts]
    [mcp-tasks.prompts :as tp]))
-
-;;; Task prompts
-
-(def task-prompts
-  "Task management prompts"
-  {"next-simple" tp/next-simple-prompt})
 
 (defn start
   "Start stdio MCP server (uses stdin/stdout)"
@@ -20,7 +13,7 @@
     (log/info :stdio-server {:msg "Starting MCP Tasks server"})
     (with-open [server (mcp-server/create-server
                         {:transport {:type :stdio}
-                         :prompts (merge prompts/default-prompts task-prompts)})]
+                         :prompts   (tp/prompts)})]
       (log/info :stdio-server {:msg "MCP Tasks server started"})
       (.addShutdownHook
        (Runtime/getRuntime)

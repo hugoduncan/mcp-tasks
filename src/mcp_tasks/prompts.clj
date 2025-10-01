@@ -113,3 +113,13 @@
          :messages [{:role "user"
                      :content {:type "text"
                                :text prompt-text}}]})))))
+
+(defn prompts
+  "Generate all task prompts by discovering categories and creating prompts for them.
+  
+  Returns a map of prompt names to prompt definitions, suitable for registering
+  with the MCP server."
+  []
+  (let [categories (discover-categories)
+        prompt-list (create-prompts categories)]
+    (into {} (map (fn [p] [(:name p) p]) prompt-list))))
