@@ -3,7 +3,9 @@
 
  :aliases
  {:dev   {}
-  :test  {:extra-paths ["test"]}
+  :test  {:extra-paths ["test"]
+          :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+          :main-opts ["-m" "kaocha.runner"]}
   :run   {:exec-fn mcp-tasks.main/start}
   :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
           :main-opts  ["-m" "nrepl.cmdline"]}}}
