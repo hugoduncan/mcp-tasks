@@ -1,6 +1,8 @@
 (ns mcp-tasks.prompts
   "Task management prompts"
   (:require
+   [clojure.java.io :as io]
+   [clojure.string :as str]
    [mcp-clj.mcp-server.prompts :as prompts]))
 
 (def next-simple-prompt
@@ -23,3 +25,23 @@
 9. Remove the task from .mcp-tasks/tasks/simple.md
 10. Commit the task tracking changes in the .mcp-tasks git repository
 "}}]}))
+
+(defn discover-categories
+  "Discover task categories by reading filenames from .mcp-tasks subdirectories.
+
+  Returns a sorted vector of unique category names (filenames without .md extension)
+  found across the tasks, complete, and prompts subdirectories."
+  []
+  (let [base-dir (io/file ".mcp-tasks")
+        subdirs ["tasks" "complete" "prompts"]
+        md-files (for [subdir subdirs
+                       :let [dir (io/file base-dir subdir)]
+                       :when (.exists dir)
+                       file (.listFiles dir)
+                       :when (and (.isFile file)
+                                  (str/ends-with? (.getName file) ".md"))]
+                   (.getName file))
+        categories (into (sorted-set)
+                         (map #(str/replace % #"\.md$" ""))
+                         md-files)]
+    (vec categories)))

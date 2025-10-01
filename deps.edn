@@ -3,7 +3,7 @@
 
  :aliases
  {:dev   {}
-  :test  {}
+  :test  {:extra-paths ["test"]}
   :run   {:exec-fn mcp-tasks.main/start}
   :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
           :main-opts  ["-m" "nrepl.cmdline"]}}}
