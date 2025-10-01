@@ -27,8 +27,11 @@ git clone https://github.com/hugoduncan/mcp-tasks.git ~/projects/hugoduncan/mcp-
   }
 }
 
+# Initialize .mcp-tasks as a git repository
+mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
+
 # Create your first task
-mkdir -p .mcp-tasks/tasks
 echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
 
 # Run in Claude Code
@@ -184,16 +187,20 @@ clj-kondo --lint src test
 ## Architecture
 
 **Task Storage:**
+
+The `.mcp-tasks` directory is a separate git repository from your project, keeping task tracking independent:
+
 ```
-.mcp-tasks/
-├── tasks/          # Active tasks (- [ ] format)
+.mcp-tasks/          # Separate git repository
+├── .git/            # Task tracking history
+├── tasks/           # Active tasks (- [ ] format)
 │   ├── simple.md
 │   ├── feature.md
 │   └── bugfix.md
-├── complete/       # Completed task archive (- [x] format)
+├── complete/        # Completed task archive (- [x] format)
 │   ├── simple.md
 │   └── feature.md
-└── prompts/        # Category-specific instructions (optional)
+└── prompts/         # Category-specific instructions (optional)
     └── feature.md
 ```
 

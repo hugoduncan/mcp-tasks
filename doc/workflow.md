@@ -6,6 +6,31 @@ This document describes how to use mcp-tasks for agent-driven task execution.
 
 mcp-tasks provides a structured workflow where you plan tasks for an agent to execute. Tasks are organized into categories, with each category having its own execution instructions and task tracking.
 
+## Setup
+
+### Initialize .mcp-tasks as a Git Repository
+
+The `.mcp-tasks` directory should be its own separate git repository to track task history independently from your project code:
+
+```bash
+# In your project root
+mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+cd .mcp-tasks
+git init
+git add .
+git commit -m "Initialize mcp-tasks repository"
+cd ..
+
+# Add .mcp-tasks to your project's .gitignore
+echo ".mcp-tasks/" >> .gitignore
+```
+
+**Why a separate repository?**
+- Task tracking commits don't clutter your project history
+- Task files are version controlled and shareable
+- Completed task archive provides an audit trail
+- Each project can have its own task repository
+
 ## Basic Workflow
 
 ### 1. Edit Task Files
