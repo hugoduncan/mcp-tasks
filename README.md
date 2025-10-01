@@ -5,15 +5,13 @@ Task-based workflow management for AI agents via Model Context Protocol (MCP).
 ## Quick Start
 
 ```bash
-# Install
-git clone https://github.com/hugoduncan/mcp-tasks.git ~/projects/hugoduncan/mcp-tasks
-
 # Add to ~/.clojure/deps.edn
 {:aliases
  {:mcp-tasks
   {:replace-paths []
    :replace-deps {org.hugpduncan/mcp-tasks
-                  {:local/root "~/projects/hugoduncan/mcp-tasks"}
+                  {:git/url "https://github.com/hugoduncan/mcp-tasks"
+                   :git/sha "2d82cffb53e3f03deced02365f5be314c7377f0b"}
                   org.clojure/clojure {:mvn/version "1.12.3"}}
    :exec-fn mcp-tasks.main/start}}}
 
@@ -65,9 +63,8 @@ mcp-tasks enables you to manage development tasks in markdown files and have AI 
 See **[doc/install.md](doc/install.md)** for complete setup instructions for Claude Code, Claude Desktop, and other MCP clients.
 
 **TL;DR:**
-1. Clone repository
-2. Add `:mcp-tasks` alias to `~/.clojure/deps.edn`
-3. Configure your MCP client to run `clojure -M:mcp-tasks`
+1. Add `:mcp-tasks` alias to `~/.clojure/deps.edn` with git coordinates
+2. Configure your MCP client to run `clojure -M:mcp-tasks`
 
 ## Core Usage
 
