@@ -14,6 +14,15 @@
 	    "args": ["clj-kondo-mcp"],
 	    "disabled": false,
 	    "autoApprove": []
+	},
+	"mcp-tasks": {
+	    "type": "stdio",
+	    "command": "/bin/zsh",
+	    "args": [
+		"-c",
+		"clojure -X:run"
+	    ],
+	    "env": {}
 	}
     }
 }
