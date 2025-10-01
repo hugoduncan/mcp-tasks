@@ -1,16 +1,209 @@
-An MCP server that provides a task based workflow
+# mcp-tasks
 
-Provides a workflow where you plan tasks for an agent to execute.  The
-tasks are divided into categories, where each category can have
-different instructions for it execution.
+Task-based workflow management for AI agents via Model Context Protocol (MCP).
 
-The server provides some default categories, but these are completely
-configurable.
+## Quick Start
 
-The tasks are stored in files under .mcp-tasks/task.  Each category has a
-file <category-name>.md, that contains the incomplete tasks.
+```bash
+# Install
+git clone https://github.com/hugoduncan/mcp-tasks.git ~/projects/hugoduncan/mcp-tasks
 
+# Add to ~/.clojure/deps.edn
+{:aliases
+ {:mcp-tasks
+  {:replace-paths []
+   :replace-deps {org.hugpduncan/mcp-tasks
+                  {:local/root "~/projects/hugoduncan/mcp-tasks"}
+                  org.clojure/clojure {:mvn/version "1.12.3"}}
+   :exec-fn mcp-tasks.main/start}}}
 
-Completed tasks are moved to files under .mcp-tasks/completed
+# Configure Claude Code (~/.config/claude-code/mcp-config.json)
+{
+  "mcpServers": {
+    "mcp-tasks": {
+      "command": "clojure",
+      "args": ["-M:mcp-tasks"]
+    }
+  }
+}
 
-Each category has a prompt under .mcp-tasks/prompt/<category name>.md
+# Create your first task
+mkdir -p .mcp-tasks/tasks
+echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
+
+# Run in Claude Code
+/mcp-tasks:next-simple
+```
+
+**[Installation Guide](doc/install.md)** • **[Workflow Documentation](doc/workflow.md)**
+
+---
+
+## What & Why
+
+mcp-tasks enables you to manage development tasks in markdown files and have AI agents execute them. Unlike todo tools, mcp-tasks integrates task planning with execution—agents don't just track tasks, they complete them.
+
+**Key Benefits:**
+- **Persistent Planning**: Tasks survive across chat sessions in version-controlled markdown
+- **Category-Based Organization**: Group tasks by type (features, bugfixes, refactoring) with custom execution strategies
+- **Audit Trail**: Completed tasks automatically archived with full context
+- **Git Integration**: Task completions include automated commits to your repository
+
+**When to Use:**
+- Complex projects requiring systematic task execution
+- Multi-agent workflows with parallel task streams
+- Projects where task history and planning context matter
+- Teams coordinating agent-driven development
+
+**vs. clojure-mcp:** This is a task management layer built on the [clojure-mcp](https://github.com/hugoduncan/mcp-clj) server library. clojure-mcp provides MCP infrastructure; mcp-tasks adds workflow automation on top.
+
+## Installation
+
+See **[doc/install.md](doc/install.md)** for complete setup instructions for Claude Code, Claude Desktop, and other MCP clients.
+
+**TL;DR:**
+1. Clone repository
+2. Add `:mcp-tasks` alias to `~/.clojure/deps.edn`
+3. Configure your MCP client to run `clojure -M:mcp-tasks`
+
+## Core Usage
+
+### 1. Create Task Files
+
+Tasks live in `.mcp-tasks/tasks/<category>.md` as markdown checkboxes:
+
+```markdown
+- [ ] Implement user authentication with JWT tokens
+- [ ] Add error handling to API endpoints
+- [ ] Write integration tests for payment flow
+```
+
+### 2. Run Task Prompts
+
+Execute the first incomplete task in a category:
+
+```
+/mcp-tasks:next-<category>
+```
+
+Example:
+```
+/mcp-tasks:next-simple
+```
+
+The agent will:
+1. Read the first `- [ ]` task
+2. Analyze requirements in project context
+3. Implement the solution
+4. Commit changes to your repository
+5. Move completed task to `.mcp-tasks/complete/<category>.md`
+6. Mark task as `- [x]` in completion archive
+
+### 3. Review and Iterate
+
+```bash
+# Check what was completed
+cat .mcp-tasks/complete/simple.md
+
+# Review the git commit
+git log -1 --stat
+
+# Add more tasks
+echo "- [ ] Optimize database queries" >> .mcp-tasks/tasks/simple.md
+```
+
+### Real Workflow Example
+
+```bash
+# Add tasks for different categories
+echo "- [ ] Add user profile endpoint" > .mcp-tasks/tasks/feature.md
+echo "- [ ] Fix memory leak in worker process" > .mcp-tasks/tasks/bugfix.md
+echo "- [ ] Extract validation logic to separate module" > .mcp-tasks/tasks/refactor.md
+
+# Process tasks by priority
+/mcp-tasks:next-bugfix      # Agent fixes memory leak, commits
+/mcp-tasks:next-feature     # Agent adds endpoint, commits
+/mcp-tasks:next-refactor    # Agent extracts validation, commits
+
+# Check completion history
+cat .mcp-tasks/complete/bugfix.md
+```
+
+See **[doc/workflow.md](doc/workflow.md)** for advanced patterns including git worktrees for parallel task execution.
+
+## Configuration
+
+### Custom Categories
+
+Categories auto-discover from filenames in `.mcp-tasks/tasks/`. Create new categories by adding task files:
+
+```bash
+mkdir -p .mcp-tasks/tasks
+echo "- [ ] First documentation task" > .mcp-tasks/tasks/docs.md
+```
+
+Now `/mcp-tasks:next-docs` is available.
+
+### Category-Specific Instructions
+
+Override default task execution by creating `.mcp-tasks/prompts/<category>.md`:
+
+```bash
+mkdir -p .mcp-tasks/prompts
+cat > .mcp-tasks/prompts/feature.md <<'EOF'
+4. Review existing code architecture
+5. Design the feature following project patterns
+6. Write tests first (TDD approach)
+7. Implement the feature
+8. Update relevant documentation
+EOF
+```
+
+The prompt file replaces steps 4-6 of the default workflow. Steps 1-3 (reading tasks) and 7-10 (committing) remain standard.
+
+**Prompt Structure:**
+- Steps 1-3: Read task from `.mcp-tasks/tasks/<category>.md`
+- Steps 4-6: Custom instructions (from `.mcp-tasks/prompts/<category>.md`) or default implementation steps
+- Steps 7-10: Commit changes, move to `.mcp-tasks/complete/<category>.md`, update task tracking
+
+See **[doc/workflow.md#category-specific-instructions](doc/workflow.md#category-specific-instructions)** for examples.
+
+## Development
+
+```bash
+# REPL
+clj
+
+# Lint
+clj-kondo --lint src test
+```
+
+**Dependencies:**
+- Requires local [mcp-clj](https://github.com/hugoduncan/mcp-clj) at `../mcp-clj/projects/server`
+
+## Architecture
+
+**Task Storage:**
+```
+.mcp-tasks/
+├── tasks/          # Active tasks (- [ ] format)
+│   ├── simple.md
+│   ├── feature.md
+│   └── bugfix.md
+├── complete/       # Completed task archive (- [x] format)
+│   ├── simple.md
+│   └── feature.md
+└── prompts/        # Category-specific instructions (optional)
+    └── feature.md
+```
+
+**Key Components:**
+- `mcp_tasks.prompts/discover-categories` - Auto-discovers categories from filesystem (src/mcp_tasks/prompts.clj:29)
+- `mcp_tasks.prompts/create-prompts` - Generates MCP prompts dynamically for each category (src/mcp_tasks/prompts.clj:85)
+- `mcp_tasks.prompts/read-prompt-instructions` - Loads custom instructions from `.mcp-tasks/prompts/<category>.md` (src/mcp_tasks/prompts.clj:76)
+
+**Status:** Alpha. Core functionality stable; API may evolve.
+
+---
+
+**Issues & Feedback:** https://github.com/hugoduncan/mcp-tasks/issues
