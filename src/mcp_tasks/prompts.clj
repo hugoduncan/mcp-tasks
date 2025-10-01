@@ -18,6 +18,8 @@
 4. Analyze the task specification in the context of the project
 5. Plan an implementation approach
 6. Implement the solution
-7. Move the completed task to .mcp-tasks/complete/simple.md (append to end, mark as complete with `- [x]`)
-8. Remove the task from .mcp-tasks/tasks/simple.md
-9. Create a git commit with the changes"}}]}))
+7. Create a git commit with the code changes in the main repository
+8. Move the completed task to .mcp-tasks/complete/simple.md (append to end, mark as complete with `- [x]`)
+9. Remove the task from .mcp-tasks/tasks/simple.md
+10. Commit the task tracking changes in the .mcp-tasks git repository
+"}}]}))
