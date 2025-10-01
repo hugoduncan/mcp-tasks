@@ -43,6 +43,7 @@
 	    "mcp__chrome-devtools__get_console_error_summary",
 	    "mcp__chrome-devtools__get_console_logs",
 	    "mcp__chrome-devtools__get_network_requests",
+	    "mcp__clj-kondo__lint_clojure",
 	    "mcp__clojure-mcp__LS",
 	    "mcp__clojure-mcp__architect",
 	    "mcp__clojure-mcp__bash",
