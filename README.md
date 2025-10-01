@@ -15,15 +15,8 @@ Task-based workflow management for AI agents via Model Context Protocol (MCP).
                   org.clojure/clojure {:mvn/version "1.12.3"}}
    :exec-fn mcp-tasks.main/start}}}
 
-# Configure Claude Code (~/.config/claude-code/mcp-config.json)
-{
-  "mcpServers": {
-    "mcp-tasks": {
-      "command": "clojure",
-      "args": ["-M:mcp-tasks"]
-    }
-  }
-}
+# Configure Claude Code
+claude mcp add mcp-tasks -- $(which clojure) -M:mcp-tasks
 
 # Initialize .mcp-tasks as a git repository
 mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts

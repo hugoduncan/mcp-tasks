@@ -27,17 +27,10 @@ Add the following alias to your `~/.clojure/deps.edn` file:
 
 ### Claude Code
 
-Add to your Claude Code MCP settings (typically `~/.config/claude-code/mcp-config.json`):
+Add the mcp-tasks server using the Claude Code CLI:
 
-```json
-{
-  "mcpServers": {
-    "mcp-tasks": {
-      "command": "clojure",
-      "args": ["-M:mcp-tasks"]
-    }
-  }
-}
+```bash
+claude mcp add mcp-tasks -- $(which clojure) -M:mcp-tasks
 ```
 
 ### Claude Desktop
