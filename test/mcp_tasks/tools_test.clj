@@ -155,3 +155,125 @@
        (is (= "- [ ] second task"
               (read-test-file "tasks/test.md")))))
   (cleanup-test-fixtures))
+
+;;; next-task-impl tests
+
+(deftest next-task-returns-first-task
+  ;; Tests that next-task-impl returns the first task from a category
+  (testing "next-task"
+    (testing "returns first task when tasks exist"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] first task\n- [ ] second task")
+      (with-test-files
+        #(let [result (sut/next-task-impl {:category "test"})]
+           (is (false? (:isError result)))
+           (is (= "{:category \"test\", :task \"first task\"}"
+                  (get-in result [:content 0 :text])))))
+      (cleanup-test-fixtures))))
+
+(deftest next-task-returns-status-when-no-tasks
+  ;; Tests that next-task-impl returns a status message when no tasks exist
+  (testing "next-task"
+    (testing "returns status message when no tasks exist"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "")
+      (with-test-files
+        #(let [result (sut/next-task-impl {:category "test"})]
+           (is (false? (:isError result)))
+           (is (= "{:category \"test\", :status \"No more tasks in this category\"}"
+                  (get-in result [:content 0 :text])))))
+      (cleanup-test-fixtures))))
+
+(deftest next-task-returns-status-when-file-doesnt-exist
+  ;; Tests that next-task-impl returns a status message when tasks file doesn't exist
+  (testing "next-task"
+    (testing "returns status message when tasks file doesn't exist"
+      (setup-test-dir)
+      (with-test-files
+        #(let [result (sut/next-task-impl {:category "test"})]
+           (is (false? (:isError result)))
+           (is (= "{:category \"test\", :status \"No more tasks in this category\"}"
+                  (get-in result [:content 0 :text])))))
+      (cleanup-test-fixtures))))
+
+(deftest next-task-strips-checkbox-prefix
+  ;; Tests that next-task-impl strips the checkbox prefix from the task text
+  (testing "next-task"
+    (testing "strips checkbox prefix from task text"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] task description here")
+      (with-test-files
+        #(let [result (sut/next-task-impl {:category "test"})]
+           (is (false? (:isError result)))
+           (is (= "{:category \"test\", :task \"task description here\"}"
+                  (get-in result [:content 0 :text])))))
+      (cleanup-test-fixtures))))
+
+(deftest next-task-handles-multi-line-tasks
+  ;; Tests that next-task-impl returns multi-line tasks with continuation lines
+  (testing "next-task"
+    (testing "returns multi-line tasks with continuation lines"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] first line\n      second line")
+      (with-test-files
+        #(let [result (sut/next-task-impl {:category "test"})]
+           (is (false? (:isError result)))
+           (is (= "{:category \"test\", :task \"first line\\n      second line\"}"
+                  (get-in result [:content 0 :text])))))
+      (cleanup-test-fixtures))))
+
+;;; add-task-impl tests
+
+(deftest add-task-appends-to-empty-file
+  ;; Tests that add-task-impl creates a new task in an empty file
+  (testing "add-task"
+    (testing "creates task in empty file"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "")
+      (with-test-files
+        #(let [result (sut/add-task-impl {:category "test"
+                                          :task-text "new task"})]
+           (is (false? (:isError result)))
+           (is (= "- [ ] new task"
+                  (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest add-task-appends-to-existing-tasks
+  ;; Tests that add-task-impl appends a new task to existing tasks
+  (testing "add-task"
+    (testing "appends to existing tasks"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] existing task")
+      (with-test-files
+        #(let [result (sut/add-task-impl {:category "test"
+                                          :task-text "new task"})]
+           (is (false? (:isError result)))
+           (is (= "- [ ] existing task\n- [ ] new task"
+                  (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest add-task-returns-success-message
+  ;; Tests that add-task-impl returns a success message with the file path
+  (testing "add-task"
+    (testing "returns success message with file path"
+      (setup-test-dir)
+      (with-test-files
+        #(let [result (sut/add-task-impl {:category "test"
+                                          :task-text "new task"})]
+           (is (false? (:isError result)))
+           (is (= "Task added to .mcp-tasks/tasks/test.md"
+                  (get-in result [:content 0 :text])))))
+      (cleanup-test-fixtures))))
+
+(deftest add-task-handles-multi-line-text
+  ;; Tests that add-task-impl correctly handles multi-line task text
+  (testing "add-task"
+    (testing "handles multi-line task text"
+      (setup-test-dir)
+      (with-test-files
+        #(let [result (sut/add-task-impl {:category "test"
+                                          :task-text "first line\nsecond line"})]
+           (is (false? (:isError result)))
+           (is (= "- [ ] first line\nsecond line"
+                  (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
