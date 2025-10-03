@@ -4,7 +4,8 @@
   (:require
    [mcp-clj.log :as log]
    [mcp-clj.mcp-server.core :as mcp-server]
-   [mcp-tasks.prompts :as tp]))
+   [mcp-tasks.prompts :as tp]
+   [mcp-tasks.tools :as tools]))
 
 (defn start
   "Start stdio MCP server (uses stdin/stdout)"
@@ -13,8 +14,8 @@
     (log/info :stdio-server {:msg "Starting MCP Tasks server"})
     (with-open [server (mcp-server/create-server
                         {:transport {:type :stdio}
-                         :tools     {}
-                         :prompts   (tp/prompts)})]
+                         :tools {"complete-task" tools/complete-task-tool}
+                         :prompts (tp/prompts)})]
       (log/info :stdio-server {:msg "MCP Tasks server started"})
       (.addShutdownHook
        (Runtime/getRuntime)
