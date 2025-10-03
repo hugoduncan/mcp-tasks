@@ -52,6 +52,8 @@
   (format "- Read the file .mcp-tasks/tasks/%s.md
 - Find the first incomplete task (marked with `- [ ]`)
 - Show the task description
+
+You can use the `next-task` tool to retrieve the next task without executing it.
 "
           category))
 
@@ -63,10 +65,7 @@
 - Implement the solution
 - Create a git commit with the code changes in the main repository
 
-Available tools:
-- Use the `next-task` tool to retrieve the next task without executing it
-- Use the `complete-task` tool to mark a task as complete and move it to the completed archive
-- Use the `add-task` tool to add new tasks to a category
+You can use the `add-task` tool to add new tasks to a category.
 ")
 
 (defn- complete-task-prompt-text
@@ -75,6 +74,8 @@ Available tools:
   (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to end, mark as complete with `- [x]`)
 - Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave the file empty rather than deleting it)
 - Commit the task tracking changes in the .mcp-tasks git repository
+
+You can use the `complete-task` tool to mark a task as complete and move it to the completed archive.
 "
           category category))
 
