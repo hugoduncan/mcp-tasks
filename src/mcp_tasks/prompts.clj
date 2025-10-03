@@ -62,6 +62,11 @@
 - Plan an implementation approach
 - Implement the solution
 - Create a git commit with the code changes in the main repository
+
+Available tools:
+- Use the `next-task` tool to retrieve the next task without executing it
+- Use the `complete-task` tool to mark a task as complete and move it to the completed archive
+- Use the `add-task` tool to add new tasks to a category
 ")
 
 (defn- complete-task-prompt-text

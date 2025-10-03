@@ -152,3 +152,91 @@
       :description "Optional comment to append to the completed task"}}
     :required ["category" "task-text"]}
    :implementation complete-task-impl})
+
+(defn next-task-impl
+  "Implementation of next-task tool.
+
+  Returns the first task from tasks/<category>.md in a map with :category and :task keys,
+  or a map with :category and :status keys if there are no tasks."
+  [{:keys [category]}]
+  (try
+    (let [tasks-dir     ".mcp-tasks/tasks"
+          tasks-file    (str tasks-dir "/" category ".md")
+          tasks-content (read-task-file tasks-file)]
+
+      (if (str/blank? tasks-content)
+        {:content [{:type "text"
+                    :text (pr-str {:category category
+                                   :status "No more tasks in this category"})}]
+         :isError false}
+        (let [tasks (parse-tasks tasks-content)]
+          (if (empty? tasks)
+            {:content [{:type "text"
+                        :text (pr-str {:category category
+                                       :status "No more tasks in this category"})}]
+             :isError false}
+            (let [first-task (first tasks)
+                  task-text  (str/replace first-task #"^- \[([ x])\] " "")]
+              {:content [{:type "text"
+                          :text (pr-str {:category category
+                                         :task task-text})}]
+               :isError false})))))
+    (catch Exception e
+      {:content [{:type "text"
+                  :text (str "Error: " (.getMessage e)
+                             (when-let [data (ex-data e)]
+                               (str "\nDetails: " (pr-str data))))}]
+       :isError true})))
+
+(def next-task-tool
+  "Tool to return the next task from a specific category"
+  {:name           "next-task"
+   :description    "Return the next task from tasks/<category>.md"
+   :inputSchema
+   {:type     "object"
+    :properties
+    {"category"
+     {:type        "string"
+      :description "The task category name"}}
+    :required ["category"]}
+   :implementation next-task-impl})
+
+(defn add-task-impl
+  "Implementation of add-task tool.
+
+  Appends a task to tasks/<category>.md as an incomplete todo item."
+  [{:keys [category task-text]}]
+  (try
+    (let [tasks-dir     ".mcp-tasks/tasks"
+          tasks-file    (str tasks-dir "/" category ".md")
+          tasks-content (read-task-file tasks-file)
+          new-task      (str "- [ ] " task-text)
+          new-content   (if (str/blank? tasks-content)
+                          new-task
+                          (str tasks-content "\n" new-task))]
+      (write-task-file tasks-file new-content)
+      {:content [{:type "text"
+                  :text (str "Task added to " tasks-file)}]
+       :isError false})
+    (catch Exception e
+      {:content [{:type "text"
+                  :text (str "Error: " (.getMessage e)
+                             (when-let [data (ex-data e)]
+                               (str "\nDetails: " (pr-str data))))}]
+       :isError true})))
+
+(def add-task-tool
+  "Tool to add a task to a specific category"
+  {:name           "add-task"
+   :description    "Add a task to tasks/<category>.md"
+   :inputSchema
+   {:type     "object"
+    :properties
+    {"category"
+     {:type        "string"
+      :description "The task category name"}
+     "task-text"
+     {:type        "string"
+      :description "The task text to add"}}
+    :required ["category" "task-text"]}
+   :implementation add-task-impl})
