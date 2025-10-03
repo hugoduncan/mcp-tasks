@@ -1,18 +1,18 @@
 (ns mcp-tasks.prompts
   "Task management prompts"
   (:require
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-clj.mcp-server.prompts :as prompts]))
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-clj.mcp-server.prompts :as prompts]))
 
 (def next-simple-prompt
   "Prompt for processing the next simple task"
   (prompts/valid-prompt?
-   {:name "next-simple"
-    :description "Process the next incomplete task from .mcp-tasks/tasks/simple.md"
-    :messages [{:role "user"
-                :content {:type "text"
-                          :text "Please complete the next simple task following these steps:
+    {:name "next-simple"
+     :description "Process the next incomplete task from .mcp-tasks/tasks/simple.md"
+     :messages [{:role "user"
+                 :content {:type "text"
+                           :text "Please complete the next simple task following these steps:
 
 1. Read the file .mcp-tasks/tasks/simple.md
 2. Find the first incomplete task (marked with `- [ ]`)
@@ -100,19 +100,19 @@
   Returns a vector of prompt maps suitable for registration with the MCP server."
   [categories]
   (vec
-   (for [category categories]
-     (let [custom-instructions (read-prompt-instructions category)
-           execution-instructions (or custom-instructions (default-prompt-text))
-           prompt-text (str "Please complete the next " category " task following these steps:\n\n"
-                            (read-task-prompt-text category)
-                            execution-instructions
-                            (complete-task-prompt-text category))]
-       (prompts/valid-prompt?
-        {:name (str "next-" category)
-         :description (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category)
-         :messages [{:role "user"
-                     :content {:type "text"
-                               :text prompt-text}}]})))))
+    (for [category categories]
+      (let [custom-instructions (read-prompt-instructions category)
+            execution-instructions (or custom-instructions (default-prompt-text))
+            prompt-text (str "Please complete the next " category " task following these steps:\n\n"
+                             (read-task-prompt-text category)
+                             execution-instructions
+                             (complete-task-prompt-text category))]
+        (prompts/valid-prompt?
+          {:name (str "next-" category)
+           :description (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category)
+           :messages [{:role "user"
+                       :content {:type "text"
+                                 :text prompt-text}}]})))))
 
 (defn prompts
   "Generate all task prompts by discovering categories and creating prompts for them.

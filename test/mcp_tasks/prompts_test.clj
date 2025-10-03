@@ -1,7 +1,7 @@
 (ns mcp-tasks.prompts-test
   (:require
-   [clojure.test :refer [deftest is testing]]
-   [mcp-tasks.prompts :as sut]))
+    [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.prompts :as sut]))
 
 (deftest discover-categories-test
   ;; Test that discover-categories finds all unique categories across
