@@ -14,7 +14,9 @@
     (log/info :stdio-server {:msg "Starting MCP Tasks server"})
     (with-open [server (mcp-server/create-server
                          {:transport {:type :stdio}
-                          :tools {"complete-task" tools/complete-task-tool}
+                          :tools {"complete-task" tools/complete-task-tool
+                                  "next-task" tools/next-task-tool
+                                  "add-task" tools/add-task-tool}
                           :prompts (tp/prompts)})]
       (log/info :stdio-server {:msg "MCP Tasks server started"})
       (.addShutdownHook

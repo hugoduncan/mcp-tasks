@@ -50,7 +50,9 @@
   "Generate prompt text for reading the next task from a category."
   [category]
   (format "- Read the file .mcp-tasks/tasks/%s.md
-- Find the first incomplete task (marked with `- [ ]`)
+
+- Find the first incomplete task (marked with `- [ ]`) You can use the
+  `next-task` tool to retrieve the next task without executing it.
 - Show the task description
 "
           category))
@@ -62,13 +64,20 @@
 - Plan an implementation approach
 - Implement the solution
 - Create a git commit with the code changes in the main repository
+
+You can use the `add-task` tool to add new tasks to a category.
 ")
 
 (defn- complete-task-prompt-text
   "Generate prompt text for completing and tracking a task."
   [category]
-  (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to end, mark as complete with `- [x]`)
-- Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave the file empty rather than deleting it)
+  (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to
+  end, mark as complete with `- [x]`). You can use the `complete-task` tool to
+  mark a task as complete and move it to the completed archive.
+
+- Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave
+  the file empty rather than deleting it)
+
 - Commit the task tracking changes in the .mcp-tasks git repository
 "
           category category))
@@ -116,7 +125,7 @@
 
 (defn prompts
   "Generate all task prompts by discovering categories and creating prompts for them.
-  
+
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
   []
