@@ -42,3 +42,14 @@ clj-kondo --lint src test
 ## Other
 
 - Use semantic commit messages, and semantic pull request titles
+- run `cljstyle fix` before making commits
+- run `(clj-kondo --lint src test)
+  ⎿  linting took 225ms, errors: 0, warnings: 0
+
+⏺ No clj-kondo errors found. The codebase passes linting cleanly.
+
+───────────────────────────────────────────────────────────────────────────────────────
+#  run  
+───────────────────────────────────────────────────────────────────────────────────────
+  # to memorize                                                         ⧉ In main.clj
+- run `clj-kondo --lint src test` before commiting
