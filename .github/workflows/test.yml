@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+          cljstyle: 0.17.642
+          clj-kondo: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clojure-deps-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            clojure-deps-
+
+      - name: Run cljstyle check
+        run: cljstyle check
+
+      - name: Run clj-kondo lint
+        run: clj-kondo --lint src test
+
+      - name: Run tests
+        run: clojure -M:dev:test

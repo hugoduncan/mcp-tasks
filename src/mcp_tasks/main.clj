@@ -7,7 +7,6 @@
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.prompts :as tp]
-    [mcp-tasks.task-prompts :as task-prompts]
     [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
