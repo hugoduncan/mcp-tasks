@@ -215,6 +215,29 @@ The `.mcp-tasks` directory is a separate git repository from your project, keepi
 
 **Status:** Alpha. Core functionality stable; API may evolve.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and version history.
+
+### Generating Changelog Locally
+
+Install git-cliff:
+```bash
+# macOS
+brew install git-cliff
+
+# Or download from https://github.com/orhun/git-cliff/releases
+```
+
+Generate changelog:
+```bash
+# Preview unreleased changes
+git cliff --unreleased
+
+# Update CHANGELOG.md
+git cliff -o CHANGELOG.md
+```
+
 ---
 
 **Issues & Feedback:** https://github.com/hugoduncan/mcp-tasks/issues
