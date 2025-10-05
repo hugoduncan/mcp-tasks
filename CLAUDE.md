@@ -32,6 +32,18 @@ clj
 clj-kondo --lint src test
 ```
 
+**Build:**
+```bash
+# Build JAR (creates target/mcp-tasks-<version>.jar)
+clj -T:build jar
+
+# Clean build artifacts
+clj -T:build clean
+
+# Check version
+clj -T:build version
+```
+
 ## Key Concepts
 
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
