@@ -27,7 +27,9 @@ jobs:
 
       - name: Install cljstyle
         run: |
-          curl -fsSL https://github.com/greglook/cljstyle/releases/latest/download/cljstyle_linux -o /usr/local/bin/cljstyle
+          curl -fsSL https://github.com/greglook/cljstyle/releases/download/0.17.642/cljstyle_0.17.642_linux_amd64.zip -o cljstyle.zip
+          unzip cljstyle.zip
+          sudo mv cljstyle /usr/local/bin/
           chmod +x /usr/local/bin/cljstyle
         shell: bash
 
