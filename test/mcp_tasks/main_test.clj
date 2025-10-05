@@ -17,19 +17,23 @@
       (let [vars (#'sut/get-prompt-vars)]
         (is (every? #(string? @%) vars))))
 
-    (testing "finds clarify-task prompt"
+    (testing "finds all defined prompts"
       (let [vars (#'sut/get-prompt-vars)
-            var-names (map #(name (symbol %)) vars)]
-        (is (some #(= "clarify-task" %) var-names))))))
+            var-names (set (map #(name (symbol %)) vars))]
+        (is (contains? var-names "clarify-task"))
+        (is (contains? var-names "simple"))
+        (is (>= (count var-names) 2))))))
 
 (deftest list-prompts-test
   ;; Test that list-prompts outputs prompt names and descriptions to stdout.
   (testing "list-prompts"
-    (testing "outputs prompt names with descriptions"
+    (testing "outputs all prompt names with descriptions"
       (let [output (with-out-str (#'sut/list-prompts))]
         (is (string? output))
         (is (str/includes? output "clarify-task:"))
-        (is (str/includes? output "Transform informal task instructions"))))
+        (is (str/includes? output "simple:"))
+        (is (str/includes? output "Turn informal task instructions"))
+        (is (str/includes? output "basic prompt"))))
 
     (testing "returns exit code 0"
       (let [exit-code (with-out-str (#'sut/list-prompts))]
@@ -51,4 +55,10 @@
   (testing "install-prompts"
     (testing "returns exit code 1 when any prompt not found"
       (let [exit-code (#'sut/install-prompts ["nonexistent"])]
-        (is (= 1 exit-code))))))
+        (is (= 1 exit-code))))
+
+    (testing "returns exit code 1 when some prompts are not found"
+      (let [output (with-out-str (#'sut/install-prompts ["simple" "nonexistent"]))
+            exit-code (#'sut/install-prompts ["simple" "nonexistent"])]
+        (is (= 1 exit-code))
+        (is (str/includes? output "Warning: Prompt 'nonexistent' not found"))))))
