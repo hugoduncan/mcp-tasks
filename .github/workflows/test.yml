@@ -20,26 +20,12 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install Clojure CLI
+      - name: Install Clojure tools
         uses: DeLaGuardo/setup-clojure@12.5
         with:
           cli: latest
-
-      - name: Install cljstyle
-        run: |
-          curl -fsSL https://github.com/greglook/cljstyle/releases/download/0.17.642/cljstyle_0.17.642_linux_amd64.zip -o cljstyle.zip
-          unzip cljstyle.zip
-          sudo mv cljstyle /usr/local/bin/
-          chmod +x /usr/local/bin/cljstyle
-        shell: bash
-
-      - name: Install clj-kondo
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo -o install-clj-kondo
-          chmod +x install-clj-kondo
-          ./install-clj-kondo
-          sudo mv clj-kondo /usr/local/bin/
-        shell: bash
+          cljstyle: 0.17.642
+          clj-kondo: latest
 
       - name: Cache Clojure dependencies
         uses: actions/cache@v4
