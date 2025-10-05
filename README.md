@@ -22,6 +22,12 @@ claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
 mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
 cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
 
+# List available prompt templates
+clojure -M:mcp-tasks --list-prompts
+
+# Install prompt templates (optional)
+clojure -M:mcp-tasks --install-prompts simple,clarify-task
+
 # Create your first task
 echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
 
@@ -142,6 +148,10 @@ Now `/mcp-tasks:next-docs` is available.
 Override default task execution by creating `.mcp-tasks/prompts/<category>.md`:
 
 ```bash
+# Install built-in prompt templates
+clojure -M:mcp-tasks --install-prompts
+
+# Or create custom prompts
 mkdir -p .mcp-tasks/prompts
 cat > .mcp-tasks/prompts/feature.md <<'EOF'
 4. Review existing code architecture
@@ -151,6 +161,10 @@ cat > .mcp-tasks/prompts/feature.md <<'EOF'
 8. Update relevant documentation
 EOF
 ```
+
+Available built-in templates (use `--list-prompts` to see all):
+- `simple` - Basic task execution with standard implementation steps
+- `clarify-task` - Transform vague instructions into detailed specifications
 
 The prompt file replaces steps 4-6 of the default workflow. Steps 1-3 (reading tasks) and 7-10 (committing) remain standard.
 
