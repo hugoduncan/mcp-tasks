@@ -69,13 +69,42 @@ Add to your Codex MCP configuration file (location varies by installation):
 }
 ```
 
+## Command Line Options
+
+The mcp-tasks server supports command line flags for managing task prompts:
+
+### List Available Prompts
+
+Display all available prompt templates with their descriptions:
+
+```bash
+clojure -M:mcp-tasks --list-prompts
+```
+
+### Install Prompt Templates
+
+Install prompt templates to `.mcp-tasks/prompts/` directory:
+
+```bash
+# Install all available prompts
+clojure -M:mcp-tasks --install-prompts
+
+# Install specific prompts (comma-separated)
+clojure -M:mcp-tasks --install-prompts simple,clarify-task
+```
+
+The `--install-prompts` command:
+- Skips files that already exist (exit code 0)
+- Warns if a prompt is not found or installation fails (exit code 1)
+- Does not start the MCP server
+
 ## Verification
 
 After configuration, restart your MCP client. The mcp-tasks server should be available with prompts for managing tasks across different categories.
 
 You can verify the installation by:
 1. Checking that the server appears in your client's MCP server list
-2. Listing available prompts (they should include task management categories)
+2. Listing available prompts using `clojure -M:mcp-tasks --list-prompts`
 3. Running a simple task command like `/mcp-tasks:next-simple`
 
 ## Troubleshooting
