@@ -55,14 +55,11 @@ clj -T:build version
 
 - Use semantic commit messages, and semantic pull request titles
 - run `cljstyle fix` before making commits
-- run `(clj-kondo --lint src test)
-  ⎿  linting took 225ms, errors: 0, warnings: 0
-
-⏺ No clj-kondo errors found. The codebase passes linting cleanly.
-
-───────────────────────────────────────────────────────────────────────────────────────
-#  run  
-───────────────────────────────────────────────────────────────────────────────────────
-  # to memorize                                                         ⧉ In main.clj
+- run `(clj-kondo --lint src test)` before commits
 - run `clj-kondo --lint src test` before commiting
-- when merging a PR provide a clean commit message using semntic commit message style.  Do no just use the default message or a concatenation of all the commit messages.  The message should reflect the scope and logical content of the PR, not all the interim work used to implement it.
+
+- when merging a PR provide a clean commit message using semntic commit
+  message style.  Do no just use the default message or a concatenation
+  of all the commit messages.  The message should reflect the scope and
+  logical content of the PR, not all the interim work used to implement
+  it.
