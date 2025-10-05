@@ -2,13 +2,12 @@
   "Stdio-based MCP server main entry point for task management"
   (:gen-class)
   (:require
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [mcp-clj.log :as log]
-    [mcp-clj.mcp-server.core :as mcp-server]
-    [mcp-tasks.prompts :as tp]
-    [mcp-tasks.task-prompts :as task-prompts]
-    [mcp-tasks.tools :as tools]))
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [mcp-clj.log :as log]
+   [mcp-clj.mcp-server.core :as mcp-server]
+   [mcp-tasks.prompts :as tp]
+   [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
   "Get all prompt vars from the task-prompts namespace.

@@ -36,14 +36,13 @@
         (is (str/includes? output "basic prompt"))))
 
     (testing "returns exit code 0"
-      (let [exit-code (with-out-str (#'sut/list-prompts))]
-        (is (= 0 (#'sut/list-prompts)))))))
+      (is (= 0 (#'sut/list-prompts))))))
 
 (deftest install-prompt-test
   ;; Test that install-prompt handles various edge cases.
   (testing "install-prompt"
     (testing "warns on nonexistent prompt"
-      (let [output (with-out-str (#'sut/install-prompt "nonexistent"))
+      (let [output    (with-out-str (#'sut/install-prompt "nonexistent"))
             exit-code (#'sut/install-prompt "nonexistent")]
         (is (str/includes? output "Warning"))
         (is (str/includes? output "not found"))
