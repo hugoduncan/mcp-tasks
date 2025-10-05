@@ -1,0 +1,59 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Clojure CLI
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+
+      - name: Install cljstyle
+        run: |
+          curl -fsSL https://github.com/greglook/cljstyle/releases/latest/download/cljstyle_linux -o /usr/local/bin/cljstyle
+          chmod +x /usr/local/bin/cljstyle
+        shell: bash
+
+      - name: Install clj-kondo
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo -o install-clj-kondo
+          chmod +x install-clj-kondo
+          ./install-clj-kondo
+          sudo mv clj-kondo /usr/local/bin/
+        shell: bash
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clojure-deps-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            clojure-deps-
+
+      - name: Run cljstyle check
+        run: cljstyle check
+
+      - name: Run clj-kondo lint
+        run: clj-kondo --lint src test
+
+      - name: Run tests
+        run: clojure -M:dev:test
