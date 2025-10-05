@@ -44,6 +44,30 @@ clj -T:build clean
 clj -T:build version
 ```
 
+## Changelog
+
+**Tool:** git-cliff (config: `cliff.toml`)
+
+**Generate changelog:**
+```bash
+git-cliff --unreleased  # Preview unreleased changes
+git-cliff -o CHANGELOG.md  # Update CHANGELOG.md
+```
+
+**Commit prefixes:**
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `docs:` - Documentation changes
+- `refactor:` - Code restructuring
+- `test:` - Test additions/changes
+- `perf:` - Performance improvements
+- `build:` - Build system changes
+- `ci:` - CI/CD changes
+- `chore:` - Maintenance tasks
+- `style:` - Code formatting
+
+See `doc/dev/changelog.md` for setup details.
+
 ## Key Concepts
 
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
