@@ -32,6 +32,18 @@ clj
 clj-kondo --lint src test
 ```
 
+**Build:**
+```bash
+# Build JAR (creates target/mcp-tasks-<version>.jar)
+clj -T:build jar
+
+# Clean build artifacts
+clj -T:build clean
+
+# Check version
+clj -T:build version
+```
+
 ## Key Concepts
 
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
@@ -43,13 +55,11 @@ clj-kondo --lint src test
 
 - Use semantic commit messages, and semantic pull request titles
 - run `cljstyle fix` before making commits
-- run `(clj-kondo --lint src test)
-  ⎿  linting took 225ms, errors: 0, warnings: 0
-
-⏺ No clj-kondo errors found. The codebase passes linting cleanly.
-
-───────────────────────────────────────────────────────────────────────────────────────
-#  run  
-───────────────────────────────────────────────────────────────────────────────────────
-  # to memorize                                                         ⧉ In main.clj
+- run `(clj-kondo --lint src test)` before commits
 - run `clj-kondo --lint src test` before commiting
+
+- when merging a PR provide a clean commit message using semntic commit
+  message style.  Do no just use the default message or a concatenation
+  of all the commit messages.  The message should reflect the scope and
+  logical content of the PR, not all the interim work used to implement
+  it.
