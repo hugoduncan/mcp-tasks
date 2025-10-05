@@ -42,7 +42,7 @@
                                    content))]
     (f)))
 
-;;; complete-task-impl tests
+;; complete-task-impl tests
 
 (deftest moves-first-task-from-tasks-to-complete
   ;; Tests that the complete-task-impl function correctly moves the first
@@ -174,7 +174,7 @@
                   (read-test-file "tasks/test.md")))))
       (cleanup-test-fixtures))))
 
-;;; next-task-impl tests
+;; next-task-impl tests
 
 (deftest next-task-returns-first-task
   ;; Tests that next-task-impl returns the first task from a category
@@ -240,7 +240,7 @@
                   (get-in result [:content 0 :text])))))
       (cleanup-test-fixtures))))
 
-;;; add-task-impl tests
+;; add-task-impl tests
 
 (deftest add-task-appends-to-empty-file
   ;; Tests that add-task-impl creates a new task in an empty file
