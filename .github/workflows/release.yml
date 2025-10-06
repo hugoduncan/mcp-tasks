@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - build-add-release-workflow
   workflow_dispatch:
     inputs:
       dry-run:
@@ -104,7 +101,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create git tag
-        if: ${{ !inputs.dry-run && github.event_name == 'workflow_dispatch' }}
+        if: ${{ !inputs.dry-run }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -112,7 +109,7 @@ jobs:
           git push origin ${{ steps.version.outputs.tag }}
 
       - name: Deploy to Clojars
-        if: ${{ !inputs.dry-run && github.event_name == 'workflow_dispatch' }}
+        if: ${{ !inputs.dry-run }}
         env:
           CLOJARS_USERNAME: ${{ secrets.CLOJARS_USERNAME }}
           CLOJARS_PASSWORD: ${{ secrets.CLOJARS_PASSWORD }}
@@ -121,7 +118,7 @@ jobs:
           clojure -X:deploy
 
       - name: Create GitHub Release
-        if: ${{ !inputs.dry-run && github.event_name == 'workflow_dispatch' }}
+        if: ${{ !inputs.dry-run }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -134,10 +131,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dry run summary
-        if: ${{ inputs.dry-run || github.event_name == 'push' }}
+        if: ${{ inputs.dry-run }}
         run: |
           echo "::notice::Dry run mode - skipped deployment steps"
-          echo "::notice::Trigger: ${{ github.event_name }}"
           echo "::notice::Version: ${{ steps.version.outputs.version }}"
           echo "::notice::Tag: ${{ steps.version.outputs.tag }}"
           echo "::notice::JAR: target/mcp-tasks-${{ steps.version.outputs.version }}.jar"
