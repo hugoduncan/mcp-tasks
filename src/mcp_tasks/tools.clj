@@ -204,15 +204,22 @@
 (defn add-task-impl
   "Implementation of add-task tool.
 
-  Appends a task to tasks/<category>.md as an incomplete todo item."
-  [{:keys [category task-text]}]
+  Adds a task to tasks/<category>.md as an incomplete todo item.
+  If prepend is true, adds at the beginning; otherwise appends at the end."
+  [{:keys [category task-text prepend]}]
   (try
     (let [tasks-dir     ".mcp-tasks/tasks"
           tasks-file    (str tasks-dir "/" category ".md")
           tasks-content (read-task-file tasks-file)
           new-task      (str "- [ ] " task-text)
-          new-content   (if (str/blank? tasks-content)
+          new-content   (cond
+                          (str/blank? tasks-content)
                           new-task
+
+                          prepend
+                          (str new-task "\n" tasks-content)
+
+                          :else
                           (str tasks-content "\n" new-task))]
       (write-task-file tasks-file new-content)
       {:content [{:type "text"
@@ -237,6 +244,9 @@
       :description "The task category name"}
      "task-text"
      {:type        "string"
-      :description "The task text to add"}}
+      :description "The task text to add"}
+     "prepend"
+     {:type        "boolean"
+      :description "If true, add task at the beginning instead of the end"}}
     :required ["category" "task-text"]}
    :implementation add-task-impl})

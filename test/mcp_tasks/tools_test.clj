@@ -295,3 +295,33 @@
            (is (= "- [ ] first line\nsecond line"
                   (read-test-file "tasks/test.md")))))
       (cleanup-test-fixtures))))
+
+(deftest add-task-prepends-when-prepend-is-true
+  ;; Tests that add-task-impl prepends task when prepend option is true
+  (testing "add-task"
+    (testing "prepends task when prepend is true"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] existing task")
+      (with-test-files
+        #(let [result (sut/add-task-impl {:category "test"
+                                          :task-text "new task"
+                                          :prepend true})]
+           (is (false? (:isError result)))
+           (is (= "- [ ] new task\n- [ ] existing task"
+                  (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest add-task-prepends-to-empty-file-when-prepend-is-true
+  ;; Tests that add-task-impl works correctly with empty file and prepend option
+  (testing "add-task"
+    (testing "prepends to empty file when prepend is true"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "")
+      (with-test-files
+        #(let [result (sut/add-task-impl {:category "test"
+                                          :task-text "new task"
+                                          :prepend true})]
+           (is (false? (:isError result)))
+           (is (= "- [ ] new task"
+                  (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
