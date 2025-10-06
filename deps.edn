@@ -15,4 +15,7 @@
           :main-opts ["-m" "nrepl.cmdline"]}
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
           :paths ["dev"]
-          :ns-default build}}}
+          :ns-default build}
+  :deploy {:replace-deps {slipset/deps-deploy {:mvn/version "0.2.2"}}
+           :exec-fn deps-deploy.deps-deploy/deploy
+           :exec-args {:installer :remote}}}}

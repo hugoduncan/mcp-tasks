@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (skip actual deployment steps)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: Release
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for version calculation and changelog
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+          cljstyle: 0.17.642
+          clj-kondo: latest
+
+      - name: Install git-cliff
+        run: |
+          wget https://github.com/orhun/git-cliff/releases/download/v2.7.0/git-cliff-2.7.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf git-cliff-2.7.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv git-cliff-2.7.0/git-cliff /usr/local/bin/
+          git-cliff --version
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clojure-deps-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            clojure-deps-
+
+      - name: Run cljstyle check
+        run: cljstyle check
+
+      - name: Run clj-kondo lint
+        run: clj-kondo --lint src test
+
+      - name: Run tests
+        run: clojure -M:dev:test
+
+      - name: Build JAR
+        run: clojure -T:build jar
+
+      - name: Calculate version
+        id: version
+        run: |
+          VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Run smoke test
+        run: |
+          OUTPUT=$(clojure -M -m mcp-tasks.main --list-prompts)
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -q "simple:"; then
+            echo "Error: Expected prompt 'simple' not found in output"
+            exit 1
+          fi
+          echo "Smoke test passed"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag to generate changelog from
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found, generating full changelog"
+            CHANGELOG=$(git-cliff --unreleased --strip all)
+          else
+            echo "Generating changelog from $PREV_TAG to HEAD"
+            CHANGELOG=$(git-cliff $PREV_TAG..HEAD --strip all)
+          fi
+
+          # Save changelog to file and output
+          echo "$CHANGELOG" > changelog.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create git tag
+        if: ${{ !inputs.dry-run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.version.outputs.tag }} -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Deploy to Clojars
+        if: ${{ !inputs.dry-run }}
+        env:
+          CLOJARS_USERNAME: ${{ secrets.CLOJARS_USERNAME }}
+          CLOJARS_PASSWORD: ${{ secrets.CLOJARS_PASSWORD }}
+        run: |
+          clojure -T:build deploy
+          clojure -X:deploy
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry-run }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: target/mcp-tasks-${{ steps.version.outputs.version }}.jar
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dry run summary
+        if: ${{ inputs.dry-run }}
+        run: |
+          echo "::notice::Dry run mode - skipped deployment steps"
+          echo "::notice::Version: ${{ steps.version.outputs.version }}"
+          echo "::notice::Tag: ${{ steps.version.outputs.tag }}"
+          echo "::notice::JAR: target/mcp-tasks-${{ steps.version.outputs.version }}.jar"
