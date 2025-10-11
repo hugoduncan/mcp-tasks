@@ -2,7 +2,7 @@
   (:require
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing use-fixtures]]
+    [clojure.test :refer [deftest is testing]]
     [mcp-tasks.main :as sut]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.tools :as tools])
