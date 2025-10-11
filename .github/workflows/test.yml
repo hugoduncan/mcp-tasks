@@ -43,5 +43,8 @@ jobs:
       - name: Run clj-kondo lint
         run: clj-kondo --lint src test --fail-level warning
 
-      - name: Run tests
-        run: clojure -M:dev:test
+      - name: Run unit tests
+        run: clojure -M:dev:test --focus :unit
+
+      - name: Run integration tests
+        run: clojure -M:dev:test --focus :integration

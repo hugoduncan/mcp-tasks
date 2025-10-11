@@ -36,14 +36,20 @@ clj-kondo --lint src test --fail-level warning
 
 **Testing:**
 ```bash
+# Run unit tests (default)
+clojure -M:dev:test --focus :unit
+
+# Run integration tests
+clojure -M:dev:test --focus :integration
+
 # Run all tests
-clojure -M:test
+clojure -M:dev:test
 
 # Run specific test namespace
-clojure -M:test --focus mcp-tasks.main-test
+clojure -M:dev:test --focus mcp-tasks.main-test
 
 # Run specific test
-clojure -M:test --focus mcp-tasks.main-test/config-threading-integration-test
+clojure -M:dev:test --focus mcp-tasks.main-test/config-threading-integration-test
 ```
 
 **Build:**
@@ -89,7 +95,7 @@ See `doc/dev/changelog.md` for setup details.
 - **test.yml** - Runs on pushes to master and all PRs
   - Runs cljstyle check
   - Runs clj-kondo lint with `--fail-level warning`
-  - Runs full test suite
+  - Runs unit tests and integration tests separately
   - Caches Clojure dependencies for faster runs
 
 - **release.yml** - Manual workflow for releasing new versions

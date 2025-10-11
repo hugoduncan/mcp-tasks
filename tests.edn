@@ -1,7 +1,12 @@
 #kaocha/v1
 {:tests [{:id :unit
           :test-paths ["test"]
-          :ns-patterns [".*-test$"]}]
+          :ns-patterns [".*-test$"]
+          :skip-meta [:integ]}
+         {:id :integration
+          :test-paths ["test"]
+          :ns-patterns [".*-test$"]
+          :focus-meta [:integ]}]
  :color? true
  :fail-fast? false
  :randomize? false}
