@@ -62,8 +62,8 @@ mcp-tasks enables you to manage development tasks in markdown files and have AI 
 See **[doc/install.md](doc/install.md)** for complete setup instructions for Claude Code, Claude Desktop, and other MCP clients.
 
 **TL;DR:**
-1. Add `:mcp-tasks` alias to `~/.clojure/deps.edn` with git coordinates
-2. Configure your MCP client to run `clojure -X:mcp-tasks`
+- Add `:mcp-tasks` alias to `~/.clojure/deps.edn` with git coordinates
+- Configure your MCP client to run `clojure -X:mcp-tasks`
 
 ## Core Usage
 
@@ -91,12 +91,12 @@ Example:
 ```
 
 The agent will:
-1. Read the first `- [ ]` task
-2. Analyze requirements in project context
-3. Implement the solution
-4. Commit changes to your repository
-5. Move completed task to `.mcp-tasks/complete/<category>.md`
-6. Mark task as `- [x]` in completion archive
+- Read the first `- [ ]` task
+- Analyze requirements in project context
+- Implement the solution
+- Commit changes to your repository
+- Move completed task to `.mcp-tasks/complete/<category>.md`
+- Mark task as `- [x]` in completion archive
 
 ### 3. Review and Iterate
 
@@ -154,11 +154,11 @@ clojure -M:mcp-tasks --install-prompts
 # Or create custom prompts
 mkdir -p .mcp-tasks/prompts
 cat > .mcp-tasks/prompts/feature.md <<'EOF'
-4. Review existing code architecture
-5. Design the feature following project patterns
-6. Write tests first (TDD approach)
-7. Implement the feature
-8. Update relevant documentation
+- Review existing code architecture
+- Design the feature following project patterns
+- Write tests first (TDD approach)
+- Implement the feature
+- Update relevant documentation
 EOF
 ```
 
@@ -166,12 +166,12 @@ Available built-in templates (use `--list-prompts` to see all):
 - `simple` - Basic task execution with standard implementation steps
 - `clarify-task` - Transform vague instructions into detailed specifications
 
-The prompt file replaces steps 4-6 of the default workflow. Steps 1-3 (reading tasks) and 7-10 (committing) remain standard.
+The prompt file provides custom execution instructions for the category, replacing the default implementation approach.
 
 **Prompt Structure:**
-- Steps 1-3: Read task from `.mcp-tasks/tasks/<category>.md`
-- Steps 4-6: Custom instructions (from `.mcp-tasks/prompts/<category>.md`) or default implementation steps
-- Steps 7-10: Commit changes, move to `.mcp-tasks/complete/<category>.md`, update task tracking
+- Initial steps: Read task from `.mcp-tasks/tasks/<category>.md`
+- Middle steps: Custom instructions (from `.mcp-tasks/prompts/<category>.md`) or default implementation steps
+- Final steps: Commit changes, move to `.mcp-tasks/complete/<category>.md`, update task tracking
 
 See **[doc/workflow.md#category-specific-instructions](doc/workflow.md#category-specific-instructions)** for examples.
 
