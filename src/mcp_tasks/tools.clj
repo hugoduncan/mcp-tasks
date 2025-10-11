@@ -1,6 +1,7 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
+    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]))
 
@@ -27,16 +28,16 @@
   "Parse markdown task list into individual task strings.
   Returns vector of task strings, each starting with '- [ ]' or '- [x]'"
   [content]
-  (let [lines        (str/split-lines content)
+  (let [lines (str/split-lines content)
         task-pattern #"^- \[([ x])\] (.*)"]
-    (loop [lines        lines
+    (loop [lines lines
            current-task []
-           tasks        []]
+           tasks []]
       (if (empty? lines)
         (if (seq current-task)
           (conj tasks (str/join "\n" current-task))
           tasks)
-        (let [line       (first lines)
+        (let [line (first lines)
               rest-lines (rest lines)]
           (if (re-matches task-pattern line)
             ;; Start of new task
@@ -73,38 +74,45 @@
 
   Moves first task from tasks/<category>.md to complete/<category>.md,
   verifying it matches the provided task-text and optionally adding a
-  completion comment."
+  completion comment.
+  
+  Returns two text items in :content:
+  1. A completion message
+  2. A JSON map with :modified-files containing paths relative to .mcp-tasks"
   [_context {:keys [category task-text completion-comment]}]
   (try
-    (let [tasks-dir     ".mcp-tasks/tasks"
-          complete-dir  ".mcp-tasks/complete"
-          tasks-file    (str tasks-dir "/" category ".md")
+    (let [tasks-dir ".mcp-tasks/tasks"
+          complete-dir ".mcp-tasks/complete"
+          tasks-file (str tasks-dir "/" category ".md")
           complete-file (str complete-dir "/" category ".md")
-          tasks-content (read-task-file tasks-file)]
+          tasks-content (read-task-file tasks-file)
+          ;; Paths relative to .mcp-tasks
+          tasks-rel-path (str "tasks/" category ".md")
+          complete-rel-path (str "complete/" category ".md")]
 
       (when (str/blank? tasks-content)
         (throw (ex-info "No tasks found in category"
                         {:category category
-                         :file     tasks-file})))
+                         :file tasks-file})))
 
       (let [tasks (parse-tasks tasks-content)]
         (when (empty? tasks)
           (throw (ex-info "No tasks found in category"
                           {:category category
-                           :file     tasks-file})))
+                           :file tasks-file})))
 
         (let [first-task (first tasks)]
           (when-not (task-matches? first-task task-text)
             (throw (ex-info "First task does not match provided text"
                             {:category category
                              :expected task-text
-                             :actual   first-task})))
+                             :actual first-task})))
 
           ;; Mark task as complete and append to complete file
-          (let [completed-task       (mark-complete
-                                       first-task
-                                       completion-comment)
-                complete-content     (read-task-file complete-file)
+          (let [completed-task (mark-complete
+                                 first-task
+                                 completion-comment)
+                complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
                                        (str complete-content
@@ -113,12 +121,15 @@
             (write-task-file complete-file new-complete-content))
 
           ;; Remove first task from tasks file
-          (let [remaining-tasks   (rest tasks)
+          (let [remaining-tasks (rest tasks)
                 new-tasks-content (str/join "\n" remaining-tasks)]
             (write-task-file tasks-file new-tasks-content))
 
           {:content [{:type "text"
-                      :text (str "Task completed and moved to " complete-file)}]
+                      :text (str "Task completed and moved to " complete-file)}
+                     {:type "text"
+                      :text (json/write-str {:modified-files [tasks-rel-path
+                                                              complete-rel-path]})}]
            :isError false})))
     (catch Exception e
       {:content [{:type "text"
@@ -132,23 +143,28 @@
    .mcp-tasks/tasks/<category>.md to .mcp-tasks/complete/<category>.md.
 
    Verifies the first task matches the provided text, marks it complete, and
-   optionally adds a completion comment.")
+   optionally adds a completion comment.
+   
+   Returns two text items:
+   1. A completion status message
+   2. A JSON-encoded map with :modified-files key containing a list of file paths
+      relative to .mcp-tasks that need to be committed in the .mcp-tasks git repository.")
 
 (def complete-task-tool
   "Tool to complete a task and move it from tasks to complete directory"
-  {:name           "complete-task"
-   :description    description
+  {:name "complete-task"
+   :description description
    :inputSchema
-   {:type     "object"
+   {:type "object"
     :properties
     {"category"
-     {:type        "string"
+     {:type "string"
       :description "The task category name"}
      "task-text"
-     {:type        "string"
+     {:type "string"
       :description "Partial text from the beginning of the task to verify"}
      "completion-comment"
-     {:type        "string"
+     {:type "string"
       :description "Optional comment to append to the completed task"}}
     :required ["category" "task-text"]}
    :implementation complete-task-impl})
@@ -160,26 +176,26 @@
   or a map with :category and :status keys if there are no tasks."
   [_context {:keys [category]}]
   (try
-    (let [tasks-dir     ".mcp-tasks/tasks"
-          tasks-file    (str tasks-dir "/" category ".md")
+    (let [tasks-dir ".mcp-tasks/tasks"
+          tasks-file (str tasks-dir "/" category ".md")
           tasks-content (read-task-file tasks-file)]
 
       (if (str/blank? tasks-content)
         {:content [{:type "text"
                     :text (pr-str {:category category
-                                   :status   "No more tasks in this category"})}]
+                                   :status "No more tasks in this category"})}]
          :isError false}
         (let [tasks (parse-tasks tasks-content)]
           (if (empty? tasks)
             {:content [{:type "text"
                         :text (pr-str {:category category
-                                       :status   "No more tasks in this category"})}]
+                                       :status "No more tasks in this category"})}]
              :isError false}
             (let [first-task (first tasks)
-                  task-text  (str/replace first-task #"^- \[([ x])\] " "")]
+                  task-text (str/replace first-task #"^- \[([ x])\] " "")]
               {:content [{:type "text"
                           :text (pr-str {:category category
-                                         :task     task-text})}]
+                                         :task task-text})}]
                :isError false})))))
     (catch Exception e
       {:content [{:type "text"
@@ -190,13 +206,13 @@
 
 (def next-task-tool
   "Tool to return the next task from a specific category"
-  {:name           "next-task"
-   :description    "Return the next task from tasks/<category>.md"
+  {:name "next-task"
+   :description "Return the next task from tasks/<category>.md"
    :inputSchema
-   {:type     "object"
+   {:type "object"
     :properties
     {"category"
-     {:type        "string"
+     {:type "string"
       :description "The task category name"}}
     :required ["category"]}
    :implementation next-task-impl})
@@ -208,19 +224,19 @@
   If prepend is true, adds at the beginning; otherwise appends at the end."
   [_context {:keys [category task-text prepend]}]
   (try
-    (let [tasks-dir     ".mcp-tasks/tasks"
-          tasks-file    (str tasks-dir "/" category ".md")
+    (let [tasks-dir ".mcp-tasks/tasks"
+          tasks-file (str tasks-dir "/" category ".md")
           tasks-content (read-task-file tasks-file)
-          new-task      (str "- [ ] " task-text)
-          new-content   (cond
-                          (str/blank? tasks-content)
-                          new-task
+          new-task (str "- [ ] " task-text)
+          new-content (cond
+                        (str/blank? tasks-content)
+                        new-task
 
-                          prepend
-                          (str new-task "\n" tasks-content)
+                        prepend
+                        (str new-task "\n" tasks-content)
 
-                          :else
-                          (str tasks-content "\n" new-task))]
+                        :else
+                        (str tasks-content "\n" new-task))]
       (write-task-file tasks-file new-content)
       {:content [{:type "text"
                   :text (str "Task added to " tasks-file)}]
@@ -234,19 +250,19 @@
 
 (def add-task-tool
   "Tool to add a task to a specific category"
-  {:name           "add-task"
-   :description    "Add a task to tasks/<category>.md"
+  {:name "add-task"
+   :description "Add a task to tasks/<category>.md"
    :inputSchema
-   {:type     "object"
+   {:type "object"
     :properties
     {"category"
-     {:type        "string"
+     {:type "string"
       :description "The task category name"}
      "task-text"
-     {:type        "string"
+     {:type "string"
       :description "The task text to add"}
      "prepend"
-     {:type        "boolean"
+     {:type "boolean"
       :description "If true, add task at the beginning instead of the end"}}
     :required ["category" "task-text"]}
    :implementation add-task-impl})
