@@ -102,8 +102,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task       (mark-complete
-                                      first-task
-                                      completion-comment)
+                                       first-task
+                                       completion-comment)
                 complete-content     (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
