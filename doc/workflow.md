@@ -6,11 +6,90 @@ This document describes how to use mcp-tasks for agent-driven task execution.
 
 mcp-tasks provides a structured workflow where you plan tasks for an agent to execute. Tasks are organized into categories, with each category having its own execution instructions and task tracking.
 
+## Configuration
+
+### Configuration File
+
+mcp-tasks supports an optional configuration file `.mcp-tasks.edn` in your project root (sibling to the `.mcp-tasks/` directory). This file allows you to explicitly control whether git integration is used for task tracking.
+
+**Configuration schema:**
+```clojure
+{:use-git? true}   ; Enable git mode
+{:use-git? false}  ; Disable git mode
+```
+
+**File location:**
+```
+project-root/
+├── .mcp-tasks/       # Task files directory
+├── .mcp-tasks.edn    # Optional configuration file
+└── src/              # Your project code
+```
+
+### Auto-Detection Mechanism
+
+When no `.mcp-tasks.edn` file is present, mcp-tasks automatically detects whether to use git mode by checking for the presence of `.mcp-tasks/.git` directory:
+
+- **Git mode enabled**: If `.mcp-tasks/.git` exists, the system assumes you want git integration
+- **Non-git mode**: If `.mcp-tasks/.git` does not exist, the system operates without git
+
+**Precedence:** Explicit configuration in `.mcp-tasks.edn` always overrides auto-detection.
+
+### Startup Validation
+
+When the MCP server starts, it validates the configuration:
+
+1. **Config file parsing**: If `.mcp-tasks.edn` exists, it must be valid EDN with correct schema
+2. **Git repository validation**: If git mode is enabled (explicitly or auto-detected), the server verifies that `.mcp-tasks/.git` exists
+3. **Error reporting**: Invalid configurations or missing git repositories cause server startup to fail with clear error messages to stderr
+
+**Example error messages:**
+```
+Git mode enabled but .mcp-tasks/.git not found
+Invalid config: :use-git? must be a boolean
+Malformed EDN in .mcp-tasks.edn: ...
+```
+
+### Git Mode vs Non-Git Mode
+
+The configuration affects two main behaviors:
+
+#### Task Completion Output
+
+When using the `complete-task` tool:
+
+- **Git mode**: Returns completion message plus JSON with modified file paths for commit workflows
+  ```
+  Task completed: <task description>
+  {"modified-files": ["tasks/simple.md", "complete/simple.md"]}
+  ```
+
+- **Non-git mode**: Returns only the completion message
+  ```
+  Task completed: <task description>
+  ```
+
+#### Prompt Instructions
+
+Task execution prompts adapt based on git mode:
+
+- **Git mode**: Includes instructions to commit task file changes to `.mcp-tasks` repository
+- **Non-git mode**: Omits git instructions, focuses only on file operations
+
+### Important Notes
+
+**Main repository independence**: The git mode configuration only affects the `.mcp-tasks` directory. Your main project repository commits are completely independent:
+
+- Git mode ON: Commits are made to both `.mcp-tasks/.git` (for task tracking) and your main repo (for code changes)
+- Git mode OFF: Commits are made only to your main repo (for code changes), task files are updated without version control
+
 ## Setup
 
-### Initialize .mcp-tasks as a Git Repository
+### Initialize .mcp-tasks as a Git Repository (Optional)
 
-The `.mcp-tasks` directory should be its own separate git repository to track task history independently from your project code:
+The `.mcp-tasks` directory can optionally be its own separate git repository to track task history independently from your project code:
+
+**Note:** This step is optional. If you skip git initialization, mcp-tasks will operate in non-git mode, managing task files without version control.
 
 ```bash
 # In your project root
@@ -217,26 +296,54 @@ The agent will read and consider all details when implementing the task.
 6. **Track progress**: The completion archive provides a clear audit trail
 7. **Iterate**: Add follow-up tasks based on completed work
 
-## Example Session
+## Example Sessions
+
+### Example: Git Mode Workflow
 
 ```bash
-# 1. Add tasks to a category
+# 1. Initialize .mcp-tasks with git (enables auto-detection)
+mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+cd .mcp-tasks
+git init
+git add .
+git commit -m "Initialize mcp-tasks repository"
+cd ..
+
+# 2. Add tasks to a category
 echo "- [ ] Fix login timeout issue" >> .mcp-tasks/tasks/bugfix.md
-echo "- [ ] Add user profile endpoint" >> .mcp-tasks/tasks/feature.md
 
-# 2. Process a bugfix task
+# 3. Process a bugfix task
 # Run: /mcp-tasks:next-bugfix
-# Agent implements the fix and commits
+# Agent implements the fix, commits to main repo, and commits task changes to .mcp-tasks repo
 
-# 3. Review the changes
-git log -1 --stat
-
-# 4. Process a feature task
-# Run: /mcp-tasks:next-feature
-# Agent implements the feature and commits
+# 4. Review the changes
+git log -1 --stat                        # Main repo commits
+cd .mcp-tasks && git log -1 --stat && cd ..  # Task tracking commits
 
 # 5. Check completed tasks
 cat .mcp-tasks/complete/bugfix.md
+```
+
+### Example: Non-Git Mode Workflow
+
+```bash
+# 1. Create .mcp-tasks directory structure (no git init)
+mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+
+# 2. Optionally configure non-git mode explicitly
+echo '{:use-git? false}' > .mcp-tasks.edn
+
+# 3. Add tasks to a category
+echo "- [ ] Add user profile endpoint" >> .mcp-tasks/tasks/feature.md
+
+# 4. Process a feature task
+# Run: /mcp-tasks:next-feature
+# Agent implements the feature, commits to main repo only
+
+# 5. Review the changes
+git log -1 --stat                # Only main repo commits
+
+# 6. Check completed tasks (files updated without version control)
 cat .mcp-tasks/complete/feature.md
 ```
 
