@@ -41,7 +41,7 @@ jobs:
         run: cljstyle check
 
       - name: Run clj-kondo lint
-        run: clj-kondo --lint src test
+        run: clj-kondo --lint src test --fail-level warning
 
       - name: Run tests
         run: clojure -M:dev:test

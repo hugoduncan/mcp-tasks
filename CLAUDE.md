@@ -31,7 +31,7 @@ clj
 
 **Linting:**
 ```bash
-clj-kondo --lint src test
+clj-kondo --lint src test --fail-level warning
 ```
 
 **Testing:**
@@ -93,7 +93,7 @@ See `doc/dev/changelog.md` for setup details.
 
 - Use semantic commit messages, and semantic pull request titles
 - run `cljstyle fix` before making commits
-- run `clj-kondo --lint src test` before commiting
+- run `clj-kondo --lint src test --fail-level warning` before commiting
 
 - when merging a PR provide a clean commit message using semntic commit
   message style.  Do no just use the default message or a concatenation
