@@ -3,7 +3,8 @@
   (:require
     [clojure.data.json :as json]
     [clojure.java.io :as io]
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [mcp-tasks.prompts :as prompts]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -248,10 +249,22 @@
                                (str "\nDetails: " (pr-str data))))}]
        :isError true})))
 
+(defn- add-task-description
+  "Build description for add-task tool with available categories and their descriptions."
+  []
+  (let [category-descs (prompts/category-descriptions)
+        categories (sort (keys category-descs))]
+    (if (seq categories)
+      (str "Add a task to tasks/<category>.md\n\nAvailable categories:\n"
+           (str/join "\n"
+                     (for [cat categories]
+                       (format "- %s: %s" cat (get category-descs cat)))))
+      "Add a task to tasks/<category>.md")))
+
 (def add-task-tool
   "Tool to add a task to a specific category"
   {:name "add-task"
-   :description "Add a task to tasks/<category>.md"
+   :description (add-task-description)
    :inputSchema
    {:type "object"
     :properties
