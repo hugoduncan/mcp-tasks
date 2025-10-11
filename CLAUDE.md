@@ -79,7 +79,6 @@ See `doc/dev/changelog.md` for setup details.
 
 - Use semantic commit messages, and semantic pull request titles
 - run `cljstyle fix` before making commits
-- run `(clj-kondo --lint src test)` before commits
 - run `clj-kondo --lint src test` before commiting
 
 - when merging a PR provide a clean commit message using semntic commit
