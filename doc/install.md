@@ -69,6 +69,65 @@ Add to your Codex MCP configuration file (location varies by installation):
 }
 ```
 
+## Workflow Configuration
+
+The mcp-tasks server supports both git-based and non-git workflows for managing tasks. The server automatically detects which mode to use.
+
+### Auto-Detection
+
+By default, mcp-tasks automatically detects whether to use git:
+- If `.mcp-tasks/.git` directory exists → git mode enabled
+- If `.mcp-tasks/.git` directory does not exist → git mode disabled
+
+This means you can start using mcp-tasks immediately without any configuration.
+
+### Explicit Configuration (Optional)
+
+You can override auto-detection by creating a `.mcp-tasks.edn` file in your project root (sibling to the `.mcp-tasks/` directory):
+
+```clojure
+{:use-git? true}   ; Force git mode on
+{:use-git? false}  ; Force git mode off
+```
+
+Explicit configuration takes precedence over auto-detection.
+
+### Git Workflow
+
+When git mode is enabled:
+- Task completion includes git commit instructions
+- The `complete-task` tool returns modified file paths for git operations
+- You can track task history using git commits
+
+**Setup:**
+```bash
+cd .mcp-tasks
+git init
+```
+
+### Non-Git Workflow
+
+When git mode is disabled:
+- Task completion focuses on file operations only
+- No git instructions or commit guidance included
+- Tasks are tracked in markdown files without version control
+
+**Setup:**
+No additional setup required - just use the `.mcp-tasks/` directory without initializing git.
+
+### When to Use Each Workflow
+
+**Use git workflow when:**
+- You want version history of your task changes
+- You're working in a team and want to share task state
+- You want to track when and why tasks were completed
+- Your main project repository is independent (mcp-tasks git repo is separate)
+
+**Use non-git workflow when:**
+- You prefer simplicity and don't need version history
+- You're working solo and tasks are ephemeral
+- You want minimal overhead
+
 ## Command Line Options
 
 The mcp-tasks server supports command line flags for managing task prompts:
