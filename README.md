@@ -18,8 +18,10 @@ Task-based workflow management for AI agents via Model Context Protocol (MCP).
 # Configure Claude Code
 claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
 
-# Initialize .mcp-tasks as a git repository
+# Initialize task directories
 mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+
+# (Optional) Initialize as git repository for version control
 cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
 
 # List available prompt templates
@@ -44,10 +46,10 @@ echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
 mcp-tasks enables you to manage development tasks in markdown files and have AI agents execute them. Unlike todo tools, mcp-tasks integrates task planning with execution—agents don't just track tasks, they complete them.
 
 **Key Benefits:**
-- **Persistent Planning**: Tasks survive across chat sessions in version-controlled markdown
+- **Persistent Planning**: Tasks survive across chat sessions in markdown files
 - **Category-Based Organization**: Group tasks by type (features, bugfixes, refactoring) with custom execution strategies
 - **Audit Trail**: Completed tasks automatically archived with full context
-- **Git Integration**: Task completions include automated commits to your repository
+- **Flexible Workflows**: Supports both git-tracked and standalone task management
 
 **When to Use:**
 - Complex projects requiring systematic task execution
@@ -97,6 +99,7 @@ The agent will:
 - Commit changes to your repository
 - Move completed task to `.mcp-tasks/complete/<category>.md`
 - Mark task as `- [x]` in completion archive
+- Commit the task repo (if git mode enabled)
 
 ### 3. Review and Iterate
 
@@ -131,6 +134,45 @@ cat .mcp-tasks/complete/bugfix.md
 See **[doc/workflow.md](doc/workflow.md)** for advanced patterns including git worktrees for parallel task execution.
 
 ## Configuration
+
+### Git Integration
+
+mcp-tasks supports two workflows:
+
+**1. Zero-Config Auto-Detection (Default)**
+
+The server automatically detects if `.mcp-tasks/.git` exists and enables git features accordingly. No configuration needed:
+
+```bash
+# Git mode: Auto-enabled if .mcp-tasks is a git repository
+cd .mcp-tasks && git init && cd ..
+
+# Non-git mode: Auto-enabled if no .mcp-tasks/.git directory
+# Just create the directory structure - no git needed
+mkdir -p .mcp-tasks/tasks .mcp-tasks/complete
+```
+
+**2. Explicit Configuration (Optional)**
+
+Override auto-detection by creating `.mcp-tasks.edn` in your project root (sibling to `.mcp-tasks/`):
+
+```clojure
+{:use-git? true}   ; Force git mode on
+{:use-git? false}  ; Force git mode off
+```
+
+**Behavior by Mode:**
+
+| Feature | Git Mode | Non-Git Mode |
+|---------|----------|--------------|
+| Task tracking | ✓ | ✓ |
+| Task completion | ✓ | ✓ |
+| Automated commits | ✓ | ✗ |
+| Modified file list | ✓ | ✗ |
+
+**Precedence:** Explicit config (`.mcp-tasks.edn`) overrides auto-detection.
+
+**Note:** Your project's git repository is independent of `.mcp-tasks` git tracking. The `:use-git?` setting only affects task tracking commits within `.mcp-tasks/`.
 
 ### Custom Categories
 
@@ -192,11 +234,11 @@ clj-kondo --lint src test
 
 **Task Storage:**
 
-The `.mcp-tasks` directory is a separate git repository from your project, keeping task tracking independent:
+The `.mcp-tasks` directory can optionally be a git repository for version control, but this is not required:
 
 ```
-.mcp-tasks/          # Separate git repository
-├── .git/            # Task tracking history
+.mcp-tasks/          # Task tracking directory
+├── .git/            # Optional: Version control for task history
 ├── tasks/           # Active tasks (- [ ] format)
 │   ├── simple.md
 │   ├── feature.md

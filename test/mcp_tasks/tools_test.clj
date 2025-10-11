@@ -55,10 +55,10 @@
                        "- [ ] first task\n      detail line\n- [ ] second task")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "first task"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "first task"})]
            (is (false? (:isError result)))
            (is (= "- [x] first task\n      detail line"
                   (read-test-file "complete/test.md")))
@@ -74,11 +74,11 @@
       (write-test-file "tasks/test.md" "- [ ] task with comment")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "task with comment"
-                         :completion-comment "Added feature X"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "task with comment"
+                        :completion-comment "Added feature X"})]
            (is (false? (:isError result)))
            (is (= "- [x] task with comment\n\nAdded feature X"
                   (read-test-file "complete/test.md")))))
@@ -93,10 +93,10 @@
       (write-test-file "complete/test.md" "- [x] old task")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "new task"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "- [x] old task\n- [x] new task"
                   (read-test-file "complete/test.md")))))
@@ -111,10 +111,10 @@
       (write-test-file "tasks/test.md" "- [ ] only task")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "only task"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "only task"})]
            (is (false? (:isError result)))
            (is (= "" (read-test-file "tasks/test.md")))))
       (cleanup-test-fixtures))))
@@ -128,10 +128,10 @@
       (write-test-file "tasks/test.md" "- [ ] actual task")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "wrong task"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "wrong task"})]
            (is (true? (:isError result)))
            (is (re-find #"does not match"
                         (get-in result [:content 0 :text])))))
@@ -146,10 +146,10 @@
       (write-test-file "tasks/test.md" "")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "any task"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "any task"})]
            (is (true? (:isError result)))
            (is (re-find #"No tasks found"
                         (get-in result [:content 0 :text])))))
@@ -163,10 +163,10 @@
       (write-test-file "tasks/test.md" "- [ ] Task With Capitals")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "task with capitals"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "task with capitals"})]
            (is (false? (:isError result)))))
       (cleanup-test-fixtures))))
 
@@ -180,10 +180,10 @@
                        "- [ ] first task\n      line 2\n      line 3\n- [ ] second task")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "first task"})]
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "first task"})]
            (is (false? (:isError result)))
            (is (= "- [x] first task\n      line 2\n      line 3"
                   (read-test-file "complete/test.md")))
@@ -199,14 +199,13 @@
       (write-test-file "tasks/test.md" "- [ ] task to complete")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "task to complete"})
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "task to complete"})
                content (:content result)]
            (is (false? (:isError result)))
-           (is (= 1 (count content)))
-           ))
+           (is (= 1 (count content)))))
       (cleanup-test-fixtures))))
 
 ;; next-task-impl tests
@@ -370,10 +369,10 @@
       (with-test-files
         #(let [config {:use-git? true}
                result (#'sut/complete-task-impl
-                        config
-                        nil
-                        {:category "test"
-                         :task-text "task to complete"})
+                       config
+                       nil
+                       {:category "test"
+                        :task-text "task to complete"})
                content (:content result)]
            (is (false? (:isError result)))
            (is (= 2 (count content)))
@@ -394,10 +393,10 @@
       (with-test-files
         #(let [config {:use-git? false}
                result (#'sut/complete-task-impl
-                        config
-                        nil
-                        {:category "test"
-                         :task-text "task to complete"})
+                       config
+                       nil
+                       {:category "test"
+                        :task-text "task to complete"})
                content (:content result)]
            (is (false? (:isError result)))
            (is (= 1 (count content)) "Should only return completion message")
@@ -413,10 +412,10 @@
       (write-test-file "tasks/test.md" "- [ ] task to complete")
       (with-test-files
         #(let [result (#'sut/complete-task-impl
-                        nil
-                        nil
-                        {:category "test"
-                         :task-text "task to complete"})
+                       nil
+                       nil
+                       {:category "test"
+                        :task-text "task to complete"})
                content (:content result)]
            (is (false? (:isError result)))
            (is (= 1 (count content)) "Should only return completion message for nil config")

@@ -1,10 +1,10 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.prompts :as prompts]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.prompts :as prompts]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -112,8 +112,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                first-task
-                                completion-comment)
+                                 first-task
+                                 completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
