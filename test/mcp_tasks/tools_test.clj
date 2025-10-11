@@ -54,7 +54,8 @@
       (write-test-file "tasks/test.md"
                        "- [ ] first task\n      detail line\n- [ ] second task")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "first task"})]
@@ -72,7 +73,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] task with comment")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "task with comment"
@@ -90,7 +92,8 @@
       (write-test-file "tasks/test.md" "- [ ] new task")
       (write-test-file "complete/test.md" "- [x] old task")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "new task"})]
@@ -107,7 +110,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] only task")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "only task"})]
@@ -123,7 +127,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] actual task")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "wrong task"})]
@@ -140,7 +145,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "any task"})]
@@ -156,7 +162,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] Task With Capitals")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "task with capitals"})]
@@ -172,7 +179,8 @@
       (write-test-file "tasks/test.md"
                        "- [ ] first task\n      line 2\n      line 3\n- [ ] second task")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "first task"})]
@@ -183,26 +191,22 @@
                   (read-test-file "tasks/test.md")))))
       (cleanup-test-fixtures))))
 
-(deftest returns-modified-files-in-json
+(deftest returns-single-message-with-nil-config
   ;; Tests that complete-task-impl returns modified files as JSON in second text item
   (testing "complete-task"
     (testing "returns modified files as JSON in second text item"
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] task to complete")
       (with-test-files
-        #(let [result (sut/complete-task-impl
+        #(let [result (#'sut/complete-task-impl
+                        nil
                         nil
                         {:category "test"
                          :task-text "task to complete"})
                content (:content result)]
            (is (false? (:isError result)))
-           (is (= 2 (count content)))
-           (is (= "text" (:type (first content))))
-           (is (= "text" (:type (second content))))
-           (let [json-data (json/read-str (:text (second content))
-                                          :key-fn keyword)]
-             (is (= ["tasks/test.md" "complete/test.md"]
-                    (:modified-files json-data))))))
+           (is (= 1 (count content)))
+           ))
       (cleanup-test-fixtures))))
 
 ;; next-task-impl tests
@@ -355,4 +359,66 @@
            (is (false? (:isError result)))
            (is (= "- [ ] new task"
                   (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest returns-modified-files-when-git-mode-enabled
+  ;; Tests that complete-task-impl returns modified files when git mode is enabled
+  (testing "complete-task"
+    (testing "returns modified files as JSON when git mode enabled"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] task to complete")
+      (with-test-files
+        #(let [config {:use-git? true}
+               result (#'sut/complete-task-impl
+                        config
+                        nil
+                        {:category "test"
+                         :task-text "task to complete"})
+               content (:content result)]
+           (is (false? (:isError result)))
+           (is (= 2 (count content)))
+           (is (= "text" (:type (first content))))
+           (is (= "text" (:type (second content))))
+           (let [json-data (json/read-str (:text (second content))
+                                          :key-fn keyword)]
+             (is (= ["tasks/test.md" "complete/test.md"]
+                    (:modified-files json-data))))))
+      (cleanup-test-fixtures))))
+
+(deftest does-not-return-modified-files-when-git-mode-disabled
+  ;; Tests that complete-task-impl does not return modified files when git mode is disabled
+  (testing "complete-task"
+    (testing "returns only completion message when git mode disabled"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] task to complete")
+      (with-test-files
+        #(let [config {:use-git? false}
+               result (#'sut/complete-task-impl
+                        config
+                        nil
+                        {:category "test"
+                         :task-text "task to complete"})
+               content (:content result)]
+           (is (false? (:isError result)))
+           (is (= 1 (count content)) "Should only return completion message")
+           (is (= "text" (:type (first content))))
+           (is (re-find #"Task completed" (:text (first content))))))
+      (cleanup-test-fixtures))))
+
+(deftest treats-nil-config-as-non-git-mode
+  ;; Tests that complete-task-impl treats nil config as non-git mode
+  (testing "complete-task"
+    (testing "treats nil config as non-git mode"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] task to complete")
+      (with-test-files
+        #(let [result (#'sut/complete-task-impl
+                        nil
+                        nil
+                        {:category "test"
+                         :task-text "task to complete"})
+               content (:content result)]
+           (is (false? (:isError result)))
+           (is (= 1 (count content)) "Should only return completion message for nil config")
+           (is (= "text" (:type (first content))))))
       (cleanup-test-fixtures))))

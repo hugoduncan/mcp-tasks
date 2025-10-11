@@ -34,6 +34,18 @@ clj
 clj-kondo --lint src test
 ```
 
+**Testing:**
+```bash
+# Run all tests
+clojure -M:test
+
+# Run specific test namespace
+clojure -M:test --focus mcp-tasks.main-test
+
+# Run specific test
+clojure -M:test --focus mcp-tasks.main-test/config-threading-integration-test
+```
+
 **Build:**
 ```bash
 # Build JAR (creates target/mcp-tasks-<version>.jar)
