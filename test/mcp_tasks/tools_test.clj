@@ -54,6 +54,7 @@
                        "- [ ] first task\n      detail line\n- [ ] second task")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "first task"})]
            (is (false? (:isError result)))
@@ -71,6 +72,7 @@
       (write-test-file "tasks/test.md" "- [ ] task with comment")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "task with comment"
                          :completion-comment "Added feature X"})]
@@ -88,6 +90,7 @@
       (write-test-file "complete/test.md" "- [x] old task")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "new task"})]
            (is (false? (:isError result)))
@@ -104,6 +107,7 @@
       (write-test-file "tasks/test.md" "- [ ] only task")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "only task"})]
            (is (false? (:isError result)))
@@ -119,6 +123,7 @@
       (write-test-file "tasks/test.md" "- [ ] actual task")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "wrong task"})]
            (is (true? (:isError result)))
@@ -135,6 +140,7 @@
       (write-test-file "tasks/test.md" "")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "any task"})]
            (is (true? (:isError result)))
@@ -150,6 +156,7 @@
       (write-test-file "tasks/test.md" "- [ ] Task With Capitals")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "task with capitals"})]
            (is (false? (:isError result)))))
@@ -165,6 +172,7 @@
                        "- [ ] first task\n      line 2\n      line 3\n- [ ] second task")
       (with-test-files
         #(let [result (sut/complete-task-impl
+                        nil
                         {:category "test"
                          :task-text "first task"})]
            (is (false? (:isError result)))
@@ -183,7 +191,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] first task\n- [ ] second task")
       (with-test-files
-        #(let [result (sut/next-task-impl {:category "test"})]
+        #(let [result (sut/next-task-impl nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :task \"first task\"}"
                   (get-in result [:content 0 :text])))))
@@ -196,7 +204,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/next-task-impl {:category "test"})]
+        #(let [result (sut/next-task-impl nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :status \"No more tasks in this category\"}"
                   (get-in result [:content 0 :text])))))
@@ -208,7 +216,7 @@
     (testing "returns status message when tasks file doesn't exist"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/next-task-impl {:category "test"})]
+        #(let [result (sut/next-task-impl nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :status \"No more tasks in this category\"}"
                   (get-in result [:content 0 :text])))))
@@ -221,7 +229,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] task description here")
       (with-test-files
-        #(let [result (sut/next-task-impl {:category "test"})]
+        #(let [result (sut/next-task-impl nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :task \"task description here\"}"
                   (get-in result [:content 0 :text])))))
@@ -234,7 +242,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] first line\n      second line")
       (with-test-files
-        #(let [result (sut/next-task-impl {:category "test"})]
+        #(let [result (sut/next-task-impl nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :task \"first line\\n      second line\"}"
                   (get-in result [:content 0 :text])))))
@@ -249,8 +257,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/add-task-impl {:category "test"
-                                          :task-text "new task"})]
+        #(let [result (sut/add-task-impl nil {:category "test"
+                                              :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "- [ ] new task"
                   (read-test-file "tasks/test.md")))))
@@ -263,8 +271,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] existing task")
       (with-test-files
-        #(let [result (sut/add-task-impl {:category "test"
-                                          :task-text "new task"})]
+        #(let [result (sut/add-task-impl nil {:category "test"
+                                              :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "- [ ] existing task\n- [ ] new task"
                   (read-test-file "tasks/test.md")))))
@@ -276,8 +284,8 @@
     (testing "returns success message with file path"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/add-task-impl {:category "test"
-                                          :task-text "new task"})]
+        #(let [result (sut/add-task-impl nil {:category "test"
+                                              :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "Task added to .mcp-tasks/tasks/test.md"
                   (get-in result [:content 0 :text])))))
@@ -289,8 +297,8 @@
     (testing "handles multi-line task text"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/add-task-impl {:category "test"
-                                          :task-text "first line\nsecond line"})]
+        #(let [result (sut/add-task-impl nil {:category "test"
+                                              :task-text "first line\nsecond line"})]
            (is (false? (:isError result)))
            (is (= "- [ ] first line\nsecond line"
                   (read-test-file "tasks/test.md")))))
@@ -303,9 +311,9 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] existing task")
       (with-test-files
-        #(let [result (sut/add-task-impl {:category "test"
-                                          :task-text "new task"
-                                          :prepend true})]
+        #(let [result (sut/add-task-impl nil {:category "test"
+                                              :task-text "new task"
+                                              :prepend true})]
            (is (false? (:isError result)))
            (is (= "- [ ] new task\n- [ ] existing task"
                   (read-test-file "tasks/test.md")))))
@@ -318,9 +326,9 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/add-task-impl {:category "test"
-                                          :task-text "new task"
-                                          :prepend true})]
+        #(let [result (sut/add-task-impl nil {:category "test"
+                                              :task-text "new task"
+                                              :prepend true})]
            (is (false? (:isError result)))
            (is (= "- [ ] new task"
                   (read-test-file "tasks/test.md")))))
