@@ -5,6 +5,47 @@
     [clojure.string :as str]
     [mcp-clj.mcp-server.prompts :as prompts]))
 
+(defn- parse-frontmatter
+  "Parse simple 'field: value' frontmatter from markdown text.
+
+  Expects frontmatter delimited by '---' at start and end.
+  Format example:
+    ---
+    description: Task description
+    author: John Doe
+    ---
+    Content here...
+
+  Returns a map with :metadata (parsed key-value pairs) and :content (remaining text).
+  If no valid frontmatter is found, returns {:metadata nil :content <original-text>}."
+  [text]
+  (if-not (str/starts-with? text "---\n")
+    {:metadata nil :content text}
+    (let [lines (str/split-lines text)
+          ;; Skip first "---" line
+          after-start (rest lines)
+          ;; Find closing "---"
+          closing-idx (first (keep-indexed
+                               (fn [idx line]
+                                 (when (= "---" (str/trim line)) idx))
+                               after-start))]
+      (if-not closing-idx
+        ;; No closing delimiter, treat as no frontmatter
+        {:metadata nil :content text}
+        (let [metadata-lines (take closing-idx after-start)
+              content-lines (drop (inc closing-idx) after-start)
+              ;; Parse "key: value" pairs
+              metadata (reduce
+                         (fn [acc line]
+                           (if-let [[_ k v] (re-matches #"([^:]+):\s*(.*)" line)]
+                             (assoc acc (str/trim k) (str/trim v))
+                             acc))
+                         {}
+                         metadata-lines)
+              content (str/join "\n" content-lines)]
+          {:metadata (when (seq metadata) metadata)
+           :content content})))))
+
 (def next-simple-prompt
   "Prompt for processing the next simple task"
   (prompts/valid-prompt?
@@ -85,11 +126,13 @@ You can use the `add-task` tool to add new tasks to a category.
 (defn- read-prompt-instructions
   "Read custom prompt instructions from .mcp-tasks/prompts/<category>.md if it exists.
 
-  Returns the file content or nil if the file doesn't exist."
+  Returns a map with :metadata and :content keys if the file exists, or nil if it doesn't.
+  The :metadata key contains parsed frontmatter (may be nil), and :content contains
+  the prompt text with frontmatter stripped."
   [category]
   (let [prompt-file (io/file ".mcp-tasks" "prompts" (str category ".md"))]
     (when (.exists prompt-file)
-      (slurp prompt-file))))
+      (parse-frontmatter (slurp prompt-file)))))
 
 (defn create-prompts
   "Create MCP prompts for a sequence of categories.
@@ -106,22 +149,44 @@ You can use the `add-task` tool to add new tasks to a category.
   2. custom instructions or default-prompt-text - category-specific execution logic
   3. complete-task-prompt-text - instructions for committing and tracking completion
 
+  If custom prompt files contain frontmatter with a 'description' field, that will be
+  used for the prompt's :description. Otherwise, a default description is generated.
+
   Returns a vector of prompt maps suitable for registration with the MCP server."
   [categories]
   (vec
     (for [category categories]
-      (let [custom-instructions (read-prompt-instructions category)
-            execution-instructions (or custom-instructions (default-prompt-text))
+      (let [prompt-data (read-prompt-instructions category)
+            metadata (:metadata prompt-data)
+            custom-content (:content prompt-data)
+            execution-instructions (or custom-content (default-prompt-text))
             prompt-text (str "Please complete the next " category " task following these steps:\n\n"
                              (read-task-prompt-text category)
                              execution-instructions
-                             (complete-task-prompt-text category))]
+                             (complete-task-prompt-text category))
+            description (or (get metadata "description")
+                            (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
         (prompts/valid-prompt?
           {:name (str "next-" category)
-           :description (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category)
+           :description description
            :messages [{:role "user"
                        :content {:type "text"
                                  :text prompt-text}}]})))))
+
+(defn category-descriptions
+  "Get descriptions for all discovered categories.
+
+  Returns a map of category name to description string. Categories without
+  custom prompts or without description metadata will have a default description."
+  []
+  (let [categories (discover-categories)]
+    (into {}
+          (for [category categories]
+            (let [prompt-data (read-prompt-instructions category)
+                  metadata (:metadata prompt-data)
+                  description (or (get metadata "description")
+                                  (format "Tasks for %s category" category))]
+              [category description])))))
 
 (defn prompts
   "Generate all task prompts by discovering categories and creating prompts for them.

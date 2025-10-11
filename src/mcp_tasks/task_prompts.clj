@@ -3,7 +3,10 @@
 
 (def simple
   "A basic prompt to execute a generic task."
-  "
+  "---
+description: Execute simple tasks with basic workflow
+---
+
 - Analyze the task specification in the context of the project
 - Plan an implementation approach
 - Implement the solution
@@ -12,7 +15,11 @@
 
 (def clarify-task
   "Turn informal task instructions into  explicit, unambiguous specifications"
-  "You are helping to transform informal task instructions into clear,
+  "---
+description: Transform informal task instructions into clear, explicit specifications
+---
+
+You are helping to transform informal task instructions into clear,
 explicit, and unambiguous specifications.
 
 ## Your Role
