@@ -190,10 +190,12 @@ You can use the `add-task` tool to add new tasks to a category.
 
 (defn prompts
   "Generate all task prompts by discovering categories and creating prompts for them.
+  
+  Accepts config parameter for future git-aware functionality.
 
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
-  []
+  [_config]
   (let [categories (discover-categories)
         prompt-list (create-prompts categories)]
     (into {} (map (fn [p] [(:name p) p]) prompt-list))))

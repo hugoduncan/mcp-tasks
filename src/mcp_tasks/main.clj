@@ -6,6 +6,7 @@
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.core :as mcp-server]
+    [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
     [mcp-tasks.tools :as tools]))
 
@@ -71,28 +72,59 @@
         exit-code (if (every? zero? results) 0 1)]
     exit-code))
 
+(defn- load-and-validate-config
+  "Loads, resolves, and validates configuration.
+  
+  Returns resolved config map with :use-git? set.
+  Throws ex-info if validation fails."
+  [config-path]
+  (let [path (str config-path)
+        raw-config (config/read-config path)
+        resolved-config (config/resolve-config path (or raw-config {}))]
+    (config/validate-startup path resolved-config)
+    resolved-config))
+
+(defn- block-forever
+  "Blocks the current thread forever.
+  
+  Extracted for testability with with-redefs."
+  []
+  @(promise))
+
+(defn- exit-process
+  "Exit the process with the given code.
+  
+  Extracted for testability with with-redefs."
+  [code]
+  (System/exit code))
+
 (defn start
-  "Start stdio MCP server (uses stdin/stdout)"
-  [_]
+  "Start stdio MCP server (uses stdin/stdout).
+  
+  Options:
+  - :config-path - Path to directory containing .mcp-tasks.edn (default: '.')
+                   Can be a string or symbol (for clj -X compatibility)"
+  [{:keys [config-path] :or {config-path "."}}]
   (try
-    (log/info :stdio-server {:msg "Starting MCP Tasks server"})
-    (with-open [server (mcp-server/create-server
-                         {:transport {:type :stdio}
-                          :tools {"complete-task" tools/complete-task-tool
-                                  "next-task" tools/next-task-tool
-                                  "add-task" tools/add-task-tool}
-                          :prompts (tp/prompts)})]
-      (log/info :stdio-server {:msg "MCP Tasks server started"})
-      (.addShutdownHook
-        (Runtime/getRuntime)
-        (Thread. #(do
-                    (log/info :shutting-down-stdio-server)
-                    ((:stop server)))))
-      ;; Keep the main thread alive
-      @(promise))
+    (let [config (load-and-validate-config config-path)]
+      (log/info :stdio-server {:msg "Starting MCP Tasks server"})
+      (with-open [server (mcp-server/create-server
+                           {:transport {:type :stdio}
+                            :tools {"complete-task" (tools/complete-task-tool config)
+                                    "next-task" (tools/next-task-tool config)
+                                    "add-task" (tools/add-task-tool config)}
+                            :prompts (tp/prompts config)})]
+        (log/info :stdio-server {:msg "MCP Tasks server started"})
+        (.addShutdownHook
+          (Runtime/getRuntime)
+          (Thread. #(do
+                      (log/info :shutting-down-stdio-server)
+                      ((:stop server)))))
+        (block-forever)))
     (catch Exception e
-      (log/error :stdio-server {:error (.getMessage e)})
-      (System/exit 1))))
+      (binding [*out* *err*]
+        (println "Error starting server:" (.getMessage e)))
+      (exit-process 1))))
 
 (defn -main
   "CLI entry point for MCP Tasks.
@@ -100,23 +132,31 @@
   Supports:
   - --list-prompts: List available prompt names and descriptions
   - --install-prompts [names]: Install prompts (comma-separated or all if omitted)
+  - --config-path <path>: Path to directory containing .mcp-tasks.edn (default: '.')
   - No args: Start the MCP server"
   [& args]
-  (cond
-    ;; --list-prompts flag
-    (some #{"--list-prompts"} args)
-    (System/exit (list-prompts))
+  (let [args-vec (vec args)
+        config-path-idx (.indexOf args-vec "--config-path")
+        config-path (when (>= config-path-idx 0)
+                      (when (< (inc config-path-idx) (count args-vec))
+                        (nth args-vec (inc config-path-idx))))]
+    (cond
+      ;; --list-prompts flag
+      (some #{"--list-prompts"} args)
+      (System/exit (list-prompts))
 
-    ;; --install-prompts flag
-    (some #{"--install-prompts"} args)
-    (let [idx (.indexOf (vec args) "--install-prompts")
-          next-arg (when (< (inc idx) (count args))
-                     (nth args (inc idx)))
-          prompt-names (if (and next-arg (not (str/starts-with? next-arg "--")))
-                         (str/split next-arg #",")
-                         [])]
-      (System/exit (install-prompts prompt-names)))
+      ;; --install-prompts flag
+      (some #{"--install-prompts"} args)
+      (let [idx (.indexOf args-vec "--install-prompts")
+            next-arg (when (< (inc idx) (count args-vec))
+                       (nth args-vec (inc idx)))
+            prompt-names (if (and next-arg (not (str/starts-with? next-arg "--")))
+                           (str/split next-arg #",")
+                           [])]
+        (System/exit (install-prompts prompt-names)))
 
-    ;; Default: start server
-    :else
-    (start {})))
+      ;; Default: start server
+      :else
+      (start (if config-path
+               {:config-path config-path}
+               {})))))

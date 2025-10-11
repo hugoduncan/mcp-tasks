@@ -1,8 +1,12 @@
 (ns mcp-tasks.main-test
   (:require
+    [clojure.java.io :as io]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing]]
-    [mcp-tasks.main :as sut]))
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [mcp-tasks.main :as sut])
+  (:import
+    (java.io
+      File)))
 
 (deftest get-prompt-vars-test
   ;; Test that get-prompt-vars finds all prompt vars from task-prompts namespace
@@ -42,7 +46,7 @@
   ;; Test that install-prompt handles various edge cases.
   (testing "install-prompt"
     (testing "warns on nonexistent prompt"
-      (let [output    (with-out-str (#'sut/install-prompt "nonexistent"))
+      (let [output (with-out-str (#'sut/install-prompt "nonexistent"))
             exit-code (#'sut/install-prompt "nonexistent")]
         (is (str/includes? output "Warning"))
         (is (str/includes? output "not found"))
@@ -61,3 +65,86 @@
             exit-code (#'sut/install-prompts ["simple" "nonexistent"])]
         (is (= 1 exit-code))
         (is (str/includes? output "Warning: Prompt 'nonexistent' not found"))))))
+
+(deftest load-and-validate-config-test
+  ;; Test that load-and-validate-config correctly loads, resolves, and validates config.
+  (testing "load-and-validate-config"
+    (testing "loads and resolves config with no config file"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)]
+        (try
+          (let [config (#'sut/load-and-validate-config (.getPath temp-dir))]
+            (is (map? config))
+            (is (contains? config :use-git?))
+            (is (boolean? (:use-git? config))))
+          (finally
+            (.delete temp-dir)))))
+
+    (testing "loads and resolves config with valid config file"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            config-file (io/file temp-dir ".mcp-tasks.edn")]
+        (try
+          (spit config-file "{:use-git? false}")
+          (let [config (#'sut/load-and-validate-config (.getPath temp-dir))]
+            (is (map? config))
+            (is (false? (:use-git? config))))
+          (finally
+            (.delete config-file)
+            (.delete temp-dir)))))
+
+    (testing "throws on invalid config"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            config-file (io/file temp-dir ".mcp-tasks.edn")]
+        (try
+          (spit config-file "{:use-git? \"not-a-boolean\"}")
+          (is (thrown? Exception
+                (#'sut/load-and-validate-config (.getPath temp-dir))))
+          (finally
+            (.delete config-file)
+            (.delete temp-dir)))))
+
+    (testing "throws on malformed EDN"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            config-file (io/file temp-dir ".mcp-tasks.edn")]
+        (try
+          (spit config-file "{:invalid")
+          (is (thrown? Exception
+                (#'sut/load-and-validate-config (.getPath temp-dir))))
+          (finally
+            (.delete config-file)
+            (.delete temp-dir)))))
+
+    (testing "validates git repo when use-git is true"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            git-dir (io/file mcp-tasks-dir ".git")
+            _ (.mkdirs git-dir)
+            config-file (io/file temp-dir ".mcp-tasks.edn")]
+        (try
+          (spit config-file "{:use-git? true}")
+          (let [config (#'sut/load-and-validate-config (.getPath temp-dir))]
+            (is (map? config))
+            (is (true? (:use-git? config))))
+          (finally
+            (.delete config-file)
+            (.delete git-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))))
+
+(deftest start-test
+  ;; Testing start function is complex due to stdio transport blocking on stdin.
+  ;; The core functionality (config loading and validation) is tested in
+  ;; load-and-validate-config-test.
+  (testing "start"
+    (testing "config parameter is accepted"
+      (is (fn? sut/start))
+      (is (= 1 (count (:arglists (meta #'sut/start))))))))

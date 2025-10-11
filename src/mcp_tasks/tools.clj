@@ -151,8 +151,11 @@
    2. A JSON-encoded map with :modified-files key containing a list of file paths
       relative to .mcp-tasks that need to be committed in the .mcp-tasks git repository.")
 
-(def complete-task-tool
-  "Tool to complete a task and move it from tasks to complete directory"
+(defn complete-task-tool
+  "Tool to complete a task and move it from tasks to complete directory.
+  
+  Accepts config parameter for future git-aware functionality."
+  [_config]
   {:name "complete-task"
    :description description
    :inputSchema
@@ -205,8 +208,11 @@
                                (str "\nDetails: " (pr-str data))))}]
        :isError true})))
 
-(def next-task-tool
-  "Tool to return the next task from a specific category"
+(defn next-task-tool
+  "Tool to return the next task from a specific category.
+  
+  Accepts config parameter for future git-aware functionality."
+  [_config]
   {:name "next-task"
    :description "Return the next task from tasks/<category>.md"
    :inputSchema
@@ -261,8 +267,11 @@
                        (format "- %s: %s" cat (get category-descs cat)))))
       "Add a task to tasks/<category>.md")))
 
-(def add-task-tool
-  "Tool to add a task to a specific category"
+(defn add-task-tool
+  "Tool to add a task to a specific category.
+  
+  Accepts config parameter for future git-aware functionality."
+  [_config]
   {:name "add-task"
    :description (add-task-description)
    :inputSchema

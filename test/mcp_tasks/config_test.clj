@@ -157,3 +157,126 @@
           (is (= :invalid-config-type (:type (ex-data e))))
           (is (= :use-git? (:key (ex-data e))))
           (is (= 123 (:value (ex-data e)))))))))
+
+(deftest git-repo-exists-detects-git-directory
+  ;; Test that git-repo-exists? correctly detects presence of .mcp-tasks/.git
+  (testing "git-repo-exists?"
+    (testing "returns false when .mcp-tasks/.git doesn't exist"
+      (is (false? (sut/git-repo-exists? test-project-dir))))
+
+    (testing "returns true when .mcp-tasks/.git exists"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (true? (sut/git-repo-exists? test-project-dir))))))
+
+(deftest determine-git-mode-with-explicit-config
+  ;; Test that explicit config values take precedence over auto-detection
+  (testing "determine-git-mode with explicit config"
+    (testing "returns true when config has :use-git? true"
+      (is (true? (sut/determine-git-mode test-project-dir {:use-git? true}))))
+
+    (testing "returns false when config has :use-git? false"
+      (is (false? (sut/determine-git-mode test-project-dir {:use-git? false}))))
+
+    (testing "explicit true overrides missing git repo"
+      (is (false? (sut/git-repo-exists? test-project-dir)))
+      (is (true? (sut/determine-git-mode test-project-dir {:use-git? true}))))
+
+    (testing "explicit false overrides existing git repo"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (true? (sut/git-repo-exists? test-project-dir)))
+      (is (false? (sut/determine-git-mode test-project-dir {:use-git? false}))))))
+
+(deftest determine-git-mode-with-auto-detection
+  ;; Test that auto-detection works when no explicit config is provided
+  (testing "determine-git-mode with auto-detection"
+    (testing "returns false when no config and no git repo"
+      (is (false? (sut/determine-git-mode test-project-dir {}))))
+
+    (testing "returns true when no config but git repo exists"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (true? (sut/determine-git-mode test-project-dir {}))))))
+
+(deftest resolve-config-adds-use-git
+  ;; Test that resolve-config adds :use-git? to config map
+  (testing "resolve-config"
+    (testing "adds :use-git? false when no config and no git repo"
+      (is (= {:use-git? false}
+             (sut/resolve-config test-project-dir {}))))
+
+    (testing "adds :use-git? true when no config but git repo exists"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (= {:use-git? true}
+             (sut/resolve-config test-project-dir {}))))
+
+    (testing "preserves explicit :use-git? true"
+      (is (= {:use-git? true}
+             (sut/resolve-config test-project-dir {:use-git? true}))))
+
+    (testing "preserves explicit :use-git? false even with git repo"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (= {:use-git? false}
+             (sut/resolve-config test-project-dir {:use-git? false}))))
+
+    (testing "preserves other config keys"
+      (cleanup-test-project)
+      (setup-test-project)
+      (is (= {:use-git? false :other-key "value"}
+             (sut/resolve-config test-project-dir {:other-key "value"}))))))
+
+(deftest validate-git-repo-with-git-disabled
+  ;; Test that validation passes when git mode is disabled
+  (testing "validate-git-repo with git disabled"
+    (testing "returns nil when :use-git? is false"
+      (is (nil? (sut/validate-git-repo test-project-dir {:use-git? false}))))
+
+    (testing "returns nil when :use-git? is not present"
+      (is (nil? (sut/validate-git-repo test-project-dir {}))))))
+
+(deftest validate-git-repo-with-git-enabled
+  ;; Test that validation checks for git repository when git mode is enabled
+  (testing "validate-git-repo with git enabled"
+    (testing "returns nil when git repo exists"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (nil? (sut/validate-git-repo test-project-dir {:use-git? true}))))
+
+    (testing "throws clear error when git repo missing"
+      (cleanup-test-project)
+      (setup-test-project)
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Git mode enabled but \.mcp-tasks/\.git not found"
+            (sut/validate-git-repo test-project-dir {:use-git? true}))))
+
+    (testing "includes error details in ex-data"
+      (cleanup-test-project)
+      (setup-test-project)
+      (try
+        (sut/validate-git-repo test-project-dir {:use-git? true})
+        (is false "Should have thrown")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :git-repo-missing (:type (ex-data e))))
+          (is (= test-project-dir (:project-dir (ex-data e))))
+          (is (string? (:git-dir (ex-data e)))))))))
+
+(deftest validate-startup-passes-with-valid-config
+  ;; Test that startup validation passes with valid configurations
+  (testing "validate-startup"
+    (testing "passes with git disabled and no git repo"
+      (is (nil? (sut/validate-startup test-project-dir {:use-git? false}))))
+
+    (testing "passes with git disabled and git repo present"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (nil? (sut/validate-startup test-project-dir {:use-git? false}))))
+
+    (testing "passes with git enabled and git repo present"
+      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (is (nil? (sut/validate-startup test-project-dir {:use-git? true}))))))
+
+(deftest validate-startup-fails-with-invalid-config
+  ;; Test that startup validation fails with invalid configurations
+  (testing "validate-startup"
+    (testing "fails when git enabled but repo missing"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Git mode enabled but \.mcp-tasks/\.git not found"
+            (sut/validate-startup test-project-dir {:use-git? true}))))))

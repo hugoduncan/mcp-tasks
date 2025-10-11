@@ -43,3 +43,53 @@
                            :cause e}
                           e))))
       nil)))
+
+;; Git auto-detection
+
+(defn git-repo-exists?
+  "Checks if .mcp-tasks/.git directory exists in the project directory.
+  Returns true if the git repository exists, false otherwise."
+  [project-dir]
+  (let [git-dir (io/file project-dir ".mcp-tasks" ".git")]
+    (.exists git-dir)))
+
+(defn determine-git-mode
+  "Determines whether to use git mode based on config and auto-detection.
+  Returns boolean indicating if git mode should be enabled.
+
+  Precedence:
+  1. Explicit config value (:use-git?) if present
+  2. Auto-detected presence of .mcp-tasks/.git directory"
+  [project-dir config]
+  (if (contains? config :use-git?)
+    (:use-git? config)
+    (git-repo-exists? project-dir)))
+
+(defn resolve-config
+  "Returns final config map with :use-git? resolved.
+  Uses explicit config value if present, otherwise auto-detects from git repo presence."
+  [project-dir config]
+  (assoc config :use-git? (determine-git-mode project-dir config)))
+
+;; Startup validation
+
+(defn validate-git-repo
+  "Validates that git repository exists when git mode is enabled.
+  Returns nil on success.
+  Throws ex-info with clear message if validation fails."
+  [project-dir config]
+  (when (:use-git? config)
+    (when-not (git-repo-exists? project-dir)
+      (throw (ex-info "Git mode enabled but .mcp-tasks/.git not found"
+                      {:type :git-repo-missing
+                       :project-dir project-dir
+                       :git-dir (str project-dir "/.mcp-tasks/.git")}))))
+  nil)
+
+(defn validate-startup
+  "Performs all startup validation (config + git repo).
+  Returns nil on success.
+  Throws ex-info with clear message if any validation fails."
+  [project-dir config]
+  (validate-git-repo project-dir config)
+  nil)
