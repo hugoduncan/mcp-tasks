@@ -74,7 +74,7 @@
   Moves first task from tasks/<category>.md to complete/<category>.md,
   verifying it matches the provided task-text and optionally adding a
   completion comment."
-  [{:keys [category task-text completion-comment]}]
+  [_context {:keys [category task-text completion-comment]}]
   (try
     (let [tasks-dir     ".mcp-tasks/tasks"
           complete-dir  ".mcp-tasks/complete"
@@ -158,7 +158,7 @@
 
   Returns the first task from tasks/<category>.md in a map with :category and :task keys,
   or a map with :category and :status keys if there are no tasks."
-  [{:keys [category]}]
+  [_context {:keys [category]}]
   (try
     (let [tasks-dir     ".mcp-tasks/tasks"
           tasks-file    (str tasks-dir "/" category ".md")
@@ -167,19 +167,19 @@
       (if (str/blank? tasks-content)
         {:content [{:type "text"
                     :text (pr-str {:category category
-                                   :status "No more tasks in this category"})}]
+                                   :status   "No more tasks in this category"})}]
          :isError false}
         (let [tasks (parse-tasks tasks-content)]
           (if (empty? tasks)
             {:content [{:type "text"
                         :text (pr-str {:category category
-                                       :status "No more tasks in this category"})}]
+                                       :status   "No more tasks in this category"})}]
              :isError false}
             (let [first-task (first tasks)
                   task-text  (str/replace first-task #"^- \[([ x])\] " "")]
               {:content [{:type "text"
                           :text (pr-str {:category category
-                                         :task task-text})}]
+                                         :task     task-text})}]
                :isError false})))))
     (catch Exception e
       {:content [{:type "text"
@@ -206,7 +206,7 @@
 
   Adds a task to tasks/<category>.md as an incomplete todo item.
   If prepend is true, adds at the beginning; otherwise appends at the end."
-  [{:keys [category task-text prepend]}]
+  [_context {:keys [category task-text prepend]}]
   (try
     (let [tasks-dir     ".mcp-tasks/tasks"
           tasks-file    (str tasks-dir "/" category ".md")
