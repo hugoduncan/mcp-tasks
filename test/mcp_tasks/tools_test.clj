@@ -1,5 +1,6 @@
 (ns mcp-tasks.tools-test
   (:require
+    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -180,6 +181,28 @@
                   (read-test-file "complete/test.md")))
            (is (= "- [ ] second task"
                   (read-test-file "tasks/test.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest returns-modified-files-in-json
+  ;; Tests that complete-task-impl returns modified files as JSON in second text item
+  (testing "complete-task"
+    (testing "returns modified files as JSON in second text item"
+      (setup-test-dir)
+      (write-test-file "tasks/test.md" "- [ ] task to complete")
+      (with-test-files
+        #(let [result (sut/complete-task-impl
+                        nil
+                        {:category "test"
+                         :task-text "task to complete"})
+               content (:content result)]
+           (is (false? (:isError result)))
+           (is (= 2 (count content)))
+           (is (= "text" (:type (first content))))
+           (is (= "text" (:type (second content))))
+           (let [json-data (json/read-str (:text (second content))
+                                          :key-fn keyword)]
+             (is (= ["tasks/test.md" "complete/test.md"]
+                    (:modified-files json-data))))))
       (cleanup-test-fixtures))))
 
 ;; next-task-impl tests
