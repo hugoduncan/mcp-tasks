@@ -403,7 +403,21 @@ Override the default story prompts by creating files in `.mcp-tasks/prompts/stor
 - `create-story-tasks.md` - Task breakdown instructions
 - `execute-story-task.md` - Task execution workflow
 
-**Override file format:**
+#### Frontmatter Format
+
+Override files must include YAML frontmatter delimited by `---` markers:
+
+**Supported fields:**
+- `title` (string) - Human-readable prompt name shown in listings
+- `description` (string) - Brief explanation of the prompt's purpose
+
+**Format requirements:**
+- Frontmatter must appear at the start of the file
+- Use `key: value` format (simple YAML)
+- Both opening and closing `---` delimiters are required
+- Frontmatter is parsed but title and description are optional
+
+**Basic override file structure:**
 ```markdown
 ---
 title: Custom Story Refinement
@@ -414,9 +428,86 @@ description: My team's story refinement process
 Use {story-name} as a placeholder for the story name argument.
 ```
 
-**Precedence:**
-1. `.mcp-tasks/prompts/story/<prompt-name>.md` (your override)
-2. Built-in defaults from the system
+#### Override Precedence
+
+The system checks for story prompt overrides in this order:
+
+1. **Project override**: `.mcp-tasks/prompts/story/<prompt-name>.md`
+   - Your team-specific customization
+   - Takes precedence over built-ins
+   - Can customize frontmatter and instructions
+
+2. **Built-in default**: Resource files in the MCP server
+   - System-provided story prompts
+   - Used when no override exists
+   - Cannot be modified without rebuilding the server
+
+#### Complete Working Example
+
+Create a custom task breakdown prompt with strict category rules:
+
+**File**: `.mcp-tasks/prompts/story/create-story-tasks.md`
+```markdown
+---
+title: Strict Category Task Breakdown
+description: Break down stories with strict 2-hour task limits
+---
+
+Break down the story into tasks following these rules:
+
+1. Read the story from `.mcp-tasks/stories/{story-name}.md`
+2. If the file doesn't exist, inform the user and stop
+3. Analyze the story and create specific, actionable tasks
+4. Apply strict category rules:
+   - simple: Must complete in under 2 hours, no external dependencies
+   - medium: 2-4 hours, may involve API integration
+   - large: Over 4 hours, requires design discussion first
+5. Each task must have:
+   - Clear acceptance criteria
+   - Estimated time in task description
+   - Explicit dependencies listed
+6. Present the breakdown with time estimates
+7. Get user approval before writing to `.mcp-tasks/story-tasks/{story-name}-tasks.md`
+
+Task format:
+- [ ] STORY: {story-name} - <title>
+  <description>
+  Estimated time: X hours
+  Dependencies: <list or "none">
+
+CATEGORY: <category>
+```
+
+This override enforces time-based categorization and explicit dependency tracking that may not be in the default prompt.
+
+#### Relationship to Category Prompts
+
+Story prompts and category prompts serve different purposes:
+
+**Story prompts** (`.mcp-tasks/prompts/story/*.md`):
+- Guide story-level operations (refine, break down, execute)
+- Handle the story workflow and task distribution
+- Route tasks to appropriate categories
+- Three prompts: refine-story, create-story-tasks, execute-story-task
+
+**Category prompts** (`.mcp-tasks/prompts/<category>.md`):
+- Define how to execute individual tasks within a category
+- Apply to both story tasks and standalone tasks
+- Specify implementation steps, testing requirements, commit conventions
+- One prompt per category (simple, medium, large, etc.)
+
+**Interaction:**
+When you run `/mcp-tasks:execute-story-task user-auth`:
+1. The `execute-story-task` **story prompt** finds the next story task
+2. It extracts the task's CATEGORY (e.g., "simple")
+3. It adds the task to that category's queue
+4. The task executes using the `simple` **category prompt** from `.mcp-tasks/prompts/simple.md`
+5. After completion, the story task is marked as done
+
+**Customization strategy:**
+- Override story prompts to change how stories are managed and broken down
+- Override category prompts to change how tasks are implemented
+- Both can be customized independently to fit your workflow
 
 ### Story Workflow Tips
 
