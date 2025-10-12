@@ -93,17 +93,19 @@
 
 (defn create-server-config
   "Create MCP server configuration map.
-  
+
   Parameters:
   - config: Resolved task configuration (from load-and-validate-config)
   - transport: Transport configuration map (e.g., {:type :stdio} or {:type :in-memory :shared ...})
-  
+
   Returns server configuration map suitable for mcp-server/create-server"
   [config transport]
   {:transport transport
    :tools {"complete-task" (tools/complete-task-tool config)
            "next-task" (tools/next-task-tool config)
-           "add-task" (tools/add-task-tool config)}
+           "add-task" (tools/add-task-tool config)
+           "next-story-task" (tools/next-story-task-tool config)
+           "complete-story-task" (tools/complete-story-task-tool config)}
    :prompts (tp/prompts config)})
 
 (defn- exit-process

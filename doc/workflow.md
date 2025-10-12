@@ -16,6 +16,8 @@ mcp-tasks supports an optional configuration file `.mcp-tasks.edn` in your proje
 ```clojure
 {:use-git? true}   ; Enable git mode
 {:use-git? false}  ; Disable git mode
+{:story-branch-management? false}  ; Disable story branch management (default)
+{:story-branch-management? true}   ; Enable story branch management
 ```
 
 **File location:**
