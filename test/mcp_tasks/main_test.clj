@@ -1,14 +1,14 @@
 (ns mcp-tasks.main-test
   (:require
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [clojure.test :refer [deftest is testing]]
-    [mcp-tasks.main :as sut]
-    [mcp-tasks.prompts :as prompts]
-    [mcp-tasks.tools :as tools])
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [mcp-tasks.main :as sut]
+   [mcp-tasks.prompts :as prompts]
+   [mcp-tasks.tools :as tools])
   (:import
-    (java.io
-      File)))
+   (java.io
+    File)))
 
 (deftest get-prompt-vars-test
   ;; Test that get-prompt-vars finds all prompt vars from task-prompts namespace
@@ -105,7 +105,7 @@
         (try
           (spit config-file "{:use-git? \"not-a-boolean\"}")
           (is (thrown? Exception
-                (#'sut/load-and-validate-config (.getPath temp-dir))))
+                       (#'sut/load-and-validate-config (.getPath temp-dir))))
           (finally
             (.delete config-file)
             (.delete temp-dir)))))
@@ -118,7 +118,7 @@
         (try
           (spit config-file "{:invalid")
           (is (thrown? Exception
-                (#'sut/load-and-validate-config (.getPath temp-dir))))
+                       (#'sut/load-and-validate-config (.getPath temp-dir))))
           (finally
             (.delete config-file)
             (.delete temp-dir)))))
@@ -223,7 +223,7 @@
             (let [message-text (get-in simple-prompt [:messages 0 :content :text])]
               (is (string? message-text))
               (is (not
-                    (re-find #"Commit the task tracking changes" message-text)))))
+                   (re-find #"Commit the task tracking changes" message-text)))))
           (finally
             (.delete (io/file tasks-dir "simple.md"))
             (.delete tasks-dir)
@@ -251,12 +251,12 @@
             (is (map? complete-tool))
             (is (map? simple-prompt))
             (let [message-text (get-in
-                                 simple-prompt
-                                 [:messages 0 :content :text])]
+                                simple-prompt
+                                [:messages 0 :content :text])]
               (is (not
-                    (re-find
-                      #"Commit the task tracking changes"
-                      message-text)))))
+                   (re-find
+                    #"Commit the task tracking changes"
+                    message-text)))))
           (finally
             (.delete config-file)
             (.delete (io/file tasks-dir "simple.md"))
@@ -321,6 +321,34 @@
           (is (map? (:prompts server-config)))
           (is (contains? (:prompts server-config) "next-simple"))
           (is (contains? (:prompts server-config) "refine-story"))
+          (finally
+            (.delete (io/file tasks-dir "simple.md"))
+            (.delete tasks-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))
+
+    (testing "review-story-implementation prompt has correct arguments"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            tasks-dir (io/file mcp-tasks-dir "tasks")
+            _ (.mkdirs tasks-dir)
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            config {:use-git? false :base-dir (.getPath temp-dir)}
+            transport {:type :in-memory}
+            server-config (sut/create-server-config config transport)]
+        (try
+          (let [prompt (get (:prompts server-config) "review-story-implementation")]
+            (is (map? prompt))
+            (is (= "review-story-implementation" (:name prompt)))
+            (is (vector? (:arguments prompt)))
+            (is (= 2 (count (:arguments prompt))))
+            (let [[story-name-arg context-arg] (:arguments prompt)]
+              (is (= "story-name" (:name story-name-arg)))
+              (is (true? (:required story-name-arg)))
+              (is (= "additional-context" (:name context-arg)))
+              (is (false? (:required context-arg)))))
           (finally
             (.delete (io/file tasks-dir "simple.md"))
             (.delete tasks-dir)
