@@ -1,10 +1,11 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.prompts :as prompts]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.response :as response]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -112,8 +113,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                first-task
-                                completion-comment)
+                                 first-task
+                                 completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -140,11 +141,7 @@
                         :text (str "Task completed and moved to " complete-file)}]
              :isError false}))))
     (catch Exception e
-      {:content [{:type "text"
-                  :text (str "Error: " (.getMessage e)
-                             (when-let [data (ex-data e)]
-                               (str "\nDetails: " (pr-str data))))}]
-       :isError true})))
+      (response/error-response e))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
@@ -221,11 +218,7 @@
                                          :task task-text})}]
                :isError false})))))
     (catch Exception e
-      {:content [{:type "text"
-                  :text (str "Error: " (.getMessage e)
-                             (when-let [data (ex-data e)]
-                               (str "\nDetails: " (pr-str data))))}]
-       :isError true})))
+      (response/error-response e))))
 
 (defn next-task-tool
   "Tool to return the next task from a specific category.
@@ -268,11 +261,7 @@
                   :text (str "Task added to " tasks-file)}]
        :isError false})
     (catch Exception e
-      {:content [{:type "text"
-                  :text (str "Error: " (.getMessage e)
-                             (when-let [data (ex-data e)]
-                               (str "\nDetails: " (pr-str data))))}]
-       :isError true})))
+      (response/error-response e))))
 
 (defn- add-task-description
   "Build description for add-task tool with available categories and their descriptions."

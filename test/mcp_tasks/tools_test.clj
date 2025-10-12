@@ -1,10 +1,10 @@
 (ns mcp-tasks.tools-test
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
-   [mcp-tasks.tools :as sut]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.tools :as sut]))
 
 (def ^:private test-fixtures-dir "test-resources/tools-test")
 

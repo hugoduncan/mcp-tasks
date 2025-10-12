@@ -1,10 +1,9 @@
 (ns mcp-tasks.story-tools-test
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-
-   [clojure.test :refer [deftest is testing]]
-   [mcp-tasks.story-tools :as sut]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.story-tools :as sut]))
 
 (def test-fixtures-dir
   "Temporary directory for test fixtures"

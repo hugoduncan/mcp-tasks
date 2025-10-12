@@ -2,14 +2,14 @@
   "Stdio-based MCP server main entry point for task management"
   (:gen-class)
   (:require
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-clj.log :as log]
-   [mcp-clj.mcp-server.core :as mcp-server]
-   [mcp-tasks.config :as config]
-   [mcp-tasks.prompts :as tp]
-   [mcp-tasks.story-tools :as story-tools]
-   [mcp-tasks.tools :as tools]))
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-clj.log :as log]
+    [mcp-clj.mcp-server.core :as mcp-server]
+    [mcp-tasks.config :as config]
+    [mcp-tasks.prompts :as tp]
+    [mcp-tasks.story-tools :as story-tools]
+    [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
   "Get all prompt vars from the task-prompts and story-prompts namespaces.
@@ -138,10 +138,10 @@
       (with-open [server (mcp-server/create-server server-config)]
         (log/info :stdio-server {:msg "MCP Tasks server started"})
         (.addShutdownHook
-         (Runtime/getRuntime)
-         (Thread. #(do
-                     (log/info :shutting-down-stdio-server)
-                     ((:stop server)))))
+          (Runtime/getRuntime)
+          (Thread. #(do
+                      (log/info :shutting-down-stdio-server)
+                      ((:stop server)))))
         (block-forever)))
     (catch Exception e
       (binding [*out* *err*]

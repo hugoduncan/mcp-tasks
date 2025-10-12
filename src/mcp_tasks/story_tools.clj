@@ -1,10 +1,11 @@
 (ns mcp-tasks.story-tools
   "Story management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.story-tasks :as story-tasks]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.response :as response]
+    [mcp-tasks.story-tasks :as story-tasks]))
 
 (defn- story-path
   "Construct .mcp-tasks story-related paths with base-dir handling.
@@ -66,11 +67,7 @@
                                      :task-index nil})}]
            :isError false})))
     (catch Exception e
-      {:content [{:type "text"
-                  :text (str "Error: " (.getMessage e)
-                             (when-let [data (ex-data e)]
-                               (str "\nDetails: " (pr-str data))))}]
-       :isError true})))
+      (response/error-response e))))
 
 (defn next-story-task-tool
   "Tool to return the next incomplete task from a story's task list.
@@ -138,9 +135,9 @@
 
         ;; Mark task as complete
         (let [updated-content (story-tasks/mark-task-complete
-                               content
-                               (:index first-incomplete)
-                               completion-comment)]
+                                content
+                                (:index first-incomplete)
+                                completion-comment)]
           (spit story-tasks-file updated-content))
 
         (if use-git?
@@ -155,11 +152,7 @@
                       :text (str "Story task completed in " story-tasks-file)}]
            :isError false})))
     (catch Exception e
-      {:content [{:type "text"
-                  :text (str "Error: " (.getMessage e)
-                             (when-let [data (ex-data e)]
-                               (str "\nDetails: " (pr-str data))))}]
-       :isError true})))
+      (response/error-response e))))
 
 (defn- complete-story-task-description
   "Generate description for complete-story-task tool based on config."
@@ -298,11 +291,7 @@
                                      "\n(Note: No tasks file found to archive)"))}]
              :isError false}))))
     (catch Exception e
-      {:content [{:type "text"
-                  :text (str "Error: " (.getMessage e)
-                             (when-let [data (ex-data e)]
-                               (str "\nDetails: " (pr-str data))))}]
-       :isError true})))
+      (response/error-response e))))
 
 (defn- complete-story-description
   "Generate description for complete-story tool based on config."
