@@ -490,3 +490,167 @@
       :description "Optional comment to append to the completed task"}}
     :required ["story-name" "task-text"]}
    :implementation (partial complete-story-task-impl config)})
+
+(defn- complete-story-impl
+  "Implementation of complete-story tool.
+
+  Marks a story as complete by moving it to the archive along with its task list.
+
+  Process:
+  1. Reads story file from .mcp-tasks/story/stories/<story-name>.md
+  2. Optionally appends completion comment
+  3. Moves story file to .mcp-tasks/story/complete/<story-name>.md
+  4. Moves tasks file from .mcp-tasks/story/story-tasks/<story-name>-tasks.md
+     to .mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md
+
+  Returns:
+  - Git mode enabled: Two text items (completion message + JSON with :modified-files)
+  - Git mode disabled: Single text item (completion message only)"
+  [config _context {:keys [story-name completion-comment]}]
+  (try
+    (let [use-git? (:use-git? config)
+          base-dir (:base-dir config)
+
+          ;; Story file paths
+          stories-dir (if base-dir
+                        (str base-dir "/.mcp-tasks/story/stories")
+                        ".mcp-tasks/story/stories")
+          complete-dir (if base-dir
+                         (str base-dir "/.mcp-tasks/story/complete")
+                         ".mcp-tasks/story/complete")
+          story-file (str stories-dir "/" story-name ".md")
+          complete-story-file (str complete-dir "/" story-name ".md")
+
+          ;; Task file paths
+          story-tasks-dir (if base-dir
+                            (str base-dir "/.mcp-tasks/story/story-tasks")
+                            ".mcp-tasks/story/story-tasks")
+          story-tasks-complete-dir (if base-dir
+                                      (str base-dir "/.mcp-tasks/story/story-tasks-complete")
+                                      ".mcp-tasks/story/story-tasks-complete")
+          tasks-file (str story-tasks-dir "/" story-name "-tasks.md")
+          complete-tasks-file (str story-tasks-complete-dir "/" story-name "-tasks.md")
+
+          ;; Relative paths for git
+          story-rel-path (if base-dir
+                           (str "story/stories/" story-name ".md")
+                           (str "story/stories/" story-name ".md"))
+          complete-story-rel-path (if base-dir
+                                    (str "story/complete/" story-name ".md")
+                                    (str "story/complete/" story-name ".md"))
+          tasks-rel-path (if base-dir
+                           (str "story/story-tasks/" story-name "-tasks.md")
+                           (str "story/story-tasks/" story-name "-tasks.md"))
+          complete-tasks-rel-path (if base-dir
+                                    (str "story/story-tasks-complete/" story-name "-tasks.md")
+                                    (str "story/story-tasks-complete/" story-name "-tasks.md"))]
+
+      ;; Check if story file exists
+      (when-not (.exists (io/file story-file))
+        (throw (ex-info "Story file not found"
+                        {:story-name story-name
+                         :file story-file})))
+
+      ;; Check if already completed
+      (when (.exists (io/file complete-story-file))
+        (throw (ex-info "Story is already completed"
+                        {:story-name story-name
+                         :file complete-story-file})))
+
+      ;; Read and optionally update story content
+      (let [story-content (slurp story-file)
+            updated-content (if (and completion-comment
+                                    (not (str/blank? completion-comment)))
+                             (str story-content "\n\n---\n\n"
+                                  (str/trim completion-comment))
+                             story-content)]
+
+        ;; Ensure complete directory exists
+        (.mkdirs (io/file complete-dir))
+
+        ;; Move story file to complete
+        (spit complete-story-file updated-content)
+        (.delete (io/file story-file))
+
+        ;; Move tasks file if it exists
+        (let [tasks-file-exists? (.exists (io/file tasks-file))
+              modified-files (if tasks-file-exists?
+                              (do
+                                (.mkdirs (io/file story-tasks-complete-dir))
+                                (let [tasks-content (slurp tasks-file)]
+                                  (spit complete-tasks-file tasks-content)
+                                  (.delete (io/file tasks-file)))
+                                [story-rel-path complete-story-rel-path
+                                 tasks-rel-path complete-tasks-rel-path])
+                              [story-rel-path complete-story-rel-path])]
+
+          (if use-git?
+            ;; Git mode: return message + JSON with modified files
+            {:content [{:type "text"
+                        :text (str "Story '" story-name "' marked as complete"
+                                  (when-not tasks-file-exists?
+                                    "\n(Note: No tasks file found to archive)"))}
+                       {:type "text"
+                        :text (json/write-str {:modified-files modified-files})}]
+             :isError false}
+            ;; Non-git mode: return message only
+            {:content [{:type "text"
+                        :text (str "Story '" story-name "' marked as complete"
+                                  (when-not tasks-file-exists?
+                                    "\n(Note: No tasks file found to archive)"))}]
+             :isError false}))))
+    (catch Exception e
+      {:content [{:type "text"
+                  :text (str "Error: " (.getMessage e)
+                             (when-let [data (ex-data e)]
+                               (str "\nDetails: " (pr-str data))))}]
+       :isError true})))
+
+(defn- complete-story-description
+  "Generate description for complete-story tool based on config."
+  [config]
+  (if (:use-git? config)
+    "Mark a story as complete and move it to the archive.
+
+  Moves the story file from .mcp-tasks/story/stories/<story-name>.md to
+  .mcp-tasks/story/complete/<story-name>.md and the tasks file from
+  .mcp-tasks/story/story-tasks/<story-name>-tasks.md to
+  .mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md.
+
+  Optionally adds a completion comment to the story.
+
+  Returns two text items:
+  1. A completion status message
+  2. A JSON-encoded map with :modified-files key containing file paths
+     relative to .mcp-tasks for use in git commit workflows."
+    "Mark a story as complete and move it to the archive.
+
+  Moves the story file from .mcp-tasks/story/stories/<story-name>.md to
+  .mcp-tasks/story/complete/<story-name>.md and the tasks file from
+  .mcp-tasks/story/story-tasks/<story-name>-tasks.md to
+  .mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md.
+
+  Optionally adds a completion comment to the story.
+
+  Returns a completion status message."))
+
+(defn complete-story-tool
+  "Tool to complete a story and move it to the archive.
+
+  Accepts config parameter containing :use-git? flag. When git mode is enabled,
+  returns modified file paths for git commit workflow. When disabled, returns
+  only completion message."
+  [config]
+  {:name "complete-story"
+   :description (complete-story-description config)
+   :inputSchema
+   {:type "object"
+    :properties
+    {"story-name"
+     {:type "string"
+      :description "The story name (without .md extension)"}
+     "completion-comment"
+     {:type "string"
+      :description "Optional comment to append to the story"}}
+    :required ["story-name"]}
+   :implementation (partial complete-story-impl config)})

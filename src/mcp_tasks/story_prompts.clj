@@ -22,3 +22,7 @@
 (def review-story-implementation
   "Review the implementation of a story."
   (slurp (io/resource "story/prompts/review-story-implementation.md")))
+
+(def complete-story
+  "Mark a story as complete and archive it."
+  (slurp (io/resource "story/prompts/complete-story.md")))

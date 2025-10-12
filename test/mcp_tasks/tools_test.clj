@@ -577,3 +577,156 @@
         (is (= "text" (:type (first content))))
         (is (re-find #"completed" (:text (first content)))))
       (cleanup-test-fixtures))))
+
+;;; complete-story-impl tests
+
+(deftest complete-story-moves-story-and-tasks-to-complete
+  ;; Tests that complete-story-impl moves both story and tasks files to complete directories
+  (testing "complete-story"
+    (testing "moves story and tasks files to complete directories"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "stories"))
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/stories/test-story.md"
+                       "# Test Story\n\nStory content here")
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
+                       "- [x] Task 1\n\nCATEGORY: simple\n")
+      (let [config {:base-dir test-fixtures-dir :use-git? false}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "test-story"})]
+        (is (false? (:isError result)))
+        (is (re-find #"marked as complete" (get-in result [:content 0 :text])))
+        ;; Check story moved
+        (is (not (.exists (io/file test-fixtures-dir ".mcp-tasks" "story" "stories" "test-story.md"))))
+        (is (.exists (io/file test-fixtures-dir ".mcp-tasks" "story" "complete" "test-story.md")))
+        (is (= "# Test Story\n\nStory content here"
+               (read-test-file ".mcp-tasks/story/complete/test-story.md")))
+        ;; Check tasks moved
+        (is (not (.exists (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks" "test-story-tasks.md"))))
+        (is (.exists (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks-complete" "test-story-tasks.md")))
+        (is (= "- [x] Task 1\n\nCATEGORY: simple\n"
+               (read-test-file ".mcp-tasks/story/story-tasks-complete/test-story-tasks.md"))))
+      (cleanup-test-fixtures))))
+
+(deftest complete-story-adds-completion-comment
+  ;; Tests that complete-story-impl adds completion comment to story
+  (testing "complete-story"
+    (testing "adds completion comment to story"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "stories"))
+      (write-test-file ".mcp-tasks/story/stories/test-story.md"
+                       "# Test Story\n\nStory content")
+      (let [config {:base-dir test-fixtures-dir :use-git? false}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "test-story"
+                     :completion-comment "Successfully implemented"})]
+        (is (false? (:isError result)))
+        (let [completed (read-test-file ".mcp-tasks/story/complete/test-story.md")]
+          (is (re-find #"# Test Story" completed))
+          (is (re-find #"---" completed))
+          (is (re-find #"Successfully implemented" completed))))
+      (cleanup-test-fixtures))))
+
+(deftest complete-story-works-without-tasks-file
+  ;; Tests that complete-story-impl works when tasks file doesn't exist
+  (testing "complete-story"
+    (testing "works when tasks file doesn't exist"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "stories"))
+      (write-test-file ".mcp-tasks/story/stories/test-story.md"
+                       "# Test Story\n\nStory content")
+      (let [config {:base-dir test-fixtures-dir :use-git? false}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "test-story"})]
+        (is (false? (:isError result)))
+        (is (re-find #"marked as complete" (get-in result [:content 0 :text])))
+        (is (re-find #"No tasks file found" (get-in result [:content 0 :text])))
+        (is (.exists (io/file test-fixtures-dir ".mcp-tasks" "story" "complete" "test-story.md"))))
+      (cleanup-test-fixtures))))
+
+(deftest complete-story-errors-when-story-not-found
+  ;; Tests that complete-story-impl errors when story file not found
+  (testing "complete-story"
+    (testing "errors when story file not found"
+      (setup-test-dir)
+      (let [config {:base-dir test-fixtures-dir :use-git? false}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "nonexistent"})]
+        (is (true? (:isError result)))
+        (is (re-find #"Story file not found"
+                     (get-in result [:content 0 :text]))))
+      (cleanup-test-fixtures))))
+
+(deftest complete-story-errors-when-already-completed
+  ;; Tests that complete-story-impl errors when story already completed
+  (testing "complete-story"
+    (testing "errors when story already completed"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "stories"))
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "complete"))
+      (write-test-file ".mcp-tasks/story/stories/test-story.md" "# Story")
+      (write-test-file ".mcp-tasks/story/complete/test-story.md" "# Already Done")
+      (let [config {:base-dir test-fixtures-dir :use-git? false}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "test-story"})]
+        (is (true? (:isError result)))
+        (is (re-find #"already completed"
+                     (get-in result [:content 0 :text]))))
+      (cleanup-test-fixtures))))
+
+(deftest complete-story-returns-modified-files-when-git-mode
+  ;; Tests that complete-story-impl returns modified files in git mode
+  (testing "complete-story"
+    (testing "returns modified files as JSON when git mode enabled"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "stories"))
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/stories/test-story.md" "# Story")
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md" "- [x] Task\n\nCATEGORY: simple\n")
+      (let [config {:base-dir test-fixtures-dir :use-git? true}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "test-story"})
+            content (:content result)]
+        (is (false? (:isError result)))
+        (is (= 2 (count content)))
+        (is (= "text" (:type (first content))))
+        (is (= "text" (:type (second content))))
+        (let [json-data (json/read-str (:text (second content))
+                                       :key-fn keyword)]
+          (is (= ["story/stories/test-story.md"
+                  "story/complete/test-story.md"
+                  "story/story-tasks/test-story-tasks.md"
+                  "story/story-tasks-complete/test-story-tasks.md"]
+                 (:modified-files json-data)))))
+      (cleanup-test-fixtures))))
+
+(deftest complete-story-returns-only-message-when-non-git-mode
+  ;; Tests that complete-story-impl returns only message in non-git mode
+  (testing "complete-story"
+    (testing "returns only completion message when git mode disabled"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "stories"))
+      (write-test-file ".mcp-tasks/story/stories/test-story.md" "# Story")
+      (let [config {:base-dir test-fixtures-dir :use-git? false}
+            result (#'sut/complete-story-impl
+                    config
+                    nil
+                    {:story-name "test-story"})
+            content (:content result)]
+        (is (false? (:isError result)))
+        (is (= 1 (count content)) "Should only return completion message")
+        (is (= "text" (:type (first content))))
+        (is (re-find #"marked as complete" (:text (first content)))))
+      (cleanup-test-fixtures))))

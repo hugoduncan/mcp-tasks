@@ -111,7 +111,8 @@
            "next-task" (tools/next-task-tool config)
            "add-task" (tools/add-task-tool config)
            "next-story-task" (tools/next-story-task-tool config)
-           "complete-story-task" (tools/complete-story-task-tool config)}
+           "complete-story-task" (tools/complete-story-task-tool config)
+           "complete-story" (tools/complete-story-tool config)}
    :prompts (merge (tp/prompts config)
                    (tp/story-prompts))})
 
