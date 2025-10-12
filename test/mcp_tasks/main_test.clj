@@ -38,8 +38,8 @@
         (is (string? output))
         (is (str/includes? output "clarify-task:"))
         (is (str/includes? output "simple:"))
-        (is (str/includes? output "Turn informal task instructions"))
-        (is (str/includes? output "basic prompt"))))
+        (is (str/includes? output "Transform informal task instructions"))
+        (is (str/includes? output "Execute simple tasks"))))
 
     (testing "returns exit code 0"
       (is (= 0 (#'sut/list-prompts))))))

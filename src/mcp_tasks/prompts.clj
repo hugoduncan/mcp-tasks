@@ -162,23 +162,23 @@ You can use the `add-task` tool to add new tasks to a category.
   Returns a vector of prompt maps suitable for registration with the MCP server."
   [config categories]
   (vec
-   (for [category categories]
-     (let [prompt-data            (read-prompt-instructions category)
-           metadata               (:metadata prompt-data)
-           custom-content         (:content prompt-data)
-           execution-instructions (or custom-content (default-prompt-text))
-           prompt-text            (str "Please complete the next " category " task following these steps:\n\n"
-                                       (read-task-prompt-text config category)
-                                       execution-instructions
-                                       (complete-task-prompt-text config category))
-           description            (or (get metadata "description")
-                                      (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
-       (prompts/valid-prompt?
-        {:name        (str "next-" category)
-         :description description
-         :messages    [{:role    "user"
-                        :content {:type "text"
-                                  :text prompt-text}}]})))))
+    (for [category categories]
+      (let [prompt-data            (read-prompt-instructions category)
+            metadata               (:metadata prompt-data)
+            custom-content         (:content prompt-data)
+            execution-instructions (or custom-content (default-prompt-text))
+            prompt-text            (str "Please complete the next " category " task following these steps:\n\n"
+                                        (read-task-prompt-text config category)
+                                        execution-instructions
+                                        (complete-task-prompt-text config category))
+            description            (or (get metadata "description")
+                                       (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
+        (prompts/valid-prompt?
+          {:name        (str "next-" category)
+           :description description
+           :messages    [{:role    "user"
+                          :content {:type "text"
+                                    :text prompt-text}}]})))))
 
 (defn category-descriptions
   "Get descriptions for all discovered categories.
@@ -302,8 +302,8 @@ You can use the `add-task` tool to add new tasks to a category.
                                                  (format "Story prompt: %s" prompt-name))]
               [prompt-name
                (prompts/valid-prompt?
-                {:name        prompt-name
-                 :description description
-                 :messages    [{:role    "user"
-                                :content {:type "text"
-                                          :text content}}]})])))))
+                 {:name        prompt-name
+                  :description description
+                  :messages    [{:role    "user"
+                                 :content {:type "text"
+                                           :text content}}]})])))))
