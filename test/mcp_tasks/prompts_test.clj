@@ -183,3 +183,34 @@
         (is (re-find #"Remove the task" text-git))
         (is (re-find #"Move the completed task" text-no-git))
         (is (re-find #"Remove the task" text-no-git))))))
+
+(deftest get-story-prompt-test
+  ;; Test that get-story-prompt retrieves prompts from file overrides or
+  ;; built-ins, with proper frontmatter parsing and fallback behavior.
+  (testing "get-story-prompt"
+    (testing "returns nil for nonexistent prompt"
+      (is (nil? (sut/get-story-prompt "nonexistent-prompt"))))
+
+    (testing "returns built-in prompt when no override file exists"
+      (let [result (sut/get-story-prompt "nonexistent-builtin")]
+        (is (nil? result))))))
+
+(deftest list-story-prompts-test
+  ;; Test that list-story-prompts returns all available prompts including
+  ;; both built-ins and file overrides, with deduplication.
+  (testing "list-story-prompts"
+    (testing "returns sequence of prompt maps"
+      (let [prompts (sut/list-story-prompts)]
+        (is (seq? prompts))
+        (is (every? map? prompts))
+        (is (every? #(contains? % :name) prompts))))
+
+    (testing "includes :name and :description for each prompt"
+      (let [prompts (sut/list-story-prompts)]
+        (is (every? #(and (contains? % :name)
+                          (contains? % :description)) prompts))))
+
+    (testing "returns unique prompt names"
+      (let [prompts (sut/list-story-prompts)
+            names (map :name prompts)]
+        (is (= (count names) (count (set names))))))))

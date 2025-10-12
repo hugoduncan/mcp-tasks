@@ -210,3 +210,69 @@ You can use the `add-task` tool to add new tasks to a category.
         categories (discover-categories base-dir)
         prompt-list (create-prompts config categories)]
     (into {} (map (fn [p] [(:name p) p]) prompt-list))))
+
+;;; Story prompt utilities
+
+(defn- get-story-prompt-vars
+  "Get all story prompt vars from the story-prompts namespace.
+
+  Returns a sequence of var objects representing story prompt definitions."
+  []
+  (require 'mcp-tasks.story-prompts)
+  (let [ns (find-ns 'mcp-tasks.story-prompts)]
+    (->> (ns-publics ns)
+         vals
+         (filter (fn [v] (string? @v))))))
+
+(defn get-story-prompt
+  "Get a story prompt by name, with file override support.
+
+  Checks for override file at `.mcp-tasks/prompts/story/<name>.md` first.
+  If not found, falls back to built-in prompt from story-prompts namespace.
+
+  Returns a map with:
+  - :name - the prompt name
+  - :description - from frontmatter or docstring
+  - :content - the prompt text (with frontmatter stripped if from file)
+
+  Returns nil if prompt is not found in either location."
+  [prompt-name]
+  (let [override-file (io/file ".mcp-tasks" "prompts" "story" (str prompt-name ".md"))]
+    (if (.exists override-file)
+      (let [file-content (slurp override-file)
+            {:keys [metadata content]} (parse-frontmatter file-content)]
+        {:name prompt-name
+         :description (get metadata "description")
+         :content content})
+      (let [prompt-vars (get-story-prompt-vars)
+            prompt-var (first (filter #(= prompt-name (name (symbol %))) prompt-vars))]
+        (when prompt-var
+          {:name prompt-name
+           :description (:doc (meta prompt-var))
+           :content @prompt-var})))))
+
+(defn list-story-prompts
+  "List all available story prompts.
+
+  Returns a sequence of maps with :name and :description for each available
+  story prompt, including both built-in prompts and file overrides."
+  []
+  (let [builtin-prompts (for [v (get-story-prompt-vars)]
+                          {:name (name (symbol v))
+                           :description (:doc (meta v))})
+        story-dir (io/file ".mcp-tasks" "prompts" "story")
+        override-prompts (when (.exists story-dir)
+                           (for [file (.listFiles story-dir)
+                                 :when (and (.isFile file)
+                                            (str/ends-with? (.getName file) ".md"))]
+                             (let [name (str/replace (.getName file) #"\.md$" "")
+                                   {:keys [metadata]} (parse-frontmatter (slurp file))]
+                               {:name name
+                                :description (get metadata "description")})))
+        all-prompts (concat override-prompts builtin-prompts)
+        seen (atom #{})]
+    (for [prompt all-prompts
+          :when (not (contains? @seen (:name prompt)))]
+      (do
+        (swap! seen conj (:name prompt))
+        prompt))))
