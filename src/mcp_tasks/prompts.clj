@@ -211,29 +211,31 @@ You can use the `add-task` tool to add new tasks to a category.
         prompt-list (create-prompts config categories)]
     (into {} (map (fn [p] [(:name p) p]) prompt-list))))
 
-;;; Story prompt utilities
+;; Story prompt utilities
 
-(defn- get-story-prompt-vars
-  "Get all story prompt vars from the story-prompts namespace.
+(defn- list-builtin-story-prompts
+  "List all built-in story prompts available in resources.
 
-  Returns a sequence of var objects representing story prompt definitions."
+  Returns a sequence of prompt names (without .md extension) found in
+  resources/story/prompts directory."
   []
-  (require 'mcp-tasks.story-prompts)
-  (let [ns (find-ns 'mcp-tasks.story-prompts)]
-    (->> (ns-publics ns)
-         vals
-         (filter (fn [v] (string? @v))))))
+  (when-let [prompts-url (io/resource "story/prompts")]
+    (let [prompts-file (io/file (.toURI prompts-url))]
+      (when (.exists prompts-file)
+        (->> (.listFiles prompts-file)
+             (filter #(and (.isFile %) (str/ends-with? (.getName %) ".md")))
+             (map #(str/replace (.getName %) #"\.md$" "")))))))
 
 (defn get-story-prompt
   "Get a story prompt by name, with file override support.
 
   Checks for override file at `.mcp-tasks/prompts/story/<name>.md` first.
-  If not found, falls back to built-in prompt from story-prompts namespace.
+  If not found, falls back to built-in prompt from resources/story/prompts.
 
   Returns a map with:
   - :name - the prompt name
-  - :description - from frontmatter or docstring
-  - :content - the prompt text (with frontmatter stripped if from file)
+  - :description - from frontmatter
+  - :content - the prompt text (with frontmatter stripped)
 
   Returns nil if prompt is not found in either location."
   [prompt-name]
@@ -244,12 +246,12 @@ You can use the `add-task` tool to add new tasks to a category.
         {:name prompt-name
          :description (get metadata "description")
          :content content})
-      (let [prompt-vars (get-story-prompt-vars)
-            prompt-var (first (filter #(= prompt-name (name (symbol %))) prompt-vars))]
-        (when prompt-var
+      (when-let [resource-path (io/resource (str "story/prompts/" prompt-name ".md"))]
+        (let [file-content (slurp resource-path)
+              {:keys [metadata content]} (parse-frontmatter file-content)]
           {:name prompt-name
-           :description (:doc (meta prompt-var))
-           :content @prompt-var})))))
+           :description (get metadata "description")
+           :content content})))))
 
 (defn list-story-prompts
   "List all available story prompts.
@@ -257,9 +259,11 @@ You can use the `add-task` tool to add new tasks to a category.
   Returns a sequence of maps with :name and :description for each available
   story prompt, including both built-in prompts and file overrides."
   []
-  (let [builtin-prompts (for [v (get-story-prompt-vars)]
-                          {:name (name (symbol v))
-                           :description (:doc (meta v))})
+  (let [builtin-prompts (for [prompt-name (list-builtin-story-prompts)
+                              :let [prompt (get-story-prompt prompt-name)]
+                              :when prompt]
+                          {:name (:name prompt)
+                           :description (:description prompt)})
         story-dir (io/file ".mcp-tasks" "prompts" "story")
         override-prompts (when (.exists story-dir)
                            (for [file (.listFiles story-dir)
