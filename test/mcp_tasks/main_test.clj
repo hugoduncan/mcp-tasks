@@ -1,14 +1,14 @@
 (ns mcp-tasks.main-test
   (:require
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
-   [mcp-tasks.main :as sut]
-   [mcp-tasks.prompts :as prompts]
-   [mcp-tasks.tools :as tools])
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.main :as sut]
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.tools :as tools])
   (:import
-   (java.io
-    File)))
+    (java.io
+      File)))
 
 (deftest get-prompt-vars-test
   ;; Test that get-prompt-vars finds all prompt vars from task-prompts namespace
@@ -105,7 +105,7 @@
         (try
           (spit config-file "{:use-git? \"not-a-boolean\"}")
           (is (thrown? Exception
-                       (#'sut/load-and-validate-config (.getPath temp-dir))))
+                (#'sut/load-and-validate-config (.getPath temp-dir))))
           (finally
             (.delete config-file)
             (.delete temp-dir)))))
@@ -118,7 +118,7 @@
         (try
           (spit config-file "{:invalid")
           (is (thrown? Exception
-                       (#'sut/load-and-validate-config (.getPath temp-dir))))
+                (#'sut/load-and-validate-config (.getPath temp-dir))))
           (finally
             (.delete config-file)
             (.delete temp-dir)))))
@@ -223,7 +223,7 @@
             (let [message-text (get-in simple-prompt [:messages 0 :content :text])]
               (is (string? message-text))
               (is (not
-                   (re-find #"Commit the task tracking changes" message-text)))))
+                    (re-find #"Commit the task tracking changes" message-text)))))
           (finally
             (.delete (io/file tasks-dir "simple.md"))
             (.delete tasks-dir)
@@ -251,12 +251,12 @@
             (is (map? complete-tool))
             (is (map? simple-prompt))
             (let [message-text (get-in
-                                simple-prompt
-                                [:messages 0 :content :text])]
+                                 simple-prompt
+                                 [:messages 0 :content :text])]
               (is (not
-                   (re-find
-                    #"Commit the task tracking changes"
-                    message-text)))))
+                    (re-find
+                      #"Commit the task tracking changes"
+                      message-text)))))
           (finally
             (.delete config-file)
             (.delete (io/file tasks-dir "simple.md"))

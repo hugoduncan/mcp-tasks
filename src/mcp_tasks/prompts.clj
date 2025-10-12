@@ -123,7 +123,6 @@
     otherwise uses default instructions based on next-simple
   - Moves completed tasks to .mcp-tasks/complete/<category>.md
   - Conditionally includes git commit instructions based on config :use-git? value
-  - Includes an :arguments key with category argument specification
 
   The prompt text is automatically composed from three parts:
   1. read-task-prompt-text - instructions for reading the next task
@@ -137,25 +136,22 @@
   [config categories]
   (vec
     (for [category categories]
-      (let [prompt-data            (read-prompt-instructions category)
-            metadata               (:metadata prompt-data)
-            custom-content         (:content prompt-data)
+      (let [prompt-data (read-prompt-instructions category)
+            metadata (:metadata prompt-data)
+            custom-content (:content prompt-data)
             execution-instructions (or custom-content (default-prompt-text))
-            prompt-text            (str "Please complete the next " category " task following these steps:\n\n"
-                                        (read-task-prompt-text config category)
-                                        execution-instructions
-                                        (complete-task-prompt-text config category))
-            description            (or (get metadata "description")
-                                       (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
+            prompt-text (str "Please complete the next " category " task following these steps:\n\n"
+                             (read-task-prompt-text config category)
+                             execution-instructions
+                             (complete-task-prompt-text config category))
+            description (or (get metadata "description")
+                            (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
         (prompts/valid-prompt?
-          {:name        (str "next-" category)
+          {:name (str "next-" category)
            :description description
-           :arguments   [{:name        "category"
-                          :description (format "The task category to execute (always '%s' for this prompt)" category)
-                          :required    true}]
-           :messages    [{:role    "user"
-                          :content {:type "text"
-                                    :text prompt-text}}]})))))
+           :messages [{:role "user"
+                       :content {:type "text"
+                                 :text prompt-text}}]})))))
 
 (defn category-descriptions
   "Get descriptions for all discovered categories.
@@ -285,35 +281,55 @@
                                 is-variadic (format "Optional additional %s (variadic)" clean-name)
                                 is-required (format "The %s (required)" (str/replace clean-name "-" " "))
                                 :else (format "Optional %s" (str/replace clean-name "-" " ")))]]
-        {:name        clean-name
+        {:name clean-name
          :description description
-         :required    is-required}))))
+         :required is-required}))))
 
 (defn story-prompts
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts namespace.
 
+  For execute-story-task prompt, tailors content based on config :story-branch-management?.
+
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
-  []
+  [config]
   (require 'mcp-tasks.story-prompts)
-  (let [ns          (find-ns 'mcp-tasks.story-prompts)
+  (let [ns (find-ns 'mcp-tasks.story-prompts)
         prompt-vars (->> (ns-publics ns)
                          vals
                          (filter (fn [v] (string? @v))))]
     (into {}
           (for [v prompt-vars]
-            (let [prompt-name                (name (symbol v))
-                  prompt-content             @v
+            (let [prompt-name (name (symbol v))
+                  prompt-content @v
                   {:keys [metadata content]} (parse-frontmatter prompt-content)
-                  description                (or (get metadata "description")
-                                                 (:doc (meta v))
-                                                 (format "Story prompt: %s" prompt-name))
-                  arguments                  (parse-argument-hint metadata)]
+                  ;; Tailor execute-story-task content based on config
+                  tailored-content (if (and (= prompt-name "execute-story-task")
+                                            (not (:story-branch-management? config)))
+                                     ;; Remove branch management section for non-branch-managed mode
+                                     (str/replace content
+                                                  #"(?s)## Branch Management \(Conditional\).*?(?=## Notes|$)"
+                                                  (str "## Using Story Task Tools\n\n"
+                                                       "You can use the following tools:\n"
+                                                       "- `next-story-task` - Find the next incomplete story task without executing it\n"
+                                                       "- `complete-story-task` - Mark a story task as complete after execution\n\n"))
+                                     ;; Keep original content with branch management
+                                     (str/replace content
+                                                  #"(?s)(## Branch Management \(Conditional\))"
+                                                  (str "## Using Story Task Tools\n\n"
+                                                       "You can use the following tools:\n"
+                                                       "- `next-story-task` - Find the next incomplete story task without executing it\n"
+                                                       "- `complete-story-task` - Mark a story task as complete after execution\n\n"
+                                                       "$1")))
+                  description (or (get metadata "description")
+                                  (:doc (meta v))
+                                  (format "Story prompt: %s" prompt-name))
+                  arguments (parse-argument-hint metadata)]
               [prompt-name
                (prompts/valid-prompt?
-                 (cond-> {:name        prompt-name
+                 (cond-> {:name prompt-name
                           :description description
-                          :messages    [{:role    "user"
-                                         :content {:type "text"
-                                                   :text content}}]}
+                          :messages [{:role "user"
+                                      :content {:type "text"
+                                                :text tailored-content}}]}
                    (seq arguments) (assoc :arguments arguments)))])))))

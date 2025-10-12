@@ -2,13 +2,14 @@
   "Stdio-based MCP server main entry point for task management"
   (:gen-class)
   (:require
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [mcp-clj.log :as log]
-    [mcp-clj.mcp-server.core :as mcp-server]
-    [mcp-tasks.config :as config]
-    [mcp-tasks.prompts :as tp]
-    [mcp-tasks.tools :as tools]))
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [mcp-clj.log :as log]
+   [mcp-clj.mcp-server.core :as mcp-server]
+   [mcp-tasks.config :as config]
+   [mcp-tasks.prompts :as tp]
+   [mcp-tasks.story-tools :as story-tools]
+   [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
   "Get all prompt vars from the task-prompts and story-prompts namespaces.
@@ -110,11 +111,11 @@
    :tools {"complete-task" (tools/complete-task-tool config)
            "next-task" (tools/next-task-tool config)
            "add-task" (tools/add-task-tool config)
-           "next-story-task" (tools/next-story-task-tool config)
-           "complete-story-task" (tools/complete-story-task-tool config)
-           "complete-story" (tools/complete-story-tool config)}
+           "next-story-task" (story-tools/next-story-task-tool config)
+           "complete-story-task" (story-tools/complete-story-task-tool config)
+           "complete-story" (story-tools/complete-story-tool config)}
    :prompts (merge (tp/prompts config)
-                   (tp/story-prompts))})
+                   (tp/story-prompts config))})
 
 (defn- exit-process
   "Exit the process with the given code.
@@ -137,10 +138,10 @@
       (with-open [server (mcp-server/create-server server-config)]
         (log/info :stdio-server {:msg "MCP Tasks server started"})
         (.addShutdownHook
-          (Runtime/getRuntime)
-          (Thread. #(do
-                      (log/info :shutting-down-stdio-server)
-                      ((:stop server)))))
+         (Runtime/getRuntime)
+         (Thread. #(do
+                     (log/info :shutting-down-stdio-server)
+                     ((:stop server)))))
         (block-forever)))
     (catch Exception e
       (binding [*out* *err*]
