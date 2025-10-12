@@ -5,6 +5,7 @@
    configurations using in-memory transport. File operation behavior is
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
+    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.in-memory-transport.shared :as shared]
@@ -340,7 +341,7 @@
                 (is (not (:isError result)))
                 (is (= 2 (count (:content result))))
                 (let [json-text (-> result :content second :text)
-                      parsed (clojure.data.json/read-str json-text :key-fn keyword)]
+                      parsed (json/read-str json-text :key-fn keyword)]
                   (is (= ["story-tasks/git-test-tasks.md"]
                          (:modified-files parsed)))))
               (finally
