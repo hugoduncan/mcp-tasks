@@ -1,7 +1,8 @@
 (ns mcp-tasks.prompts-test
   (:require
-    [clojure.test :refer [deftest is testing]]
-    [mcp-tasks.prompts :as sut]))
+   [clojure.java.io :as io]
+   [clojure.test :refer [deftest is testing]]
+   [mcp-tasks.prompts :as sut]))
 
 (deftest discover-categories-test
   ;; Test that discover-categories finds all unique categories across
@@ -339,3 +340,139 @@
             execute-prompt (first (filter #(= "execute-story-task" (:name %)) prompts))]
         (is (some? execute-prompt))
         (is (some? (:description execute-prompt)))))))
+
+(defn- create-test-override-file
+  "Create a temporary override file for testing.
+  Returns the file object for cleanup."
+  [prompt-name content]
+  (let [override-dir (io/file ".mcp-tasks" "prompts" "story")
+        override-file (io/file override-dir (str prompt-name ".md"))]
+    (.mkdirs override-dir)
+    (spit override-file content)
+    override-file))
+
+(defn- delete-test-file
+  "Delete a test file if it exists."
+  [file]
+  (when (.exists file)
+    (.delete file)))
+
+(deftest get-story-prompt-override-precedence-test
+  ;; Test that get-story-prompt correctly prioritizes override files over
+  ;; built-in prompts, with proper frontmatter parsing.
+  (testing "get-story-prompt override precedence"
+    (testing "uses override file when it exists, even if built-in exists"
+      (let [test-file (create-test-override-file
+                       "refine-story"
+                       "---\ndescription: Override description\n---\n\nOverride content")]
+        (try
+          (let [result (sut/get-story-prompt "refine-story")]
+            (is (some? result))
+            (is (= "refine-story" (:name result)))
+            (is (= "Override description" (:description result)))
+            (is (= "\nOverride content" (:content result))))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "falls back to built-in when no override exists"
+      (let [result (sut/get-story-prompt "create-story-tasks")]
+        (is (some? result))
+        (is (= "create-story-tasks" (:name result)))
+        (is (some? (:description result)))
+        (is (some? (:content result)))))
+
+    (testing "returns nil when neither override nor built-in exists"
+      (is (nil? (sut/get-story-prompt "completely-nonexistent-prompt"))))))
+
+(deftest get-story-prompt-frontmatter-handling-test
+  ;; Test that get-story-prompt correctly handles frontmatter in override
+  ;; files with various formats.
+  (testing "get-story-prompt frontmatter handling"
+    (testing "parses frontmatter from override file"
+      (let [test-file (create-test-override-file
+                       "test-with-frontmatter"
+                       "---\ndescription: Test description\nauthor: Test Author\n---\n\nTest content")]
+        (try
+          (let [result (sut/get-story-prompt "test-with-frontmatter")]
+            (is (some? result))
+            (is (= "Test description" (:description result)))
+            (is (= "\nTest content" (:content result))))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "handles override file without frontmatter"
+      (let [test-file (create-test-override-file
+                       "test-no-frontmatter"
+                       "Just plain content without frontmatter")]
+        (try
+          (let [result (sut/get-story-prompt "test-no-frontmatter")]
+            (is (some? result))
+            (is (nil? (:description result)))
+            (is (= "Just plain content without frontmatter" (:content result))))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "handles override file with empty frontmatter"
+      (let [test-file (create-test-override-file
+                       "test-empty-frontmatter"
+                       "---\n---\n\nContent after empty frontmatter")]
+        (try
+          (let [result (sut/get-story-prompt "test-empty-frontmatter")]
+            (is (some? result))
+            (is (nil? (:description result)))
+            (is (= "\nContent after empty frontmatter" (:content result))))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "handles override file with partial frontmatter"
+      (let [test-file (create-test-override-file
+                       "test-partial-frontmatter"
+                       "---\nauthor: Someone\n---\n\nContent")]
+        (try
+          (let [result (sut/get-story-prompt "test-partial-frontmatter")]
+            (is (some? result))
+            (is (nil? (:description result)))
+            (is (= "\nContent" (:content result))))
+          (finally
+            (delete-test-file test-file)))))))
+
+(deftest list-story-prompts-override-integration-test
+  ;; Test that list-story-prompts correctly includes overrides and handles
+  ;; deduplication when both override and built-in exist.
+  (testing "list-story-prompts with overrides"
+    (testing "includes override prompts in the list"
+      (let [test-file (create-test-override-file
+                       "custom-override-prompt"
+                       "---\ndescription: Custom override\n---\n\nCustom content")]
+        (try
+          (let [prompts (sut/list-story-prompts)
+                names (set (map :name prompts))]
+            (is (contains? names "custom-override-prompt"))
+            (let [custom-prompt (first (filter #(= "custom-override-prompt" (:name %)) prompts))]
+              (is (= "Custom override" (:description custom-prompt)))))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "deduplicates when both override and built-in exist"
+      (let [test-file (create-test-override-file
+                       "refine-story"
+                       "---\ndescription: Overridden refine-story\n---\n\nOverride content")]
+        (try
+          (let [prompts (sut/list-story-prompts)
+                refine-prompts (filter #(= "refine-story" (:name %)) prompts)]
+            (is (= 1 (count refine-prompts)))
+            (is (= "Overridden refine-story" (:description (first refine-prompts)))))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "override takes precedence in deduplicated list"
+      (let [test-file (create-test-override-file
+                       "create-story-tasks"
+                       "---\ndescription: Override takes precedence\n---\n\nOverride")]
+        (try
+          (let [prompts (sut/list-story-prompts)
+                create-prompt (first (filter #(= "create-story-tasks" (:name %)) prompts))]
+            (is (some? create-prompt))
+            (is (= "Override takes precedence" (:description create-prompt))))
+          (finally
+            (delete-test-file test-file)))))))
