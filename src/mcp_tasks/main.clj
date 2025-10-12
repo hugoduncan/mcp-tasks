@@ -8,7 +8,6 @@
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
-    [mcp-tasks.story-prompts :as sp]
     [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
