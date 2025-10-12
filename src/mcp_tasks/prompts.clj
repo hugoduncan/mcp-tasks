@@ -123,6 +123,7 @@
     otherwise uses default instructions based on next-simple
   - Moves completed tasks to .mcp-tasks/complete/<category>.md
   - Conditionally includes git commit instructions based on config :use-git? value
+  - Includes an :arguments key with category argument specification
 
   The prompt text is automatically composed from three parts:
   1. read-task-prompt-text - instructions for reading the next task
@@ -149,6 +150,9 @@
         (prompts/valid-prompt?
           {:name        (str "next-" category)
            :description description
+           :arguments   [{:name        "category"
+                          :description (format "The task category to execute (always '%s' for this prompt)" category)
+                          :required    true}]
            :messages    [{:role    "user"
                           :content {:type "text"
                                     :text prompt-text}}]})))))
@@ -254,6 +258,37 @@
         (swap! seen conj (:name prompt))
         prompt))))
 
+(defn- parse-argument-hint
+  "Parse argument-hint from frontmatter metadata.
+
+  The argument-hint format uses angle brackets for required arguments and
+  square brackets for optional arguments:
+  - <arg-name> - required argument
+  - [arg-name] - optional argument
+  - [...] or [name...] - variadic/multiple values
+
+  Example: '<story-name> [additional-context...]'
+
+  Returns a vector of argument maps with :name, :description, and :required keys."
+  [metadata]
+  (when-let [hint (get metadata "argument-hint")]
+    (vec
+      (for [token (re-seq #"<([^>]+)>|\[([^\]]+)\]" hint)
+            :let [[_ required optional] token
+                  arg-name (or required optional)
+                  is-required (some? required)
+                  is-variadic (str/ends-with? arg-name "...")
+                  clean-name (if is-variadic
+                               (str/replace arg-name #"\.\.\.$" "")
+                               arg-name)
+                  description (cond
+                                is-variadic (format "Optional additional %s (variadic)" clean-name)
+                                is-required (format "The %s (required)" (str/replace clean-name "-" " "))
+                                :else (format "Optional %s" (str/replace clean-name "-" " ")))]]
+        {:name        clean-name
+         :description description
+         :required    is-required}))))
+
 (defn story-prompts
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts namespace.
 
@@ -272,11 +307,13 @@
                   {:keys [metadata content]} (parse-frontmatter prompt-content)
                   description                (or (get metadata "description")
                                                  (:doc (meta v))
-                                                 (format "Story prompt: %s" prompt-name))]
+                                                 (format "Story prompt: %s" prompt-name))
+                  arguments                  (parse-argument-hint metadata)]
               [prompt-name
                (prompts/valid-prompt?
-                 {:name        prompt-name
-                  :description description
-                  :messages    [{:role    "user"
-                                 :content {:type "text"
-                                           :text content}}]})])))))
+                 (cond-> {:name        prompt-name
+                          :description description
+                          :messages    [{:role    "user"
+                                         :content {:type "text"
+                                                   :text content}}]}
+                   (seq arguments) (assoc :arguments arguments)))])))))

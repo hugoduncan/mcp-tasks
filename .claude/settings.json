@@ -9,6 +9,7 @@
 	    "Bash(curl:*)",
 	    "Bash(else)",
 	    "Bash(fi)",
+	    "Bash(git -C .mcp-tasks:*)",
 	    "Bash(git add:*)",
 	    "Bash(git commit:*)",
 	    "Bash(git log:*)",

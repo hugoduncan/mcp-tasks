@@ -4,7 +4,8 @@
   Story prompts are used for story-based workflow management. Each prompt is
   defined as a def var with a docstring and content that includes frontmatter
   metadata."
-  (:require [clojure.java.io :as io]))
+  (:require
+    [clojure.java.io :as io]))
 
 (def refine-story
   "Interactively refine a story document with user feedback."
