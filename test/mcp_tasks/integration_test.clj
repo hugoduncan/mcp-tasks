@@ -25,7 +25,11 @@
 (defn- setup-test-project
   []
   (cleanup-test-project)
-  (.mkdirs (io/file test-project-dir ".mcp-tasks")))
+  (let [mcp-tasks-dir (io/file test-project-dir ".mcp-tasks")
+        tasks-dir (io/file mcp-tasks-dir "tasks")]
+    (.mkdirs tasks-dir)
+    ;; Create a simple.md file so discover-categories finds at least one category
+    (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")))
 
 (defn- write-config-file
   [content]

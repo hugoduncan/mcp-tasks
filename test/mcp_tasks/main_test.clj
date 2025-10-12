@@ -156,10 +156,10 @@
   ;; This integration test verifies the complete flow without starting the full server.
   (testing "config threading integration"
     (testing "tools receive config with git mode enabled"
-      (let [config        {:use-git? true}
+      (let [config {:use-git? true}
             complete-tool (tools/complete-task-tool config)
-            next-tool     (tools/next-task-tool config)
-            add-tool      (tools/add-task-tool config)]
+            next-tool (tools/next-task-tool config)
+            add-tool (tools/add-task-tool config)]
         (is (map? complete-tool))
         (is (= "complete-task" (:name complete-tool)))
         (is (fn? (:implementation complete-tool)))
@@ -169,10 +169,10 @@
         (is (= "add-task" (:name add-tool)))))
 
     (testing "tools receive config with git mode disabled"
-      (let [config        {:use-git? false}
+      (let [config {:use-git? false}
             complete-tool (tools/complete-task-tool config)
-            next-tool     (tools/next-task-tool config)
-            add-tool      (tools/add-task-tool config)]
+            next-tool (tools/next-task-tool config)
+            add-tool (tools/add-task-tool config)]
         (is (map? complete-tool))
         (is (= "complete-task" (:name complete-tool)))
         (is (fn? (:implementation complete-tool)))
@@ -182,41 +182,75 @@
         (is (= "add-task" (:name add-tool)))))
 
     (testing "prompts receive config and generate correctly with git mode enabled"
-      (let [config        {:use-git? true}
-            prompt-map    (prompts/prompts config)
-            simple-prompt (get prompt-map "next-simple")]
-        (is (map? prompt-map))
-        (is (map? simple-prompt))
-        (is (= "next-simple" (:name simple-prompt)))
-        (let [message-text (get-in simple-prompt [:messages 0 :content :text])]
-          (is (string? message-text))
-          (is (re-find #"Commit the task tracking changes" message-text)))))
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            tasks-dir (io/file mcp-tasks-dir "tasks")
+            _ (.mkdirs tasks-dir)
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            original-dir (System/getProperty "user.dir")]
+        (try
+          (System/setProperty "user.dir" (.getPath temp-dir))
+          (let [config {:use-git? true}
+                prompt-map (prompts/prompts config)
+                simple-prompt (get prompt-map "next-simple")]
+            (is (map? prompt-map))
+            (is (map? simple-prompt))
+            (is (= "next-simple" (:name simple-prompt)))
+            (let [message-text (get-in simple-prompt [:messages 0 :content :text])]
+              (is (string? message-text))
+              (is (re-find #"Commit the task tracking changes" message-text))))
+          (finally
+            (System/setProperty "user.dir" original-dir)
+            (.delete (io/file tasks-dir "simple.md"))
+            (.delete tasks-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))
 
     (testing "prompts receive config and generate correctly with git mode disabled"
-      (let [config        {:use-git? false}
-            prompt-map    (prompts/prompts config)
-            simple-prompt (get prompt-map "next-simple")]
-        (is (map? prompt-map))
-        (is (map? simple-prompt))
-        (is (= "next-simple" (:name simple-prompt)))
-        (let [message-text (get-in simple-prompt [:messages 0 :content :text])]
-          (is (string? message-text))
-          (is (not
-                (re-find #"Commit the task tracking changes" message-text))))))
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            tasks-dir (io/file mcp-tasks-dir "tasks")
+            _ (.mkdirs tasks-dir)
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            original-dir (System/getProperty "user.dir")]
+        (try
+          (System/setProperty "user.dir" (.getPath temp-dir))
+          (let [config {:use-git? false}
+                prompt-map (prompts/prompts config)
+                simple-prompt (get prompt-map "next-simple")]
+            (is (map? prompt-map))
+            (is (map? simple-prompt))
+            (is (= "next-simple" (:name simple-prompt)))
+            (let [message-text (get-in simple-prompt [:messages 0 :content :text])]
+              (is (string? message-text))
+              (is (not
+                    (re-find #"Commit the task tracking changes" message-text)))))
+          (finally
+            (System/setProperty "user.dir" original-dir)
+            (.delete (io/file tasks-dir "simple.md"))
+            (.delete tasks-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))
 
     (testing "config flows from load-and-validate-config through to components"
-      (let [temp-dir      (File/createTempFile "mcp-tasks-test" "")
-            _             (.delete temp-dir)
-            _             (.mkdirs temp-dir)
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            _             (.mkdirs mcp-tasks-dir)
-            config-file   (io/file temp-dir ".mcp-tasks.edn")]
+            tasks-dir (io/file mcp-tasks-dir "tasks")
+            _ (.mkdirs tasks-dir)
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            config-file (io/file temp-dir ".mcp-tasks.edn")]
         (try
           (spit config-file "{:use-git? false}")
-          (let [config        (#'sut/load-and-validate-config
-                               (.getPath temp-dir))
+          (let [config (#'sut/load-and-validate-config
+                        (.getPath temp-dir))
                 complete-tool (tools/complete-task-tool config)
-                prompt-map    (prompts/prompts config)
+                prompt-map (prompts/prompts config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (false? (:use-git? config)))
             (is (map? complete-tool))
@@ -230,5 +264,7 @@
                       message-text)))))
           (finally
             (.delete config-file)
+            (.delete (io/file tasks-dir "simple.md"))
+            (.delete tasks-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))))
