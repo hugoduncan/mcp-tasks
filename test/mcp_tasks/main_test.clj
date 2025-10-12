@@ -263,3 +263,65 @@
             (.delete tasks-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))))
+
+(deftest create-server-config-test
+  ;; Test that create-server-config properly includes all tools and prompts,
+  ;; including story prompts.
+  (testing "create-server-config"
+    (testing "includes all required tools"
+      (let [config {:use-git? false}
+            transport {:type :in-memory}
+            server-config (sut/create-server-config config transport)]
+        (is (map? server-config))
+        (is (= transport (:transport server-config)))
+        (is (map? (:tools server-config)))
+        (is (contains? (:tools server-config) "complete-task"))
+        (is (contains? (:tools server-config) "next-task"))
+        (is (contains? (:tools server-config) "add-task"))
+        (is (contains? (:tools server-config) "next-story-task"))
+        (is (contains? (:tools server-config) "complete-story-task"))))
+
+    (testing "includes story prompts"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            tasks-dir (io/file mcp-tasks-dir "tasks")
+            _ (.mkdirs tasks-dir)
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            config {:use-git? false :base-dir (.getPath temp-dir)}
+            transport {:type :in-memory}
+            server-config (sut/create-server-config config transport)]
+        (try
+          (is (map? (:prompts server-config)))
+          (is (contains? (:prompts server-config) "refine-story"))
+          (is (contains? (:prompts server-config) "create-story-tasks"))
+          (is (contains? (:prompts server-config) "execute-story-task"))
+          (is (map? (get (:prompts server-config) "refine-story")))
+          (is (= "refine-story" (:name (get (:prompts server-config) "refine-story"))))
+          (finally
+            (.delete (io/file tasks-dir "simple.md"))
+            (.delete tasks-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))
+
+    (testing "merges task prompts and story prompts"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            tasks-dir (io/file mcp-tasks-dir "tasks")
+            _ (.mkdirs tasks-dir)
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            config {:use-git? false :base-dir (.getPath temp-dir)}
+            transport {:type :in-memory}
+            server-config (sut/create-server-config config transport)]
+        (try
+          (is (map? (:prompts server-config)))
+          (is (contains? (:prompts server-config) "next-simple"))
+          (is (contains? (:prompts server-config) "refine-story"))
+          (finally
+            (.delete (io/file tasks-dir "simple.md"))
+            (.delete tasks-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))))
