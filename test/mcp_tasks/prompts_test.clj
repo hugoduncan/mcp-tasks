@@ -214,3 +214,32 @@
       (let [prompts (sut/list-story-prompts)
             names (map :name prompts)]
         (is (= (count names) (count (set names))))))))
+
+(deftest refine-story-prompt-test
+  ;; Test that the refine-story built-in prompt is properly defined with
+  ;; correct metadata and content structure.
+  (testing "refine-story prompt"
+    (testing "is available via get-story-prompt"
+      (let [prompt (sut/get-story-prompt "refine-story")]
+        (is (some? prompt))
+        (is (= "refine-story" (:name prompt)))))
+
+    (testing "has description metadata"
+      (let [prompt (sut/get-story-prompt "refine-story")]
+        (is (some? (:description prompt)))
+        (is (string? (:description prompt)))))
+
+    (testing "has content with key instructions"
+      (let [prompt (sut/get-story-prompt "refine-story")
+            content (:content prompt)]
+        (is (some? content))
+        (is (string? content))
+        (is (re-find #"story-name" content))
+        (is (re-find #"\.mcp-tasks/stories" content))
+        (is (re-find #"interactive" content))))
+
+    (testing "appears in list-story-prompts"
+      (let [prompts (sut/list-story-prompts)
+            refine-prompt (first (filter #(= "refine-story" (:name %)) prompts))]
+        (is (some? refine-prompt))
+        (is (some? (:description refine-prompt)))))))
