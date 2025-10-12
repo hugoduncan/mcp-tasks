@@ -1,13 +1,14 @@
 ---
 title: Execute Story Task
 description: Execute the next task from a story's task list
+argument-hint: <story-name> [additional-context...]
 ---
 
-Execute the next incomplete task from the story specified by the `story-name` argument.
+Execute the next incomplete task from the story.
 
-## Arguments
-
-- `story-name` - The name of the story (without .md extension)
+Parse the arguments: $ARGUMENTS
+- The first word/token is the story name (without .md extension)
+- Everything after is additional context to consider when executing the task
 
 ## Process
 

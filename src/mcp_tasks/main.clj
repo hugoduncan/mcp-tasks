@@ -8,18 +8,25 @@
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
+    [mcp-tasks.story-tools :as story-tools]
     [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
-  "Get all prompt vars from the task-prompts namespace.
+  "Get all prompt vars from the task-prompts and story-prompts namespaces.
 
   Returns a sequence of var objects representing prompt definitions."
   []
   (require 'mcp-tasks.task-prompts)
-  (let [ns (find-ns 'mcp-tasks.task-prompts)]
-    (->> (ns-publics ns)
-         vals
-         (filter (fn [v] (string? @v))))))
+  (require 'mcp-tasks.story-prompts)
+  (let [task-ns (find-ns 'mcp-tasks.task-prompts)
+        story-ns (find-ns 'mcp-tasks.story-prompts)
+        task-vars (->> (ns-publics task-ns)
+                       vals
+                       (filter (fn [v] (string? @v))))
+        story-vars (->> (ns-publics story-ns)
+                        vals
+                        (filter (fn [v] (string? @v))))]
+    (concat task-vars story-vars)))
 
 (defn- list-prompts
   "List all available prompts with their names and descriptions.
@@ -104,9 +111,11 @@
    :tools {"complete-task" (tools/complete-task-tool config)
            "next-task" (tools/next-task-tool config)
            "add-task" (tools/add-task-tool config)
-           "next-story-task" (tools/next-story-task-tool config)
-           "complete-story-task" (tools/complete-story-task-tool config)}
-   :prompts (tp/prompts config)})
+           "next-story-task" (story-tools/next-story-task-tool config)
+           "complete-story-task" (story-tools/complete-story-task-tool config)
+           "complete-story" (story-tools/complete-story-tool config)}
+   :prompts (merge (tp/prompts config)
+                   (tp/story-prompts config))})
 
 (defn- exit-process
   "Exit the process with the given code.

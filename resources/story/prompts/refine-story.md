@@ -1,13 +1,14 @@
 ---
 title: Refine Story
 description: Interactively refine a story document with user feedback
+argument-hint: <story-name> [additional-context...]
 ---
 
-Refine the story specified by the `story-name` argument through an interactive process.
+Refine the story through an interactive process.
 
-## Arguments
-
-- `story-name` - The name of the story to refine (without .md extension)
+Parse the arguments: $ARGUMENTS
+- The first word/token is the story name (without .md extension)
+- Everything after is additional context to consider when refining
 
 ## Process
 

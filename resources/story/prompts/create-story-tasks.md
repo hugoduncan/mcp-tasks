@@ -1,13 +1,14 @@
 ---
 title: Create Story Tasks
 description: Break down a story into categorized, executable tasks
+argument-hint: <story-name> [additional-context...]
 ---
 
-Create a task breakdown for the story specified by the `story-name` argument.
+Create a task breakdown for the story.
 
-## Arguments
-
-- `story-name` - The name of the story to break down (without .md extension)
+Parse the arguments: $ARGUMENTS
+- The first word/token is the story name (without .md extension)
+- Everything after is additional context to consider when creating tasks
 
 ## Process
 

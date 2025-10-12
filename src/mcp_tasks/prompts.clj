@@ -46,27 +46,6 @@
           {:metadata (when (seq metadata) metadata)
            :content content})))))
 
-(def next-simple-prompt
-  "Prompt for processing the next simple task"
-  (prompts/valid-prompt?
-    {:name "next-simple"
-     :description "Process the next incomplete task from .mcp-tasks/tasks/simple.md"
-     :messages [{:role "user"
-                 :content {:type "text"
-                           :text "Please complete the next simple task following these steps:
-
-1. Read the file .mcp-tasks/tasks/simple.md
-2. Find the first incomplete task (marked with `- [ ]`)
-3. Show the task description
-4. Analyze the task specification in the context of the project
-5. Plan an implementation approach
-6. Implement the solution
-7. Create a git commit with the code changes in the main repository
-8. Move the completed task to .mcp-tasks/complete/simple.md (append to end, mark as complete with `- [x]`)
-9. Remove the task from .mcp-tasks/tasks/simple.md
-10. Commit the task tracking changes in the .mcp-tasks git repository
-"}}]}))
-
 (defn discover-categories
   "Discover task categories by reading filenames from .mcp-tasks subdirectories.
 
@@ -105,13 +84,7 @@
 (defn- default-prompt-text
   "Generate default execution instructions for a category."
   []
-  "- Analyze the task specification in the context of the project
-- Plan an implementation approach
-- Implement the solution
-- Create a git commit with the code changes in the main repository
-
-You can use the `add-task` tool to add new tasks to a category.
-")
+  (slurp (io/resource "prompts/default-prompt-text.md")))
 
 (defn- complete-task-prompt-text
   "Generate prompt text for completing and tracking a task.
@@ -280,3 +253,83 @@ You can use the `add-task` tool to add new tasks to a category.
       (do
         (swap! seen conj (:name prompt))
         prompt))))
+
+(defn- parse-argument-hint
+  "Parse argument-hint from frontmatter metadata.
+
+  The argument-hint format uses angle brackets for required arguments and
+  square brackets for optional arguments:
+  - <arg-name> - required argument
+  - [arg-name] - optional argument
+  - [...] or [name...] - variadic/multiple values
+
+  Example: '<story-name> [additional-context...]'
+
+  Returns a vector of argument maps with :name, :description, and :required keys."
+  [metadata]
+  (when-let [hint (get metadata "argument-hint")]
+    (vec
+      (for [token (re-seq #"<([^>]+)>|\[([^\]]+)\]" hint)
+            :let [[_ required optional] token
+                  arg-name (or required optional)
+                  is-required (some? required)
+                  is-variadic (str/ends-with? arg-name "...")
+                  clean-name (if is-variadic
+                               (str/replace arg-name #"\.\.\.$" "")
+                               arg-name)
+                  description (cond
+                                is-variadic (format "Optional additional %s (variadic)" clean-name)
+                                is-required (format "The %s (required)" (str/replace clean-name "-" " "))
+                                :else (format "Optional %s" (str/replace clean-name "-" " ")))]]
+        {:name clean-name
+         :description description
+         :required is-required}))))
+
+(defn story-prompts
+  "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts namespace.
+
+  For execute-story-task prompt, tailors content based on config :story-branch-management?.
+
+  Returns a map of prompt names to prompt definitions, suitable for registering
+  with the MCP server."
+  [config]
+  (require 'mcp-tasks.story-prompts)
+  (let [ns (find-ns 'mcp-tasks.story-prompts)
+        prompt-vars (->> (ns-publics ns)
+                         vals
+                         (filter (fn [v] (string? @v))))]
+    (into {}
+          (for [v prompt-vars]
+            (let [prompt-name (name (symbol v))
+                  prompt-content @v
+                  {:keys [metadata content]} (parse-frontmatter prompt-content)
+                  ;; Tailor execute-story-task content based on config
+                  tailored-content (if (and (= prompt-name "execute-story-task")
+                                            (not (:story-branch-management? config)))
+                                     ;; Remove branch management section for non-branch-managed mode
+                                     (str/replace content
+                                                  #"(?s)## Branch Management \(Conditional\).*?(?=## Notes|$)"
+                                                  (str "## Using Story Task Tools\n\n"
+                                                       "You can use the following tools:\n"
+                                                       "- `next-story-task` - Find the next incomplete story task without executing it\n"
+                                                       "- `complete-story-task` - Mark a story task as complete after execution\n\n"))
+                                     ;; Keep original content with branch management
+                                     (str/replace content
+                                                  #"(?s)(## Branch Management \(Conditional\))"
+                                                  (str "## Using Story Task Tools\n\n"
+                                                       "You can use the following tools:\n"
+                                                       "- `next-story-task` - Find the next incomplete story task without executing it\n"
+                                                       "- `complete-story-task` - Mark a story task as complete after execution\n\n"
+                                                       "$1")))
+                  description (or (get metadata "description")
+                                  (:doc (meta v))
+                                  (format "Story prompt: %s" prompt-name))
+                  arguments (parse-argument-hint metadata)]
+              [prompt-name
+               (prompts/valid-prompt?
+                 (cond-> {:name prompt-name
+                          :description description
+                          :messages [{:role "user"
+                                      :content {:type "text"
+                                                :text tailored-content}}]}
+                   (seq arguments) (assoc :arguments arguments)))])))))
