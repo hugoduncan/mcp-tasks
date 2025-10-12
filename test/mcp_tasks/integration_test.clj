@@ -54,6 +54,27 @@
     (config/validate-startup test-project-dir resolved-config)
     resolved-config))
 
+(defn- wait-for-client-ready
+  "Wait for client to be ready, polling with exponential backoff.
+  
+  Returns true if client becomes ready within timeout, false otherwise.
+  Max wait time is approximately timeout-ms."
+  [client timeout-ms]
+  (let [start-time (System/currentTimeMillis)
+        max-wait timeout-ms]
+    (loop [wait-time 10]
+      (cond
+        (mcp-client/client-ready? client)
+        true
+
+        (> (- (System/currentTimeMillis) start-time) max-wait)
+        false
+
+        :else
+        (do
+          (Thread/sleep wait-time)
+          (recur (min (* wait-time 2) 100)))))))
+
 (defn- create-test-server-and-client
   "Create server and client connected via in-memory transport.
 
@@ -121,8 +142,7 @@
       (write-config-file "{:use-git? false}")
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          ;; Allow time for initialization to complete on slow CI machines
-          (Thread/sleep 100)
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -135,8 +155,7 @@
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          ;; Allow time for initialization to complete on slow CI machines
-          (Thread/sleep 100)
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
