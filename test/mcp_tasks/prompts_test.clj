@@ -243,3 +243,49 @@
             refine-prompt (first (filter #(= "refine-story" (:name %)) prompts))]
         (is (some? refine-prompt))
         (is (some? (:description refine-prompt)))))))
+
+(deftest create-story-tasks-prompt-test
+  ;; Test that the create-story-tasks built-in prompt is properly defined
+  ;; with correct metadata and content structure including task format and
+  ;; category guidance.
+  (testing "create-story-tasks prompt"
+    (testing "is available via get-story-prompt"
+      (let [prompt (sut/get-story-prompt "create-story-tasks")]
+        (is (some? prompt))
+        (is (= "create-story-tasks" (:name prompt)))))
+
+    (testing "has description metadata"
+      (let [prompt (sut/get-story-prompt "create-story-tasks")]
+        (is (some? (:description prompt)))
+        (is (string? (:description prompt)))))
+
+    (testing "has content with key instructions"
+      (let [prompt (sut/get-story-prompt "create-story-tasks")
+            content (:content prompt)]
+        (is (some? content))
+        (is (string? content))
+        (is (re-find #"story-name" content))
+        (is (re-find #"\.mcp-tasks/stories" content))
+        (is (re-find #"\.mcp-tasks/story-tasks" content))
+        (is (re-find #"STORY:" content))
+        (is (re-find #"CATEGORY:" content))))
+
+    (testing "includes category selection guidance"
+      (let [prompt (sut/get-story-prompt "create-story-tasks")
+            content (:content prompt)]
+        (is (re-find #"simple" content))
+        (is (re-find #"medium" content))
+        (is (re-find #"large" content))
+        (is (re-find #"clarify-task" content))))
+
+    (testing "includes task format examples"
+      (let [prompt (sut/get-story-prompt "create-story-tasks")
+            content (:content prompt)]
+        (is (re-find #"multi-line" content))
+        (is (re-find #"checkbox" content))))
+
+    (testing "appears in list-story-prompts"
+      (let [prompts (sut/list-story-prompts)
+            create-prompt (first (filter #(= "create-story-tasks" (:name %)) prompts))]
+        (is (some? create-prompt))
+        (is (some? (:description create-prompt)))))))
