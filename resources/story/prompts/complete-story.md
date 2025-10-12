@@ -26,11 +26,14 @@ Use this tool after all story tasks are complete and the implementation has been
 
 3. Move the story file from `.mcp-tasks/story/stories/<story-name>.md` to `.mcp-tasks/story/complete/<story-name>.md`
 
-4. If git workflow is enabled:
-   - Stage the file changes (both source and destination)
+4. Move the story tasks file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md` to `.mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md`
+   - If the tasks file doesn't exist, skip this step with a note
+
+5. If git workflow is enabled:
+   - Stage the file changes (both story and tasks files, source and destination)
    - Return the modified file paths for commit
 
-5. Confirm completion to the user
+6. Confirm completion to the user
 
 ## When to Use
 
@@ -40,6 +43,6 @@ Use this tool after all story tasks are complete and the implementation has been
 
 ## Notes
 
-- Completed stories remain accessible in the archive for historical reference
-- The story's task list in `.mcp-tasks/story/story-tasks/<story-name>-tasks.md` is not moved
+- Completed stories and their task lists remain accessible in the archive for historical reference
+- Both the story file and its task list are moved to their respective complete directories
 - If git workflow is enabled, you should commit the changes after completion
