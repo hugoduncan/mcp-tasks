@@ -44,6 +44,18 @@
     (testing "accepts config with use-git? false"
       (is (= {:use-git? false} (sut/validate-config {:use-git? false}))))
 
+    (testing "accepts config with story-branch-management? true"
+      (is (= {:story-branch-management? true}
+             (sut/validate-config {:story-branch-management? true}))))
+
+    (testing "accepts config with story-branch-management? false"
+      (is (= {:story-branch-management? false}
+             (sut/validate-config {:story-branch-management? false}))))
+
+    (testing "accepts config with both use-git? and story-branch-management?"
+      (is (= {:use-git? true :story-branch-management? false}
+             (sut/validate-config {:use-git? true :story-branch-management? false}))))
+
     (testing "accepts config with unknown keys for forward compatibility"
       (is (= {:use-git? true :unknown-key "value"}
              (sut/validate-config {:use-git? true :unknown-key "value"}))))))
@@ -69,7 +81,17 @@
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
             #"Expected boolean for :use-git\?, got .*Long"
-            (sut/validate-config {:use-git? 1}))))))
+            (sut/validate-config {:use-git? 1}))))
+
+    (testing "rejects non-boolean story-branch-management? value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected boolean for :story-branch-management\?, got .*String"
+            (sut/validate-config {:story-branch-management? "true"})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected boolean for :story-branch-management\?, got .*Long"
+            (sut/validate-config {:story-branch-management? 1}))))))
 
 (deftest validate-config-error-data-structure
   ;; Test that validation errors include structured data for programmatic handling

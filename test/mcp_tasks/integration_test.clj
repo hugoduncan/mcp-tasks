@@ -5,6 +5,7 @@
    configurations using in-memory transport. File operation behavior is
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
+    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.in-memory-transport.shared :as shared]
@@ -181,6 +182,7 @@
               (is (contains? tool-names "complete-task"))
               (is (contains? tool-names "next-task"))
               (is (contains? tool-names "add-task"))
+              (is (contains? tool-names "next-story-task"))
 
               (doseq [tool tools]
                 (is (contains? tool :name))
@@ -207,6 +209,169 @@
             (is (map? prompts-response))
             (is (vector? prompts))
             (is (pos? (count prompts)))))
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
+
+(deftest ^:integ next-story-task-tool-test
+  ;; Test the next-story-task tool integration.
+  (testing "next-story-task tool"
+    (write-config-file "{:use-git? false}")
+
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "returns task info when story tasks exist"
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-tasks-dir "test-story-tasks.md")
+                  (str "# Test Story Tasks\n\n"
+                       "- [ ] STORY: test-story - First incomplete task\n"
+                       "  With more details\n"
+                       "\n"
+                       "CATEGORY: medium\n"
+                       "\n"
+                       "- [x] STORY: test-story - Completed task\n"
+                       "\n"
+                       "CATEGORY: simple\n")))
+
+          (let [tools-response @(mcp-client/list-tools client)
+                tools (:tools tools-response)
+                tool-names (set (map :name tools))]
+            (is (contains? tool-names "next-story-task"))
+
+            (let [result @(mcp-client/call-tool client
+                                                "next-story-task"
+                                                {:story-name "test-story"})
+                  text (-> result :content first :text)]
+              (is (not (:isError result)))
+              (is (string? text))
+              (let [parsed (read-string text)]
+                (is (map? parsed))
+                (is (= "medium" (:category parsed)))
+                (is (= 0 (:task-index parsed)))
+                (is (string? (:task-text parsed)))
+                (is (re-find #"First incomplete task" (:task-text parsed)))))))
+
+        (testing "returns nil values when no incomplete tasks"
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-tasks-dir "complete-story-tasks.md")
+                  (str "# Complete Story Tasks\n\n"
+                       "- [x] STORY: complete-story - All done\n"
+                       "\n"
+                       "CATEGORY: simple\n")))
+
+          (let [result @(mcp-client/call-tool client
+                                              "next-story-task"
+                                              {:story-name "complete-story"})
+                text (-> result :content first :text)]
+            (is (not (:isError result)))
+            (let [parsed (read-string text)]
+              (is (map? parsed))
+              (is (nil? (:task-text parsed)))
+              (is (nil? (:category parsed)))
+              (is (nil? (:task-index parsed))))))
+
+        (testing "returns error when story file not found"
+          (let [result @(mcp-client/call-tool client
+                                              "next-story-task"
+                                              {:story-name "nonexistent"})]
+            (is (:isError result))
+            (is (re-find #"Story tasks file not found"
+                         (-> result :content first :text)))))
+
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
+
+(deftest ^:integ complete-story-task-tool-test
+  ;; Test the complete-story-task tool integration.
+  (testing "complete-story-task tool"
+    (write-config-file "{:use-git? false}")
+
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "completes task when story tasks exist"
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-tasks-dir "test-story-tasks.md")
+                  (str "# Test Story Tasks\n\n"
+                       "- [ ] STORY: test-story - First incomplete task\n"
+                       "  With more details\n"
+                       "\n"
+                       "CATEGORY: medium\n"
+                       "\n"
+                       "- [ ] STORY: test-story - Second incomplete task\n"
+                       "\n"
+                       "CATEGORY: simple\n"))
+
+            (let [tools-response @(mcp-client/list-tools client)
+                  tools (:tools tools-response)
+                  tool-names (set (map :name tools))]
+              (is (contains? tool-names "complete-story-task"))
+
+              (let [result @(mcp-client/call-tool client
+                                                  "complete-story-task"
+                                                  {:story-name "test-story"
+                                                   :task-text "STORY: test-story - First"})]
+                (is (not (:isError result)))
+                (is (= 1 (count (:content result))))
+                (is (re-find #"completed" (-> result :content first :text)))
+
+                ;; Verify file was updated
+                (let [updated-content (slurp (io/file story-tasks-dir "test-story-tasks.md"))]
+                  (is (re-find #"- \[x\] STORY: test-story - First incomplete task" updated-content))
+                  (is (re-find #"- \[ \] STORY: test-story - Second incomplete task" updated-content)))))))
+
+        (testing "returns modified files when git mode enabled"
+          (write-config-file "{:use-git? true}")
+          (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+          (let [{:keys [server client]} (create-test-server-and-client)]
+            (try
+              (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+                (.mkdirs story-tasks-dir)
+                (spit (io/file story-tasks-dir "git-test-tasks.md")
+                      (str "- [ ] STORY: git-test - Task to complete\n\n"
+                           "CATEGORY: simple\n")))
+
+              (let [result @(mcp-client/call-tool client
+                                                  "complete-story-task"
+                                                  {:story-name "git-test"
+                                                   :task-text "STORY: git-test - Task"})]
+                (is (not (:isError result)))
+                (is (= 2 (count (:content result))))
+                (let [json-text (-> result :content second :text)
+                      parsed (json/read-str json-text :key-fn keyword)]
+                  (is (= ["story/story-tasks/git-test-tasks.md"]
+                         (:modified-files parsed)))))
+              (finally
+                (mcp-client/close! client)
+                ((:stop server))))))
+
+        (testing "returns error when story file not found"
+          (let [result @(mcp-client/call-tool client
+                                              "complete-story-task"
+                                              {:story-name "nonexistent"
+                                               :task-text "some task"})]
+            (is (:isError result))
+            (is (re-find #"Story tasks file not found"
+                         (-> result :content first :text)))))
+
+        (testing "returns error when task text does not match"
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-tasks-dir "mismatch-tasks.md")
+                  (str "- [ ] STORY: mismatch - Actual task\n\n"
+                       "CATEGORY: simple\n")))
+
+          (let [result @(mcp-client/call-tool client
+                                              "complete-story-task"
+                                              {:story-name "mismatch"
+                                               :task-text "STORY: mismatch - Wrong task"})]
+            (is (:isError result))
+            (is (re-find #"does not match"
+                         (-> result :content first :text)))))
+
         (finally
           (mcp-client/close! client)
           ((:stop server)))))))

@@ -4,7 +4,8 @@
     [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [mcp-tasks.prompts :as prompts]))
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.story-tasks :as story-tasks]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -288,7 +289,7 @@
 
 (defn add-task-tool
   "Tool to add a task to a specific category.
-  
+
   Accepts config parameter for future git-aware functionality."
   [_config]
   {:name "add-task"
@@ -307,3 +308,185 @@
       :description "If true, add task at the beginning instead of the end"}}
     :required ["category" "task-text"]}
    :implementation add-task-impl})
+
+;; Story task management
+
+(defn- next-story-task-impl
+  "Implementation of next-story-task tool.
+
+  Reads story task file from .mcp-tasks/story-tasks/<story-name>-tasks.md,
+  parses it, and returns the first incomplete task with its metadata.
+
+  Returns a map with :task-text, :category, and :task-index keys,
+  or nil values if no incomplete task is found."
+  [config _context {:keys [story-name]}]
+  (try
+    (let [base-dir (:base-dir config)
+          story-tasks-file (if base-dir
+                             (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
+                             (str ".mcp-tasks/story-tasks/" story-name "-tasks.md"))]
+
+      (when-not (.exists (io/file story-tasks-file))
+        (throw (ex-info "Story tasks file not found"
+                        {:story-name story-name
+                         :file story-tasks-file})))
+
+      (let [content (slurp story-tasks-file)
+            tasks (story-tasks/parse-story-tasks content)
+            first-incomplete (story-tasks/find-first-incomplete-task tasks)]
+
+        (if first-incomplete
+          {:content [{:type "text"
+                      :text (pr-str {:task-text (:text first-incomplete)
+                                     :category (:category first-incomplete)
+                                     :task-index (:index first-incomplete)})}]
+           :isError false}
+          {:content [{:type "text"
+                      :text (pr-str {:task-text nil
+                                     :category nil
+                                     :task-index nil})}]
+           :isError false})))
+    (catch Exception e
+      {:content [{:type "text"
+                  :text (str "Error: " (.getMessage e)
+                             (when-let [data (ex-data e)]
+                               (str "\nDetails: " (pr-str data))))}]
+       :isError true})))
+
+(defn next-story-task-tool
+  "Tool to return the next incomplete task from a story's task list.
+
+  Takes a story-name parameter and reads from .mcp-tasks/story-tasks/<story-name>-tasks.md.
+  Returns a map with :task-text, :category, and :task-index, or nil values if no tasks remain."
+  [config]
+  {:name "next-story-task"
+   :description "Return the next incomplete task from a story's task list.
+
+  Reads story task file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`,
+  uses story-tasks parsing utilities to find first incomplete task,
+  returns map with :task-text, :category, :task-index (or nil if none)."
+   :inputSchema
+   {:type "object"
+    :properties
+    {"story-name"
+     {:type "string"
+      :description "The story name (without -tasks.md suffix)"}}
+    :required ["story-name"]}
+   :implementation (partial next-story-task-impl config)})
+
+(defn- complete-story-task-impl
+  "Implementation of complete-story-task tool.
+
+  Marks the first incomplete task in a story's task list as complete.
+  Verifies task-text matches before completing.
+
+  Returns:
+  - Git mode enabled: Two text items (completion message + JSON with :modified-files)
+  - Git mode disabled: Single text item (completion message only)"
+  [config _context {:keys [story-name task-text completion-comment]}]
+  (try
+    (let [use-git? (:use-git? config)
+          base-dir (:base-dir config)
+          story-tasks-file (if base-dir
+                             (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
+                             (str ".mcp-tasks/story-tasks/" story-name "-tasks.md"))
+          ;; Path relative to .mcp-tasks
+          story-tasks-rel-path (if base-dir
+                                 (str "story/story-tasks/" story-name "-tasks.md")
+                                 (str "story-tasks/" story-name "-tasks.md"))]
+
+      (when-not (.exists (io/file story-tasks-file))
+        (throw (ex-info "Story tasks file not found"
+                        {:story-name story-name
+                         :file story-tasks-file})))
+
+      (let [content (slurp story-tasks-file)
+            tasks (story-tasks/parse-story-tasks content)
+            first-incomplete (story-tasks/find-first-incomplete-task tasks)]
+
+        (when-not first-incomplete
+          (throw (ex-info "No incomplete tasks found in story"
+                          {:story-name story-name
+                           :file story-tasks-file})))
+
+        ;; Verify task-text matches (case-insensitive, whitespace-normalized)
+        ;; Strip checkbox prefix before comparing, like task-matches? does
+        (let [normalize #(-> % str/lower-case (str/replace #"\s+" " ") str/trim)
+              task-content (-> (:text first-incomplete)
+                               (str/replace #"^- \[([ x])\] " "")
+                               normalize)
+              search-text (normalize task-text)]
+          (when-not (str/starts-with? task-content search-text)
+            (throw (ex-info "First incomplete task does not match provided text"
+                            {:story-name story-name
+                             :expected task-text
+                             :actual (str/replace (:text first-incomplete) #"^- \[([ x])\] " "")}))))
+
+        ;; Mark task as complete
+        (let [updated-content (story-tasks/mark-task-complete
+                                content
+                                (:index first-incomplete)
+                                completion-comment)]
+          (spit story-tasks-file updated-content))
+
+        (if use-git?
+          ;; Git mode: return message + JSON with modified files
+          {:content [{:type "text"
+                      :text (str "Story task completed in " story-tasks-file)}
+                     {:type "text"
+                      :text (json/write-str {:modified-files [story-tasks-rel-path]})}]
+           :isError false}
+          ;; Non-git mode: return message only
+          {:content [{:type "text"
+                      :text (str "Story task completed in " story-tasks-file)}]
+           :isError false})))
+    (catch Exception e
+      {:content [{:type "text"
+                  :text (str "Error: " (.getMessage e)
+                             (when-let [data (ex-data e)]
+                               (str "\nDetails: " (pr-str data))))}]
+       :isError true})))
+
+(defn- complete-story-task-description
+  "Generate description for complete-story-task tool based on config."
+  [config]
+  (if (:use-git? config)
+    "Complete a task in a story's task list.
+
+  Verifies the first incomplete task matches the provided text, marks it complete,
+  and optionally adds a completion comment.
+  
+  Returns two text items:
+  1. A completion status message
+  2. A JSON-encoded map with :modified-files key containing file paths
+     relative to .mcp-tasks for use in git commit workflows."
+    "Complete a task in a story's task list.
+
+  Verifies the first incomplete task matches the provided text, marks it complete,
+  and optionally adds a completion comment.
+  
+  Returns a completion status message."))
+
+(defn complete-story-task-tool
+  "Tool to complete a task in a story's task list.
+  
+  Accepts config parameter containing :use-git? flag. When git mode is enabled,
+  returns modified file paths for git commit workflow. When disabled, returns
+  only completion message."
+  [config]
+  {:name "complete-story-task"
+   :description (complete-story-task-description config)
+   :inputSchema
+   {:type "object"
+    :properties
+    {"story-name"
+     {:type "string"
+      :description "The story name (without -tasks.md suffix)"}
+     "task-text"
+     {:type "string"
+      :description "Partial text from the beginning of the task to verify"}
+     "completion-comment"
+     {:type "string"
+      :description "Optional comment to append to the completed task"}}
+    :required ["story-name" "task-text"]}
+   :implementation (partial complete-story-task-impl config)})

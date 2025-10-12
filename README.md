@@ -33,8 +33,16 @@ clojure -M:mcp-tasks --install-prompts simple,clarify-task
 # Create your first task
 echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
 
+# Or create a story for larger features
+mkdir -p .mcp-tasks/story/stories
+echo "# Add CI Pipeline" > .mcp-tasks/story/stories/ci-setup.md
+echo "" >> .mcp-tasks/story/stories/ci-setup.md
+echo "Set up GitHub Actions for automated testing and deployment" >> .mcp-tasks/story/stories/ci-setup.md
+
 # Run in Claude Code
 /mcp-tasks:next-simple
+# Or for story-based development
+/mcp-tasks:refine-story ci-setup
 ```
 
 **[Installation Guide](doc/install.md)** • **[Workflow Documentation](doc/workflow.md)**
@@ -48,6 +56,7 @@ mcp-tasks enables you to manage development tasks in markdown files and have AI 
 **Key Benefits:**
 - **Persistent Planning**: Tasks survive across chat sessions in markdown files
 - **Category-Based Organization**: Group tasks by type (features, bugfixes, refactoring) with custom execution strategies
+- **Story-Based Development**: Break down epics into tasks with dedicated workflows for refinement and execution
 - **Audit Trail**: Completed tasks automatically archived with full context
 - **Flexible Workflows**: Supports both git-tracked and standalone task management
 
@@ -132,6 +141,42 @@ cat .mcp-tasks/complete/bugfix.md
 ```
 
 See **[doc/workflow.md](doc/workflow.md)** for advanced patterns including git worktrees for parallel task execution.
+
+### Story-Based Workflows
+
+For larger features that require multiple related tasks, use story workflows:
+
+```bash
+# Create a story describing the feature
+cat > .mcp-tasks/story/stories/user-auth.md <<'EOF'
+# User Authentication System
+
+Implement JWT-based authentication with user registration, login, and password reset.
+
+Requirements:
+- User registration with email validation
+- JWT token generation and validation
+- Password hashing with bcrypt
+- Password reset via email
+EOF
+
+# Refine the story interactively with agent
+/mcp-tasks:refine-story user-auth
+
+# Break down into executable tasks
+/mcp-tasks:create-story-tasks user-auth
+
+# Execute tasks one by one
+/mcp-tasks:execute-story-task user-auth
+```
+
+The agent will:
+- Guide you through story refinement with feedback loops
+- Break the story into categorized tasks
+- Execute tasks sequentially, tracking progress
+- Optionally manage feature branches automatically
+
+See **[doc/workflow.md#story-workflows](doc/workflow.md#story-workflows)** for complete documentation.
 
 ## Configuration
 

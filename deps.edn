@@ -1,4 +1,6 @@
-{:deps
+{:paths ["src" "resources"]
+
+ :deps
  {org.hugpduncan/mcp-clj-server
   {:git/url   "https://github.com/hugoduncan/mcp-clj"
    :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"

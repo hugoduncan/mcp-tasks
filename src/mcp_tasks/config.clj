@@ -19,6 +19,13 @@
                        :key :use-git?
                        :value use-git
                        :expected 'boolean?}))))
+  (when-let [story-branch-mgmt (:story-branch-management? config)]
+    (when-not (boolean? story-branch-mgmt)
+      (throw (ex-info (str "Expected boolean for :story-branch-management?, got " (type story-branch-mgmt))
+                      {:type :invalid-config-type
+                       :key :story-branch-management?
+                       :value story-branch-mgmt
+                       :expected 'boolean?}))))
   config)
 
 (defn read-config
