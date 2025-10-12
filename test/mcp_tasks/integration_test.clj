@@ -2,15 +2,17 @@
   "End-to-end integration tests for mcp-tasks server.
 
    Tests server startup and MCP protocol communication with different
-   configurations using Java SDK client. File operation behavior is
+   configurations using in-memory transport. File operation behavior is
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
-    [mcp-clj.java-sdk.interop :as java-sdk])
-  (:import
-    (java.lang
-      AutoCloseable)))
+    [mcp-clj.in-memory-transport.shared :as shared]
+    [mcp-clj.mcp-client.core :as mcp-client]
+    [mcp-clj.mcp-server.core :as mcp-server]
+    [mcp-tasks.config :as config]
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.tools :as tools]))
 
 (def test-project-dir (.getAbsolutePath (io/file "test-resources/integration-test")))
 
@@ -41,37 +43,58 @@
 
 (use-fixtures :each with-test-project)
 
-(defn- create-mcp-tasks-client
-  "Create Java SDK client connected to mcp-tasks server subprocess"
-  ^AutoCloseable []
-  (let [transport (java-sdk/create-stdio-client-transport
-                    {:command "clojure"
-                     :args ["-M:run" "--config-path" test-project-dir]})
-        client (java-sdk/create-java-client
-                 {:transport transport
-                  :async? false})]
-    client))
+(defn- load-test-config
+  "Load config for test, using test-project-dir as the config path"
+  []
+  (let [raw-config (config/read-config test-project-dir)
+        resolved-config (config/resolve-config test-project-dir (or raw-config {}))]
+    (config/validate-startup test-project-dir resolved-config)
+    resolved-config))
+
+(defn- create-test-server-and-client
+  "Create server and client connected via in-memory transport"
+  []
+  (let [config (load-test-config)
+        shared-transport (shared/create-shared-transport)
+        server (mcp-server/create-server
+                 {:transport {:type :in-memory
+                              :shared shared-transport}
+                  :tools {"complete-task" (tools/complete-task-tool config)
+                          "next-task" (tools/next-task-tool config)
+                          "add-task" (tools/add-task-tool config)}
+                  :prompts (prompts/prompts config)})
+        client (mcp-client/create-client
+                 {:transport {:type :in-memory
+                              :shared shared-transport}
+                  :client-info {:name "test-client" :version "1.0.0"}
+                  :protocol-version "2025-06-18"})]
+    {:server server
+     :client client}))
 
 (deftest ^:integ server-startup-with-no-config-test
   ;; Test that server starts successfully with no config file,
   ;; auto-detecting git mode based on .mcp-tasks/.git presence.
   (testing "server startup with no config"
     (testing "starts without git repo (auto-detects git mode off)"
-      (with-open [client (create-mcp-tasks-client)]
-        (let [result (java-sdk/initialize-client client)]
-          (is (some? result))
-          (is (contains? result :capabilities))
-          (is (contains? (:capabilities result) :tools))
-          (is (contains? (:capabilities result) :prompts)))))
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (is (mcp-client/client-ready? client))
+          (is (mcp-client/available-tools? client))
+          (is (mcp-client/available-prompts? client))
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
 
     (testing "starts with git repo (auto-detects git mode on)"
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
-      (with-open [client (create-mcp-tasks-client)]
-        (let [result (java-sdk/initialize-client client)]
-          (is (some? result))
-          (is (contains? result :capabilities))
-          (is (contains? (:capabilities result) :tools))
-          (is (contains? (:capabilities result) :prompts)))))))
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (is (mcp-client/client-ready? client))
+          (is (mcp-client/available-tools? client))
+          (is (mcp-client/available-prompts? client))
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
 
 (deftest ^:integ server-startup-with-explicit-git-mode-test
   ;; Test that server starts successfully with explicit git mode config.
@@ -79,34 +102,40 @@
     (testing "starts successfully when git repo exists"
       (write-config-file "{:use-git? true}")
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
-      (with-open [client (create-mcp-tasks-client)]
-        (let [result (java-sdk/initialize-client client)]
-          (is (some? result))
-          (is (contains? result :capabilities))
-          (is (contains? (:capabilities result) :tools))
-          (is (contains? (:capabilities result) :prompts)))))))
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (is (mcp-client/client-ready? client))
+          (is (mcp-client/available-tools? client))
+          (is (mcp-client/available-prompts? client))
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
 
 (deftest ^:integ server-startup-with-explicit-non-git-mode-test
   ;; Test that server starts successfully with explicit non-git mode config.
   (testing "server startup with explicit git mode disabled"
     (testing "starts successfully without git repo"
       (write-config-file "{:use-git? false}")
-      (with-open [client (create-mcp-tasks-client)]
-        (let [result (java-sdk/initialize-client client)]
-          (is (some? result))
-          (is (contains? result :capabilities))
-          (is (contains? (:capabilities result) :tools))
-          (is (contains? (:capabilities result) :prompts)))))
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (is (mcp-client/client-ready? client))
+          (is (mcp-client/available-tools? client))
+          (is (mcp-client/available-prompts? client))
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
 
     (testing "starts successfully even when git repo exists"
       (write-config-file "{:use-git? false}")
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
-      (with-open [client (create-mcp-tasks-client)]
-        (let [result (java-sdk/initialize-client client)]
-          (is (some? result))
-          (is (contains? result :capabilities))
-          (is (contains? (:capabilities result) :tools))
-          (is (contains? (:capabilities result) :prompts)))))))
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (is (mcp-client/client-ready? client))
+          (is (mcp-client/available-tools? client))
+          (is (mcp-client/available-prompts? client))
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
 
 (deftest ^:integ tools-available-test
   ;; Test that all expected tools are advertised and callable.
@@ -114,25 +143,27 @@
   (testing "tools availability"
     (write-config-file "{:use-git? false}")
 
-    (with-open [client (create-mcp-tasks-client)]
-      (java-sdk/initialize-client client)
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "lists expected tools"
+          (let [tools-response @(mcp-client/list-tools client)
+                tools (:tools tools-response)]
+            (is (map? tools-response))
+            (is (vector? tools))
 
-      (testing "lists expected tools"
-        (let [tools-response @(java-sdk/list-tools client)]
-          (is (map? tools-response))
-          (is (contains? tools-response :tools))
-          (is (sequential? (:tools tools-response)))
+            (let [tool-names (set (map :name tools))]
+              (is (contains? tool-names "complete-task"))
+              (is (contains? tool-names "next-task"))
+              (is (contains? tool-names "add-task"))
 
-          (let [tool-names (set (map :name (:tools tools-response)))]
-            (is (contains? tool-names "complete-task"))
-            (is (contains? tool-names "next-task"))
-            (is (contains? tool-names "add-task"))
-
-            (doseq [tool (:tools tools-response)]
-              (is (contains? tool :name))
-              (is (contains? tool :description))
-              (is (string? (:name tool)))
-              (is (string? (:description tool))))))))))
+              (doseq [tool tools]
+                (is (contains? tool :name))
+                (is (contains? tool :description))
+                (is (string? (:name tool)))
+                (is (string? (:description tool)))))))
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
 
 (deftest ^:integ prompts-available-test
   ;; Test that prompts are advertised with correct capabilities.
@@ -141,9 +172,15 @@
     (write-config-file "{:use-git? true}")
     (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
 
-    (with-open [client (create-mcp-tasks-client)]
-      (let [init-result (java-sdk/initialize-client client)]
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
         (testing "server advertises prompt capabilities"
-          (is (some? init-result))
-          (is (contains? init-result :capabilities))
-          (is (contains? (:capabilities init-result) :prompts)))))))
+          (is (mcp-client/available-prompts? client))
+          (let [prompts-response @(mcp-client/list-prompts client)
+                prompts (:prompts prompts-response)]
+            (is (map? prompts-response))
+            (is (vector? prompts))
+            (is (pos? (count prompts)))))
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
