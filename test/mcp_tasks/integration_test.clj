@@ -221,7 +221,7 @@
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
         (testing "returns task info when story tasks exist"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story-tasks")]
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-tasks-dir)
             (spit (io/file story-tasks-dir "test-story-tasks.md")
                   (str "# Test Story Tasks\n\n"
@@ -253,7 +253,7 @@
                 (is (re-find #"First incomplete task" (:task-text parsed)))))))
 
         (testing "returns nil values when no incomplete tasks"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story-tasks")]
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-tasks-dir)
             (spit (io/file story-tasks-dir "complete-story-tasks.md")
                   (str "# Complete Story Tasks\n\n"
@@ -292,7 +292,7 @@
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
         (testing "completes task when story tasks exist"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story-tasks")]
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-tasks-dir)
             (spit (io/file story-tasks-dir "test-story-tasks.md")
                   (str "# Test Story Tasks\n\n"
@@ -328,7 +328,7 @@
           (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
           (let [{:keys [server client]} (create-test-server-and-client)]
             (try
-              (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story-tasks")]
+              (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
                 (.mkdirs story-tasks-dir)
                 (spit (io/file story-tasks-dir "git-test-tasks.md")
                       (str "- [ ] STORY: git-test - Task to complete\n\n"
@@ -342,7 +342,7 @@
                 (is (= 2 (count (:content result))))
                 (let [json-text (-> result :content second :text)
                       parsed (json/read-str json-text :key-fn keyword)]
-                  (is (= ["story-tasks/git-test-tasks.md"]
+                  (is (= ["story/story-tasks/git-test-tasks.md"]
                          (:modified-files parsed)))))
               (finally
                 (mcp-client/close! client)
@@ -358,7 +358,7 @@
                          (-> result :content first :text)))))
 
         (testing "returns error when task text does not match"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story-tasks")]
+          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-tasks-dir)
             (spit (io/file story-tasks-dir "mismatch-tasks.md")
                   (str "- [ ] STORY: mismatch - Actual task\n\n"

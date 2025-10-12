@@ -1,11 +1,11 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-    [clojure.data.json :as json]
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [mcp-tasks.prompts :as prompts]
-    [mcp-tasks.story-tasks :as story-tasks]))
+   [clojure.data.json :as json]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [mcp-tasks.prompts :as prompts]
+   [mcp-tasks.story-tasks :as story-tasks]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -113,8 +113,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                 first-task
-                                 completion-comment)
+                                first-task
+                                completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -321,9 +321,10 @@
   or nil values if no incomplete task is found."
   [config _context {:keys [story-name]}]
   (try
-    (let [base-dir (:base-dir config ".")
-          story-tasks-dir (str base-dir "/.mcp-tasks/story-tasks")
-          story-tasks-file (str story-tasks-dir "/" story-name "-tasks.md")]
+    (let [base-dir (:base-dir config)
+          story-tasks-file (if base-dir
+                             (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
+                             (str ".mcp-tasks/story-tasks/" story-name "-tasks.md"))]
 
       (when-not (.exists (io/file story-tasks-file))
         (throw (ex-info "Story tasks file not found"
@@ -385,11 +386,14 @@
   [config _context {:keys [story-name task-text completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          base-dir (:base-dir config ".")
-          story-tasks-dir (str base-dir "/.mcp-tasks/story-tasks")
-          story-tasks-file (str story-tasks-dir "/" story-name "-tasks.md")
+          base-dir (:base-dir config)
+          story-tasks-file (if base-dir
+                             (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
+                             (str ".mcp-tasks/story-tasks/" story-name "-tasks.md"))
           ;; Path relative to .mcp-tasks
-          story-tasks-rel-path (str "story-tasks/" story-name "-tasks.md")]
+          story-tasks-rel-path (if base-dir
+                                 (str "story/story-tasks/" story-name "-tasks.md")
+                                 (str "story-tasks/" story-name "-tasks.md"))]
 
       (when-not (.exists (io/file story-tasks-file))
         (throw (ex-info "Story tasks file not found"
@@ -420,9 +424,9 @@
 
         ;; Mark task as complete
         (let [updated-content (story-tasks/mark-task-complete
-                                content
-                                (:index first-incomplete)
-                                completion-comment)]
+                               content
+                               (:index first-incomplete)
+                               completion-comment)]
           (spit story-tasks-file updated-content))
 
         (if use-git?
