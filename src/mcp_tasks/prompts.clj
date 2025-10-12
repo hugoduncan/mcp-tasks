@@ -280,3 +280,30 @@ You can use the `add-task` tool to add new tasks to a category.
       (do
         (swap! seen conj (:name prompt))
         prompt))))
+
+(defn story-prompts
+  "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts namespace.
+
+  Returns a map of prompt names to prompt definitions, suitable for registering
+  with the MCP server."
+  []
+  (require 'mcp-tasks.story-prompts)
+  (let [ns (find-ns 'mcp-tasks.story-prompts)
+        prompt-vars (->> (ns-publics ns)
+                         vals
+                         (filter (fn [v] (string? @v))))]
+    (into {}
+          (for [v prompt-vars]
+            (let [prompt-name (name (symbol v))
+                  prompt-content @v
+                  {:keys [metadata content]} (parse-frontmatter prompt-content)
+                  description (or (get metadata "description")
+                                  (:doc (meta v))
+                                  (format "Story prompt: %s" prompt-name))]
+              [(str "/" prompt-name)
+               (prompts/valid-prompt?
+                 {:name (str "/" prompt-name)
+                  :description description
+                  :messages [{:role "user"
+                              :content {:type "text"
+                                        :text content}}]})])))))
