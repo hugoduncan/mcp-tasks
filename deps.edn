@@ -1,13 +1,24 @@
 {:deps
- {org.hugpduncan/mcp-clj {:git/url   "https://github.com/hugoduncan/mcp-clj"
-                          :git/sha   "66b7c92e45f23f66d940eba636cf64040be3b2cf"
-                          :deps/root "projects/server"}
-  org.clojure/clojure    {:mvn/version "1.12.3"}}
+ {org.hugpduncan/mcp-clj-server
+  {:git/url   "https://github.com/hugoduncan/mcp-clj"
+   :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
+   :deps/root "projects/server"}
+  org.clojure/clojure {:mvn/version "1.12.3"}}
 
  :aliases
- {:dev    {}
+ {:dev    {:override-deps
+           {org.hugpduncan/mcp-clj-server
+            {:git/url   "https://github.com/hugoduncan/mcp-clj"
+             :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
+             :deps/root "projects/test-dep"}}}
   :test   {:extra-paths ["test"]
-           :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+           :extra-deps
+           {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+           :override-deps
+           {org.hugpduncan/mcp-clj-server
+            {:git/url   "https://github.com/hugoduncan/mcp-clj"
+             :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
+             :deps/root "projects/test-dep"}}
            :main-opts   ["-m" "kaocha.runner"]}
   :run    {:exec-fn   mcp-tasks.main/start
            :main-opts ["-m" "mcp-tasks.main"]}

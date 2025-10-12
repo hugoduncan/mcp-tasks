@@ -70,26 +70,30 @@
 (defn discover-categories
   "Discover task categories by reading filenames from .mcp-tasks subdirectories.
 
+  Takes base-dir which should be the project directory (defaults to current dir).
   Returns a sorted vector of unique category names (filenames without .md extension)
   found across the tasks, complete, and prompts subdirectories."
-  []
-  (let [base-dir (io/file ".mcp-tasks")
-        subdirs ["tasks" "complete" "prompts"]
-        md-files (for [subdir subdirs
-                       :let [dir (io/file base-dir subdir)]
-                       :when (.exists dir)
-                       file (.listFiles dir)
-                       :when (and (.isFile file)
-                                  (str/ends-with? (.getName file) ".md"))]
-                   (.getName file))
-        categories (into (sorted-set)
-                         (map #(str/replace % #"\.md$" ""))
-                         md-files)]
-    (vec categories)))
+  ([]
+   (discover-categories (System/getProperty "user.dir")))
+  ([base-dir]
+   (let [mcp-tasks-dir (io/file base-dir ".mcp-tasks")
+         subdirs ["tasks" "complete" "prompts"]
+         md-files (for [subdir subdirs
+                        :let [dir (io/file mcp-tasks-dir subdir)]
+                        :when (.exists dir)
+                        file (.listFiles dir)
+                        :when (and (.isFile file)
+                                   (str/ends-with? (.getName file) ".md"))]
+                    (.getName file))
+         categories (into (sorted-set)
+                          (map #(str/replace % #"\.md$" ""))
+                          md-files)]
+     (vec categories))))
 
 (defn- read-task-prompt-text
-  "Generate prompt text for reading the next task from a category."
-  [category]
+  "Generate prompt text for reading the next task from a category.
+  Config parameter included for API consistency but not currently used."
+  [_config category]
   (format "- Read the file .mcp-tasks/tasks/%s.md
 
 - Find the first incomplete task (marked with `- [ ]`) You can use the
@@ -110,18 +114,21 @@ You can use the `add-task` tool to add new tasks to a category.
 ")
 
 (defn- complete-task-prompt-text
-  "Generate prompt text for completing and tracking a task."
-  [category]
-  (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to
+  "Generate prompt text for completing and tracking a task.
+  Conditionally includes git commit instructions based on config :use-git? value."
+  [config category]
+  (let [base-text (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to
   end, mark as complete with `- [x]`). You can use the `complete-task` tool to
   mark a task as complete and move it to the completed archive.
 
 - Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave
   the file empty rather than deleting it)
-
-- Commit the task tracking changes in the .mcp-tasks git repository
 "
-          category category))
+                          category category)
+        git-text "\n- Commit the task tracking changes in the .mcp-tasks git repository\n"]
+    (if (:use-git? config)
+      (str base-text git-text)
+      base-text)))
 
 (defn- read-prompt-instructions
   "Read custom prompt instructions from .mcp-tasks/prompts/<category>.md if it exists.
@@ -142,7 +149,7 @@ You can use the `add-task` tool to add new tasks to a category.
   - Uses instructions from .mcp-tasks/prompts/<category>.md if available,
     otherwise uses default instructions based on next-simple
   - Moves completed tasks to .mcp-tasks/complete/<category>.md
-  - Commits changes to the .mcp-tasks repository
+  - Conditionally includes git commit instructions based on config :use-git? value
 
   The prompt text is automatically composed from three parts:
   1. read-task-prompt-text - instructions for reading the next task
@@ -153,7 +160,7 @@ You can use the `add-task` tool to add new tasks to a category.
   used for the prompt's :description. Otherwise, a default description is generated.
 
   Returns a vector of prompt maps suitable for registration with the MCP server."
-  [categories]
+  [config categories]
   (vec
     (for [category categories]
       (let [prompt-data (read-prompt-instructions category)
@@ -161,9 +168,9 @@ You can use the `add-task` tool to add new tasks to a category.
             custom-content (:content prompt-data)
             execution-instructions (or custom-content (default-prompt-text))
             prompt-text (str "Please complete the next " category " task following these steps:\n\n"
-                             (read-task-prompt-text category)
+                             (read-task-prompt-text config category)
                              execution-instructions
-                             (complete-task-prompt-text category))
+                             (complete-task-prompt-text config category))
             description (or (get metadata "description")
                             (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
         (prompts/valid-prompt?
@@ -178,22 +185,28 @@ You can use the `add-task` tool to add new tasks to a category.
 
   Returns a map of category name to description string. Categories without
   custom prompts or without description metadata will have a default description."
-  []
-  (let [categories (discover-categories)]
-    (into {}
-          (for [category categories]
-            (let [prompt-data (read-prompt-instructions category)
-                  metadata (:metadata prompt-data)
-                  description (or (get metadata "description")
-                                  (format "Tasks for %s category" category))]
-              [category description])))))
+  ([]
+   (category-descriptions (System/getProperty "user.dir")))
+  ([base-dir]
+   (let [categories (discover-categories base-dir)]
+     (into {}
+           (for [category categories]
+             (let [prompt-data (read-prompt-instructions category)
+                   metadata (:metadata prompt-data)
+                   description (or (get metadata "description")
+                                   (format "Tasks for %s category" category))]
+               [category description]))))))
 
 (defn prompts
   "Generate all task prompts by discovering categories and creating prompts for them.
 
+  Accepts config parameter to conditionally include git instructions in prompts.
+  Uses :base-dir from config to locate .mcp-tasks directory.
+
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
-  []
-  (let [categories (discover-categories)
-        prompt-list (create-prompts categories)]
+  [config]
+  (let [base-dir (or (:base-dir config) (System/getProperty "user.dir"))
+        categories (discover-categories base-dir)
+        prompt-list (create-prompts config categories)]
     (into {} (map (fn [p] [(:name p) p]) prompt-list))))

@@ -70,19 +70,20 @@
       (str completed-task "\n\n" (str/trim completion-comment))
       completed-task)))
 
-(defn complete-task-impl
+(defn- complete-task-impl
   "Implementation of complete-task tool.
 
   Moves first task from tasks/<category>.md to complete/<category>.md,
   verifying it matches the provided task-text and optionally adding a
   completion comment.
   
-  Returns two text items in :content:
-  1. A completion message
-  2. A JSON map with :modified-files containing paths relative to .mcp-tasks"
-  [_context {:keys [category task-text completion-comment]}]
+  Returns:
+  - Git mode enabled: Two text items (completion message + JSON with :modified-files)
+  - Git mode disabled: Single text item (completion message only)"
+  [config _context {:keys [category task-text completion-comment]}]
   (try
-    (let [tasks-dir ".mcp-tasks/tasks"
+    (let [use-git? (:use-git? config)
+          tasks-dir ".mcp-tasks/tasks"
           complete-dir ".mcp-tasks/complete"
           tasks-file (str tasks-dir "/" category ".md")
           complete-file (str complete-dir "/" category ".md")
@@ -126,12 +127,18 @@
                 new-tasks-content (str/join "\n" remaining-tasks)]
             (write-task-file tasks-file new-tasks-content))
 
-          {:content [{:type "text"
-                      :text (str "Task completed and moved to " complete-file)}
-                     {:type "text"
-                      :text (json/write-str {:modified-files [tasks-rel-path
-                                                              complete-rel-path]})}]
-           :isError false})))
+          (if use-git?
+            ;; Git mode: return message + JSON with modified files
+            {:content [{:type "text"
+                        :text (str "Task completed and moved to " complete-file)}
+                       {:type "text"
+                        :text (json/write-str {:modified-files [tasks-rel-path
+                                                                complete-rel-path]})}]
+             :isError false}
+            ;; Non-git mode: return message only
+            {:content [{:type "text"
+                        :text (str "Task completed and moved to " complete-file)}]
+             :isError false}))))
     (catch Exception e
       {:content [{:type "text"
                   :text (str "Error: " (.getMessage e)
@@ -139,8 +146,11 @@
                                (str "\nDetails: " (pr-str data))))}]
        :isError true})))
 
-(def ^:private description
-  "Complete a task by moving it from
+(defn- description
+  "Generate description for complete-task tool based on config."
+  [config]
+  (if (:use-git? config)
+    "Complete a task by moving it from
    .mcp-tasks/tasks/<category>.md to .mcp-tasks/complete/<category>.md.
 
    Verifies the first task matches the provided text, marks it complete, and
@@ -148,13 +158,25 @@
    
    Returns two text items:
    1. A completion status message
-   2. A JSON-encoded map with :modified-files key containing a list of file paths
-      relative to .mcp-tasks that need to be committed in the .mcp-tasks git repository.")
+   2. A JSON-encoded map with :modified-files key containing file paths
+      relative to .mcp-tasks for use in git commit workflows."
+    "Complete a task by moving it from
+   .mcp-tasks/tasks/<category>.md to .mcp-tasks/complete/<category>.md.
 
-(def complete-task-tool
-  "Tool to complete a task and move it from tasks to complete directory"
+   Verifies the first task matches the provided text, marks it complete, and
+   optionally adds a completion comment.
+   
+   Returns a completion status message."))
+
+(defn complete-task-tool
+  "Tool to complete a task and move it from tasks to complete directory.
+  
+  Accepts config parameter containing :use-git? flag. When git mode is enabled,
+  returns modified file paths for git commit workflow. When disabled, returns
+  only completion message."
+  [config]
   {:name "complete-task"
-   :description description
+   :description (description config)
    :inputSchema
    {:type "object"
     :properties
@@ -168,7 +190,7 @@
      {:type "string"
       :description "Optional comment to append to the completed task"}}
     :required ["category" "task-text"]}
-   :implementation complete-task-impl})
+   :implementation (partial complete-task-impl config)})
 
 (defn next-task-impl
   "Implementation of next-task tool.
@@ -205,8 +227,11 @@
                                (str "\nDetails: " (pr-str data))))}]
        :isError true})))
 
-(def next-task-tool
-  "Tool to return the next task from a specific category"
+(defn next-task-tool
+  "Tool to return the next task from a specific category.
+  
+  Accepts config parameter for future git-aware functionality."
+  [_config]
   {:name "next-task"
    :description "Return the next task from tasks/<category>.md"
    :inputSchema
@@ -261,8 +286,11 @@
                        (format "- %s: %s" cat (get category-descs cat)))))
       "Add a task to tasks/<category>.md")))
 
-(def add-task-tool
-  "Tool to add a task to a specific category"
+(defn add-task-tool
+  "Tool to add a task to a specific category.
+  
+  Accepts config parameter for future git-aware functionality."
+  [_config]
   {:name "add-task"
    :description (add-task-description)
    :inputSchema

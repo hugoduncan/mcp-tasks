@@ -31,7 +31,25 @@ clj
 
 **Linting:**
 ```bash
-clj-kondo --lint src test
+clj-kondo --lint src test --fail-level warning
+```
+
+**Testing:**
+```bash
+# Run unit tests (default)
+clojure -M:dev:test --focus :unit
+
+# Run integration tests
+clojure -M:dev:test --focus :integration
+
+# Run all tests
+clojure -M:dev:test
+
+# Run specific test namespace
+clojure -M:dev:test --focus mcp-tasks.main-test
+
+# Run specific test
+clojure -M:dev:test --focus mcp-tasks.main-test/config-threading-integration-test
 ```
 
 **Build:**
@@ -70,6 +88,31 @@ git-cliff -o CHANGELOG.md  # Update CHANGELOG.md
 
 See `doc/dev/changelog.md` for setup details.
 
+## GitHub Actions
+
+**Workflows:**
+
+- **test.yml** - Runs on pushes to master and all PRs
+  - Runs cljstyle check
+  - Runs clj-kondo lint with `--fail-level warning`
+  - Runs unit tests and integration tests separately
+  - Caches Clojure dependencies for faster runs
+
+- **release.yml** - Manual workflow for releasing new versions
+  - Runs all tests and linting
+  - Builds JAR with version calculated from commit count
+  - Generates changelog using git-cliff
+  - Creates git tag
+  - Deploys to Clojars
+  - Creates GitHub Release with JAR artifact
+  - Supports dry-run mode for testing
+
+**Release Process:**
+1. Go to Actions → Release workflow
+2. Click "Run workflow"
+3. Optionally enable dry-run to test without deploying
+4. Workflow automatically calculates version (0.1.N based on commit count)
+
 ## Key Concepts
 
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
@@ -81,7 +124,7 @@ See `doc/dev/changelog.md` for setup details.
 
 - Use semantic commit messages, and semantic pull request titles
 - run `cljstyle fix` before making commits
-- run `clj-kondo --lint src test` before commiting
+- run `clj-kondo --lint src test --fail-level warning` before commiting
 
 - when merging a PR provide a clean commit message using semntic commit
   message style.  Do no just use the default message or a concatenation

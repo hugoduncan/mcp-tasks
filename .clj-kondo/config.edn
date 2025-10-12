@@ -1,1 +1,1 @@
-{:linters {:unused-namespace {:level :warning}}}
+{}

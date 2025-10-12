@@ -72,13 +72,13 @@
   ;; with both custom and default instructions.
   (testing "create-prompts"
     (testing "creates prompts for each category"
-      (let [prompts (sut/create-prompts ["simple" "test-category"])]
+      (let [prompts (sut/create-prompts {:use-git? true} ["simple" "test-category"])]
         (is (vector? prompts))
         (is (= 2 (count prompts)))
         (is (every? map? prompts))))
 
     (testing "generates correct prompt structure"
-      (let [prompts (sut/create-prompts ["simple"])
+      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
             prompt (first prompts)]
         (is (contains? prompt :name))
         (is (contains? prompt :description))
@@ -88,7 +88,7 @@
         (is (vector? (:messages prompt)))))
 
     (testing "uses default template when no custom prompt file exists"
-      (let [prompts (sut/create-prompts ["nonexistent"])
+      (let [prompts (sut/create-prompts {:use-git? true} ["nonexistent"])
             prompt (first prompts)
             message-text (get-in prompt [:messages 0 :content :text])]
         (is (= "next-nonexistent" (:name prompt)))
@@ -96,7 +96,7 @@
         (is (re-find #"\.mcp-tasks/tasks/nonexistent\.md" message-text))))
 
     (testing "generates prompts with proper category substitution"
-      (let [prompts (sut/create-prompts ["simple"])
+      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
             prompt (first prompts)
             message-text (get-in prompt [:messages 0 :content :text])]
         (is (= "next-simple" (:name prompt)))
@@ -105,17 +105,29 @@
         (is (re-find #"\.mcp-tasks/complete/simple\.md" message-text))))
 
     (testing "uses metadata description when available"
-      (let [prompts (sut/create-prompts ["simple"])
+      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
             prompt (first prompts)]
         (is (= "next-simple" (:name prompt)))
         (is (= "Execute simple tasks with basic workflow" (:description prompt)))))
 
     (testing "uses default description when no metadata"
-      (let [prompts (sut/create-prompts ["nonexistent"])
+      (let [prompts (sut/create-prompts {:use-git? true} ["nonexistent"])
             prompt (first prompts)]
         (is (= "next-nonexistent" (:name prompt)))
         (is (= "Process the next incomplete task from .mcp-tasks/tasks/nonexistent.md"
-               (:description prompt)))))))
+               (:description prompt)))))
+
+    (testing "includes git instructions when use-git? is true"
+      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
+            prompt (first prompts)
+            message-text (get-in prompt [:messages 0 :content :text])]
+        (is (re-find #"Commit the task tracking changes" message-text))))
+
+    (testing "omits .mcp-tasks git commit instructions when use-git? is false"
+      (let [prompts (sut/create-prompts {:use-git? false} ["simple"])
+            prompt (first prompts)
+            message-text (get-in prompt [:messages 0 :content :text])]
+        (is (not (re-find #"Commit the task tracking changes in the \.mcp-tasks git repository" message-text)))))))
 
 (deftest category-descriptions-test
   ;; Test that category-descriptions returns correct descriptions for all categories.
@@ -130,3 +142,44 @@
       (let [categories (sut/discover-categories)
             descs (sut/category-descriptions)]
         (is (= (set categories) (set (keys descs))))))))
+
+(deftest read-task-prompt-text-test
+  ;; Test that read-task-prompt-text generates correct prompt text.
+  ;; Config parameter is accepted but not currently used.
+  (testing "read-task-prompt-text"
+    (testing "generates prompt text for category"
+      (let [text (#'sut/read-task-prompt-text {:use-git? true} "simple")]
+        (is (string? text))
+        (is (re-find #"\.mcp-tasks/tasks/simple\.md" text))
+        (is (re-find #"first incomplete task" text))))
+
+    (testing "config parameter doesn't affect output"
+      (let [text-git (#'sut/read-task-prompt-text {:use-git? true} "simple")
+            text-no-git (#'sut/read-task-prompt-text {:use-git? false} "simple")]
+        (is (= text-git text-no-git))))))
+
+(deftest complete-task-prompt-text-test
+  ;; Test that complete-task-prompt-text conditionally includes git instructions.
+  (testing "complete-task-prompt-text"
+    (testing "includes git instructions when use-git? is true"
+      (let [text (#'sut/complete-task-prompt-text {:use-git? true} "simple")]
+        (is (string? text))
+        (is (re-find #"\.mcp-tasks/complete/simple\.md" text))
+        (is (re-find #"\.mcp-tasks/tasks/simple\.md" text))
+        (is (re-find #"Commit the task tracking changes in the \.mcp-tasks git repository" text))))
+
+    (testing "omits git instructions when use-git? is false"
+      (let [text (#'sut/complete-task-prompt-text {:use-git? false} "simple")]
+        (is (string? text))
+        (is (re-find #"\.mcp-tasks/complete/simple\.md" text))
+        (is (re-find #"\.mcp-tasks/tasks/simple\.md" text))
+        (is (not (re-find #"Commit" text)))
+        (is (not (re-find #"git" text)))))
+
+    (testing "includes file operation instructions in both modes"
+      (let [text-git (#'sut/complete-task-prompt-text {:use-git? true} "simple")
+            text-no-git (#'sut/complete-task-prompt-text {:use-git? false} "simple")]
+        (is (re-find #"Move the completed task" text-git))
+        (is (re-find #"Remove the task" text-git))
+        (is (re-find #"Move the completed task" text-no-git))
+        (is (re-find #"Remove the task" text-no-git))))))
