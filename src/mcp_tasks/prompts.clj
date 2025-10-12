@@ -70,22 +70,25 @@
 (defn discover-categories
   "Discover task categories by reading filenames from .mcp-tasks subdirectories.
 
+  Takes base-dir which should be the project directory (defaults to current dir).
   Returns a sorted vector of unique category names (filenames without .md extension)
   found across the tasks, complete, and prompts subdirectories."
-  []
-  (let [base-dir (io/file ".mcp-tasks")
-        subdirs ["tasks" "complete" "prompts"]
-        md-files (for [subdir subdirs
-                       :let [dir (io/file base-dir subdir)]
-                       :when (.exists dir)
-                       file (.listFiles dir)
-                       :when (and (.isFile file)
-                                  (str/ends-with? (.getName file) ".md"))]
-                   (.getName file))
-        categories (into (sorted-set)
-                         (map #(str/replace % #"\.md$" ""))
-                         md-files)]
-    (vec categories)))
+  ([]
+   (discover-categories (System/getProperty "user.dir")))
+  ([base-dir]
+   (let [mcp-tasks-dir (io/file base-dir ".mcp-tasks")
+         subdirs ["tasks" "complete" "prompts"]
+         md-files (for [subdir subdirs
+                        :let [dir (io/file mcp-tasks-dir subdir)]
+                        :when (.exists dir)
+                        file (.listFiles dir)
+                        :when (and (.isFile file)
+                                   (str/ends-with? (.getName file) ".md"))]
+                    (.getName file))
+         categories (into (sorted-set)
+                          (map #(str/replace % #"\.md$" ""))
+                          md-files)]
+     (vec categories))))
 
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category.
@@ -182,24 +185,28 @@ You can use the `add-task` tool to add new tasks to a category.
 
   Returns a map of category name to description string. Categories without
   custom prompts or without description metadata will have a default description."
-  []
-  (let [categories (discover-categories)]
-    (into {}
-          (for [category categories]
-            (let [prompt-data (read-prompt-instructions category)
-                  metadata (:metadata prompt-data)
-                  description (or (get metadata "description")
-                                  (format "Tasks for %s category" category))]
-              [category description])))))
+  ([]
+   (category-descriptions (System/getProperty "user.dir")))
+  ([base-dir]
+   (let [categories (discover-categories base-dir)]
+     (into {}
+           (for [category categories]
+             (let [prompt-data (read-prompt-instructions category)
+                   metadata (:metadata prompt-data)
+                   description (or (get metadata "description")
+                                   (format "Tasks for %s category" category))]
+               [category description]))))))
 
 (defn prompts
   "Generate all task prompts by discovering categories and creating prompts for them.
 
   Accepts config parameter to conditionally include git instructions in prompts.
+  Uses :base-dir from config to locate .mcp-tasks directory.
 
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
   [config]
-  (let [categories (discover-categories)
+  (let [base-dir (or (:base-dir config) (System/getProperty "user.dir"))
+        categories (discover-categories base-dir)
         prompt-list (create-prompts config categories)]
     (into {} (map (fn [p] [(:name p) p]) prompt-list))))

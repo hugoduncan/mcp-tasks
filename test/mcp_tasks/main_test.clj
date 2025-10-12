@@ -188,11 +188,9 @@
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             tasks-dir (io/file mcp-tasks-dir "tasks")
             _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
-            original-dir (System/getProperty "user.dir")]
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")]
         (try
-          (System/setProperty "user.dir" (.getPath temp-dir))
-          (let [config {:use-git? true}
+          (let [config {:use-git? true :base-dir (.getPath temp-dir)}
                 prompt-map (prompts/prompts config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (map? prompt-map))
@@ -202,7 +200,6 @@
               (is (string? message-text))
               (is (re-find #"Commit the task tracking changes" message-text))))
           (finally
-            (System/setProperty "user.dir" original-dir)
             (.delete (io/file tasks-dir "simple.md"))
             (.delete tasks-dir)
             (.delete mcp-tasks-dir)
@@ -215,11 +212,9 @@
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             tasks-dir (io/file mcp-tasks-dir "tasks")
             _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
-            original-dir (System/getProperty "user.dir")]
+            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")]
         (try
-          (System/setProperty "user.dir" (.getPath temp-dir))
-          (let [config {:use-git? false}
+          (let [config {:use-git? false :base-dir (.getPath temp-dir)}
                 prompt-map (prompts/prompts config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (map? prompt-map))
@@ -230,7 +225,6 @@
               (is (not
                     (re-find #"Commit the task tracking changes" message-text)))))
           (finally
-            (System/setProperty "user.dir" original-dir)
             (.delete (io/file tasks-dir "simple.md"))
             (.delete tasks-dir)
             (.delete mcp-tasks-dir)
@@ -253,6 +247,7 @@
                 prompt-map (prompts/prompts config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (false? (:use-git? config)))
+            (is (= (.getPath temp-dir) (:base-dir config)))
             (is (map? complete-tool))
             (is (map? simple-prompt))
             (let [message-text (get-in

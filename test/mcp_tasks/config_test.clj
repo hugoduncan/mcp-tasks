@@ -197,30 +197,30 @@
       (is (true? (sut/determine-git-mode test-project-dir {}))))))
 
 (deftest resolve-config-adds-use-git
-  ;; Test that resolve-config adds :use-git? to config map
+  ;; Test that resolve-config adds :use-git? and :base-dir to config map
   (testing "resolve-config"
-    (testing "adds :use-git? false when no config and no git repo"
-      (is (= {:use-git? false}
+    (testing "adds :use-git? false and :base-dir when no config and no git repo"
+      (is (= {:use-git? false :base-dir test-project-dir}
              (sut/resolve-config test-project-dir {}))))
 
-    (testing "adds :use-git? true when no config but git repo exists"
+    (testing "adds :use-git? true and :base-dir when no config but git repo exists"
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
-      (is (= {:use-git? true}
+      (is (= {:use-git? true :base-dir test-project-dir}
              (sut/resolve-config test-project-dir {}))))
 
-    (testing "preserves explicit :use-git? true"
-      (is (= {:use-git? true}
+    (testing "preserves explicit :use-git? true and adds :base-dir"
+      (is (= {:use-git? true :base-dir test-project-dir}
              (sut/resolve-config test-project-dir {:use-git? true}))))
 
-    (testing "preserves explicit :use-git? false even with git repo"
+    (testing "preserves explicit :use-git? false even with git repo and adds :base-dir"
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
-      (is (= {:use-git? false}
+      (is (= {:use-git? false :base-dir test-project-dir}
              (sut/resolve-config test-project-dir {:use-git? false}))))
 
-    (testing "preserves other config keys"
+    (testing "preserves other config keys and adds :use-git? and :base-dir"
       (cleanup-test-project)
       (setup-test-project)
-      (is (= {:use-git? false :other-key "value"}
+      (is (= {:use-git? false :base-dir test-project-dir :other-key "value"}
              (sut/resolve-config test-project-dir {:other-key "value"}))))))
 
 (deftest validate-git-repo-with-git-disabled

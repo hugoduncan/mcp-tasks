@@ -66,10 +66,14 @@
     (git-repo-exists? project-dir)))
 
 (defn resolve-config
-  "Returns final config map with :use-git? resolved.
-  Uses explicit config value if present, otherwise auto-detects from git repo presence."
+  "Returns final config map with :use-git? and :base-dir resolved.
+  Uses explicit config value if present, otherwise auto-detects from git repo presence.
+  Base directory defaults to current working directory if project-dir not provided."
   [project-dir config]
-  (assoc config :use-git? (determine-git-mode project-dir config)))
+  (let [base-dir (or project-dir (System/getProperty "user.dir"))]
+    (assoc config
+           :use-git? (determine-git-mode project-dir config)
+           :base-dir base-dir)))
 
 ;; Startup validation
 
