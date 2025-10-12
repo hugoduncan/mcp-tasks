@@ -289,3 +289,53 @@
             create-prompt (first (filter #(= "create-story-tasks" (:name %)) prompts))]
         (is (some? create-prompt))
         (is (some? (:description create-prompt)))))))
+
+(deftest execute-story-task-prompt-test
+  ;; Test that the execute-story-task built-in prompt is properly defined
+  ;; with correct metadata and content structure including task execution,
+  ;; queue management, and branch management instructions.
+  (testing "execute-story-task prompt"
+    (testing "is available via get-story-prompt"
+      (let [prompt (sut/get-story-prompt "execute-story-task")]
+        (is (some? prompt))
+        (is (= "execute-story-task" (:name prompt)))))
+
+    (testing "has description metadata"
+      (let [prompt (sut/get-story-prompt "execute-story-task")]
+        (is (some? (:description prompt)))
+        (is (string? (:description prompt)))))
+
+    (testing "has content with key instructions"
+      (let [prompt (sut/get-story-prompt "execute-story-task")
+            content (:content prompt)]
+        (is (some? content))
+        (is (string? content))
+        (is (re-find #"story-name" content))
+        (is (re-find #"\.mcp-tasks/story-tasks" content))
+        (is (re-find #"CATEGORY" content))))
+
+    (testing "includes task execution workflow"
+      (let [prompt (sut/get-story-prompt "execute-story-task")
+            content (:content prompt)]
+        (is (re-find #"add-task" content))
+        (is (re-find #"prepend" content))
+        (is (re-find #"next-task" content))
+        (is (re-find #"complete-story-task" content))))
+
+    (testing "includes branch management instructions"
+      (let [prompt (sut/get-story-prompt "execute-story-task")
+            content (:content prompt)]
+        (is (re-find #"story-branch-management" content))
+        (is (re-find #"Branch Management" content))))
+
+    (testing "includes conditional logic documentation"
+      (let [prompt (sut/get-story-prompt "execute-story-task")
+            content (:content prompt)]
+        (is (re-find #"Conditional" content))
+        (is (re-find #"configuration" content))))
+
+    (testing "appears in list-story-prompts"
+      (let [prompts (sut/list-story-prompts)
+            execute-prompt (first (filter #(= "execute-story-task" (:name %)) prompts))]
+        (is (some? execute-prompt))
+        (is (some? (:description execute-prompt)))))))
