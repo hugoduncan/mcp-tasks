@@ -441,6 +441,263 @@ Use {story-name} as a placeholder for the story name argument.
 - Use stories for planned work, regular tasks for ad-hoc items
 - Story tasks can reference regular tasks and vice versa
 
+## Story Tools and Prompts Reference
+
+### Story Tools
+
+#### next-story-task
+
+Returns the next incomplete task from a story's task list.
+
+**Parameters:**
+- `story-name` (string, required) - The story name without -tasks.md suffix
+
+**Returns:**
+
+A map with three keys:
+- `:task-text` (string or nil) - The full multi-line task text including the STORY prefix, excluding the CATEGORY line
+- `:category` (string or nil) - The category assigned to this task
+- `:task-index` (integer or nil) - The zero-based index of the task in the story task file
+
+Returns nil values for all keys if no incomplete tasks are found.
+
+**Behavior:**
+- Reads story task file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+- Parses the markdown to find the first task marked with `- [ ]`
+- Extracts the task text (all continuation lines until the CATEGORY line)
+- Extracts the category from the `CATEGORY: <category>` metadata line
+- Returns an error if the story task file doesn't exist
+
+**Example:**
+```clojure
+;; Call
+{:story-name "user-auth"}
+
+;; Return value (success)
+{:task-text "STORY: user-auth - Set up JWT library dependencies\nAdd JWT library to deps.edn..."
+ :category "simple"
+ :task-index 0}
+
+;; Return value (no tasks)
+{:task-text nil
+ :category nil
+ :task-index nil}
+```
+
+**Usage:**
+```
+Use the next-story-task tool to inspect the next task without executing it.
+This is useful for planning or verifying task order.
+```
+
+#### complete-story-task
+
+Completes a task in a story's task list by marking it as done.
+
+**Parameters:**
+- `story-name` (string, required) - The story name without -tasks.md suffix
+- `task-text` (string, required) - Partial text from the beginning of the task to verify (without the `- [ ]` checkbox prefix)
+- `completion-comment` (string, optional) - Optional comment to append to the completed task
+
+**Returns:**
+
+Git mode enabled:
+- Text item 1: Completion status message
+- Text item 2: JSON-encoded map with `:modified-files` key containing file paths relative to `.mcp-tasks`
+
+Git mode disabled:
+- Single text item: Completion status message
+
+**Behavior:**
+- Reads story task file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+- Finds the first incomplete task (marked with `- [ ]`)
+- Verifies the task text matches the provided `task-text` parameter (case-insensitive, whitespace-normalized)
+- Changes `- [ ]` to `- [x]` for the matched task
+- Optionally appends the completion comment on a new line after the task
+- Writes the updated content back to the story task file
+- Returns an error if:
+  - Story task file doesn't exist
+  - No incomplete tasks are found
+  - The first incomplete task doesn't match the provided text
+
+**Example:**
+```clojure
+;; Call
+{:story-name "user-auth"
+ :task-text "STORY: user-auth - Set up JWT library"
+ :completion-comment "Added buddy-sign library"}
+
+;; Return (git mode)
+"Story task completed in .mcp-tasks/story-tasks/user-auth-tasks.md"
+"{\"modified-files\": [\"story-tasks/user-auth-tasks.md\"]}"
+
+;; Return (non-git mode)
+"Story task completed in .mcp-tasks/story-tasks/user-auth-tasks.md"
+```
+
+**Usage:**
+```
+Use complete-story-task after successfully executing a story task to mark
+it as complete in the story task file. The tool verifies you're completing
+the correct task before making changes.
+
+In git mode, use the modified-files output to commit the task tracking change.
+```
+
+### Story Prompts
+
+#### refine-story
+
+Interactively refine a story document with user feedback.
+
+**Arguments:**
+- `story-name` - The name of the story to refine (without .md extension)
+
+**Behavior:**
+1. Reads the story file from `.mcp-tasks/stories/<story-name>.md`
+2. If the file doesn't exist, informs the user and stops
+3. Displays the current story content
+4. Enters an interactive refinement loop:
+   - Analyzes the story for clarity, completeness, and feasibility
+   - Suggests specific improvements
+   - Presents suggestions to the user
+   - Gets user feedback on the suggestions
+   - Applies approved changes
+   - Incorporates user modifications
+   - Continues until user is satisfied
+5. Shows the final refined story for approval
+6. If approved, writes the updated content back to the story file
+7. Confirms the save operation
+
+**Key characteristics:**
+- Collaborative and iterative process
+- Always gets explicit user approval before making changes
+- Focuses on improving clarity, completeness, and actionability
+- Does not make assumptions about requirements - asks for clarification
+
+**Usage example:**
+```
+/mcp-tasks:refine-story user-authentication
+
+The agent will read the user-authentication story, analyze it, and guide
+you through an interactive refinement process to improve the story's clarity
+and completeness.
+```
+
+#### create-story-tasks
+
+Break down a story into categorized, executable tasks.
+
+**Arguments:**
+- `story-name` - The name of the story to break down (without .md extension)
+
+**Behavior:**
+1. Reads the story file from `.mcp-tasks/stories/<story-name>.md`
+2. If the file doesn't exist, informs the user and stops
+3. Displays the story content
+4. Analyzes the story and breaks it down into specific, actionable tasks:
+   - Each task is concrete and achievable
+   - Tasks follow a logical sequence (dependencies first)
+   - Related tasks are grouped into sections
+   - Each task is prefixed with `STORY: <story-name> - `
+   - Each task has a `CATEGORY: <category>` line after the task description
+5. Applies category selection guidance:
+   - `simple` - Straightforward tasks, small changes, documentation updates
+   - `medium` - Tasks requiring analysis and design, moderate complexity
+   - `large` - Complex tasks needing extensive planning and implementation
+   - `clarify-task` - Tasks that need clarification before execution
+6. Presents the task breakdown to the user with category assignments
+7. Gets user feedback and makes adjustments
+8. Once approved, writes the tasks to `.mcp-tasks/story-tasks/<story-name>-tasks.md`:
+   - Includes a header: `# Tasks for <story-name> Story`
+   - Organizes tasks by logical sections with `## Section Name` headers
+   - Maintains the checkbox format with STORY prefix and CATEGORY metadata
+   - Ensures blank lines between tasks for readability
+9. Confirms the save operation
+
+**Task format:**
+```markdown
+- [ ] STORY: <story-name> - <brief task title>
+  <additional task details on continuation lines>
+  <more details as needed>
+
+CATEGORY: <category>
+```
+
+**Key characteristics:**
+- Task descriptions are specific enough to be actionable without additional context
+- The STORY prefix helps track which story each task belongs to
+- The CATEGORY line is metadata used for routing
+- Multi-line task descriptions are supported and encouraged
+- Tasks are ordered to respect dependencies
+
+**Usage example:**
+```
+/mcp-tasks:create-story-tasks user-authentication
+
+The agent will read the user-authentication story, break it down into
+discrete tasks, assign categories, and save the task list after your approval.
+```
+
+#### execute-story-task
+
+Execute the next task from a story's task list.
+
+**Arguments:**
+- `story-name` - The name of the story (without .md extension)
+
+**Behavior:**
+1. Reads the story tasks file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+2. If the file doesn't exist, informs the user and stops
+3. Finds the first incomplete task (marked with `- [ ]`)
+4. Parses the task to extract:
+   - Task text (everything from `- [ ] STORY:` until the `CATEGORY:` line)
+   - Category (from the `CATEGORY: <category>` line)
+5. If no incomplete tasks found, informs the user and stops
+6. If no CATEGORY line found, informs the user and stops
+7. Adds the task to the category queue:
+   - Uses the `add-task` tool to prepend the task to the category's queue
+   - Parameters: category (extracted), task-text (full multi-line description), prepend (true)
+8. Executes the task:
+   - Uses the category-specific next-task workflow
+   - Follows the category's execution instructions from `.mcp-tasks/prompts/<category>.md`
+   - Completes all implementation steps according to the category workflow
+9. After successful execution, marks the story task as complete:
+   - Changes `- [ ]` to `- [x]` for the executed task
+   - Writes the updated content back to the story tasks file
+   - Uses the `complete-story-task` tool if available
+   - Confirms completion to the user
+
+**Branch management (conditional):**
+
+If configuration includes `:story-branch-management? true`:
+1. Before starting task execution:
+   - Checks if currently on a branch named `<story-name>`
+   - If not, checks out the default branch, ensures it's up to date with origin, then creates the `<story-name>` branch
+2. After task completion:
+   - Remains on the `<story-name>` branch for the next task
+   - Does not merge or push automatically
+
+If `:story-branch-management?` is false (default):
+- Executes tasks on the current branch without any branch operations
+
+**Key characteristics:**
+- The task text includes the full multi-line description from the story tasks file
+- The CATEGORY line is used only for routing and is not included in the task text added to the category queue
+- If task execution fails, the story task is not marked as complete
+- The story task file tracks overall story progress
+- Individual category queues manage immediate execution
+- Branch management is optional and controlled by configuration
+
+**Usage example:**
+```
+/mcp-tasks:execute-story-task user-authentication
+
+The agent will find the next incomplete task from the user-authentication story,
+add it to the appropriate category queue, execute it using that category's
+workflow, and mark it as complete upon success.
+```
+
 ## Task Categories
 
 Categories allow you to organize tasks by type and apply different execution strategies.
