@@ -91,6 +91,21 @@
   []
   @(promise))
 
+(defn create-server-config
+  "Create MCP server configuration map.
+  
+  Parameters:
+  - config: Resolved task configuration (from load-and-validate-config)
+  - transport: Transport configuration map (e.g., {:type :stdio} or {:type :in-memory :shared ...})
+  
+  Returns server configuration map suitable for mcp-server/create-server"
+  [config transport]
+  {:transport transport
+   :tools {"complete-task" (tools/complete-task-tool config)
+           "next-task" (tools/next-task-tool config)
+           "add-task" (tools/add-task-tool config)}
+   :prompts (tp/prompts config)})
+
 (defn- exit-process
   "Exit the process with the given code.
   
@@ -106,14 +121,10 @@
                    Can be a string or symbol (for clj -X compatibility)"
   [{:keys [config-path] :or {config-path "."}}]
   (try
-    (let [config (load-and-validate-config config-path)]
+    (let [config (load-and-validate-config config-path)
+          server-config (create-server-config config {:type :stdio})]
       (log/info :stdio-server {:msg "Starting MCP Tasks server"})
-      (with-open [server (mcp-server/create-server
-                           {:transport {:type :stdio}
-                            :tools {"complete-task" (tools/complete-task-tool config)
-                                    "next-task" (tools/next-task-tool config)
-                                    "add-task" (tools/add-task-tool config)}
-                            :prompts (tp/prompts config)})]
+      (with-open [server (mcp-server/create-server server-config)]
         (log/info :stdio-server {:msg "MCP Tasks server started"})
         (.addShutdownHook
           (Runtime/getRuntime)

@@ -11,8 +11,7 @@
     [mcp-clj.mcp-client.core :as mcp-client]
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.config :as config]
-    [mcp-tasks.prompts :as prompts]
-    [mcp-tasks.tools :as tools]))
+    [mcp-tasks.main :as main]))
 
 (def test-project-dir (.getAbsolutePath (io/file "test-resources/integration-test")))
 
@@ -52,17 +51,17 @@
     resolved-config))
 
 (defn- create-test-server-and-client
-  "Create server and client connected via in-memory transport"
+  "Create server and client connected via in-memory transport.
+
+  Uses main/create-server-config to ensure tests use the same server
+  configuration as production code for better test fidelity."
   []
   (let [config (load-test-config)
         shared-transport (shared/create-shared-transport)
-        server (mcp-server/create-server
-                 {:transport {:type :in-memory
-                              :shared shared-transport}
-                  :tools {"complete-task" (tools/complete-task-tool config)
-                          "next-task" (tools/next-task-tool config)
-                          "add-task" (tools/add-task-tool config)}
-                  :prompts (prompts/prompts config)})
+        server-config (main/create-server-config
+                        config
+                        {:type :in-memory :shared shared-transport})
+        server (mcp-server/create-server server-config)
         client (mcp-client/create-client
                  {:transport {:type :in-memory
                               :shared shared-transport}
