@@ -1,11 +1,11 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.prompts :as prompts]
-   [mcp-tasks.story-tasks :as story-tasks]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.story-tasks :as story-tasks]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -113,8 +113,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                first-task
-                                completion-comment)
+                                 first-task
+                                 completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -424,9 +424,9 @@
 
         ;; Mark task as complete
         (let [updated-content (story-tasks/mark-task-complete
-                               content
-                               (:index first-incomplete)
-                               completion-comment)]
+                                content
+                                (:index first-incomplete)
+                                completion-comment)]
           (spit story-tasks-file updated-content))
 
         (if use-git?

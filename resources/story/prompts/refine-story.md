@@ -11,7 +11,7 @@ Refine the story specified by the `story-name` argument through an interactive p
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/stories/<story-name>.md`
+1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
    - If the file doesn't exist, inform the user and stop
 
 2. Display the current story content to the user
@@ -27,7 +27,7 @@ Refine the story specified by the `story-name` argument through an interactive p
 
 4. Once refinement is complete:
    - Show the final refined story to the user for approval
-   - If approved, write the updated content back to `.mcp-tasks/stories/<story-name>.md`
+   - If approved, write the updated content back to `.mcp-tasks/story/stories/<story-name>.md`
    - Confirm the save operation to the user
 
 ## Notes

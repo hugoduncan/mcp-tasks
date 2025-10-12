@@ -34,10 +34,10 @@ clojure -M:mcp-tasks --install-prompts simple,clarify-task
 echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
 
 # Or create a story for larger features
-mkdir -p .mcp-tasks/stories
-echo "# Add CI Pipeline" > .mcp-tasks/stories/ci-setup.md
-echo "" >> .mcp-tasks/stories/ci-setup.md
-echo "Set up GitHub Actions for automated testing and deployment" >> .mcp-tasks/stories/ci-setup.md
+mkdir -p .mcp-tasks/story/stories
+echo "# Add CI Pipeline" > .mcp-tasks/story/stories/ci-setup.md
+echo "" >> .mcp-tasks/story/stories/ci-setup.md
+echo "Set up GitHub Actions for automated testing and deployment" >> .mcp-tasks/story/stories/ci-setup.md
 
 # Run in Claude Code
 /mcp-tasks:next-simple
@@ -148,7 +148,7 @@ For larger features that require multiple related tasks, use story workflows:
 
 ```bash
 # Create a story describing the feature
-cat > .mcp-tasks/stories/user-auth.md <<'EOF'
+cat > .mcp-tasks/story/stories/user-auth.md <<'EOF'
 # User Authentication System
 
 Implement JWT-based authentication with user registration, login, and password reset.

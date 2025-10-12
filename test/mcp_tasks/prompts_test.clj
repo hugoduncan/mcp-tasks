@@ -236,7 +236,7 @@
         (is (some? content))
         (is (string? content))
         (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/stories" content))
+        (is (re-find #"\.mcp-tasks/story/stories" content))
         (is (re-find #"interactive" content))))
 
     (testing "appears in list-story-prompts"
@@ -266,8 +266,8 @@
         (is (some? content))
         (is (string? content))
         (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/stories" content))
-        (is (re-find #"\.mcp-tasks/story-tasks" content))
+        (is (re-find #"\.mcp-tasks/story/stories" content))
+        (is (re-find #"\.mcp-tasks/story/story-tasks" content))
         (is (re-find #"STORY:" content))
         (is (re-find #"CATEGORY:" content))))
 
@@ -312,7 +312,7 @@
         (is (some? content))
         (is (string? content))
         (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/story-tasks" content))
+        (is (re-find #"\.mcp-tasks/story/story-tasks" content))
         (is (re-find #"CATEGORY" content))))
 
     (testing "includes task execution workflow"
@@ -345,7 +345,7 @@
   "Create a temporary override file for testing.
   Returns the file object for cleanup."
   [prompt-name content]
-  (let [override-dir (io/file ".mcp-tasks" "prompts" "story")
+  (let [override-dir (io/file ".mcp-tasks" "story" "prompts")
         override-file (io/file override-dir (str prompt-name ".md"))]
     (.mkdirs override-dir)
     (spit override-file content)

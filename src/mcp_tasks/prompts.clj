@@ -229,7 +229,7 @@ You can use the `add-task` tool to add new tasks to a category.
 (defn get-story-prompt
   "Get a story prompt by name, with file override support.
 
-  Checks for override file at `.mcp-tasks/prompts/story/<name>.md` first.
+  Checks for override file at `.mcp-tasks/story/prompts/<name>.md` first.
   If not found, falls back to built-in prompt from resources/story/prompts.
 
   Returns a map with:
@@ -239,7 +239,7 @@ You can use the `add-task` tool to add new tasks to a category.
 
   Returns nil if prompt is not found in either location."
   [prompt-name]
-  (let [override-file (io/file ".mcp-tasks" "prompts" "story" (str prompt-name ".md"))]
+  (let [override-file (io/file ".mcp-tasks" "story" "prompts" (str prompt-name ".md"))]
     (if (.exists override-file)
       (let [file-content (slurp override-file)
             {:keys [metadata content]} (parse-frontmatter file-content)]
@@ -264,7 +264,7 @@ You can use the `add-task` tool to add new tasks to a category.
                               :when prompt]
                           {:name (:name prompt)
                            :description (:description prompt)})
-        story-dir (io/file ".mcp-tasks" "prompts" "story")
+        story-dir (io/file ".mcp-tasks" "story" "prompts")
         override-prompts (when (.exists story-dir)
                            (for [file (.listFiles story-dir)
                                  :when (and (.isFile file)

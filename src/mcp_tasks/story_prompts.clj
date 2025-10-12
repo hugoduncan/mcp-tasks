@@ -23,7 +23,7 @@ Refine the story specified by the `story-name` argument through an interactive p
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/stories/<story-name>.md`
+1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
    - If the file doesn't exist, inform the user and stop
 
 2. Display the current story content to the user
@@ -39,7 +39,7 @@ Refine the story specified by the `story-name` argument through an interactive p
 
 4. Once refinement is complete:
    - Show the final refined story to the user for approval
-   - If approved, write the updated content back to `.mcp-tasks/stories/<story-name>.md`
+   - If approved, write the updated content back to `.mcp-tasks/story/stories/<story-name>.md`
    - Confirm the save operation to the user
 
 ## Notes
@@ -68,7 +68,7 @@ Create a task breakdown for the story specified by the `story-name` argument.
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/stories/<story-name>.md`
+1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
    - If the file doesn't exist, inform the user and stop
 
 2. Display the story content to the user
@@ -101,7 +101,7 @@ Create a task breakdown for the story specified by the `story-name` argument.
    - Get user feedback and approval
    - Make adjustments based on feedback
 
-7. Once approved, write the tasks to `.mcp-tasks/story-tasks/<story-name>-tasks.md`:
+7. Once approved, write the tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
    - Include a header: `# Tasks for <story-name> Story`
    - Organize tasks by logical sections with `## Section Name` headers
    - Maintain the checkbox format with STORY prefix and CATEGORY metadata
@@ -138,7 +138,7 @@ Execute the next incomplete task from the story specified by the `story-name` ar
 
 ## Process
 
-1. Read the story tasks file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+1. Read the story tasks file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
    - If the file doesn't exist, inform the user and stop
 
 2. Find the first incomplete task (marked with `- [ ]`)
@@ -159,7 +159,7 @@ Execute the next incomplete task from the story specified by the `story-name` ar
 5. Mark the story task as complete:
    - After task execution completes successfully, update the story tasks file
    - Change `- [ ]` to `- [x]` for the task that was just executed
-   - Write the updated content back to `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+   - Write the updated content back to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
    - Use the `complete-story-task` tool if available
    - Confirm to the user that the story task has been marked complete
 

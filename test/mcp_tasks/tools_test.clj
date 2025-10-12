@@ -429,8 +429,8 @@
   (testing "complete-story-task"
     (testing "marks first incomplete task as complete"
       (setup-test-dir)
-      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story-tasks"))
-      (write-test-file ".mcp-tasks/story-tasks/test-story-tasks.md"
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
                        (str "# Test Story\n\n"
                             "- [x] STORY: test-story - Already done\n\n"
                             "CATEGORY: simple\n\n"
@@ -447,7 +447,7 @@
                      :task-text "STORY: test-story - First incomplete"})]
         (is (false? (:isError result)))
         (is (re-find #"completed" (get-in result [:content 0 :text])))
-        (let [updated (read-test-file ".mcp-tasks/story-tasks/test-story-tasks.md")]
+        (let [updated (read-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md")]
           (is (re-find #"- \[x\] STORY: test-story - First incomplete" updated))
           (is (re-find #"- \[ \] STORY: test-story - Second incomplete" updated))))
       (cleanup-test-fixtures))))
@@ -457,8 +457,8 @@
   (testing "complete-story-task"
     (testing "adds completion comment when provided"
       (setup-test-dir)
-      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story-tasks"))
-      (write-test-file ".mcp-tasks/story-tasks/test-story-tasks.md"
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
                        (str "- [ ] STORY: test-story - Task to complete\n\n"
                             "CATEGORY: simple\n"))
       (let [config {:base-dir test-fixtures-dir :use-git? false}
@@ -469,7 +469,7 @@
                      :task-text "STORY: test-story - Task to complete"
                      :completion-comment "Added feature X"})]
         (is (false? (:isError result)))
-        (let [updated (read-test-file ".mcp-tasks/story-tasks/test-story-tasks.md")]
+        (let [updated (read-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md")]
           (is (re-find #"- \[x\] STORY: test-story - Task to complete" updated))
           (is (re-find #"Added feature X" updated))))
       (cleanup-test-fixtures))))
@@ -495,8 +495,8 @@
   (testing "complete-story-task"
     (testing "errors when no incomplete tasks"
       (setup-test-dir)
-      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story-tasks"))
-      (write-test-file ".mcp-tasks/story-tasks/test-story-tasks.md"
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
                        (str "- [x] STORY: test-story - Already done\n\n"
                             "CATEGORY: simple\n"))
       (let [config {:base-dir test-fixtures-dir :use-git? false}
@@ -515,8 +515,8 @@
   (testing "complete-story-task"
     (testing "errors when task text does not match"
       (setup-test-dir)
-      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story-tasks"))
-      (write-test-file ".mcp-tasks/story-tasks/test-story-tasks.md"
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
                        (str "- [ ] STORY: test-story - Actual task\n\n"
                             "CATEGORY: simple\n"))
       (let [config {:base-dir test-fixtures-dir :use-git? false}
@@ -535,8 +535,8 @@
   (testing "complete-story-task"
     (testing "returns modified files as JSON when git mode enabled"
       (setup-test-dir)
-      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story-tasks"))
-      (write-test-file ".mcp-tasks/story-tasks/test-story-tasks.md"
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
                        (str "- [ ] STORY: test-story - Task to complete\n\n"
                             "CATEGORY: simple\n"))
       (let [config {:base-dir test-fixtures-dir :use-git? true}
@@ -552,7 +552,7 @@
         (is (= "text" (:type (second content))))
         (let [json-data (json/read-str (:text (second content))
                                        :key-fn keyword)]
-          (is (= ["story-tasks/test-story-tasks.md"]
+          (is (= ["story/story-tasks/test-story-tasks.md"]
                  (:modified-files json-data)))))
       (cleanup-test-fixtures))))
 
@@ -561,8 +561,8 @@
   (testing "complete-story-task"
     (testing "returns only completion message when git mode disabled"
       (setup-test-dir)
-      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story-tasks"))
-      (write-test-file ".mcp-tasks/story-tasks/test-story-tasks.md"
+      (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "story" "story-tasks"))
+      (write-test-file ".mcp-tasks/story/story-tasks/test-story-tasks.md"
                        (str "- [ ] STORY: test-story - Task to complete\n\n"
                             "CATEGORY: simple\n"))
       (let [config {:base-dir test-fixtures-dir :use-git? false}

@@ -176,7 +176,7 @@ Stories provide a higher-level workflow for breaking down larger features or epi
 
 ### Story File Structure
 
-Stories are stored in `.mcp-tasks/stories/<story-name>.md` as markdown files containing:
+Stories are stored in `.mcp-tasks/story/stories/<story-name>.md` as markdown files containing:
 
 **Example story file:**
 ```markdown
@@ -210,7 +210,7 @@ Refine a rough story idea into a detailed specification:
 ```
 
 **Process:**
-- Agent reads the initial story from `.mcp-tasks/stories/<story-name>.md`
+- Agent reads the initial story from `.mcp-tasks/story/stories/<story-name>.md`
 - Asks clarifying questions about requirements, constraints, and approach
 - Iteratively refines the story with your feedback
 - Saves the refined story back to the file
@@ -232,7 +232,7 @@ Agent: Based on your answers, here's the refined story...
 
 User: Looks good!
 
-Agent: Story saved to .mcp-tasks/stories/user-auth.md
+Agent: Story saved to .mcp-tasks/story/stories/user-auth.md
 ```
 
 #### 2. Task Breakdown
@@ -247,7 +247,7 @@ Break the refined story into executable tasks:
 - Agent reads the story file
 - Analyzes requirements and identifies discrete tasks
 - Assigns each task to an appropriate category (simple, medium, large)
-- Creates task file at `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+- Creates task file at `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
 - Gets your approval before saving
 
 **Task file format:**
@@ -323,11 +323,11 @@ Check story progress at any time:
 
 ```bash
 # View all tasks
-cat .mcp-tasks/story-tasks/<story-name>-tasks.md
+cat .mcp-tasks/story/story-tasks/<story-name>-tasks.md
 
 # Count completed vs total tasks
-grep -c "^- \[x\]" .mcp-tasks/story-tasks/user-auth-tasks.md
-grep -c "^- \[ \]" .mcp-tasks/story-tasks/user-auth-tasks.md
+grep -c "^- \[x\]" .mcp-tasks/story/story-tasks/user-auth-tasks.md
+grep -c "^- \[ \]" .mcp-tasks/story/story-tasks/user-auth-tasks.md
 ```
 
 Completed tasks are marked with `- [x]` but remain in the story task file for the full context.
@@ -362,7 +362,7 @@ echo '{:use-git? true :story-branch-management? true}' > .mcp-tasks.edn
 
 ```bash
 # 1. Create initial story file
-cat > .mcp-tasks/stories/user-auth.md <<EOF
+cat > .mcp-tasks/story/stories/user-auth.md <<EOF
 # User Authentication
 
 We need user authentication with JWT tokens.
@@ -386,7 +386,7 @@ EOF
 # ... repeat until all tasks complete
 
 # 5. Review the completed work
-cat .mcp-tasks/story-tasks/user-auth-tasks.md
+cat .mcp-tasks/story/story-tasks/user-auth-tasks.md
 # All tasks marked with [x]
 
 # 6. Merge story branch (if using branch management)
@@ -396,7 +396,7 @@ git merge user-auth
 
 ### Story Prompt Customization
 
-Override the default story prompts by creating files in `.mcp-tasks/prompts/story/`:
+Override the default story prompts by creating files in `.mcp-tasks/story/prompts/`:
 
 **Available prompts to override:**
 - `refine-story.md` - Story refinement instructions
@@ -432,7 +432,7 @@ Use {story-name} as a placeholder for the story name argument.
 
 The system checks for story prompt overrides in this order:
 
-1. **Project override**: `.mcp-tasks/prompts/story/<prompt-name>.md`
+1. **Project override**: `.mcp-tasks/story/prompts/<prompt-name>.md`
    - Your team-specific customization
    - Takes precedence over built-ins
    - Can customize frontmatter and instructions
@@ -446,7 +446,7 @@ The system checks for story prompt overrides in this order:
 
 Create a custom task breakdown prompt with strict category rules:
 
-**File**: `.mcp-tasks/prompts/story/create-story-tasks.md`
+**File**: `.mcp-tasks/story/prompts/create-story-tasks.md`
 ```markdown
 ---
 title: Strict Category Task Breakdown
@@ -455,7 +455,7 @@ description: Break down stories with strict 2-hour task limits
 
 Break down the story into tasks following these rules:
 
-1. Read the story from `.mcp-tasks/stories/{story-name}.md`
+1. Read the story from `.mcp-tasks/story/stories/{story-name}.md`
 2. If the file doesn't exist, inform the user and stop
 3. Analyze the story and create specific, actionable tasks
 4. Apply strict category rules:
@@ -467,7 +467,7 @@ Break down the story into tasks following these rules:
    - Estimated time in task description
    - Explicit dependencies listed
 6. Present the breakdown with time estimates
-7. Get user approval before writing to `.mcp-tasks/story-tasks/{story-name}-tasks.md`
+7. Get user approval before writing to `.mcp-tasks/story/story-tasks/{story-name}-tasks.md`
 
 Task format:
 - [ ] STORY: {story-name} - <title>
@@ -484,7 +484,7 @@ This override enforces time-based categorization and explicit dependency trackin
 
 Story prompts and category prompts serve different purposes:
 
-**Story prompts** (`.mcp-tasks/prompts/story/*.md`):
+**Story prompts** (`.mcp-tasks/story/prompts/*.md`):
 - Guide story-level operations (refine, break down, execute)
 - Handle the story workflow and task distribution
 - Route tasks to appropriate categories
@@ -553,7 +553,7 @@ A map with three keys:
 Returns nil values for all keys if no incomplete tasks are found.
 
 **Behavior:**
-- Reads story task file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+- Reads story task file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
 - Parses the markdown to find the first task marked with `- [ ]`
 - Extracts the task text (all continuation lines until the CATEGORY line)
 - Extracts the category from the `CATEGORY: <category>` metadata line
@@ -600,7 +600,7 @@ Git mode disabled:
 - Single text item: Completion status message
 
 **Behavior:**
-- Reads story task file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+- Reads story task file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
 - Finds the first incomplete task (marked with `- [ ]`)
 - Verifies the task text matches the provided `task-text` parameter (case-insensitive, whitespace-normalized)
 - Changes `- [ ]` to `- [x]` for the matched task
@@ -619,11 +619,11 @@ Git mode disabled:
  :completion-comment "Added buddy-sign library"}
 
 ;; Return (git mode)
-"Story task completed in .mcp-tasks/story-tasks/user-auth-tasks.md"
+"Story task completed in .mcp-tasks/story/story-tasks/user-auth-tasks.md"
 "{\"modified-files\": [\"story-tasks/user-auth-tasks.md\"]}"
 
 ;; Return (non-git mode)
-"Story task completed in .mcp-tasks/story-tasks/user-auth-tasks.md"
+"Story task completed in .mcp-tasks/story/story-tasks/user-auth-tasks.md"
 ```
 
 **Usage:**
@@ -645,7 +645,7 @@ Interactively refine a story document with user feedback.
 - `story-name` - The name of the story to refine (without .md extension)
 
 **Behavior:**
-1. Reads the story file from `.mcp-tasks/stories/<story-name>.md`
+1. Reads the story file from `.mcp-tasks/story/stories/<story-name>.md`
 2. If the file doesn't exist, informs the user and stops
 3. Displays the current story content
 4. Enters an interactive refinement loop:
@@ -683,7 +683,7 @@ Break down a story into categorized, executable tasks.
 - `story-name` - The name of the story to break down (without .md extension)
 
 **Behavior:**
-1. Reads the story file from `.mcp-tasks/stories/<story-name>.md`
+1. Reads the story file from `.mcp-tasks/story/stories/<story-name>.md`
 2. If the file doesn't exist, informs the user and stops
 3. Displays the story content
 4. Analyzes the story and breaks it down into specific, actionable tasks:
@@ -699,7 +699,7 @@ Break down a story into categorized, executable tasks.
    - `clarify-task` - Tasks that need clarification before execution
 6. Presents the task breakdown to the user with category assignments
 7. Gets user feedback and makes adjustments
-8. Once approved, writes the tasks to `.mcp-tasks/story-tasks/<story-name>-tasks.md`:
+8. Once approved, writes the tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
    - Includes a header: `# Tasks for <story-name> Story`
    - Organizes tasks by logical sections with `## Section Name` headers
    - Maintains the checkbox format with STORY prefix and CATEGORY metadata
@@ -738,7 +738,7 @@ Execute the next task from a story's task list.
 - `story-name` - The name of the story (without .md extension)
 
 **Behavior:**
-1. Reads the story tasks file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+1. Reads the story tasks file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
 2. If the file doesn't exist, informs the user and stops
 3. Finds the first incomplete task (marked with `- [ ]`)
 4. Parses the task to extract:

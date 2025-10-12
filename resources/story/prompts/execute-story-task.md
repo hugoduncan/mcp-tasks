@@ -11,7 +11,7 @@ Execute the next incomplete task from the story specified by the `story-name` ar
 
 ## Process
 
-1. Read the story tasks file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+1. Read the story tasks file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
    - If the file doesn't exist, inform the user and stop
 
 2. Find the first incomplete task (marked with `- [ ]`)
@@ -32,7 +32,7 @@ Execute the next incomplete task from the story specified by the `story-name` ar
 5. Mark the story task as complete:
    - After task execution completes successfully, update the story tasks file
    - Change `- [ ]` to `- [x]` for the task that was just executed
-   - Write the updated content back to `.mcp-tasks/story-tasks/<story-name>-tasks.md`
+   - Write the updated content back to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
    - Use the `complete-story-task` tool if available
    - Confirm to the user that the story task has been marked complete
 

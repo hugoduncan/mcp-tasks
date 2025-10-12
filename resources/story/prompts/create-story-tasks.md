@@ -11,7 +11,7 @@ Create a task breakdown for the story specified by the `story-name` argument.
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/stories/<story-name>.md`
+1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
    - If the file doesn't exist, inform the user and stop
 
 2. Display the story content to the user
@@ -44,7 +44,7 @@ Create a task breakdown for the story specified by the `story-name` argument.
    - Get user feedback and approval
    - Make adjustments based on feedback
 
-7. Once approved, write the tasks to `.mcp-tasks/story-tasks/<story-name>-tasks.md`:
+7. Once approved, write the tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
    - Include a header: `# Tasks for <story-name> Story`
    - Organize tasks by logical sections with `## Section Name` headers
    - Maintain the checkbox format with STORY prefix and CATEGORY metadata
