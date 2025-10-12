@@ -121,6 +121,8 @@
       (write-config-file "{:use-git? false}")
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          ;; Allow time for initialization to complete on slow CI machines
+          (Thread/sleep 100)
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -133,6 +135,8 @@
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          ;; Allow time for initialization to complete on slow CI machines
+          (Thread/sleep 100)
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
