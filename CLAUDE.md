@@ -131,3 +131,4 @@ See `doc/dev/changelog.md` for setup details.
   of all the commit messages.  The message should reflect the scope and
   logical content of the PR, not all the interim work used to implement
   it.
+- the git repo in ~/.mcp-tasks does not have a remote
