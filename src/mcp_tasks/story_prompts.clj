@@ -18,3 +18,7 @@
 (def execute-story-task
   "Execute the next task from a story's task list."
   (slurp (io/resource "story/prompts/execute-story-task.md")))
+
+(def review-story-implementation
+  "Review the implementation of a story."
+  (slurp (io/resource "story/prompts/review-story-implementation.md")))

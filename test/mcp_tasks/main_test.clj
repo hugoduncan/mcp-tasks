@@ -297,6 +297,7 @@
           (is (contains? (:prompts server-config) "refine-story"))
           (is (contains? (:prompts server-config) "create-story-tasks"))
           (is (contains? (:prompts server-config) "execute-story-task"))
+          (is (contains? (:prompts server-config) "review-story-implementation"))
           (is (map? (get (:prompts server-config) "refine-story")))
           (is (= "refine-story" (:name (get (:prompts server-config) "refine-story"))))
           (finally
