@@ -38,18 +38,10 @@ Parse the arguments: $ARGUMENTS
      "Would you like to create story tasks for any of these suggestions? (enter numbers separated by commas, e.g., '1,3' or 'all' for all suggestions, or 'none' to skip)"
 
    - If user selects suggestions:
-     a) For each selected suggestion:
-        - Present the suggestion text
-        - Ask: "Task description (press Enter to use suggestion as-is, or type custom description):"
-        - If user provides text, use it; otherwise use the original suggestion text
-        - Ask: "Category (simple/medium/large) [default: medium]:"
-        - Validate category input; if invalid, re-prompt
-        - If user just presses Enter, use "medium"
-
-     b) After collecting all task details, use the `add-task` tool for each task:
+     a) For each selected suggestion, use the `add-task` tool for each task:
         - Use the `add-task` tool with these parameters:
-          - `category`: the selected category (simple/medium/large)
-          - `task-text`: "STORY: <story-name> - <task description>"
+          - `category`: pick an appropriate category based on the task complexity
+          - `task-text`: "STORY: <story-name> - <task description>" the task description can span multiple lines.
           - `story-name`: the story name from step 1
           - `prepend`: false (to append tasks)
 
@@ -57,7 +49,7 @@ Parse the arguments: $ARGUMENTS
         ```
         add-task(
           category="medium",
-          task-text="STORY: my-story - Add error handling for edge cases",
+          task-text="STORY: my-story - Add error handling for edge cases\n throw exceptions if edge cases not supported",
           story-name="my-story",
           prepend=false
         )
