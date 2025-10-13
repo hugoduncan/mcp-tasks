@@ -104,6 +104,7 @@
     (testing "starts without git repo (auto-detects git mode off)"
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -115,6 +116,7 @@
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -130,6 +132,7 @@
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -173,6 +176,7 @@
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
+        (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
         (testing "lists expected tools"
           (let [tools-response @(mcp-client/list-tools client)
                 tools (:tools tools-response)]
@@ -203,6 +207,7 @@
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
+        (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
         (testing "server advertises prompt capabilities"
           (is (mcp-client/available-prompts? client))
           (let [prompts-response @(mcp-client/list-prompts client)
@@ -223,6 +228,7 @@
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
+        (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
         (testing "server advertises resource capabilities"
           (is (mcp-client/available-resources? client))
           (let [resources-response @(mcp-client/list-resources client)
@@ -283,6 +289,7 @@
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
+        (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
         (testing "resource content includes YAML frontmatter with description"
           (let [read-response @(mcp-client/read-resource client "prompt://next-simple")
                 text (-> read-response :contents first :text)]
@@ -350,6 +357,7 @@
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
+        (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
         (testing "returns task info when story tasks exist"
           (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-tasks-dir)
@@ -421,6 +429,7 @@
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
+        (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
         (testing "completes task when story tasks exist"
           (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-tasks-dir)
@@ -516,6 +525,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
                 story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-dir)
@@ -549,6 +559,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
                 story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-dir)
@@ -583,6 +594,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
                 story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
             (.mkdirs story-dir)
@@ -619,6 +631,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")]
             (.mkdirs story-dir)
             (spit (io/file story-dir "test-story.md") "# Test Story"))
@@ -659,6 +672,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
+          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (let [result @(mcp-client/call-tool client
                                               "add-task"
                                               {:category "simple"
