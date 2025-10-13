@@ -7,6 +7,7 @@
   (:require
     [clojure.data.json :as json]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.in-memory-transport.shared :as shared]
     [mcp-clj.mcp-client.core :as mcp-client]
@@ -470,7 +471,7 @@
 
             (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "prepend-story-tasks.md")
                   content (slurp story-tasks-file)
-                  lines (clojure.string/split-lines content)]
+                  lines (str/split-lines content)]
               (is (re-find #"- \[ \] New first task" (first (filter #(re-find #"- \[ \]" %) lines))))
               (is (re-find #"CATEGORY: large" content))
               (is (re-find #"CATEGORY: simple" content))
