@@ -6,7 +6,8 @@
     [clojure.string :as str]
     [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.prompts :as prompts]
-    [mcp-tasks.response :as response]))
+    [mcp-tasks.response :as response]
+    [mcp-tasks.tasks :as tasks]))
 
 (defn- file-exists?
   "Check if a file exists"
@@ -80,59 +81,54 @@
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
-  Moves first task from tasks/<category>.md to complete/<category>.md,
+  Moves first task from tasks/<category>.ednl to complete/<category>.ednl,
   verifying it matches the provided task-text and optionally adding a
   completion comment.
-  
+
   Returns:
   - Git mode enabled: Two text items (completion message + JSON with :modified-files)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [category task-text completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
-          complete-path (path-helper/task-path config ["complete" (str category ".md")])
+          tasks-path (path-helper/task-path config ["tasks" (str category ".ednl")])
+          complete-path (path-helper/task-path config ["complete" (str category ".ednl")])
           tasks-file (:absolute tasks-path)
           complete-file (:absolute complete-path)
-          tasks-content (read-task-file tasks-file)
           ;; Paths relative to .mcp-tasks
           tasks-rel-path (:relative tasks-path)
           complete-rel-path (:relative complete-path)]
 
-      (when (str/blank? tasks-content)
+      ;; Load tasks from EDNL file
+      (when-not (file-exists? tasks-file)
         (throw (ex-info "No tasks found in category"
                         {:category category
                          :file tasks-file})))
 
-      (let [tasks (parse-tasks tasks-content)]
-        (when (empty? tasks)
-          (throw (ex-info "No tasks found in category"
-                          {:category category
-                           :file tasks-file})))
+      (tasks/load-tasks! tasks-file)
 
-        (let [first-task (first tasks)]
-          (when-not (task-matches? first-task task-text)
+      ;; Get next incomplete task
+      (if-let [task (tasks/get-next-incomplete-by-category category)]
+        (let [task-id (:id task)
+              title (:title task)
+              description (:description task "")
+              full-text (if (str/blank? description)
+                          title
+                          (str title "\n" description))]
+
+          ;; Verify task text matches
+          (when-not (or (str/starts-with? full-text task-text)
+                        (str/starts-with? title task-text))
             (throw (ex-info "First task does not match provided text"
                             {:category category
                              :expected task-text
-                             :actual first-task})))
+                             :actual full-text})))
 
-          ;; Mark task as complete and append to complete file
-          (let [completed-task (mark-complete
-                                 first-task
-                                 completion-comment)
-                complete-content (read-task-file complete-file)
-                new-complete-content (if (str/blank? complete-content)
-                                       completed-task
-                                       (str complete-content
-                                            "\n"
-                                            completed-task))]
-            (write-task-file complete-file new-complete-content))
+          ;; Mark task as complete in memory
+          (tasks/mark-complete task-id completion-comment)
 
-          ;; Remove first task from tasks file
-          (let [remaining-tasks (rest tasks)
-                new-tasks-content (str/join "\n" remaining-tasks)]
-            (write-task-file tasks-file new-tasks-content))
+          ;; Move task from tasks file to complete file
+          (tasks/move-task! task-id tasks-file complete-file)
 
           (if use-git?
             ;; Git mode: return message + JSON with modified files
@@ -145,7 +141,10 @@
             ;; Non-git mode: return message only
             {:content [{:type "text"
                         :text (str "Task completed and moved to " complete-file)}]
-             :isError false}))))
+             :isError false}))
+        (throw (ex-info "No tasks found in category"
+                        {:category category
+                         :file tasks-file}))))
     (catch Exception e
       (response/error-response e))))
 
@@ -154,21 +153,21 @@
   [config]
   (if (:use-git? config)
     "Complete a task by moving it from
-   .mcp-tasks/tasks/<category>.md to .mcp-tasks/complete/<category>.md.
+   .mcp-tasks/tasks/<category>.ednl to .mcp-tasks/complete/<category>.ednl.
 
    Verifies the first task matches the provided text, marks it complete, and
    optionally adds a completion comment.
-   
+
    Returns two text items:
    1. A completion status message
    2. A JSON-encoded map with :modified-files key containing file paths
       relative to .mcp-tasks for use in git commit workflows."
     "Complete a task by moving it from
-   .mcp-tasks/tasks/<category>.md to .mcp-tasks/complete/<category>.md.
+   .mcp-tasks/tasks/<category>.ednl to .mcp-tasks/complete/<category>.ednl.
 
    Verifies the first task matches the provided text, marks it complete, and
    optionally adds a completion comment.
-   
+
    Returns a completion status message."))
 
 (defn complete-task-tool
@@ -198,31 +197,32 @@
 (defn next-task-impl
   "Implementation of next-task tool.
 
-  Returns the first task from tasks/<category>.md in a map with :category and :task keys,
+  Returns the first task from tasks/<category>.ednl in a map with :category and :task keys,
   or a map with :category and :status keys if there are no tasks."
   [config _context {:keys [category]}]
   (try
-    (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
-          tasks-file (:absolute tasks-path)
-          tasks-content (read-task-file tasks-file)]
+    (let [tasks-path (path-helper/task-path config ["tasks" (str category ".ednl")])
+          tasks-file (:absolute tasks-path)]
 
-      (if (str/blank? tasks-content)
+      ;; Load tasks from EDNL file
+      (when (file-exists? tasks-file)
+        (tasks/load-tasks! tasks-file))
+
+      ;; Get next incomplete task
+      (if-let [task (tasks/get-next-incomplete-by-category category)]
+        (let [title (:title task)
+              description (:description task "")
+              task-text (if (str/blank? description)
+                          title
+                          (str title "\n" description))]
+          {:content [{:type "text"
+                      :text (pr-str {:category category
+                                     :task task-text})}]
+           :isError false})
         {:content [{:type "text"
                     :text (pr-str {:category category
                                    :status "No more tasks in this category"})}]
-         :isError false}
-        (let [tasks (parse-tasks tasks-content)]
-          (if (empty? tasks)
-            {:content [{:type "text"
-                        :text (pr-str {:category category
-                                       :status "No more tasks in this category"})}]
-             :isError false}
-            (let [first-task (first tasks)
-                  task-text (str/replace first-task #"^- \[([ x])\] " "")]
-              {:content [{:type "text"
-                          :text (pr-str {:category category
-                                         :task task-text})}]
-               :isError false})))))
+         :isError false}))
     (catch Exception e
       (response/error-response e))))
 
@@ -232,7 +232,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "next-task"
-   :description "Return the next task from tasks/<category>.md"
+   :description "Return the next task from tasks/<category>.ednl"
    :inputSchema
    {:type "object"
     :properties
@@ -265,11 +265,15 @@
 (defn- prepare-category-task-file
   "Prepare category task file for adding a task.
 
-  Returns [file-path content] tuple."
+  Loads tasks from EDNL file into memory.
+  Returns the absolute file path."
   [config category]
-  (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+  (let [tasks-path (path-helper/task-path config ["tasks" (str category ".ednl")])
         tasks-file (:absolute tasks-path)]
-    [tasks-file (read-task-file tasks-file)]))
+    ;; Load existing tasks into memory if file exists
+    (when (file-exists? tasks-file)
+      (tasks/load-tasks! tasks-file))
+    tasks-file))
 
 (defn- format-task-content
   "Format task content for adding to a task file.
@@ -297,20 +301,45 @@
 (defn add-task-impl
   "Implementation of add-task tool.
 
-  Adds a task to tasks/<category>.md as an incomplete todo item.
+  Adds a task to tasks/<category>.ednl (for category tasks) or
+  tasks/<story-name>-tasks.md (for story tasks).
   If prepend is true, adds at the beginning; otherwise appends at the end.
   If story-name is provided, the task is associated with that story and
   includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
   [config _context {:keys [category task-text prepend story-name]}]
   (try
-    (let [[tasks-file tasks-content] (if story-name
-                                       (prepare-story-task-file config story-name)
-                                       (prepare-category-task-file config category))
-          new-content (format-task-content task-text category tasks-content prepend story-name)]
-      (write-task-file tasks-file new-content)
-      {:content [{:type "text"
-                  :text (str "Task added to " tasks-file)}]
-       :isError false})
+    (if story-name
+      ;; Story task: use markdown format
+      (let [[tasks-file tasks-content] (prepare-story-task-file config story-name)
+            new-content (format-task-content task-text category tasks-content prepend story-name)]
+        (write-task-file tasks-file new-content)
+        {:content [{:type "text"
+                    :text (str "Task added to " tasks-file)}]
+         :isError false})
+      ;; Category task: use EDN format
+      (let [tasks-file (prepare-category-task-file config category)
+            ;; Parse task-text into title and description
+            lines (str/split-lines task-text)
+            title (first lines)
+            description (if (> (count lines) 1)
+                          (str/join "\n" (rest lines))
+                          "")
+            ;; Create task map with all required fields
+            task-map {:title title
+                      :description description
+                      :design ""
+                      :category category
+                      :status :open
+                      :type :task
+                      :meta {}
+                      :relations []}]
+        ;; Add task to in-memory state
+        (tasks/add-task task-map :prepend? (boolean prepend))
+        ;; Save to EDNL file
+        (tasks/save-tasks! tasks-file)
+        {:content [{:type "text"
+                    :text (str "Task added to " tasks-file)}]
+         :isError false}))
     (catch Exception e
       (response/error-response e))))
 
@@ -320,11 +349,11 @@
   (let [category-descs (prompts/category-descriptions)
         categories (sort (keys category-descs))]
     (if (seq categories)
-      (str "Add a task to tasks/<category>.md\n\nAvailable categories:\n"
+      (str "Add a task to tasks/<category>.ednl\n\nAvailable categories:\n"
            (str/join "\n"
                      (for [cat categories]
                        (format "- %s: %s" cat (get category-descs cat)))))
-      "Add a task to tasks/<category>.md")))
+      "Add a task to tasks/<category>.ednl")))
 
 (defn add-task-tool
   "Tool to add a task to a specific category.

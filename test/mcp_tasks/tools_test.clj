@@ -4,6 +4,8 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.tasks :as tasks]
+    [mcp-tasks.tasks-file :as tasks-file]
     [mcp-tasks.tools :as sut]))
 
 (def ^:private test-fixtures-dir "test-resources/tools-test")
@@ -36,42 +38,63 @@
       (slurp file)
       "")))
 
+(defn- write-ednl-test-file
+  "Write tasks as EDNL format to test file."
+  [path tasks]
+  (let [file-path (str test-fixtures-dir "/" path)]
+    (tasks-file/write-tasks file-path tasks)))
+
+(defn- read-ednl-test-file
+  "Read tasks from EDNL test file."
+  [path]
+  (let [file-path (str test-fixtures-dir "/" path)]
+    (tasks-file/read-ednl file-path)))
+
+(defn- reset-tasks-state!
+  "Reset the tasks namespace global state for testing."
+  []
+  (reset! tasks/task-ids [])
+  (reset! tasks/tasks {})
+  (reset! tasks/parent-children {})
+  (reset! tasks/child-parent {}))
+
+(def ^:private test-config
+  "Config that points to test fixtures directory."
+  {:tasks-dir test-fixtures-dir})
+
 (defn- with-test-files
+  "Stub wrapper for old tests - most old tests will need updating."
   [f]
-  (with-redefs [sut/file-exists?
-                (fn [path]
-                  (let [test-path (str/replace path #"^\.mcp-tasks/" "")]
-                    (.exists (io/file (str test-fixtures-dir "/" test-path)))))
-                sut/read-task-file
-                (fn [path]
-                  (read-test-file (str/replace path #"^\.mcp-tasks/" "")))
-                sut/write-task-file
-                (fn [path content]
-                  (write-test-file (str/replace path #"^\.mcp-tasks/" "")
-                                   content))]
-    (f)))
+  (f))
 
 ;; complete-task-impl tests
 
 (deftest moves-first-task-from-tasks-to-complete
   ;; Tests that the complete-task-impl function correctly moves the first
-  ;; task from tasks/<category>.md to complete/<category>.md
+  ;; task from tasks/<category>.ednl to complete/<category>.ednl
   (testing "complete-task"
     (testing "moves first task from tasks to complete"
       (setup-test-dir)
-      (write-test-file "tasks/test.md"
-                       "- [ ] first task\n      detail line\n- [ ] second task")
-      (with-test-files
-        #(let [result (#'sut/complete-task-impl
-                       nil
-                       nil
-                       {:category "test"
-                        :task-text "first task"})]
-           (is (false? (:isError result)))
-           (is (= "- [x] first task\n      detail line"
-                  (read-test-file "complete/test.md")))
-           (is (= "- [ ] second task"
-                  (read-test-file "tasks/test.md")))))
+      (reset-tasks-state!)
+      ;; Create EDNL file with two tasks
+      (write-ednl-test-file "tasks/test.ednl"
+                            [{:id 1 :title "first task" :description "detail line" :category "test" :status :open}
+                             {:id 2 :title "second task" :category "test" :status :open}])
+      (let [result (#'sut/complete-task-impl
+                    test-config
+                    nil
+                    {:category "test"
+                     :task-text "first task"})]
+        (is (false? (:isError result)))
+        ;; Verify complete file has the completed task
+        (let [complete-tasks (read-ednl-test-file "complete/test.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "first task" (:title (first complete-tasks))))
+          (is (= :closed (:status (first complete-tasks)))))
+        ;; Verify tasks file has only the second task
+        (let [tasks (read-ednl-test-file "tasks/test.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= "second task" (:title (first tasks))))))
       (cleanup-test-fixtures))))
 
 (deftest adds-completion-comment-when-provided
@@ -79,17 +102,19 @@
   (testing "complete-task"
     (testing "adds completion comment when provided"
       (setup-test-dir)
-      (write-test-file "tasks/test.md" "- [ ] task with comment")
-      (with-test-files
-        #(let [result (#'sut/complete-task-impl
-                       nil
-                       nil
-                       {:category "test"
-                        :task-text "task with comment"
-                        :completion-comment "Added feature X"})]
-           (is (false? (:isError result)))
-           (is (= "- [x] task with comment\n\nAdded feature X"
-                  (read-test-file "complete/test.md")))))
+      (reset-tasks-state!)
+      (write-ednl-test-file "tasks/test.ednl"
+                            [{:id 1 :title "task with comment" :category "test" :status :open}])
+      (let [result (#'sut/complete-task-impl
+                    test-config
+                    nil
+                    {:category "test"
+                     :task-text "task with comment"
+                     :completion-comment "Added feature X"})]
+        (is (false? (:isError result)))
+        (let [complete-tasks (read-ednl-test-file "complete/test.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (str/includes? (:description (first complete-tasks)) "Added feature X"))))
       (cleanup-test-fixtures))))
 
 (deftest appends-to-existing-complete-file
@@ -600,4 +625,60 @@
              ;; Ensure no extra spaces or formatting
              (is (not (str/includes? content "CATEGORY:simple")))
              (is (not (str/includes? content "CATEGORY:  simple"))))))
+      (cleanup-test-fixtures))))
+
+;; Integration Tests
+
+(deftest ^:integration complete-workflow-add-next-complete
+  ;; Integration test for complete workflow: add task → next task → complete task
+  (testing "complete workflow with EDN storage"
+    (testing "add → next → complete workflow"
+      (setup-test-dir)
+      (reset-tasks-state!)
+
+      ;; Add first task
+      (let [result (#'sut/add-task-impl test-config nil {:category "test"
+                                                         :task-text "First task\nWith description"})]
+        (when (:isError result)
+          (prn "Add first task error:" result))
+        (is (false? (:isError result))))
+
+      ;; Add second task
+      (let [result (#'sut/add-task-impl test-config nil {:category "test"
+                                                         :task-text "Second task"})]
+        (when (:isError result)
+          (prn "Add second task error:" result))
+        (is (false? (:isError result))))
+
+      ;; Get next task - should be first task
+      (let [result (#'sut/next-task-impl test-config nil {:category "test"})]
+        (is (false? (:isError result)))
+        (let [response (clojure.edn/read-string (get-in result [:content 0 :text]))]
+          (is (= "test" (:category response)))
+          (is (str/starts-with? (:task response) "First task"))))
+
+      ;; Complete first task
+      (let [result (#'sut/complete-task-impl test-config nil {:category "test"
+                                                              :task-text "First task"})]
+        (is (false? (:isError result))))
+
+      ;; Get next task - should now be second task
+      (let [result (#'sut/next-task-impl test-config nil {:category "test"})]
+        (is (false? (:isError result)))
+        (let [response (clojure.edn/read-string (get-in result [:content 0 :text]))]
+          (is (= "test" (:category response)))
+          (is (str/starts-with? (:task response) "Second task"))))
+
+      ;; Complete second task
+      (let [result (#'sut/complete-task-impl test-config nil {:category "test"
+                                                              :task-text "Second task"})]
+        (is (false? (:isError result))))
+
+      ;; Get next task - should have no more tasks
+      (let [result (#'sut/next-task-impl test-config nil {:category "test"})]
+        (is (false? (:isError result)))
+        (let [response (clojure.edn/read-string (get-in result [:content 0 :text]))]
+          (is (= "test" (:category response)))
+          (is (= "No more tasks in this category" (:status response)))))
+
       (cleanup-test-fixtures))))
