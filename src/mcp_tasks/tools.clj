@@ -4,6 +4,7 @@
    [clojure.data.json :as json]
    [clojure.java.io :as io]
    [clojure.string :as str]
+   [mcp-tasks.path-helper :as path-helper]
    [mcp-tasks.prompts :as prompts]
    [mcp-tasks.response :as response]))
 
@@ -250,20 +251,17 @@
   includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
   [config _context {:keys [category task-text prepend story-name]}]
   (try
-    (let [base-dir (:base-dir config)
-          [tasks-file tasks-content]
+    (let [[tasks-file tasks-content]
           (if story-name
             ;; Story task mode: validate story exists and use story-tasks file
-            (let [story-file (if base-dir
-                               (str base-dir "/.mcp-tasks/story/stories/" story-name ".md")
-                               (str ".mcp-tasks/story/stories/" story-name ".md"))]
+            (let [story-path (path-helper/task-path config ["story" "stories" (str story-name ".md")])
+                  story-file (:absolute story-path)]
               (when-not (file-exists? story-file)
                 (throw (ex-info "Story does not exist"
                                 {:story-name story-name
                                  :expected-file story-file})))
-              (let [story-tasks-file (if base-dir
-                                       (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
-                                       (str ".mcp-tasks/story/story-tasks/" story-name "-tasks.md"))
+              (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
+                    story-tasks-file (:absolute story-tasks-path)
                     content (read-task-file story-tasks-file)
                     ;; If file is empty, initialize with header
                     content (if (str/blank? content)
@@ -271,10 +269,8 @@
                               content)]
                 [story-tasks-file content]))
             ;; Category task mode: use existing logic
-            (let [tasks-dir (if base-dir
-                              (str base-dir "/.mcp-tasks/tasks")
-                              ".mcp-tasks/tasks")
-                  tasks-file (str tasks-dir "/" category ".md")]
+            (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+                  tasks-file (:absolute tasks-path)]
               [tasks-file (read-task-file tasks-file)]))
 
           ;; Format task based on whether it's for a story or category
