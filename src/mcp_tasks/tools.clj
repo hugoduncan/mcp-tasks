@@ -1,11 +1,11 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-    [clojure.data.json :as json]
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [mcp-tasks.prompts :as prompts]
-    [mcp-tasks.response :as response]))
+   [clojure.data.json :as json]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [mcp-tasks.prompts :as prompts]
+   [mcp-tasks.response :as response]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -113,8 +113,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                 first-task
-                                 completion-comment)
+                                first-task
+                                completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -240,8 +240,9 @@
   "Implementation of add-task tool.
 
   Adds a task to tasks/<category>.md as an incomplete todo item.
-  If prepend is true, adds at the beginning; otherwise appends at the end."
-  [_context {:keys [category task-text prepend]}]
+  If prepend is true, adds at the beginning; otherwise appends at the end.
+  If story-name is provided, the task is associated with that story."
+  [_context {:keys [category task-text prepend story-name]}]
   (try
     (let [tasks-dir ".mcp-tasks/tasks"
           tasks-file (str tasks-dir "/" category ".md")
@@ -291,6 +292,9 @@
      "task-text"
      {:type "string"
       :description "The task text to add"}
+     "story-name"
+     {:type "string"
+      :description "Optional story name to associate this task with"}
      "prepend"
      {:type "boolean"
       :description "If true, add task at the beginning instead of the end"}}
