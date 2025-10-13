@@ -36,7 +36,7 @@ Parse the arguments: $ARGUMENTS
 6. Interactive task creation from suggestions:
    - After presenting all findings and suggestions, ask the user:
      "Would you like to create story tasks for any of these suggestions? (enter numbers separated by commas, e.g., '1,3' or 'all' for all suggestions, or 'none' to skip)"
-   
+
    - If user selects suggestions:
      a) For each selected suggestion:
         - Present the suggestion text
@@ -45,20 +45,24 @@ Parse the arguments: $ARGUMENTS
         - Ask: "Category (simple/medium/large) [default: medium]:"
         - Validate category input; if invalid, re-prompt
         - If user just presses Enter, use "medium"
-     
-     b) After collecting all task details, append to story task file:
-        - Target file: `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
-        - Create parent directories if needed
-        - Read existing content (or treat as empty if file doesn't exist)
-        - Ensure existing content ends with proper spacing (add blank line if needed)
-        - For each new task, append in this format:
-          ```
-          - [ ] <task description>
-          CATEGORY: <category>
-          
-          ```
-        - Write the complete content back to the file
-     
+
+     b) After collecting all task details, use the `add-task` tool for each task:
+        - Use the `add-task` tool with these parameters:
+          - `category`: the selected category (simple/medium/large)
+          - `task-text`: "STORY: <story-name> - <task description>"
+          - `story-name`: the story name from step 1
+          - `prepend`: false (to append tasks)
+
+        Example:
+        ```
+        add-task(
+          category="medium",
+          task-text="STORY: my-story - Add error handling for edge cases",
+          story-name="my-story",
+          prepend=false
+        )
+        ```
+
      c) Confirm to user:
         "✓ Added N task(s) to <story-name>-tasks.md:"
         List each task with its category in a bullet format
@@ -70,5 +74,4 @@ Parse the arguments: $ARGUMENTS
 - All suggestions should be numbered from the start to make selection easy
 - Task descriptions can be refined by the user or used verbatim from suggestions
 - Categories help route tasks to appropriate execution workflows
-- The task file format must match story task conventions with `- [ ]` and `CATEGORY:` on separate line
-- Always preserve existing tasks when appending new ones
+- The `add-task` tool automatically handles file creation, formatting, and task preservation
