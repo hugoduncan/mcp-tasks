@@ -1,12 +1,12 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.path-helper :as path-helper]
-   [mcp-tasks.prompts :as prompts]
-   [mcp-tasks.response :as response]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.path-helper :as path-helper]
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.response :as response]))
 
 (defn- file-exists?
   "Check if a file exists"
@@ -119,8 +119,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                first-task
-                                completion-comment)
+                                 first-task
+                                 completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -242,6 +242,58 @@
     :required ["category"]}
    :implementation next-task-impl})
 
+(defn- prepare-story-task-file
+  "Prepare story task file for adding a task.
+
+  Validates story exists and returns [file-path content] tuple.
+  Initializes file with header if empty."
+  [config story-name]
+  (let [story-path (path-helper/task-path config ["story" "stories" (str story-name ".md")])
+        story-file (:absolute story-path)]
+    (when-not (file-exists? story-file)
+      (throw (ex-info "Story does not exist"
+                      {:story-name story-name
+                       :expected-file story-file})))
+    (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
+          story-tasks-file (:absolute story-tasks-path)
+          content (read-task-file story-tasks-file)
+          content (if (str/blank? content)
+                    (str "# Tasks for " story-name " Story\n")
+                    content)]
+      [story-tasks-file content])))
+
+(defn- prepare-category-task-file
+  "Prepare category task file for adding a task.
+
+  Returns [file-path content] tuple."
+  [config category]
+  (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+        tasks-file (:absolute tasks-path)]
+    [tasks-file (read-task-file tasks-file)]))
+
+(defn- format-task-content
+  "Format task content for adding to a task file.
+
+  Returns the new file content with the task added."
+  [task-text category tasks-content prepend story-name]
+  (let [new-task (if story-name
+                   (str "- [ ] " task-text "\nCATEGORY: " category)
+                   (str "- [ ] " task-text))
+        separator (if story-name "\n\n" "\n")
+        header-only? (and story-name
+                          (= tasks-content (str "# Tasks for " story-name " Story\n")))]
+    (cond
+      (or (str/blank? tasks-content) header-only?)
+      (if header-only?
+        (str tasks-content new-task)
+        new-task)
+
+      prepend
+      (str new-task separator tasks-content)
+
+      :else
+      (str tasks-content separator new-task))))
+
 (defn add-task-impl
   "Implementation of add-task tool.
 
@@ -251,53 +303,10 @@
   includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
   [config _context {:keys [category task-text prepend story-name]}]
   (try
-    (let [[tasks-file tasks-content]
-          (if story-name
-            ;; Story task mode: validate story exists and use story-tasks file
-            (let [story-path (path-helper/task-path config ["story" "stories" (str story-name ".md")])
-                  story-file (:absolute story-path)]
-              (when-not (file-exists? story-file)
-                (throw (ex-info "Story does not exist"
-                                {:story-name story-name
-                                 :expected-file story-file})))
-              (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
-                    story-tasks-file (:absolute story-tasks-path)
-                    content (read-task-file story-tasks-file)
-                    ;; If file is empty, initialize with header
-                    content (if (str/blank? content)
-                              (str "# Tasks for " story-name " Story\n")
-                              content)]
-                [story-tasks-file content]))
-            ;; Category task mode: use existing logic
-            (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
-                  tasks-file (:absolute tasks-path)]
-              [tasks-file (read-task-file tasks-file)]))
-
-          ;; Format task based on whether it's for a story or category
-          new-task (if story-name
-                     ;; Story task: include CATEGORY annotation
-                     (str "- [ ] " task-text "\nCATEGORY: " category)
-                     ;; Category task: simple format
-                     (str "- [ ] " task-text))
-
-          ;; Determine separator based on story vs category mode
-          separator (if story-name "\n\n" "\n")
-
-          ;; Check if content is just the header (for story tasks)
-          header-only? (and story-name
-                            (= tasks-content (str "# Tasks for " story-name " Story\n")))
-
-          new-content (cond
-                        (or (str/blank? tasks-content) header-only?)
-                        (if header-only?
-                          (str tasks-content new-task)
-                          new-task)
-
-                        prepend
-                        (str new-task separator tasks-content)
-
-                        :else
-                        (str tasks-content separator new-task))]
+    (let [[tasks-file tasks-content] (if story-name
+                                       (prepare-story-task-file config story-name)
+                                       (prepare-category-task-file config category))
+          new-content (format-task-content task-text category tasks-content prepend story-name)]
       (write-task-file tasks-file new-content)
       {:content [{:type "text"
                   :text (str "Task added to " tasks-file)}]
