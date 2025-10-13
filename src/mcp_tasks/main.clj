@@ -8,6 +8,7 @@
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
+    [mcp-tasks.resources :as resources]
     [mcp-tasks.story-tools :as story-tools]
     [mcp-tasks.tools :as tools]))
 
@@ -107,15 +108,17 @@
 
   Returns server configuration map suitable for mcp-server/create-server"
   [config transport]
-  {:transport transport
-   :tools {"complete-task" (tools/complete-task-tool config)
-           "next-task" (tools/next-task-tool config)
-           "add-task" (tools/add-task-tool config)
-           "next-story-task" (story-tools/next-story-task-tool config)
-           "complete-story-task" (story-tools/complete-story-task-tool config)
-           "complete-story" (story-tools/complete-story-tool config)}
-   :prompts (merge (tp/prompts config)
-                   (tp/story-prompts config))})
+  (let [all-prompts (merge (tp/prompts config)
+                           (tp/story-prompts config))]
+    {:transport transport
+     :tools {"complete-task" (tools/complete-task-tool config)
+             "next-task" (tools/next-task-tool config)
+             "add-task" (tools/add-task-tool config)
+             "next-story-task" (story-tools/next-story-task-tool config)
+             "complete-story-task" (story-tools/complete-story-task-tool config)
+             "complete-story" (story-tools/complete-story-tool config)}
+     :prompts all-prompts
+     :resources (resources/prompt-resources all-prompts)}))
 
 (defn- exit-process
   "Exit the process with the given code.
@@ -132,7 +135,7 @@
                    Can be a string or symbol (for clj -X compatibility)"
   [{:keys [config-path] :or {config-path "."}}]
   (try
-    (let [config        (load-and-validate-config config-path)
+    (let [config (load-and-validate-config config-path)
           server-config (create-server-config config {:type :stdio})]
       (log/info :stdio-server {:msg "Starting MCP Tasks server"})
       (with-open [server (mcp-server/create-server server-config)]
@@ -163,11 +166,11 @@
   - --config-path <path>: Path to directory containing .mcp-tasks.edn (default: '.')
   - No args: Start the MCP server"
   [& args]
-  (let [args-vec        (vec args)
+  (let [args-vec (vec args)
         config-path-idx (index-of args-vec "--config-path")
-        config-path     (when (>= config-path-idx 0)
-                          (when (< (inc config-path-idx) (count args-vec))
-                            (nth args-vec (inc config-path-idx))))]
+        config-path (when (>= config-path-idx 0)
+                      (when (< (inc config-path-idx) (count args-vec))
+                        (nth args-vec (inc config-path-idx))))]
     (cond
       ;; --list-prompts flag
       (some #{"--list-prompts"} args)
@@ -175,9 +178,9 @@
 
       ;; --install-prompts flag
       (some #{"--install-prompts"} args)
-      (let [idx          (index-of args-vec "--install-prompts")
-            next-arg     (when (< (inc idx) (count args-vec))
-                           (nth args-vec (inc idx)))
+      (let [idx (index-of args-vec "--install-prompts")
+            next-arg (when (< (inc idx) (count args-vec))
+                       (nth args-vec (inc idx)))
             prompt-names (if (and next-arg (not (str/starts-with? next-arg "--")))
                            (str/split next-arg #",")
                            [])]

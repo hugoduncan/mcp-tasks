@@ -214,6 +214,66 @@
           (mcp-client/close! client)
           ((:stop server)))))))
 
+(deftest ^:integ resources-available-test
+  ;; Test that resources are advertised and can be read.
+  ;; Resource content details are covered in resources unit tests.
+  (testing "resources availability"
+    (write-config-file "{:use-git? true}")
+    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "server advertises resource capabilities"
+          (is (mcp-client/available-resources? client))
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)]
+            (is (map? resources-response))
+            (is (vector? resources))
+            (is (pos? (count resources)))
+
+            (testing "all resources have required fields"
+              (doseq [resource resources]
+                (is (contains? resource :name))
+                (is (contains? resource :uri))
+                (is (contains? resource :mimeType))
+                (is (string? (:name resource)))
+                (is (string? (:uri resource)))
+                (is (string? (:mimeType resource)))
+                (is (= "text/markdown" (:mimeType resource)))
+                (is (str/starts-with? (:uri resource) "prompt://"))))
+
+            (testing "includes resources for all configured prompts"
+              (let [resource-names (set (map :name resources))]
+                ;; Check for some known prompts
+                (is (contains? resource-names "next-simple"))
+                (is (contains? resource-names "execute-story-task"))))))
+
+        (testing "can read resource content"
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)
+                first-resource (first resources)
+                uri (:uri first-resource)
+                read-response @(mcp-client/read-resource client uri)
+                contents (:contents read-response)]
+            (is (not (:isError read-response)))
+            (is (vector? contents))
+            (is (pos? (count contents)))
+            (let [content (first contents)]
+              (is (= uri (:uri content)))
+              (is (= "text/markdown" (:mimeType content)))
+              (is (string? (:text content)))
+              (is (pos? (count (:text content)))))))
+
+        (testing "returns error for non-existent resource"
+          (let [read-response @(mcp-client/read-resource client "prompt://nonexistent")]
+            (is (:isError read-response))
+            (is (re-find #"Resource not found"
+                         (-> read-response :contents first :text)))))
+
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
+
 (deftest ^:integ next-story-task-tool-test
   ;; Test the next-story-task tool integration.
   (testing "next-story-task tool"
