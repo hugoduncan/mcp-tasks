@@ -56,32 +56,13 @@
     (config/validate-startup test-project-dir resolved-config)
     resolved-config))
 
-(defn- wait-for-client-ready
-  "Wait for client to be ready, polling with exponential backoff.
-  
-  Returns true if client becomes ready within timeout, false otherwise.
-  Max wait time is approximately timeout-ms."
-  [client timeout-ms]
-  (let [start-time (System/currentTimeMillis)
-        max-wait timeout-ms]
-    (loop [wait-time 10]
-      (cond
-        (mcp-client/client-ready? client)
-        true
-
-        (> (- (System/currentTimeMillis) start-time) max-wait)
-        false
-
-        :else
-        (do
-          (Thread/sleep wait-time)
-          (recur (min (* wait-time 2) 100)))))))
-
 (defn- create-test-server-and-client
   "Create server and client connected via in-memory transport.
 
   Uses main/create-server-config to ensure tests use the same server
-  configuration as production code for better test fidelity."
+  configuration as production code for better test fidelity.
+
+  Waits for client to be ready before returning."
   []
   (let [config (load-test-config)
         shared-transport (shared/create-shared-transport)
@@ -94,6 +75,8 @@
                               :shared shared-transport}
                   :client-info {:name "test-client" :version "1.0.0"}
                   :protocol-version "2025-06-18"})]
+    ;; Wait for client to be ready (up to 5 seconds)
+    (mcp-client/wait-for-ready client 5000)
     {:server server
      :client client}))
 
@@ -144,7 +127,6 @@
       (write-config-file "{:use-git? false}")
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -157,7 +139,6 @@
       (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
           (is (mcp-client/client-ready? client))
           (is (mcp-client/available-tools? client))
           (is (mcp-client/available-prompts? client))
@@ -210,6 +191,135 @@
             (is (map? prompts-response))
             (is (vector? prompts))
             (is (pos? (count prompts)))))
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
+
+(deftest ^:integ resources-available-test
+  ;; Test that resources are advertised and can be read.
+  ;; Resource content details are covered in resources unit tests.
+  (testing "resources availability"
+    (write-config-file "{:use-git? true}")
+    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "server advertises resource capabilities"
+          (is (mcp-client/available-resources? client))
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)]
+            (is (map? resources-response))
+            (is (vector? resources))
+            (is (pos? (count resources)))
+
+            (testing "all resources have required fields"
+              (doseq [resource resources]
+                (is (contains? resource :name))
+                (is (contains? resource :uri))
+                (is (contains? resource :mimeType))
+                (is (string? (:name resource)))
+                (is (string? (:uri resource)))
+                (is (string? (:mimeType resource)))
+                (is (= "text/markdown" (:mimeType resource)))
+                (is (str/starts-with? (:uri resource) "prompt://"))))
+
+            (testing "includes resources for all configured prompts"
+              (let [resource-names (set (map :name resources))]
+                ;; Check for some known prompts
+                (is (contains? resource-names "next-simple"))
+                (is (contains? resource-names "execute-story-task"))))))
+
+        (testing "can read resource content"
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)
+                first-resource (first resources)
+                uri (:uri first-resource)
+                read-response @(mcp-client/read-resource client uri)
+                contents (:contents read-response)]
+            (is (not (:isError read-response)))
+            (is (vector? contents))
+            (is (pos? (count contents)))
+            (let [content (first contents)]
+              (is (= uri (:uri content)))
+              (is (= "text/markdown" (:mimeType content)))
+              (is (string? (:text content)))
+              (is (pos? (count (:text content)))))))
+
+        (testing "returns error for non-existent resource"
+          (let [read-response @(mcp-client/read-resource client "prompt://nonexistent")]
+            (is (:isError read-response))
+            (is (re-find #"Resource not found"
+                         (-> read-response :contents first :text)))))
+
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
+
+(deftest ^:integ prompt-resources-content-test
+  ;; Test comprehensive validation of prompt resource content, metadata, and formatting.
+  ;; Validates YAML frontmatter structure and prompt message text consistency.
+  (testing "prompt resources content validation"
+    (write-config-file "{:use-git? true}")
+    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "resource content includes YAML frontmatter with description"
+          (let [read-response @(mcp-client/read-resource client "prompt://next-simple")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (str/starts-with? text "---\n"))
+            (is (str/includes? text "\n---\n"))
+            (is (str/includes? text "description:"))
+            (let [frontmatter-end (str/index-of text "\n---\n")
+                  frontmatter (subs text 0 frontmatter-end)]
+              (is (str/includes? frontmatter "simple")))))
+
+        (testing "resource content includes prompt message text"
+          (let [read-response @(mcp-client/read-resource client "prompt://next-simple")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (str/includes? text "complete the next simple task"))
+            (let [frontmatter-end (+ (str/index-of text "\n---\n") 5)
+                  message-text (subs text frontmatter-end)]
+              (is (pos? (count (str/trim message-text)))))))
+
+        (testing "story prompt includes argument-hint in frontmatter"
+          (let [read-response @(mcp-client/read-resource client "prompt://execute-story-task")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (str/starts-with? text "---\n"))
+            (is (str/includes? text "argument-hint:"))
+            (is (str/includes? text "<story-name>"))
+            (is (str/includes? text "Execute the next incomplete task"))))
+
+        (testing "multiple prompts return distinct content"
+          (let [simple-response @(mcp-client/read-resource client "prompt://next-simple")
+                simple-text (-> simple-response :contents first :text)
+                story-response @(mcp-client/read-resource client "prompt://execute-story-task")
+                story-text (-> story-response :contents first :text)]
+            (is (not (:isError simple-response)))
+            (is (not (:isError story-response)))
+            (is (not= simple-text story-text))
+            (is (str/includes? simple-text "simple"))
+            (is (str/includes? story-text "story"))))
+
+        (testing "all listed resources can be read successfully"
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)]
+            (doseq [resource resources]
+              (let [uri (:uri resource)
+                    read-response @(mcp-client/read-resource client uri)
+                    text (-> read-response :contents first :text)]
+                (is (not (:isError read-response))
+                    (str "Should read resource successfully: " uri))
+                (is (str/starts-with? text "---\n")
+                    (str "Resource should have YAML frontmatter: " uri))
+                (is (str/includes? text "\n---\n")
+                    (str "Resource should have complete frontmatter: " uri))
+                (is (str/includes? text "description:")
+                    (str "Resource should have description metadata: " uri))))))
+
         (finally
           (mcp-client/close! client)
           ((:stop server)))))))
@@ -329,7 +439,6 @@
           (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
           (let [{:keys [server client]} (create-test-server-and-client)]
             (try
-              (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
               (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
                 (.mkdirs story-tasks-dir)
                 (spit (io/file story-tasks-dir "git-test-tasks.md")

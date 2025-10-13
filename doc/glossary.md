@@ -23,6 +23,10 @@ Each category has a queue of tasks in .mcp-tasks/tasks/<category>.md.
 
 **Prompt**: An MCP resource that instructs agents on how to execute tasks for a specific category.
 
+**Prompt Resource**: An MCP resource exposing a prompt via the `prompt://` URI scheme, enabling programmatic access and inspection.
+
+**Resource URI**: A unique identifier for an MCP resource, such as `prompt://next-simple` or `prompt://refine-story`.
+
 **Task**: A single checkbox item (`- [ ]` or `- [x]`) in a markdown file under `.mcp-tasks/`.
 
 **Task File**: A markdown file containing checkbox-formatted tasks at `.mcp-tasks/tasks/<category>.md`.
