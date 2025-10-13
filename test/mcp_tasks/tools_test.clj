@@ -23,7 +23,11 @@
 
 (defn- write-test-file
   [path content]
-  (spit (str test-fixtures-dir "/" path) content))
+  (let [file (io/file (str test-fixtures-dir "/" path))
+        parent (.getParentFile file)]
+    (when parent
+      (.mkdirs parent))
+    (spit file content)))
 
 (defn- read-test-file
   [path]
@@ -34,7 +38,11 @@
 
 (defn- with-test-files
   [f]
-  (with-redefs [sut/read-task-file
+  (with-redefs [sut/file-exists?
+                (fn [path]
+                  (let [test-path (str/replace path #"^\.mcp-tasks/" "")]
+                    (.exists (io/file (str test-fixtures-dir "/" test-path)))))
+                sut/read-task-file
                 (fn [path]
                   (read-test-file (str/replace path #"^\.mcp-tasks/" "")))
                 sut/write-task-file
@@ -420,4 +428,86 @@
            (is (false? (:isError result)))
            (is (= 1 (count content)) "Should only return completion message for nil config")
            (is (= "text" (:type (first content))))))
+      (cleanup-test-fixtures))))
+
+;; Story task file creation tests
+
+(deftest creates-story-tasks-file-when-it-doesnt-exist
+  ;; Tests that add-task-impl creates story-tasks file with header when adding
+  ;; first task to a story
+  (testing "add-task"
+    (testing "creates story-tasks file with header when it doesn't exist"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir "story/stories"))
+      (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
+      (write-test-file "story/stories/test-story.md" "# Test Story\n\nDescription")
+      (with-test-files
+        #(let [result (sut/add-task-impl nil {:category "simple"
+                                              :task-text "First task"
+                                              :story-name "test-story"})]
+           (when (:isError result)
+             (prn "Error result:" result))
+           (is (false? (:isError result)))
+           (is (= "# Tasks for test-story Story\n- [ ] First task\nCATEGORY: simple"
+                  (read-test-file "story/story-tasks/test-story-tasks.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest appends-to-existing-story-tasks-file
+  ;; Tests that add-task-impl appends to existing story-tasks file without
+  ;; adding duplicate header
+  (testing "add-task"
+    (testing "appends to existing story-tasks file"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir "story/stories"))
+      (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
+      (write-test-file "story/stories/test-story.md" "# Test Story\n\nDescription")
+      (write-test-file "story/story-tasks/test-story-tasks.md"
+                       "# Tasks for test-story Story\n- [ ] Existing task\nCATEGORY: simple")
+      (with-test-files
+        #(let [result (sut/add-task-impl nil {:category "medium"
+                                              :task-text "Second task"
+                                              :story-name "test-story"})]
+           (is (false? (:isError result)))
+           (is (= (str "# Tasks for test-story Story\n"
+                       "- [ ] Existing task\nCATEGORY: simple\n\n"
+                       "- [ ] Second task\nCATEGORY: medium")
+                  (read-test-file "story/story-tasks/test-story-tasks.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest prepends-to-story-tasks-file-when-prepend-is-true
+  ;; Tests that add-task-impl prepends to story-tasks file when prepend is true
+  (testing "add-task"
+    (testing "prepends to story-tasks file when prepend is true"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir "story/stories"))
+      (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
+      (write-test-file "story/stories/test-story.md" "# Test Story\n\nDescription")
+      (write-test-file "story/story-tasks/test-story-tasks.md"
+                       "# Tasks for test-story Story\n- [ ] Existing task\nCATEGORY: simple")
+      (with-test-files
+        #(let [result (sut/add-task-impl nil {:category "simple"
+                                              :task-text "New task"
+                                              :story-name "test-story"
+                                              :prepend true})]
+           (is (false? (:isError result)))
+           (is (= (str "- [ ] New task\nCATEGORY: simple\n\n"
+                       "# Tasks for test-story Story\n"
+                       "- [ ] Existing task\nCATEGORY: simple")
+                  (read-test-file "story/story-tasks/test-story-tasks.md")))))
+      (cleanup-test-fixtures))))
+
+(deftest errors-when-story-does-not-exist
+  ;; Tests that add-task-impl returns error when trying to add task to
+  ;; non-existent story
+  (testing "add-task"
+    (testing "errors when story does not exist"
+      (setup-test-dir)
+      (.mkdirs (io/file test-fixtures-dir "story/stories"))
+      (with-test-files
+        #(let [result (sut/add-task-impl nil {:category "simple"
+                                              :task-text "Task for missing story"
+                                              :story-name "nonexistent"})]
+           (is (true? (:isError result)))
+           (is (re-find #"Story does not exist"
+                        (get-in result [:content 0 :text])))))
       (cleanup-test-fixtures))))

@@ -7,11 +7,16 @@
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.response :as response]))
 
+(defn- file-exists?
+  "Check if a file exists"
+  [file-path]
+  (.exists (io/file file-path)))
+
 (defn- read-task-file
   "Read task file and return content as string.
   Returns an empty string if file doesn't exist"
   [file-path]
-  (if (.exists (io/file file-path))
+  (if (file-exists? file-path)
     (slurp file-path)
     ""))
 
@@ -242,21 +247,26 @@
   Adds a task to tasks/<category>.md as an incomplete todo item.
   If prepend is true, adds at the beginning; otherwise appends at the end.
   If story-name is provided, the task is associated with that story and
-  includes CATEGORY metadata."
+  includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
   [_context {:keys [category task-text prepend story-name]}]
   (try
     (let [[tasks-file tasks-content]
           (if story-name
             ;; Story task mode: validate story exists and use story-tasks file
             (let [story-file (str ".mcp-tasks/story/stories/" story-name ".md")]
-              (when-not (.exists (io/file story-file))
+              (when-not (file-exists? story-file)
                 (throw (ex-info "Story does not exist"
                                 {:story-name story-name
                                  :expected-file story-file})))
               (let [story-tasks-file (str ".mcp-tasks/story/story-tasks/"
                                           story-name
-                                          "-tasks.md")]
-                [story-tasks-file (read-task-file story-tasks-file)]))
+                                          "-tasks.md")
+                    content (read-task-file story-tasks-file)
+                    ;; If file is empty, initialize with header
+                    content (if (str/blank? content)
+                              (str "# Tasks for " story-name " Story\n")
+                              content)]
+                [story-tasks-file content]))
             ;; Category task mode: use existing logic
             (let [tasks-dir ".mcp-tasks/tasks"
                   tasks-file (str tasks-dir "/" category ".md")]
@@ -272,9 +282,15 @@
           ;; Determine separator based on story vs category mode
           separator (if story-name "\n\n" "\n")
 
+          ;; Check if content is just the header (for story tasks)
+          header-only? (and story-name
+                            (= tasks-content (str "# Tasks for " story-name " Story\n")))
+
           new-content (cond
-                        (str/blank? tasks-content)
-                        new-task
+                        (or (str/blank? tasks-content) header-only?)
+                        (if header-only?
+                          (str tasks-content new-task)
+                          new-task)
 
                         prepend
                         (str new-task separator tasks-content)
