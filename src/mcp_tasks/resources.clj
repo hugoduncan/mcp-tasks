@@ -1,20 +1,56 @@
 (ns mcp-tasks.resources
-  "Resource definitions for MCP server")
+  "Resource definitions for MCP server"
+  (:require
+    [clojure.string :as str]))
+
+(defn- format-argument-hint
+  "Format argument hint from prompt :arguments vector.
+
+  Converts argument maps to hint string format:
+  - Required args: <arg-name>
+  - Optional args: [arg-name]
+
+  Returns nil if arguments vector is empty or nil."
+  [arguments]
+  (when (seq arguments)
+    (str/join " "
+              (for [arg arguments]
+                (if (:required arg)
+                  (str "<" (:name arg) ">")
+                  (str "[" (:name arg) "]"))))))
+
+(defn- build-frontmatter
+  "Build YAML frontmatter string from prompt metadata.
+
+  Includes description and argument-hint (if present).
+  Returns frontmatter string with delimiters or nil if no metadata."
+  [prompt]
+  (let [description (:description prompt)
+        argument-hint (format-argument-hint (:arguments prompt))
+        lines (cond-> []
+                description (conj (str "description: " description))
+                argument-hint (conj (str "argument-hint: " argument-hint)))]
+    (when (seq lines)
+      (str "---\n"
+           (str/join "\n" lines)
+           "\n---\n"))))
 
 (defn- prompt-resource-implementation
   "Implementation function for reading a prompt resource.
-  
-  Returns the prompt text content for the given URI."
+
+  Returns the prompt text content with YAML frontmatter for the given URI."
   [_context prompts-map uri]
   (let [prompt-name (subs uri (count "prompt://"))
         prompt (get prompts-map prompt-name)]
     (if prompt
       (let [messages (:messages prompt)
             ;; Extract text content from the first message
-            text (-> messages first :content :text)]
+            text (-> messages first :content :text)
+            frontmatter (build-frontmatter prompt)
+            full-text (str frontmatter text)]
         {:contents [{:uri uri
                      :mimeType "text/markdown"
-                     :text text}]})
+                     :text full-text}]})
       {:contents [{:uri uri
                    :text (str "Prompt not found: " prompt-name)}]
        :isError true})))

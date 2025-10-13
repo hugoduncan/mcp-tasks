@@ -93,12 +93,34 @@
           (is (not (:isError result)))
           (is (vector? contents))
           (is (= 1 (count contents)))
-          (let [content (first contents)]
+          (let [content (first contents)
+                text (:text content)]
             (is (= "prompt://next-simple" (:uri content)))
             (is (= "text/markdown" (:mimeType content)))
-            (is (string? (:text content)))
-            (is (pos? (count (:text content))))
-            (is (str/includes? (:text content) "complete the next simple task")))))
+            (is (string? text))
+            (is (pos? (count text)))
+            (is (str/includes? text "complete the next simple task")))))
+
+      (testing "content includes YAML frontmatter with description"
+        (let [resource (get resources-map "prompt://next-simple")
+              implementation (:implementation resource)
+              result (implementation nil "prompt://next-simple")
+              text (-> result :contents first :text)]
+          (is (str/starts-with? text "---\n"))
+          (is (str/includes? text "description:"))
+          (is (str/includes? text "\n---\n"))))
+
+      (testing "content includes description metadata"
+        (let [resource (get resources-map "prompt://next-simple")
+              implementation (:implementation resource)
+              result (implementation nil "prompt://next-simple")
+              text (-> result :contents first :text)
+              ;; Find the description line in frontmatter
+              lines (str/split-lines text)
+              frontmatter-lines (take-while #(not= "---" %) (rest lines))
+              desc-line (first (filter #(str/starts-with? % "description:") frontmatter-lines))]
+          (is (some? desc-line))
+          (is (str/includes? desc-line "simple"))))
 
       (testing "returns error for non-existent prompt"
         (let [resource (get resources-map "prompt://next-simple")
@@ -114,8 +136,20 @@
               result (implementation nil "prompt://execute-story-task")
               contents (:contents result)]
           (is (not (:isError result)))
-          (let [content (first contents)]
+          (let [content (first contents)
+                text (:text content)]
             (is (= "prompt://execute-story-task" (:uri content)))
             (is (= "text/markdown" (:mimeType content)))
-            (is (string? (:text content)))
-            (is (str/includes? (:text content) "Execute the next incomplete task"))))))))
+            (is (string? text))
+            (is (str/includes? text "Execute the next incomplete task")))))
+
+      (testing "story prompt with arguments includes argument-hint in frontmatter"
+        (let [resource (get resources-map "prompt://execute-story-task")
+              implementation (:implementation resource)
+              result (implementation nil "prompt://execute-story-task")
+              text (-> result :contents first :text)
+              lines (str/split-lines text)
+              frontmatter-lines (take-while #(not= "---" %) (rest lines))
+              arg-hint-line (first (filter #(str/starts-with? % "argument-hint:") frontmatter-lines))]
+          (is (some? arg-hint-line))
+          (is (str/includes? arg-hint-line "<story-name>")))))))
