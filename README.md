@@ -262,6 +262,83 @@ The prompt file provides custom execution instructions for the category, replaci
 
 See **[doc/workflow.md#category-specific-instructions](doc/workflow.md#category-specific-instructions)** for examples.
 
+## MCP Resources
+
+mcp-tasks exposes its execution prompts as MCP resources, enabling advanced use cases like prompt composition and inspection.
+
+### Prompt Resources
+
+Each category and story workflow has an associated prompt resource accessible via the `prompt://` URI scheme:
+
+**Category prompts:**
+```
+prompt://next-<category>
+```
+
+Examples:
+- `prompt://next-simple` - Simple task execution prompt
+- `prompt://next-feature` - Feature task execution prompt
+- `prompt://next-bugfix` - Bugfix task execution prompt
+
+**Story prompts:**
+```
+prompt://refine-story
+prompt://create-story-tasks
+prompt://execute-story-task
+```
+
+### Resource Format
+
+Prompt resources include YAML frontmatter with metadata:
+
+```markdown
+---
+description: Execute simple tasks with basic workflow
+---
+
+Please complete the next simple task following these steps:
+[... prompt content ...]
+```
+
+**Frontmatter fields:**
+- `description` (string) - Brief explanation of the prompt's purpose
+- Additional metadata may be present in custom prompts
+
+### Accessing Resources
+
+**List all prompt resources:**
+
+Most MCP clients provide a way to list available resources. The exact method depends on your client.
+
+**Read a prompt resource:**
+
+Use your MCP client's resource reading capability with the `prompt://` URI. For example, in Claude Code you might use tools to inspect prompt resources programmatically.
+
+### Use Cases
+
+**1. Prompt Composition**
+
+Build custom workflows by combining or referencing existing prompts:
+
+```markdown
+# Custom prompt that references another
+Execute the feature task, then follow the review process from prompt://review-checklist
+```
+
+**2. Prompt Inspection**
+
+Understand what a category prompt does before executing tasks:
+- Read `prompt://next-simple` to see the simple task workflow
+- Compare different category prompts to choose appropriate categories
+
+**3. Documentation**
+
+Generate workflow documentation by extracting prompt content and descriptions.
+
+**4. Tooling Integration**
+
+Build tools that discover and utilize mcp-tasks prompts programmatically via the MCP resource protocol.
+
 ## Development
 
 ```bash
