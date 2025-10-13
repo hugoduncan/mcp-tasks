@@ -27,6 +27,7 @@ Parse the arguments: $ARGUMENTS
    - Don't create lots of very simple tasks, try and group them
    - The task description contains enough context to implement it without
      any other context.
+   - update unit tests if needed, as part of each task
    - Each task must have a reference to the story file
    - Each task must have a `CATEGORY: <category>` line on its own line
      after the task description

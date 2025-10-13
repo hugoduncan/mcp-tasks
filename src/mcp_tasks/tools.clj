@@ -241,7 +241,8 @@
 
   Adds a task to tasks/<category>.md as an incomplete todo item.
   If prepend is true, adds at the beginning; otherwise appends at the end.
-  If story-name is provided, the task is associated with that story."
+  If story-name is provided, the task is associated with that story and
+  includes CATEGORY metadata."
   [_context {:keys [category task-text prepend story-name]}]
   (try
     (let [[tasks-file tasks-content]
@@ -261,16 +262,25 @@
                   tasks-file (str tasks-dir "/" category ".md")]
               [tasks-file (read-task-file tasks-file)]))
 
-          new-task (str "- [ ] " task-text)
+          ;; Format task based on whether it's for a story or category
+          new-task (if story-name
+                     ;; Story task: include CATEGORY annotation
+                     (str "- [ ] " task-text "\nCATEGORY: " category)
+                     ;; Category task: simple format
+                     (str "- [ ] " task-text))
+
+          ;; Determine separator based on story vs category mode
+          separator (if story-name "\n\n" "\n")
+
           new-content (cond
                         (str/blank? tasks-content)
                         new-task
 
                         prepend
-                        (str new-task "\n" tasks-content)
+                        (str new-task separator tasks-content)
 
                         :else
-                        (str tasks-content "\n" new-task))]
+                        (str tasks-content separator new-task))]
       (write-task-file tasks-file new-content)
       {:content [{:type "text"
                   :text (str "Task added to " tasks-file)}]
