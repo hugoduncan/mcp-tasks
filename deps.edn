@@ -5,7 +5,8 @@
   {:git/url   "https://github.com/hugoduncan/mcp-clj"
    :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
    :deps/root "projects/server"}
-  org.clojure/clojure {:mvn/version "1.12.3"}}
+  org.clojure/clojure {:mvn/version "1.12.3"}
+  metosin/malli {:mvn/version "0.16.4"}}
 
  :aliases
  {:dev    {:override-deps

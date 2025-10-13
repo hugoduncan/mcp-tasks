@@ -31,6 +31,8 @@ Parse the arguments: $ARGUMENTS
 4. Execute the task:
    - execute the `next-<catagory>` prompt from the `mcp-tasks` tool .For
      example, if <category> is "simple", execute the `next-simple` prompt
+   - run `/mcp-tasks:next-<catagory>` or use the
+     `prompt://next-<catagory>` resource to access the prompt
    - This will run the task using the category-specific workflow
    - Complete all implementation steps according to the category workflow
 
