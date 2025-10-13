@@ -291,8 +291,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "new task"})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "- [ ] new task"
                   (read-test-file "tasks/test.md")))))
@@ -305,8 +305,8 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] existing task")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "new task"})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "- [ ] existing task\n- [ ] new task"
                   (read-test-file "tasks/test.md")))))
@@ -318,8 +318,8 @@
     (testing "returns success message with file path"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "new task"})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "new task"})]
            (is (false? (:isError result)))
            (is (= "Task added to .mcp-tasks/tasks/test.md"
                   (get-in result [:content 0 :text])))))
@@ -331,8 +331,8 @@
     (testing "handles multi-line task text"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "first line\nsecond line"})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "first line\nsecond line"})]
            (is (false? (:isError result)))
            (is (= "- [ ] first line\nsecond line"
                   (read-test-file "tasks/test.md")))))
@@ -345,9 +345,9 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] existing task")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "new task"
-                                              :prepend true})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "new task"
+                                                   :prepend true})]
            (is (false? (:isError result)))
            (is (= "- [ ] new task\n- [ ] existing task"
                   (read-test-file "tasks/test.md")))))
@@ -360,9 +360,9 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "new task"
-                                              :prepend true})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "new task"
+                                                   :prepend true})]
            (is (false? (:isError result)))
            (is (= "- [ ] new task"
                   (read-test-file "tasks/test.md")))))
@@ -442,9 +442,9 @@
       (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
       (write-test-file "story/stories/test-story.md" "# Test Story\n\nDescription")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "simple"
-                                              :task-text "First task"
-                                              :story-name "test-story"})]
+        #(let [result (sut/add-task-impl nil nil {:category "simple"
+                                                   :task-text "First task"
+                                                   :story-name "test-story"})]
            (when (:isError result)
              (prn "Error result:" result))
            (is (false? (:isError result)))
@@ -464,9 +464,9 @@
       (write-test-file "story/story-tasks/test-story-tasks.md"
                        "# Tasks for test-story Story\n- [ ] Existing task\nCATEGORY: simple")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "medium"
-                                              :task-text "Second task"
-                                              :story-name "test-story"})]
+        #(let [result (sut/add-task-impl nil nil {:category "medium"
+                                                   :task-text "Second task"
+                                                   :story-name "test-story"})]
            (is (false? (:isError result)))
            (is (= (str "# Tasks for test-story Story\n"
                        "- [ ] Existing task\nCATEGORY: simple\n\n"
@@ -485,10 +485,10 @@
       (write-test-file "story/story-tasks/test-story-tasks.md"
                        "# Tasks for test-story Story\n- [ ] Existing task\nCATEGORY: simple")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "simple"
-                                              :task-text "New task"
-                                              :story-name "test-story"
-                                              :prepend true})]
+        #(let [result (sut/add-task-impl nil nil {:category "simple"
+                                                   :task-text "New task"
+                                                   :story-name "test-story"
+                                                   :prepend true})]
            (is (false? (:isError result)))
            (is (= (str "- [ ] New task\nCATEGORY: simple\n\n"
                        "# Tasks for test-story Story\n"
@@ -504,9 +504,9 @@
       (setup-test-dir)
       (.mkdirs (io/file test-fixtures-dir "story/stories"))
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "simple"
-                                              :task-text "Task for missing story"
-                                              :story-name "nonexistent"})]
+        #(let [result (sut/add-task-impl nil nil {:category "simple"
+                                                   :task-text "Task for missing story"
+                                                   :story-name "nonexistent"})]
            (is (true? (:isError result)))
            (is (re-find #"Story does not exist"
                         (get-in result [:content 0 :text])))))
@@ -521,9 +521,9 @@
       (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
       (write-test-file "story/stories/test-story.md" "# Test Story")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "large"
-                                              :task-text "Complex task"
-                                              :story-name "test-story"})]
+        #(let [result (sut/add-task-impl nil nil {:category "large"
+                                                   :task-text "Complex task"
+                                                   :story-name "test-story"})]
            (is (false? (:isError result)))
            (is (str/includes? (read-test-file "story/story-tasks/test-story-tasks.md")
                               "CATEGORY: large"))))
@@ -538,9 +538,9 @@
       (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
       (write-test-file "story/stories/test-story.md" "# Test Story")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "medium"
-                                              :task-text "First line\nSecond line\nThird line"
-                                              :story-name "test-story"})]
+        #(let [result (sut/add-task-impl nil nil {:category "medium"
+                                                   :task-text "First line\nSecond line\nThird line"
+                                                   :story-name "test-story"})]
            (is (false? (:isError result)))
            (is (= "# Tasks for test-story Story\n- [ ] First line\nSecond line\nThird line\nCATEGORY: medium"
                   (read-test-file "story/story-tasks/test-story-tasks.md")))))
@@ -552,8 +552,8 @@
     (testing "does not include CATEGORY line for regular tasks"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "test"
-                                              :task-text "Regular task"})]
+        #(let [result (sut/add-task-impl nil nil {:category "test"
+                                                   :task-text "Regular task"})]
            (is (false? (:isError result)))
            (is (= "- [ ] Regular task"
                   (read-test-file "tasks/test.md")))
@@ -572,9 +572,9 @@
       (write-test-file "story/story-tasks/test-story-tasks.md"
                        "# Tasks for test-story Story\n- [ ] First task\nCATEGORY: simple")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "medium"
-                                              :task-text "Second task"
-                                              :story-name "test-story"})]
+        #(let [result (sut/add-task-impl nil nil {:category "medium"
+                                                   :task-text "Second task"
+                                                   :story-name "test-story"})]
            (is (false? (:isError result)))
            (let [content (read-test-file "story/story-tasks/test-story-tasks.md")]
              ;; Verify double newline separator between tasks
@@ -590,9 +590,9 @@
       (.mkdirs (io/file test-fixtures-dir "story/story-tasks"))
       (write-test-file "story/stories/test-story.md" "# Test Story")
       (with-test-files
-        #(let [result (sut/add-task-impl nil {:category "simple"
-                                              :task-text "Test task"
-                                              :story-name "test-story"})]
+        #(let [result (sut/add-task-impl nil nil {:category "simple"
+                                                   :task-text "Test task"
+                                                   :story-name "test-story"})]
            (is (false? (:isError result)))
            (let [content (read-test-file "story/story-tasks/test-story-tasks.md")]
              ;; Verify exact format: "CATEGORY: " followed by category name
