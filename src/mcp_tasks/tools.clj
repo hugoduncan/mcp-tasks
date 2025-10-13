@@ -1,11 +1,11 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-    [clojure.data.json :as json]
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [mcp-tasks.prompts :as prompts]
-    [mcp-tasks.response :as response]))
+   [clojure.data.json :as json]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [mcp-tasks.prompts :as prompts]
+   [mcp-tasks.response :as response]))
 
 (defn- file-exists?
   "Check if a file exists"
@@ -118,8 +118,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                 first-task
-                                 completion-comment)
+                                first-task
+                                completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -248,19 +248,22 @@
   If prepend is true, adds at the beginning; otherwise appends at the end.
   If story-name is provided, the task is associated with that story and
   includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
-  [_context {:keys [category task-text prepend story-name]}]
+  [config _context {:keys [category task-text prepend story-name]}]
   (try
-    (let [[tasks-file tasks-content]
+    (let [base-dir (:base-dir config)
+          [tasks-file tasks-content]
           (if story-name
             ;; Story task mode: validate story exists and use story-tasks file
-            (let [story-file (str ".mcp-tasks/story/stories/" story-name ".md")]
+            (let [story-file (if base-dir
+                               (str base-dir "/.mcp-tasks/story/stories/" story-name ".md")
+                               (str ".mcp-tasks/story/stories/" story-name ".md"))]
               (when-not (file-exists? story-file)
                 (throw (ex-info "Story does not exist"
                                 {:story-name story-name
                                  :expected-file story-file})))
-              (let [story-tasks-file (str ".mcp-tasks/story/story-tasks/"
-                                          story-name
-                                          "-tasks.md")
+              (let [story-tasks-file (if base-dir
+                                       (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
+                                       (str ".mcp-tasks/story/story-tasks/" story-name "-tasks.md"))
                     content (read-task-file story-tasks-file)
                     ;; If file is empty, initialize with header
                     content (if (str/blank? content)
@@ -268,7 +271,9 @@
                               content)]
                 [story-tasks-file content]))
             ;; Category task mode: use existing logic
-            (let [tasks-dir ".mcp-tasks/tasks"
+            (let [tasks-dir (if base-dir
+                              (str base-dir "/.mcp-tasks/tasks")
+                              ".mcp-tasks/tasks")
                   tasks-file (str tasks-dir "/" category ".md")]
               [tasks-file (read-task-file tasks-file)]))
 
@@ -320,7 +325,7 @@
   "Tool to add a task to a specific category.
 
   Accepts config parameter for future git-aware functionality."
-  [_config]
+  [config]
   {:name "add-task"
    :description (add-task-description)
    :inputSchema
@@ -339,4 +344,4 @@
      {:type "boolean"
       :description "If true, add task at the beginning instead of the end"}}
     :required ["category" "task-text"]}
-   :implementation add-task-impl})
+   :implementation (partial add-task-impl config)})
