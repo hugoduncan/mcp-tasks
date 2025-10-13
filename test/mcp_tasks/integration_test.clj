@@ -329,6 +329,7 @@
           (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
           (let [{:keys [server client]} (create-test-server-and-client)]
             (try
+              (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
               (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
                 (.mkdirs story-tasks-dir)
                 (spit (io/file story-tasks-dir "git-test-tasks.md")
