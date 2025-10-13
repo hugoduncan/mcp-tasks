@@ -81,7 +81,7 @@
 
 (defn- load-and-validate-config
   "Loads, resolves, and validates configuration.
-  
+
   Returns resolved config map with :use-git? set.
   Throws ex-info if validation fails."
   [config-path]
@@ -93,7 +93,7 @@
 
 (defn- block-forever
   "Blocks the current thread forever.
-  
+
   Extracted for testability with with-redefs."
   []
   @(promise))
@@ -119,20 +119,20 @@
 
 (defn- exit-process
   "Exit the process with the given code.
-  
+
   Extracted for testability with with-redefs."
   [code]
   (System/exit code))
 
 (defn start
   "Start stdio MCP server (uses stdin/stdout).
-  
+
   Options:
   - :config-path - Path to directory containing .mcp-tasks.edn (default: '.')
                    Can be a string or symbol (for clj -X compatibility)"
   [{:keys [config-path] :or {config-path "."}}]
   (try
-    (let [config (load-and-validate-config config-path)
+    (let [config        (load-and-validate-config config-path)
           server-config (create-server-config config {:type :stdio})]
       (log/info :stdio-server {:msg "Starting MCP Tasks server"})
       (with-open [server (mcp-server/create-server server-config)]
@@ -148,6 +148,12 @@
         (println "Error starting server:" (.getMessage e)))
       (exit-process 1))))
 
+(defn- index-of
+  "Returns the index of the first occurrence of value in coll.
+  Returns nil if not found."
+  [coll value]
+  (first (keep-indexed #(when (= %2 value) %1) coll)))
+
 (defn -main
   "CLI entry point for MCP Tasks.
 
@@ -157,11 +163,11 @@
   - --config-path <path>: Path to directory containing .mcp-tasks.edn (default: '.')
   - No args: Start the MCP server"
   [& args]
-  (let [args-vec (vec args)
-        config-path-idx (.indexOf args-vec "--config-path")
-        config-path (when (>= config-path-idx 0)
-                      (when (< (inc config-path-idx) (count args-vec))
-                        (nth args-vec (inc config-path-idx))))]
+  (let [args-vec        (vec args)
+        config-path-idx (index-of args-vec "--config-path")
+        config-path     (when (>= config-path-idx 0)
+                          (when (< (inc config-path-idx) (count args-vec))
+                            (nth args-vec (inc config-path-idx))))]
     (cond
       ;; --list-prompts flag
       (some #{"--list-prompts"} args)
@@ -169,9 +175,9 @@
 
       ;; --install-prompts flag
       (some #{"--install-prompts"} args)
-      (let [idx (.indexOf args-vec "--install-prompts")
-            next-arg (when (< (inc idx) (count args-vec))
-                       (nth args-vec (inc idx)))
+      (let [idx          (index-of args-vec "--install-prompts")
+            next-arg     (when (< (inc idx) (count args-vec))
+                           (nth args-vec (inc idx)))
             prompt-names (if (and next-arg (not (str/starts-with? next-arg "--")))
                            (str/split next-arg #",")
                            [])]
