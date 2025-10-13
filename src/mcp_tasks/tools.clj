@@ -90,14 +90,14 @@
   [config _context {:keys [category task-text completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          tasks-dir ".mcp-tasks/tasks"
-          complete-dir ".mcp-tasks/complete"
-          tasks-file (str tasks-dir "/" category ".md")
-          complete-file (str complete-dir "/" category ".md")
+          tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+          complete-path (path-helper/task-path config ["complete" (str category ".md")])
+          tasks-file (:absolute tasks-path)
+          complete-file (:absolute complete-path)
           tasks-content (read-task-file tasks-file)
           ;; Paths relative to .mcp-tasks
-          tasks-rel-path (str "tasks/" category ".md")
-          complete-rel-path (str "complete/" category ".md")]
+          tasks-rel-path (:relative tasks-path)
+          complete-rel-path (:relative complete-path)]
 
       (when (str/blank? tasks-content)
         (throw (ex-info "No tasks found in category"
@@ -200,10 +200,10 @@
 
   Returns the first task from tasks/<category>.md in a map with :category and :task keys,
   or a map with :category and :status keys if there are no tasks."
-  [_context {:keys [category]}]
+  [config _context {:keys [category]}]
   (try
-    (let [tasks-dir ".mcp-tasks/tasks"
-          tasks-file (str tasks-dir "/" category ".md")
+    (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+          tasks-file (:absolute tasks-path)
           tasks-content (read-task-file tasks-file)]
 
       (if (str/blank? tasks-content)
@@ -228,9 +228,9 @@
 
 (defn next-task-tool
   "Tool to return the next task from a specific category.
-  
+
   Accepts config parameter for future git-aware functionality."
-  [_config]
+  [config]
   {:name "next-task"
    :description "Return the next task from tasks/<category>.md"
    :inputSchema
@@ -240,7 +240,7 @@
      {:type "string"
       :description "The task category name"}}
     :required ["category"]}
-   :implementation next-task-impl})
+   :implementation (partial next-task-impl config)})
 
 (defn- prepare-story-task-file
   "Prepare story task file for adding a task.

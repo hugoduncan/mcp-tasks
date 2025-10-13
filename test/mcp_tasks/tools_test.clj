@@ -225,7 +225,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] first task\n- [ ] second task")
       (with-test-files
-        #(let [result (sut/next-task-impl nil {:category "test"})]
+        #(let [result (sut/next-task-impl nil nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :task \"first task\"}"
                   (get-in result [:content 0 :text])))))
@@ -238,7 +238,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "")
       (with-test-files
-        #(let [result (sut/next-task-impl nil {:category "test"})]
+        #(let [result (sut/next-task-impl nil nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :status \"No more tasks in this category\"}"
                   (get-in result [:content 0 :text])))))
@@ -250,7 +250,7 @@
     (testing "returns status message when tasks file doesn't exist"
       (setup-test-dir)
       (with-test-files
-        #(let [result (sut/next-task-impl nil {:category "test"})]
+        #(let [result (sut/next-task-impl nil nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :status \"No more tasks in this category\"}"
                   (get-in result [:content 0 :text])))))
@@ -263,7 +263,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] task description here")
       (with-test-files
-        #(let [result (sut/next-task-impl nil {:category "test"})]
+        #(let [result (sut/next-task-impl nil nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :task \"task description here\"}"
                   (get-in result [:content 0 :text])))))
@@ -276,7 +276,7 @@
       (setup-test-dir)
       (write-test-file "tasks/test.md" "- [ ] first line\n      second line")
       (with-test-files
-        #(let [result (sut/next-task-impl nil {:category "test"})]
+        #(let [result (sut/next-task-impl nil nil {:category "test"})]
            (is (false? (:isError result)))
            (is (= "{:category \"test\", :task \"first line\\n      second line\"}"
                   (get-in result [:content 0 :text])))))
