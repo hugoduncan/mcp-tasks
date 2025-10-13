@@ -18,16 +18,20 @@ Parse the arguments: $ARGUMENTS
 2. Analyze the current branch against the description of the story:
    - Does the code implement the story correctly?
    - Does it have extra functionality that was not requested?
+   0 Could the logic be simplified while remaining clear?
 
 3. Analyze the quality of the code in the implementation:
-   - Is it as simple as possible?
+   - Is it as simple as possible? Is there unnecessary complexity?
    - Is the code DRY?
-   - Is the naming used consistent?
+   - Are names descriptive and consistent with the codebase?
    - Check error handling, input validation, and edge cases
+   - Is the code readable and self-documenting? Would someone unfamiliar
+     with it understand what it does?
 
 4. Analyze the structure of the code:
    - Separation of concerns
    - Single responsibility
+   - is good use made of namespaces for grouping code?
 
 5. Report findings:
    - List issues clearly and numbered (e.g., "1. Add error handling...", "2. Improve test coverage...")
