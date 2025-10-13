@@ -27,8 +27,8 @@ Parse the arguments: $ARGUMENTS
      task-text (full multi-line task description), prepend (true)
 
 4. Execute the task:
-   - Use the category-specific next-task workflow to execute the task
-   - For example, if CATEGORY is "simple", execute `/mcp-tasks:next-simple`
+   - execute the `/mcp-tasks:next-simple` prompt
+   - For example, if <category> is "simple", execute `/mcp-tasks:next-simple`
    - This will run the task using the category-specific workflow
    - Complete all implementation steps according to the category workflow
 
