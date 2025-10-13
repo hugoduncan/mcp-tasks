@@ -1,11 +1,11 @@
 (ns mcp-tasks.tools
   "Task management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.prompts :as prompts]
-   [mcp-tasks.response :as response]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.prompts :as prompts]
+    [mcp-tasks.response :as response]))
 
 (defn- read-task-file
   "Read task file and return content as string.
@@ -113,8 +113,8 @@
 
           ;; Mark task as complete and append to complete file
           (let [completed-task (mark-complete
-                                first-task
-                                completion-comment)
+                                 first-task
+                                 completion-comment)
                 complete-content (read-task-file complete-file)
                 new-complete-content (if (str/blank? complete-content)
                                        completed-task
@@ -244,9 +244,23 @@
   If story-name is provided, the task is associated with that story."
   [_context {:keys [category task-text prepend story-name]}]
   (try
-    (let [tasks-dir ".mcp-tasks/tasks"
-          tasks-file (str tasks-dir "/" category ".md")
-          tasks-content (read-task-file tasks-file)
+    (let [[tasks-file tasks-content]
+          (if story-name
+            ;; Story task mode: validate story exists and use story-tasks file
+            (let [story-file (str ".mcp-tasks/story/stories/" story-name ".md")]
+              (when-not (.exists (io/file story-file))
+                (throw (ex-info "Story does not exist"
+                                {:story-name story-name
+                                 :expected-file story-file})))
+              (let [story-tasks-file (str ".mcp-tasks/story/story-tasks/"
+                                          story-name
+                                          "-tasks.md")]
+                [story-tasks-file (read-task-file story-tasks-file)]))
+            ;; Category task mode: use existing logic
+            (let [tasks-dir ".mcp-tasks/tasks"
+                  tasks-file (str tasks-dir "/" category ".md")]
+              [tasks-file (read-task-file tasks-file)]))
+
           new-task (str "- [ ] " task-text)
           new-content (cond
                         (str/blank? tasks-content)
