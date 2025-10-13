@@ -24,11 +24,13 @@ Parse the arguments: $ARGUMENTS
    - Use the `add-task` tool to prepend this task to the category's
      queue
    - Parameters: category (returned by `next-story-task` tool),
-     task-text (full multi-line task description), prepend (true)
+     task-text (full multi-line task description), prepend (true), do
+     not pass the story-name, so that we do not write back to the story
+     tasks file.
 
 4. Execute the task:
-   - Use the category-specific next-task workflow to execute the task
-   - For example, if CATEGORY is "simple", execute `/mcp-tasks:next-simple`
+   - execute the `next-<catagory>` prompt from the `mcp-tasks` tool .For
+     example, if <category> is "simple", execute the `next-simple` prompt
    - This will run the task using the category-specific workflow
    - Complete all implementation steps according to the category workflow
 

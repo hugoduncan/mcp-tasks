@@ -7,6 +7,7 @@
   (:require
     [clojure.data.json :as json]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.in-memory-transport.shared :as shared]
     [mcp-clj.mcp-client.core :as mcp-client]
@@ -328,6 +329,7 @@
           (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
           (let [{:keys [server client]} (create-test-server-and-client)]
             (try
+              (is (wait-for-client-ready client 5000) "Client should become ready within 5 seconds")
               (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
                 (.mkdirs story-tasks-dir)
                 (spit (io/file story-tasks-dir "git-test-tasks.md")
@@ -375,3 +377,168 @@
         (finally
           (mcp-client/close! client)
           ((:stop server)))))))
+
+(deftest ^:integ add-task-to-new-story-tasks-file-test
+  ;; Tests that add-task creates a new story-tasks file with header when adding
+  ;; first task to a story.
+  (testing "add-task tool with story-name"
+    (testing "creates new story-tasks file with header"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
+                story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-dir)
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-dir "new-story.md") "# New Story\n\nDescription"))
+
+          (let [result @(mcp-client/call-tool client
+                                              "add-task"
+                                              {:category "simple"
+                                               :task-text "First task for story"
+                                               :story-name "new-story"})]
+            (is (not (:isError result)))
+            (is (re-find #"Task added" (-> result :content first :text)))
+
+            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "new-story-tasks.md")]
+              (is (.exists story-tasks-file))
+              (let [content (slurp story-tasks-file)]
+                (is (re-find #"# Tasks for new-story Story" content))
+                (is (re-find #"- \[ \] First task for story" content))
+                (is (re-find #"CATEGORY: simple" content)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ add-task-to-existing-story-tasks-file-append-test
+  ;; Tests that add-task appends to existing story-tasks file.
+  (testing "add-task tool with story-name"
+    (testing "appends to existing story-tasks file"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
+                story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-dir)
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-dir "existing-story.md") "# Existing Story")
+            (spit (io/file story-tasks-dir "existing-story-tasks.md")
+                  "# Tasks for existing-story Story\n- [ ] First task\nCATEGORY: simple"))
+
+          (let [result @(mcp-client/call-tool client
+                                              "add-task"
+                                              {:category "medium"
+                                               :task-text "Second task"
+                                               :story-name "existing-story"})]
+            (is (not (:isError result)))
+
+            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "existing-story-tasks.md")
+                  content (slurp story-tasks-file)]
+              (is (re-find #"- \[ \] First task" content))
+              (is (re-find #"- \[ \] Second task" content))
+              (is (re-find #"CATEGORY: medium" content))
+              (is (re-find #"CATEGORY: simple\n\n- \[ \] Second task" content))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ add-task-to-existing-story-tasks-file-prepend-test
+  ;; Tests that add-task prepends to existing story-tasks file when prepend is true.
+  (testing "add-task tool with story-name"
+    (testing "prepends to existing story-tasks file when prepend is true"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
+                story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
+            (.mkdirs story-dir)
+            (.mkdirs story-tasks-dir)
+            (spit (io/file story-dir "prepend-story.md") "# Prepend Story")
+            (spit (io/file story-tasks-dir "prepend-story-tasks.md")
+                  "# Tasks for prepend-story Story\n- [ ] Existing task\nCATEGORY: simple"))
+
+          (let [result @(mcp-client/call-tool client
+                                              "add-task"
+                                              {:category "large"
+                                               :task-text "New first task"
+                                               :story-name "prepend-story"
+                                               :prepend true})]
+            (is (not (:isError result)))
+
+            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "prepend-story-tasks.md")
+                  content (slurp story-tasks-file)
+                  lines (str/split-lines content)]
+              (is (re-find #"- \[ \] New first task" (first (filter #(re-find #"- \[ \]" %) lines))))
+              (is (re-find #"CATEGORY: large" content))
+              (is (re-find #"CATEGORY: simple" content))
+              (is (re-find #"- \[ \] New first task\nCATEGORY: large\n\n" content))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ add-task-preserves-category-tasks-workflow-test
+  ;; Tests that adding story tasks doesn't affect regular category task workflow.
+  (testing "add-task tool"
+    (testing "preserves category tasks workflow when story tasks are used"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")]
+            (.mkdirs story-dir)
+            (spit (io/file story-dir "test-story.md") "# Test Story"))
+
+          (let [story-result @(mcp-client/call-tool client
+                                                    "add-task"
+                                                    {:category "simple"
+                                                     :task-text "Story task"
+                                                     :story-name "test-story"})
+                category-result @(mcp-client/call-tool client
+                                                       "add-task"
+                                                       {:category "simple"
+                                                        :task-text "Category task"})]
+            (is (not (:isError story-result)))
+            (is (not (:isError category-result)))
+
+            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "test-story-tasks.md")
+                  category-tasks-file (io/file test-project-dir ".mcp-tasks" "tasks" "simple.md")]
+              (is (.exists story-tasks-file))
+              (is (.exists category-tasks-file))
+
+              (let [story-content (slurp story-tasks-file)
+                    category-content (slurp category-tasks-file)]
+                (is (re-find #"Story task" story-content))
+                (is (re-find #"CATEGORY: simple" story-content))
+                (is (re-find #"Category task" category-content))
+                (is (not (re-find #"CATEGORY:" category-content))))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ add-task-story-file-validation-test
+  ;; Tests that add-task returns error when story file doesn't exist.
+  (testing "add-task tool with story-name"
+    (testing "returns error when story file doesn't exist"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [result @(mcp-client/call-tool client
+                                              "add-task"
+                                              {:category "simple"
+                                               :task-text "Task for nonexistent"
+                                               :story-name "nonexistent"})]
+            (is (:isError result))
+            (is (re-find #"Story does not exist"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))

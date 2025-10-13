@@ -4,14 +4,20 @@
     [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
+    [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.response :as response]))
+
+(defn- file-exists?
+  "Check if a file exists"
+  [file-path]
+  (.exists (io/file file-path)))
 
 (defn- read-task-file
   "Read task file and return content as string.
   Returns an empty string if file doesn't exist"
   [file-path]
-  (if (.exists (io/file file-path))
+  (if (file-exists? file-path)
     (slurp file-path)
     ""))
 
@@ -84,14 +90,14 @@
   [config _context {:keys [category task-text completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          tasks-dir ".mcp-tasks/tasks"
-          complete-dir ".mcp-tasks/complete"
-          tasks-file (str tasks-dir "/" category ".md")
-          complete-file (str complete-dir "/" category ".md")
+          tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+          complete-path (path-helper/task-path config ["complete" (str category ".md")])
+          tasks-file (:absolute tasks-path)
+          complete-file (:absolute complete-path)
           tasks-content (read-task-file tasks-file)
           ;; Paths relative to .mcp-tasks
-          tasks-rel-path (str "tasks/" category ".md")
-          complete-rel-path (str "complete/" category ".md")]
+          tasks-rel-path (:relative tasks-path)
+          complete-rel-path (:relative complete-path)]
 
       (when (str/blank? tasks-content)
         (throw (ex-info "No tasks found in category"
@@ -194,10 +200,10 @@
 
   Returns the first task from tasks/<category>.md in a map with :category and :task keys,
   or a map with :category and :status keys if there are no tasks."
-  [_context {:keys [category]}]
+  [config _context {:keys [category]}]
   (try
-    (let [tasks-dir ".mcp-tasks/tasks"
-          tasks-file (str tasks-dir "/" category ".md")
+    (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+          tasks-file (:absolute tasks-path)
           tasks-content (read-task-file tasks-file)]
 
       (if (str/blank? tasks-content)
@@ -222,9 +228,9 @@
 
 (defn next-task-tool
   "Tool to return the next task from a specific category.
-  
+
   Accepts config parameter for future git-aware functionality."
-  [_config]
+  [config]
   {:name "next-task"
    :description "Return the next task from tasks/<category>.md"
    :inputSchema
@@ -234,28 +240,73 @@
      {:type "string"
       :description "The task category name"}}
     :required ["category"]}
-   :implementation next-task-impl})
+   :implementation (partial next-task-impl config)})
+
+(defn- prepare-story-task-file
+  "Prepare story task file for adding a task.
+
+  Validates story exists and returns [file-path content] tuple.
+  Initializes file with header if empty."
+  [config story-name]
+  (let [story-path (path-helper/task-path config ["story" "stories" (str story-name ".md")])
+        story-file (:absolute story-path)]
+    (when-not (file-exists? story-file)
+      (throw (ex-info "Story does not exist"
+                      {:story-name story-name
+                       :expected-file story-file})))
+    (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
+          story-tasks-file (:absolute story-tasks-path)
+          content (read-task-file story-tasks-file)
+          content (if (str/blank? content)
+                    (str "# Tasks for " story-name " Story\n")
+                    content)]
+      [story-tasks-file content])))
+
+(defn- prepare-category-task-file
+  "Prepare category task file for adding a task.
+
+  Returns [file-path content] tuple."
+  [config category]
+  (let [tasks-path (path-helper/task-path config ["tasks" (str category ".md")])
+        tasks-file (:absolute tasks-path)]
+    [tasks-file (read-task-file tasks-file)]))
+
+(defn- format-task-content
+  "Format task content for adding to a task file.
+
+  Returns the new file content with the task added."
+  [task-text category tasks-content prepend story-name]
+  (let [new-task (if story-name
+                   (str "- [ ] " task-text "\nCATEGORY: " category)
+                   (str "- [ ] " task-text))
+        separator (if story-name "\n\n" "\n")
+        header-only? (and story-name
+                          (= tasks-content (str "# Tasks for " story-name " Story\n")))]
+    (cond
+      (or (str/blank? tasks-content) header-only?)
+      (if header-only?
+        (str tasks-content new-task)
+        new-task)
+
+      prepend
+      (str new-task separator tasks-content)
+
+      :else
+      (str tasks-content separator new-task))))
 
 (defn add-task-impl
   "Implementation of add-task tool.
 
   Adds a task to tasks/<category>.md as an incomplete todo item.
-  If prepend is true, adds at the beginning; otherwise appends at the end."
-  [_context {:keys [category task-text prepend]}]
+  If prepend is true, adds at the beginning; otherwise appends at the end.
+  If story-name is provided, the task is associated with that story and
+  includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
+  [config _context {:keys [category task-text prepend story-name]}]
   (try
-    (let [tasks-dir ".mcp-tasks/tasks"
-          tasks-file (str tasks-dir "/" category ".md")
-          tasks-content (read-task-file tasks-file)
-          new-task (str "- [ ] " task-text)
-          new-content (cond
-                        (str/blank? tasks-content)
-                        new-task
-
-                        prepend
-                        (str new-task "\n" tasks-content)
-
-                        :else
-                        (str tasks-content "\n" new-task))]
+    (let [[tasks-file tasks-content] (if story-name
+                                       (prepare-story-task-file config story-name)
+                                       (prepare-category-task-file config category))
+          new-content (format-task-content task-text category tasks-content prepend story-name)]
       (write-task-file tasks-file new-content)
       {:content [{:type "text"
                   :text (str "Task added to " tasks-file)}]
@@ -279,7 +330,7 @@
   "Tool to add a task to a specific category.
 
   Accepts config parameter for future git-aware functionality."
-  [_config]
+  [config]
   {:name "add-task"
    :description (add-task-description)
    :inputSchema
@@ -291,8 +342,11 @@
      "task-text"
      {:type "string"
       :description "The task text to add"}
+     "story-name"
+     {:type "string"
+      :description "Optional story name to associate this task with"}
      "prepend"
      {:type "boolean"
       :description "If true, add task at the beginning instead of the end"}}
     :required ["category" "task-text"]}
-   :implementation add-task-impl})
+   :implementation (partial add-task-impl config)})

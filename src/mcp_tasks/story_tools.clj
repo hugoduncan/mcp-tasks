@@ -4,32 +4,9 @@
     [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
+    [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.response :as response]
     [mcp-tasks.story-tasks :as story-tasks]))
-
-(defn- story-path
-  "Construct .mcp-tasks story-related paths with base-dir handling.
-
-  Parameters:
-  - config: Configuration map containing optional :base-dir
-  - path-segments: Vector of path segments (e.g., [\"story\" \"stories\" \"foo.md\"])
-
-  Returns map with:
-  - :absolute - Full filesystem path
-  - :relative - Path relative to .mcp-tasks root (for git operations)
-
-  Example:
-    (story-path config [\"story\" \"stories\" \"foo.md\"])
-    => {:absolute \"/path/.mcp-tasks/story/stories/foo.md\"
-        :relative \"story/stories/foo.md\"}"
-  [config path-segments]
-  (let [base-dir (:base-dir config)
-        relative-path (str/join "/" path-segments)
-        absolute-path (if base-dir
-                        (str base-dir "/.mcp-tasks/" relative-path)
-                        (str ".mcp-tasks/" relative-path))]
-    {:absolute absolute-path
-     :relative relative-path}))
 
 (defn- next-story-task-impl
   "Implementation of next-story-task tool.
@@ -41,10 +18,8 @@
   or nil values if no incomplete task is found."
   [config _context {:keys [story-name]}]
   (try
-    (let [base-dir (:base-dir config)
-          story-tasks-file (if base-dir
-                             (str base-dir "/.mcp-tasks/story/story-tasks/" story-name "-tasks.md")
-                             (str ".mcp-tasks/story-tasks/" story-name "-tasks.md"))]
+    (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
+          story-tasks-file (:absolute story-tasks-path)]
 
       (when-not (.exists (io/file story-tasks-file))
         (throw (ex-info "Story tasks file not found"
@@ -102,7 +77,7 @@
   [config _context {:keys [story-name task-text completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          story-tasks-path (story-path config ["story" "story-tasks" (str story-name "-tasks.md")])
+          story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
           story-tasks-file (:absolute story-tasks-path)
           story-tasks-rel-path (:relative story-tasks-path)]
 
@@ -217,24 +192,24 @@
   (try
     (let [use-git? (:use-git? config)
           ;; Story file paths
-          story-path-map (story-path config ["story" "stories" (str story-name ".md")])
-          complete-story-path-map (story-path config ["story" "complete" (str story-name ".md")])
+          story-path-map (path-helper/task-path config ["story" "stories" (str story-name ".md")])
+          complete-story-path-map (path-helper/task-path config ["story" "complete" (str story-name ".md")])
           story-file (:absolute story-path-map)
           complete-story-file (:absolute complete-story-path-map)
           story-rel-path (:relative story-path-map)
           complete-story-rel-path (:relative complete-story-path-map)
 
           ;; Task file paths
-          tasks-path-map (story-path config ["story" "story-tasks" (str story-name "-tasks.md")])
-          complete-tasks-path-map (story-path config ["story" "story-tasks-complete" (str story-name "-tasks.md")])
+          tasks-path-map (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
+          complete-tasks-path-map (path-helper/task-path config ["story" "story-tasks-complete" (str story-name "-tasks.md")])
           tasks-file (:absolute tasks-path-map)
           complete-tasks-file (:absolute complete-tasks-path-map)
           tasks-rel-path (:relative tasks-path-map)
           complete-tasks-rel-path (:relative complete-tasks-path-map)
 
           ;; Directory paths for mkdirs
-          complete-dir (:absolute (story-path config ["story" "complete"]))
-          story-tasks-complete-dir (:absolute (story-path config ["story" "story-tasks-complete"]))]
+          complete-dir (:absolute (path-helper/task-path config ["story" "complete"]))
+          story-tasks-complete-dir (:absolute (path-helper/task-path config ["story" "story-tasks-complete"]))]
 
       ;; Check if story file exists
       (when-not (.exists (io/file story-file))

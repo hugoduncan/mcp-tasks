@@ -320,7 +320,7 @@
             content (:content prompt)]
         (is (re-find #"add-task" content))
         (is (re-find #"prepend" content))
-        (is (re-find #"next-task" content))
+        (is (re-find #"next-story-task" content))
         (is (re-find #"complete-story-task" content))))
 
     (testing "appears in list-story-prompts"

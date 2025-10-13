@@ -18,16 +18,20 @@ Parse the arguments: $ARGUMENTS
 2. Analyze the current branch against the description of the story:
    - Does the code implement the story correctly?
    - Does it have extra functionality that was not requested?
+   0 Could the logic be simplified while remaining clear?
 
 3. Analyze the quality of the code in the implementation:
-   - Is it as simple as possible?
+   - Is it as simple as possible? Is there unnecessary complexity?
    - Is the code DRY?
-   - Is the naming used consistent?
+   - Are names descriptive and consistent with the codebase?
    - Check error handling, input validation, and edge cases
+   - Is the code readable and self-documenting? Would someone unfamiliar
+     with it understand what it does?
 
 4. Analyze the structure of the code:
    - Separation of concerns
    - Single responsibility
+   - is good use made of namespaces for grouping code?
 
 5. Report findings:
    - List issues clearly and numbered (e.g., "1. Add error handling...", "2. Improve test coverage...")
@@ -36,29 +40,25 @@ Parse the arguments: $ARGUMENTS
 6. Interactive task creation from suggestions:
    - After presenting all findings and suggestions, ask the user:
      "Would you like to create story tasks for any of these suggestions? (enter numbers separated by commas, e.g., '1,3' or 'all' for all suggestions, or 'none' to skip)"
-   
+
    - If user selects suggestions:
-     a) For each selected suggestion:
-        - Present the suggestion text
-        - Ask: "Task description (press Enter to use suggestion as-is, or type custom description):"
-        - If user provides text, use it; otherwise use the original suggestion text
-        - Ask: "Category (simple/medium/large) [default: medium]:"
-        - Validate category input; if invalid, re-prompt
-        - If user just presses Enter, use "medium"
-     
-     b) After collecting all task details, append to story task file:
-        - Target file: `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
-        - Create parent directories if needed
-        - Read existing content (or treat as empty if file doesn't exist)
-        - Ensure existing content ends with proper spacing (add blank line if needed)
-        - For each new task, append in this format:
-          ```
-          - [ ] <task description>
-          CATEGORY: <category>
-          
-          ```
-        - Write the complete content back to the file
-     
+     a) For each selected suggestion, use the `add-task` tool for each task:
+        - Use the `add-task` tool with these parameters:
+          - `category`: pick an appropriate category based on the task complexity
+          - `task-text`: "STORY: <story-name> - <task description>" the task description can span multiple lines.
+          - `story-name`: the story name from step 1
+          - `prepend`: false (to append tasks)
+
+        Example:
+        ```
+        add-task(
+          category="medium",
+          task-text="STORY: my-story - Add error handling for edge cases\n throw exceptions if edge cases not supported",
+          story-name="my-story",
+          prepend=false
+        )
+        ```
+
      c) Confirm to user:
         "✓ Added N task(s) to <story-name>-tasks.md:"
         List each task with its category in a bullet format
@@ -70,5 +70,4 @@ Parse the arguments: $ARGUMENTS
 - All suggestions should be numbered from the start to make selection easy
 - Task descriptions can be refined by the user or used verbatim from suggestions
 - Categories help route tasks to appropriate execution workflows
-- The task file format must match story task conventions with `- [ ]` and `CATEGORY:` on separate line
-- Always preserve existing tasks when appending new ones
+- The `add-task` tool automatically handles file creation, formatting, and task preservation
