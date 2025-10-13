@@ -36,6 +36,56 @@
 
 (use-fixtures :each with-test-project)
 
+(deftest format-argument-hint-test
+  ;; Test that format-argument-hint correctly formats various argument combinations.
+  (testing "format-argument-hint"
+    (testing "returns nil for nil arguments"
+      (is (nil? (#'resources/format-argument-hint nil))))
+
+    (testing "returns nil for empty arguments vector"
+      (is (nil? (#'resources/format-argument-hint []))))
+
+    (testing "formats single required argument"
+      (is (= "<story-name>"
+             (#'resources/format-argument-hint
+              [{:name "story-name" :required true}]))))
+
+    (testing "formats single optional argument"
+      (is (= "[context]"
+             (#'resources/format-argument-hint
+              [{:name "context" :required false}]))))
+
+    (testing "formats multiple required arguments"
+      (is (= "<category> <task-text>"
+             (#'resources/format-argument-hint
+              [{:name "category" :required true}
+               {:name "task-text" :required true}]))))
+
+    (testing "formats multiple optional arguments"
+      (is (= "[option1] [option2]"
+             (#'resources/format-argument-hint
+              [{:name "option1" :required false}
+               {:name "option2" :required false}]))))
+
+    (testing "formats mixed required and optional arguments"
+      (is (= "<story-name> [additional-context]"
+             (#'resources/format-argument-hint
+              [{:name "story-name" :required true}
+               {:name "additional-context" :required false}]))))
+
+    (testing "formats complex argument combinations"
+      (is (= "<category> <task-text> [prepend] [story-name]"
+             (#'resources/format-argument-hint
+              [{:name "category" :required true}
+               {:name "task-text" :required true}
+               {:name "prepend" :required false}
+               {:name "story-name" :required false}]))))
+
+    (testing "handles argument without explicit required field (treats as optional)"
+      (is (= "[implicit-optional]"
+             (#'resources/format-argument-hint
+              [{:name "implicit-optional"}]))))))
+
 (deftest prompt-resources-test
   ;; Test that prompt-resources creates resources for all configured prompts.
   (testing "prompt-resources"
