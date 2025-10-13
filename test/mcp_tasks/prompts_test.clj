@@ -1,8 +1,8 @@
 (ns mcp-tasks.prompts-test
   (:require
-    [clojure.java.io :as io]
-    [clojure.test :refer [deftest is testing]]
-    [mcp-tasks.prompts :as sut]))
+   [clojure.java.io :as io]
+   [clojure.test :refer [deftest is testing]]
+   [mcp-tasks.prompts :as sut]))
 
 (deftest discover-categories-test
   ;; Test that discover-categories finds all unique categories across
@@ -323,18 +323,6 @@
         (is (re-find #"next-task" content))
         (is (re-find #"complete-story-task" content))))
 
-    (testing "includes branch management instructions"
-      (let [prompt (sut/get-story-prompt "execute-story-task")
-            content (:content prompt)]
-        (is (re-find #"story-branch-management" content))
-        (is (re-find #"Branch Management" content))))
-
-    (testing "includes conditional logic documentation"
-      (let [prompt (sut/get-story-prompt "execute-story-task")
-            content (:content prompt)]
-        (is (re-find #"Conditional" content))
-        (is (re-find #"configuration" content))))
-
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)
             execute-prompt (first (filter #(= "execute-story-task" (:name %)) prompts))]
@@ -363,8 +351,8 @@
   (testing "get-story-prompt override precedence"
     (testing "uses override file when it exists, even if built-in exists"
       (let [test-file (create-test-override-file
-                        "refine-story"
-                        "---\ndescription: Override description\n---\n\nOverride content")]
+                       "refine-story"
+                       "---\ndescription: Override description\n---\n\nOverride content")]
         (try
           (let [result (sut/get-story-prompt "refine-story")]
             (is (some? result))
@@ -390,8 +378,8 @@
   (testing "get-story-prompt frontmatter handling"
     (testing "parses frontmatter from override file"
       (let [test-file (create-test-override-file
-                        "test-with-frontmatter"
-                        "---\ndescription: Test description\nauthor: Test Author\n---\n\nTest content")]
+                       "test-with-frontmatter"
+                       "---\ndescription: Test description\nauthor: Test Author\n---\n\nTest content")]
         (try
           (let [result (sut/get-story-prompt "test-with-frontmatter")]
             (is (some? result))
@@ -402,8 +390,8 @@
 
     (testing "handles override file without frontmatter"
       (let [test-file (create-test-override-file
-                        "test-no-frontmatter"
-                        "Just plain content without frontmatter")]
+                       "test-no-frontmatter"
+                       "Just plain content without frontmatter")]
         (try
           (let [result (sut/get-story-prompt "test-no-frontmatter")]
             (is (some? result))
@@ -414,8 +402,8 @@
 
     (testing "handles override file with empty frontmatter"
       (let [test-file (create-test-override-file
-                        "test-empty-frontmatter"
-                        "---\n---\n\nContent after empty frontmatter")]
+                       "test-empty-frontmatter"
+                       "---\n---\n\nContent after empty frontmatter")]
         (try
           (let [result (sut/get-story-prompt "test-empty-frontmatter")]
             (is (some? result))
@@ -426,8 +414,8 @@
 
     (testing "handles override file with partial frontmatter"
       (let [test-file (create-test-override-file
-                        "test-partial-frontmatter"
-                        "---\nauthor: Someone\n---\n\nContent")]
+                       "test-partial-frontmatter"
+                       "---\nauthor: Someone\n---\n\nContent")]
         (try
           (let [result (sut/get-story-prompt "test-partial-frontmatter")]
             (is (some? result))
@@ -442,8 +430,8 @@
   (testing "list-story-prompts with overrides"
     (testing "includes override prompts in the list"
       (let [test-file (create-test-override-file
-                        "custom-override-prompt"
-                        "---\ndescription: Custom override\n---\n\nCustom content")]
+                       "custom-override-prompt"
+                       "---\ndescription: Custom override\n---\n\nCustom content")]
         (try
           (let [prompts (sut/list-story-prompts)
                 names (set (map :name prompts))]
@@ -455,8 +443,8 @@
 
     (testing "deduplicates when both override and built-in exist"
       (let [test-file (create-test-override-file
-                        "refine-story"
-                        "---\ndescription: Overridden refine-story\n---\n\nOverride content")]
+                       "refine-story"
+                       "---\ndescription: Overridden refine-story\n---\n\nOverride content")]
         (try
           (let [prompts (sut/list-story-prompts)
                 refine-prompts (filter #(= "refine-story" (:name %)) prompts)]
@@ -467,8 +455,8 @@
 
     (testing "override takes precedence in deduplicated list"
       (let [test-file (create-test-override-file
-                        "create-story-tasks"
-                        "---\ndescription: Override takes precedence\n---\n\nOverride")]
+                       "create-story-tasks"
+                       "---\ndescription: Override takes precedence\n---\n\nOverride")]
         (try
           (let [prompts (sut/list-story-prompts)
                 create-prompt (first (filter #(= "create-story-tasks" (:name %)) prompts))]
@@ -476,3 +464,39 @@
             (is (= "Override takes precedence" (:description create-prompt))))
           (finally
             (delete-test-file test-file)))))))
+
+(deftest story-prompts-branch-management-test
+  ;; Test that story-prompts conditionally includes branch management
+  ;; instructions in execute-story-task prompt based on config.
+  (testing "story-prompts branch management"
+    (testing "includes branch management when :story-branch-management? is true"
+      (let [prompts (sut/story-prompts {:story-branch-management? true})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (re-find #"Branch Management" content))
+          (is (re-find #"checkout the default branch" content))
+          (is (re-find #"create the `<story-name>` branch" content)))))
+
+    (testing "excludes branch management when :story-branch-management? is false"
+      (let [prompts (sut/story-prompts {:story-branch-management? false})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Branch Management" content)))
+          (is (not (re-find #"checkout the default branch" content))))))
+
+    (testing "excludes branch management when config key is not present"
+      (let [prompts (sut/story-prompts {})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Branch Management" content)))
+          (is (not (re-find #"checkout the default branch" content))))))
+
+    (testing "does not affect other story prompts"
+      (let [prompts-with-branch (sut/story-prompts {:story-branch-management? true})
+            prompts-without-branch (sut/story-prompts {:story-branch-management? false})
+            refine-with (get prompts-with-branch "refine-story")
+            refine-without (get prompts-without-branch "refine-story")]
+        (is (= (:messages refine-with) (:messages refine-without)))))))
