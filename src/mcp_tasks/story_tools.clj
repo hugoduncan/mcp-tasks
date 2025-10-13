@@ -6,126 +6,184 @@
     [clojure.string :as str]
     [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.response :as response]
-    [mcp-tasks.story-tasks :as story-tasks]))
+    [mcp-tasks.tasks :as tasks]))
+
+;; Helper Functions
+
+(defn- find-story-by-name
+  "Find a story task by name in loaded tasks.
+
+  Returns the story task map or nil if not found."
+  [story-name]
+  (let [task-map @tasks/tasks
+        task-ids @tasks/task-ids]
+    (->> task-ids
+         (map #(get task-map %))
+         (filter #(and (= (:type %) :story)
+                       (= (:title %) story-name)))
+         first)))
+
+(defn- format-task-as-text
+  "Format a task map as text for display.
+
+  Combines :title and :description fields."
+  [task]
+  (let [title (:title task)
+        description (:description task "")]
+    (if (str/blank? description)
+      title
+      (str title "\n" description))))
+
+(defn- file-exists?
+  "Check if a file exists"
+  [file-path]
+  (.exists (io/file file-path)))
+
+(defn- get-children-in-order
+  "Get children for a parent in task-ids order.
+
+  Returns vector of child task maps."
+  [parent-id]
+  (let [child-ids-set (get @tasks/parent-children parent-id #{})
+        task-ids @tasks/task-ids
+        task-map @tasks/tasks]
+    (->> task-ids
+         (filter child-ids-set)
+         (mapv #(get task-map %)))))
+
+;; Tool Implementations
 
 (defn- next-story-task-impl
   "Implementation of next-story-task tool.
 
-  Reads story task file from .mcp-tasks/story-tasks/<story-name>-tasks.md,
-  parses it, and returns the first incomplete task with its metadata.
+  Loads tasks from .mcp-tasks/tasks.ednl and finds the first incomplete
+  child task for the specified story.
 
-  Returns a map with :task-text, :category, and :task-index keys,
+  Returns a map with :task-text, :category, :task-id, and :task-index keys,
   or nil values if no incomplete task is found."
   [config _context {:keys [story-name]}]
   (try
-    (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
-          story-tasks-file (:absolute story-tasks-path)]
+    (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
+          tasks-file (:absolute tasks-path)]
 
-      (when-not (.exists (io/file story-tasks-file))
-        (throw (ex-info "Story tasks file not found"
-                        {:story-name story-name
-                         :file story-tasks-file})))
+      ;; Load tasks from EDNL file
+      (when (file-exists? tasks-file)
+        (tasks/load-tasks! tasks-file))
 
-      (let [content (slurp story-tasks-file)
-            tasks (story-tasks/parse-story-tasks content)
-            first-incomplete (story-tasks/find-first-incomplete-task tasks)]
-
-        (if first-incomplete
-          {:content [{:type "text"
-                      :text (pr-str {:task-text (:text first-incomplete)
-                                     :category (:category first-incomplete)
-                                     :task-index (:index first-incomplete)})}]
-           :isError false}
-          {:content [{:type "text"
-                      :text (pr-str {:task-text nil
-                                     :category nil
-                                     :task-index nil})}]
-           :isError false})))
+      ;; Find story task
+      (if-let [story (find-story-by-name story-name)]
+        (let [story-id (:id story)
+              ;; Get children in order
+              all-children (get-children-in-order story-id)
+              ;; Find first incomplete
+              first-incomplete (->> all-children
+                                    (filter #(not= (:status %) :closed))
+                                    first)]
+          (if first-incomplete
+            (let [task-text (format-task-as-text first-incomplete)
+                  category (:category first-incomplete)
+                  task-id (:id first-incomplete)
+                  task-index (.indexOf (mapv :id all-children) task-id)]
+              {:content [{:type "text"
+                          :text (pr-str {:task-text task-text
+                                         :category category
+                                         :task-id task-id
+                                         :task-index task-index})}]
+               :isError false})
+            ;; No incomplete tasks for this story
+            {:content [{:type "text"
+                        :text (pr-str {:task-text nil
+                                       :category nil
+                                       :task-id nil
+                                       :task-index nil})}]
+             :isError false}))
+        ;; Story not found
+        (throw (ex-info "Story not found"
+                        {:story-name story-name}))))
     (catch Exception e
       (response/error-response e))))
 
 (defn next-story-task-tool
   "Tool to return the next incomplete task from a story's task list.
 
-  Takes a story-name parameter and reads from .mcp-tasks/story-tasks/<story-name>-tasks.md.
-  Returns a map with :task-text, :category, and :task-index, or nil values if no tasks remain."
+  Takes a story-name parameter and reads from .mcp-tasks/tasks.ednl.
+  Returns a map with :task-text, :category, :task-id, and :task-index, or nil values if no tasks remain."
   [config]
   {:name "next-story-task"
    :description "Return the next incomplete task from a story's task list.
 
-  Reads story task file from `.mcp-tasks/story-tasks/<story-name>-tasks.md`,
-  uses story-tasks parsing utilities to find first incomplete task,
-  returns map with :task-text, :category, :task-index (or nil if none)."
+  Loads tasks from `.mcp-tasks/tasks.ednl`, finds story by name,
+  returns first incomplete child task with :task-text, :category, :task-id, :task-index (or nil if none)."
    :inputSchema
    {:type "object"
     :properties
     {"story-name"
      {:type "string"
-      :description "The story name (without -tasks.md suffix)"}}
+      :description "The story name"}}
     :required ["story-name"]}
    :implementation (partial next-story-task-impl config)})
 
 (defn- complete-story-task-impl
   "Implementation of complete-story-task tool.
 
-  Marks the first incomplete task in a story's task list as complete.
-  Verifies task-text matches before completing.
+  Marks a story task as complete by task-id. Uses tasks namespace API.
 
   Returns:
   - Git mode enabled: Two text items (completion message + JSON with :modified-files)
   - Git mode disabled: Single text item (completion message only)"
-  [config _context {:keys [story-name task-text completion-comment]}]
+  [config _context {:keys [story-name task-id completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
-          story-tasks-file (:absolute story-tasks-path)
-          story-tasks-rel-path (:relative story-tasks-path)]
+          tasks-path (path-helper/task-path config ["tasks.ednl"])
+          complete-path (path-helper/task-path config ["complete.ednl"])
+          tasks-file (:absolute tasks-path)
+          complete-file (:absolute complete-path)
+          tasks-rel-path (:relative tasks-path)
+          complete-rel-path (:relative complete-path)]
 
-      (when-not (.exists (io/file story-tasks-file))
-        (throw (ex-info "Story tasks file not found"
-                        {:story-name story-name
-                         :file story-tasks-file})))
+      ;; Load tasks from EDNL file
+      (when-not (file-exists? tasks-file)
+        (throw (ex-info "Tasks file not found"
+                        {:file tasks-file})))
 
-      (let [content (slurp story-tasks-file)
-            tasks (story-tasks/parse-story-tasks content)
-            first-incomplete (story-tasks/find-first-incomplete-task tasks)]
+      (tasks/load-tasks! tasks-file)
 
-        (when-not first-incomplete
-          (throw (ex-info "No incomplete tasks found in story"
-                          {:story-name story-name
-                           :file story-tasks-file})))
+      ;; Get task by ID
+      (when-not (tasks/get-task task-id)
+        (throw (ex-info "Task not found"
+                        {:task-id task-id})))
 
-        ;; Verify task-text matches (case-insensitive, whitespace-normalized)
-        ;; Strip checkbox prefix before comparing, like task-matches? does
-        (let [normalize #(-> % str/lower-case (str/replace #"\s+" " ") str/trim)
-              task-content (-> (:text first-incomplete)
-                               (str/replace #"^- \[([ x])\] " "")
-                               normalize)
-              search-text (normalize task-text)]
-          (when-not (str/starts-with? task-content search-text)
-            (throw (ex-info "First incomplete task does not match provided text"
-                            {:story-name story-name
-                             :expected task-text
-                             :actual (str/replace (:text first-incomplete) #"^- \[([ x])\] " "")}))))
+      ;; Verify task belongs to the story
+      (if-let [story (find-story-by-name story-name)]
+        (let [task (tasks/get-task task-id)
+              parent-id (:parent-id task)]
+          (when-not (= parent-id (:id story))
+            (throw (ex-info "Task does not belong to specified story"
+                            {:task-id task-id
+                             :story-name story-name
+                             :task-parent-id parent-id
+                             :story-id (:id story)})))
 
-        ;; Mark task as complete
-        (let [updated-content (story-tasks/mark-task-complete
-                                content
-                                (:index first-incomplete)
-                                completion-comment)]
-          (spit story-tasks-file updated-content))
+          ;; Mark task as complete in memory
+          (tasks/mark-complete task-id completion-comment)
 
-        (if use-git?
-          ;; Git mode: return message + JSON with modified files
-          {:content [{:type "text"
-                      :text (str "Story task completed in " story-tasks-file)}
-                     {:type "text"
-                      :text (json/write-str {:modified-files [story-tasks-rel-path]})}]
-           :isError false}
-          ;; Non-git mode: return message only
-          {:content [{:type "text"
-                      :text (str "Story task completed in " story-tasks-file)}]
-           :isError false})))
+          ;; Move task from tasks file to complete file
+          (tasks/move-task! task-id tasks-file complete-file)
+
+          (if use-git?
+            ;; Git mode: return message + JSON with modified files
+            {:content [{:type "text"
+                        :text (str "Story task completed and moved to " complete-file)}
+                       {:type "text"
+                        :text (json/write-str {:modified-files [tasks-rel-path
+                                                                complete-rel-path]})}]
+             :isError false}
+            ;; Non-git mode: return message only
+            {:content [{:type "text"
+                        :text (str "Story task completed and moved to " complete-file)}]
+             :isError false}))
+        (throw (ex-info "Story not found"
+                        {:story-name story-name}))))
     (catch Exception e
       (response/error-response e))))
 
@@ -133,25 +191,23 @@
   "Generate description for complete-story-task tool based on config."
   [config]
   (if (:use-git? config)
-    "Complete a task in a story's task list.
+    "Complete a task in a story's task list by task-id.
 
-  Verifies the first incomplete task matches the provided text, marks it complete,
-  and optionally adds a completion comment.
-  
+  Marks the specified task as complete and optionally adds a completion comment.
+
   Returns two text items:
   1. A completion status message
   2. A JSON-encoded map with :modified-files key containing file paths
      relative to .mcp-tasks for use in git commit workflows."
-    "Complete a task in a story's task list.
+    "Complete a task in a story's task list by task-id.
 
-  Verifies the first incomplete task matches the provided text, marks it complete,
-  and optionally adds a completion comment.
-  
+  Marks the specified task as complete and optionally adds a completion comment.
+
   Returns a completion status message."))
 
 (defn complete-story-task-tool
   "Tool to complete a task in a story's task list.
-  
+
   Accepts config parameter containing :use-git? flag. When git mode is enabled,
   returns modified file paths for git commit workflow. When disabled, returns
   only completion message."
@@ -163,27 +219,27 @@
     :properties
     {"story-name"
      {:type "string"
-      :description "The story name (without -tasks.md suffix)"}
-     "task-text"
-     {:type "string"
-      :description "Partial text from the beginning of the task to verify"}
+      :description "The story name"}
+     "task-id"
+     {:type "number"
+      :description "The task ID to complete"}
      "completion-comment"
      {:type "string"
       :description "Optional comment to append to the completed task"}}
-    :required ["story-name" "task-text"]}
+    :required ["story-name" "task-id"]}
    :implementation (partial complete-story-task-impl config)})
 
 (defn- complete-story-impl
   "Implementation of complete-story tool.
 
-  Marks a story as complete by moving it to the archive along with its task list.
+  Marks a story as complete by moving it and all child tasks to complete.ednl.
 
   Process:
-  1. Reads story file from .mcp-tasks/story/stories/<story-name>.md
-  2. Optionally appends completion comment
-  3. Moves story file to .mcp-tasks/story/complete/<story-name>.md
-  4. Moves tasks file from .mcp-tasks/story/story-tasks/<story-name>-tasks.md
-     to .mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md
+  1. Loads tasks from tasks.ednl
+  2. Finds story by name
+  3. Verifies all child tasks are complete
+  4. Marks story complete
+  5. Moves story and all children to complete.ednl
 
   Returns:
   - Git mode enabled: Two text items (completion message + JSON with :modified-files)
@@ -191,80 +247,61 @@
   [config _context {:keys [story-name completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          ;; Story file paths
-          story-path-map (path-helper/task-path config ["story" "stories" (str story-name ".md")])
-          complete-story-path-map (path-helper/task-path config ["story" "complete" (str story-name ".md")])
-          story-file (:absolute story-path-map)
-          complete-story-file (:absolute complete-story-path-map)
-          story-rel-path (:relative story-path-map)
-          complete-story-rel-path (:relative complete-story-path-map)
+          tasks-path (path-helper/task-path config ["tasks.ednl"])
+          complete-path (path-helper/task-path config ["complete.ednl"])
+          tasks-file (:absolute tasks-path)
+          complete-file (:absolute complete-path)
+          tasks-rel-path (:relative tasks-path)
+          complete-rel-path (:relative complete-path)]
 
-          ;; Task file paths
-          tasks-path-map (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
-          complete-tasks-path-map (path-helper/task-path config ["story" "story-tasks-complete" (str story-name "-tasks.md")])
-          tasks-file (:absolute tasks-path-map)
-          complete-tasks-file (:absolute complete-tasks-path-map)
-          tasks-rel-path (:relative tasks-path-map)
-          complete-tasks-rel-path (:relative complete-tasks-path-map)
+      ;; Load tasks from EDNL file
+      (when-not (file-exists? tasks-file)
+        (throw (ex-info "Tasks file not found"
+                        {:file tasks-file})))
 
-          ;; Directory paths for mkdirs
-          complete-dir (:absolute (path-helper/task-path config ["story" "complete"]))
-          story-tasks-complete-dir (:absolute (path-helper/task-path config ["story" "story-tasks-complete"]))]
+      (tasks/load-tasks! tasks-file)
 
-      ;; Check if story file exists
-      (when-not (.exists (io/file story-file))
-        (throw (ex-info "Story file not found"
-                        {:story-name story-name
-                         :file story-file})))
+      ;; Find story task
+      (if-let [story (find-story-by-name story-name)]
+        (let [story-id (:id story)
+              children (get-children-in-order story-id)
+              incomplete-children (filter #(not= (:status %) :closed) children)]
 
-      ;; Check if already completed
-      (when (.exists (io/file complete-story-file))
-        (throw (ex-info "Story is already completed"
-                        {:story-name story-name
-                         :file complete-story-file})))
+          ;; Check all children are complete
+          (when (seq incomplete-children)
+            (throw (ex-info "Cannot complete story with incomplete tasks"
+                            {:story-name story-name
+                             :incomplete-count (count incomplete-children)
+                             :incomplete-tasks (mapv #(select-keys % [:id :title]) incomplete-children)})))
 
-      ;; Read and optionally update story content
-      (let [story-content (slurp story-file)
-            updated-content (if (and completion-comment
-                                     (not (str/blank? completion-comment)))
-                              (str story-content "\n\n---\n\n"
-                                   (str/trim completion-comment))
-                              story-content)]
+          ;; Mark story as complete
+          (tasks/mark-complete story-id completion-comment)
 
-        ;; Ensure complete directory exists
-        (.mkdirs (io/file complete-dir))
+          ;; Move story to complete file
+          (tasks/move-task! story-id tasks-file complete-file)
 
-        ;; Move story file to complete
-        (spit complete-story-file updated-content)
-        (.delete (io/file story-file))
-
-        ;; Move tasks file if it exists
-        (let [tasks-file-exists? (.exists (io/file tasks-file))
-              modified-files (if tasks-file-exists?
-                               (do
-                                 (.mkdirs (io/file story-tasks-complete-dir))
-                                 (let [tasks-content (slurp tasks-file)]
-                                   (spit complete-tasks-file tasks-content)
-                                   (.delete (io/file tasks-file)))
-                                 [story-rel-path complete-story-rel-path
-                                  tasks-rel-path complete-tasks-rel-path])
-                               [story-rel-path complete-story-rel-path])]
+          ;; Move all children to complete file
+          (doseq [child children]
+            (tasks/move-task! (:id child) tasks-file complete-file))
 
           (if use-git?
             ;; Git mode: return message + JSON with modified files
             {:content [{:type "text"
                         :text (str "Story '" story-name "' marked as complete"
-                                   (when-not tasks-file-exists?
-                                     "\n(Note: No tasks file found to archive)"))}
+                                   (when (seq children)
+                                     (str " (" (count children) " task(s) archived)")))}
                        {:type "text"
-                        :text (json/write-str {:modified-files modified-files})}]
+                        :text (json/write-str {:modified-files [tasks-rel-path
+                                                                complete-rel-path]})}]
              :isError false}
             ;; Non-git mode: return message only
             {:content [{:type "text"
                         :text (str "Story '" story-name "' marked as complete"
-                                   (when-not tasks-file-exists?
-                                     "\n(Note: No tasks file found to archive)"))}]
-             :isError false}))))
+                                   (when (seq children)
+                                     (str " (" (count children) " task(s) archived)")))}]
+             :isError false}))
+        (throw (ex-info "Story not found"
+                        {:story-name story-name}))))
     (catch Exception e
       (response/error-response e))))
 
@@ -274,10 +311,9 @@
   (if (:use-git? config)
     "Mark a story as complete and move it to the archive.
 
-  Moves the story file from .mcp-tasks/story/stories/<story-name>.md to
-  .mcp-tasks/story/complete/<story-name>.md and the tasks file from
-  .mcp-tasks/story/story-tasks/<story-name>-tasks.md to
-  .mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md.
+  Moves the story and all its child tasks from .mcp-tasks/tasks.ednl to
+  .mcp-tasks/complete.ednl. Verifies that all child tasks are complete before
+  marking the story complete.
 
   Optionally adds a completion comment to the story.
 
@@ -287,10 +323,9 @@
      relative to .mcp-tasks for use in git commit workflows."
     "Mark a story as complete and move it to the archive.
 
-  Moves the story file from .mcp-tasks/story/stories/<story-name>.md to
-  .mcp-tasks/story/complete/<story-name>.md and the tasks file from
-  .mcp-tasks/story/story-tasks/<story-name>-tasks.md to
-  .mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md.
+  Moves the story and all its child tasks from .mcp-tasks/tasks.ednl to
+  .mcp-tasks/complete.ednl. Verifies that all child tasks are complete before
+  marking the story complete.
 
   Optionally adds a completion comment to the story.
 
@@ -310,7 +345,7 @@
     :properties
     {"story-name"
      {:type "string"
-      :description "The story name (without .md extension)"}
+      :description "The story name"}
      "completion-comment"
      {:type "string"
       :description "Optional comment to append to the story"}}
