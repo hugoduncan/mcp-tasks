@@ -134,3 +134,16 @@
                       {:id id
                        :file file-path})))
     (write-ednl-atomic file-path new-tasks)))
+
+(defn write-tasks
+  "Write a collection of tasks to an EDNL file.
+
+  Write operation is atomic. Validates all tasks against schema before writing.
+  Creates parent directories if needed."
+  [file-path tasks]
+  (doseq [task tasks]
+    (when-not (schema/valid-task? task)
+      (throw (ex-info "Invalid task schema"
+                      {:task task
+                       :explanation (schema/explain-task task)}))))
+  (write-ednl-atomic file-path tasks))
