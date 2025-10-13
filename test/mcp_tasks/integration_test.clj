@@ -274,6 +274,75 @@
           (mcp-client/close! client)
           ((:stop server)))))))
 
+(deftest ^:integ prompt-resources-content-test
+  ;; Test comprehensive validation of prompt resource content, metadata, and formatting.
+  ;; Validates YAML frontmatter structure and prompt message text consistency.
+  (testing "prompt resources content validation"
+    (write-config-file "{:use-git? true}")
+    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+    (let [{:keys [server client]} (create-test-server-and-client)]
+      (try
+        (testing "resource content includes YAML frontmatter with description"
+          (let [read-response @(mcp-client/read-resource client "prompt://next-simple")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (str/starts-with? text "---\n"))
+            (is (str/includes? text "\n---\n"))
+            (is (str/includes? text "description:"))
+            (let [frontmatter-end (str/index-of text "\n---\n")
+                  frontmatter (subs text 0 frontmatter-end)]
+              (is (str/includes? frontmatter "simple")))))
+
+        (testing "resource content includes prompt message text"
+          (let [read-response @(mcp-client/read-resource client "prompt://next-simple")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (str/includes? text "complete the next simple task"))
+            (let [frontmatter-end (+ (str/index-of text "\n---\n") 5)
+                  message-text (subs text frontmatter-end)]
+              (is (pos? (count (str/trim message-text)))))))
+
+        (testing "story prompt includes argument-hint in frontmatter"
+          (let [read-response @(mcp-client/read-resource client "prompt://execute-story-task")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (str/starts-with? text "---\n"))
+            (is (str/includes? text "argument-hint:"))
+            (is (str/includes? text "<story-name>"))
+            (is (str/includes? text "Execute the next incomplete task"))))
+
+        (testing "multiple prompts return distinct content"
+          (let [simple-response @(mcp-client/read-resource client "prompt://next-simple")
+                simple-text (-> simple-response :contents first :text)
+                story-response @(mcp-client/read-resource client "prompt://execute-story-task")
+                story-text (-> story-response :contents first :text)]
+            (is (not (:isError simple-response)))
+            (is (not (:isError story-response)))
+            (is (not= simple-text story-text))
+            (is (str/includes? simple-text "simple"))
+            (is (str/includes? story-text "story"))))
+
+        (testing "all listed resources can be read successfully"
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)]
+            (doseq [resource resources]
+              (let [uri (:uri resource)
+                    read-response @(mcp-client/read-resource client uri)
+                    text (-> read-response :contents first :text)]
+                (is (not (:isError read-response))
+                    (str "Should read resource successfully: " uri))
+                (is (str/starts-with? text "---\n")
+                    (str "Resource should have YAML frontmatter: " uri))
+                (is (str/includes? text "\n---\n")
+                    (str "Resource should have complete frontmatter: " uri))
+                (is (str/includes? text "description:")
+                    (str "Resource should have description metadata: " uri))))))
+
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
+
 (deftest ^:integ next-story-task-tool-test
   ;; Test the next-story-task tool integration.
   (testing "next-story-task tool"

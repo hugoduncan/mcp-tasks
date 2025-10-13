@@ -57,19 +57,23 @@
 
 (defn prompt-resources
   "Create resource definitions for all prompts.
-  
+
   Takes a map of prompts (already merged from tp/prompts and tp/story-prompts).
   Returns a map of resource URIs to resource definitions.
   Each prompt is exposed as a resource with URI pattern: prompt://<prompt-name>"
   [prompts-map]
   (into {}
         (for [[prompt-name prompt] prompts-map]
-          (let [uri (str "prompt://" prompt-name)
-                description (:description prompt)]
+          (let [uri         (str "prompt://" prompt-name)
+                description (:description prompt)
+                impl=fn     (fn [context uri]
+                              (prompt-resource-implementation
+                                context
+                                prompts-map
+                                uri))]
             [uri
-             {:name prompt-name
-              :uri uri
-              :mime-type "text/markdown"
-              :description description
-              :implementation (fn [context uri]
-                                (prompt-resource-implementation context prompts-map uri))}]))))
+             {:name           prompt-name
+              :uri            uri
+              :mime-type      "text/markdown"
+              :description    description
+              :implementation impl=fn}]))))
