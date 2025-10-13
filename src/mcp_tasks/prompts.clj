@@ -1,12 +1,12 @@
 (ns mcp-tasks.prompts
   "Task management prompts"
   (:require
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-clj.mcp-server.prompts :as prompts])
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-clj.mcp-server.prompts :as prompts])
   (:import
-   (java.io
-    File)))
+    (java.io
+      File)))
 
 (defn- parse-frontmatter
   "Parse simple 'field: value' frontmatter from markdown text.
@@ -29,9 +29,9 @@
           after-start (rest lines)
           ;; Find closing "---"
           closing-idx (first (keep-indexed
-                              (fn [idx line]
-                                (when (= "---" (str/trim line)) idx))
-                              after-start))]
+                               (fn [idx line]
+                                 (when (= "---" (str/trim line)) idx))
+                               after-start))]
       (if-not closing-idx
         ;; No closing delimiter, treat as no frontmatter
         {:metadata nil :content text}
@@ -39,12 +39,12 @@
               content-lines (drop (inc closing-idx) after-start)
               ;; Parse "key: value" pairs
               metadata (reduce
-                        (fn [acc line]
-                          (if-let [[_ k v] (re-matches #"([^:]+):\s*(.*)" line)]
-                            (assoc acc (str/trim k) (str/trim v))
-                            acc))
-                        {}
-                        metadata-lines)
+                         (fn [acc line]
+                           (if-let [[_ k v] (re-matches #"([^:]+):\s*(.*)" line)]
+                             (assoc acc (str/trim k) (str/trim v))
+                             acc))
+                         {}
+                         metadata-lines)
               content (str/join "\n" content-lines)]
           {:metadata (when (seq metadata) metadata)
            :content content})))))
@@ -66,7 +66,7 @@
                         ^File file (.listFiles dir)
                         :when (and (.isFile ^File file)
                                    (str/ends-with?
-                                    (.getName file) ".md"))]
+                                     (.getName file) ".md"))]
                     (.getName file))
          categories (into (sorted-set)
                           (map #(str/replace % #"\.md$" ""))
@@ -139,23 +139,23 @@
   Returns a vector of prompt maps suitable for registration with the MCP server."
   [config categories]
   (vec
-   (for [category categories]
-     (let [prompt-data (read-prompt-instructions category)
-           metadata (:metadata prompt-data)
-           custom-content (:content prompt-data)
-           execution-instructions (or custom-content (default-prompt-text))
-           prompt-text (str "Please complete the next " category " task following these steps:\n\n"
-                            (read-task-prompt-text config category)
-                            execution-instructions
-                            (complete-task-prompt-text config category))
-           description (or (get metadata "description")
-                           (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
-       (prompts/valid-prompt?
-        {:name (str "next-" category)
-         :description description
-         :messages [{:role "user"
-                     :content {:type "text"
-                               :text prompt-text}}]})))))
+    (for [category categories]
+      (let [prompt-data (read-prompt-instructions category)
+            metadata (:metadata prompt-data)
+            custom-content (:content prompt-data)
+            execution-instructions (or custom-content (default-prompt-text))
+            prompt-text (str "Please complete the next " category " task following these steps:\n\n"
+                             (read-task-prompt-text config category)
+                             execution-instructions
+                             (complete-task-prompt-text config category))
+            description (or (get metadata "description")
+                            (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
+        (prompts/valid-prompt?
+          {:name (str "next-" category)
+           :description description
+           :messages [{:role "user"
+                       :content {:type "text"
+                                 :text prompt-text}}]})))))
 
 (defn category-descriptions
   "Get descriptions for all discovered categories.
@@ -201,8 +201,8 @@
       (when (.exists prompts-file)
         (->> (.listFiles prompts-file)
              (filter
-              #(and (.isFile ^File %)
-                    (str/ends-with? (.getName ^File %) ".md")))
+               #(and (.isFile ^File %)
+                     (str/ends-with? (.getName ^File %) ".md")))
              (map #(str/replace (.getName ^File %) #"\.md$" "")))))))
 
 (defn get-story-prompt
@@ -275,21 +275,21 @@
   [metadata]
   (when-let [hint (get metadata "argument-hint")]
     (vec
-     (for [token (re-seq #"<([^>]+)>|\[([^\]]+)\]" hint)
-           :let [[_ required optional] token
-                 arg-name (or required optional)
-                 is-required (some? required)
-                 is-variadic (str/ends-with? arg-name "...")
-                 clean-name (if is-variadic
-                              (str/replace arg-name #"\.\.\.$" "")
-                              arg-name)
-                 description (cond
-                               is-variadic (format "Optional additional %s (variadic)" clean-name)
-                               is-required (format "The %s (required)" (str/replace clean-name "-" " "))
-                               :else (format "Optional %s" (str/replace clean-name "-" " ")))]]
-       {:name clean-name
-        :description description
-        :required is-required}))))
+      (for [token (re-seq #"<([^>]+)>|\[([^\]]+)\]" hint)
+            :let [[_ required optional] token
+                  arg-name (or required optional)
+                  is-required (some? required)
+                  is-variadic (str/ends-with? arg-name "...")
+                  clean-name (if is-variadic
+                               (str/replace arg-name #"\.\.\.$" "")
+                               arg-name)
+                  description (cond
+                                is-variadic (format "Optional additional %s (variadic)" clean-name)
+                                is-required (format "The %s (required)" (str/replace clean-name "-" " "))
+                                :else (format "Optional %s" (str/replace clean-name "-" " ")))]]
+        {:name clean-name
+         :description description
+         :required is-required}))))
 
 (defn story-prompts
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts namespace.
@@ -315,10 +315,10 @@
                     (and (= prompt-name "execute-story-task")
                          (:story-branch-management? config))
                     (str
-                     "\n\n"
-                     (slurp
-                      (io/resource
-                       "story/prompts/story-branch-management.md"))))
+                      "\n\n"
+                      (slurp
+                        (io/resource
+                          "story/prompts/story-branch-management.md"))))
                   description (or (get metadata "description")
                                   (:doc (meta v))
                                   (format "Story prompt: %s" prompt-name))
@@ -326,9 +326,9 @@
 
               [prompt-name
                (prompts/valid-prompt?
-                (cond-> {:name prompt-name
-                         :description description
-                         :messages [{:role "user"
-                                     :content {:type "text"
-                                               :text tailored-content}}]}
-                  (seq arguments) (assoc :arguments arguments)))])))))
+                 (cond-> {:name prompt-name
+                          :description description
+                          :messages [{:role "user"
+                                      :content {:type "text"
+                                                :text tailored-content}}]}
+                   (seq arguments) (assoc :arguments arguments)))])))))
