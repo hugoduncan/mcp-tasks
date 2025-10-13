@@ -323,18 +323,6 @@
         (is (re-find #"next-task" content))
         (is (re-find #"complete-story-task" content))))
 
-    (testing "includes branch management instructions"
-      (let [prompt (sut/get-story-prompt "execute-story-task")
-            content (:content prompt)]
-        (is (re-find #"story-branch-management" content))
-        (is (re-find #"Branch Management" content))))
-
-    (testing "includes conditional logic documentation"
-      (let [prompt (sut/get-story-prompt "execute-story-task")
-            content (:content prompt)]
-        (is (re-find #"Conditional" content))
-        (is (re-find #"configuration" content))))
-
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)
             execute-prompt (first (filter #(= "execute-story-task" (:name %)) prompts))]
@@ -476,3 +464,39 @@
             (is (= "Override takes precedence" (:description create-prompt))))
           (finally
             (delete-test-file test-file)))))))
+
+(deftest story-prompts-branch-management-test
+  ;; Test that story-prompts conditionally includes branch management
+  ;; instructions in execute-story-task prompt based on config.
+  (testing "story-prompts branch management"
+    (testing "includes branch management when :story-branch-management? is true"
+      (let [prompts (sut/story-prompts {:story-branch-management? true})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (re-find #"Branch Management" content))
+          (is (re-find #"checkout the default branch" content))
+          (is (re-find #"create the `<story-name>` branch" content)))))
+
+    (testing "excludes branch management when :story-branch-management? is false"
+      (let [prompts (sut/story-prompts {:story-branch-management? false})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Branch Management" content)))
+          (is (not (re-find #"checkout the default branch" content))))))
+
+    (testing "excludes branch management when config key is not present"
+      (let [prompts (sut/story-prompts {})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Branch Management" content)))
+          (is (not (re-find #"checkout the default branch" content))))))
+
+    (testing "does not affect other story prompts"
+      (let [prompts-with-branch (sut/story-prompts {:story-branch-management? true})
+            prompts-without-branch (sut/story-prompts {:story-branch-management? false})
+            refine-with (get prompts-with-branch "refine-story")
+            refine-without (get prompts-without-branch "refine-story")]
+        (is (= (:messages refine-with) (:messages refine-without)))))))

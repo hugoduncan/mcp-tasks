@@ -59,18 +59,18 @@
    (discover-categories (System/getProperty "user.dir")))
   ([base-dir]
    (let [mcp-tasks-dir (io/file base-dir ".mcp-tasks")
-         subdirs       ["tasks" "complete" "prompts"]
-         md-files      (for [subdir     subdirs
-                             :let       [dir (io/file mcp-tasks-dir subdir)]
-                             :when      (.exists dir)
-                             ^File file (.listFiles dir)
-                             :when      (and (.isFile ^File file)
-                                             (str/ends-with?
-                                               (.getName file) ".md"))]
-                         (.getName file))
-         categories    (into (sorted-set)
-                             (map #(str/replace % #"\.md$" ""))
-                             md-files)]
+         subdirs ["tasks" "complete" "prompts"]
+         md-files (for [subdir subdirs
+                        :let [dir (io/file mcp-tasks-dir subdir)]
+                        :when (.exists dir)
+                        ^File file (.listFiles dir)
+                        :when (and (.isFile ^File file)
+                                   (str/ends-with?
+                                     (.getName file) ".md"))]
+                    (.getName file))
+         categories (into (sorted-set)
+                          (map #(str/replace % #"\.md$" ""))
+                          md-files)]
      (vec categories))))
 
 (defn- read-task-prompt-text
@@ -238,24 +238,24 @@
   Returns a sequence of maps with :name and :description for each available
   story prompt, including both built-in prompts and file overrides."
   []
-  (let [builtin-prompts  (for [prompt-name (list-builtin-story-prompts)
-                               :let        [prompt (get-story-prompt prompt-name)]
-                               :when       prompt]
-                           {:name        (:name prompt)
-                            :description (:description prompt)})
-        story-dir        (io/file ".mcp-tasks" "story" "prompts")
+  (let [builtin-prompts (for [prompt-name (list-builtin-story-prompts)
+                              :let [prompt (get-story-prompt prompt-name)]
+                              :when prompt]
+                          {:name (:name prompt)
+                           :description (:description prompt)})
+        story-dir (io/file ".mcp-tasks" "story" "prompts")
         override-prompts (when (.exists story-dir)
                            (for [^File file (.listFiles story-dir)
-                                 :when      (and (.isFile file)
-                                                 (str/ends-with? (.getName file) ".md"))]
-                             (let [name               (str/replace (.getName file) #"\.md$" "")
+                                 :when (and (.isFile file)
+                                            (str/ends-with? (.getName file) ".md"))]
+                             (let [name (str/replace (.getName file) #"\.md$" "")
                                    {:keys [metadata]} (parse-frontmatter (slurp file))]
-                               {:name        name
+                               {:name name
                                 :description (get metadata "description")})))
-        all-prompts      (concat override-prompts builtin-prompts)
-        seen             (atom #{})]
+        all-prompts (concat override-prompts builtin-prompts)
+        seen (atom #{})]
     (for [prompt all-prompts
-          :when  (not (contains? @seen (:name prompt)))]
+          :when (not (contains? @seen (:name prompt)))]
       (do
         (swap! seen conj (:name prompt))
         prompt))))
@@ -300,14 +300,14 @@
   with the MCP server."
   [config]
   (require 'mcp-tasks.story-prompts)
-  (let [ns          (find-ns 'mcp-tasks.story-prompts)
+  (let [ns (find-ns 'mcp-tasks.story-prompts)
         prompt-vars (->> (ns-publics ns)
                          vals
                          (filter (fn [v] (string? @v))))]
     (into {}
           (for [v prompt-vars]
-            (let [prompt-name                (name (symbol v))
-                  prompt-content             @v
+            (let [prompt-name (name (symbol v))
+                  prompt-content @v
                   {:keys [metadata content]} (parse-frontmatter prompt-content)
                   ;; Tailor execute-story-task content based on config
                   tailored-content
@@ -319,12 +319,11 @@
                       (slurp
                         (io/resource
                           "story/prompts/story-branch-management.md"))))
-                  description                (or (get metadata "description")
-                                                 (:doc (meta v))
-                                                 (format "Story prompt: %s" prompt-name))
-                  arguments                  (parse-argument-hint metadata)]
-              (prn :prompt-name prompt-name)
-              (prn :sbm? (:story-branch-management? config))
+                  description (or (get metadata "description")
+                                  (:doc (meta v))
+                                  (format "Story prompt: %s" prompt-name))
+                  arguments (parse-argument-hint metadata)]
+
               [prompt-name
                (prompts/valid-prompt?
                  (cond-> {:name prompt-name
