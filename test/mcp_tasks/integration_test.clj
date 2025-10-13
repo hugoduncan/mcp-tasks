@@ -5,14 +5,14 @@
    configurations using in-memory transport. File operation behavior is
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing use-fixtures]]
-   [mcp-clj.in-memory-transport.shared :as shared]
-   [mcp-clj.mcp-client.core :as mcp-client]
-   [mcp-clj.mcp-server.core :as mcp-server]
-   [mcp-tasks.config :as config]
-   [mcp-tasks.main :as main]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [mcp-clj.in-memory-transport.shared :as shared]
+    [mcp-clj.mcp-client.core :as mcp-client]
+    [mcp-clj.mcp-server.core :as mcp-server]
+    [mcp-tasks.config :as config]
+    [mcp-tasks.main :as main]))
 
 (def test-project-dir (.getAbsolutePath (io/file "test-resources/integration-test")))
 
@@ -85,14 +85,14 @@
   (let [config (load-test-config)
         shared-transport (shared/create-shared-transport)
         server-config (main/create-server-config
-                       config
-                       {:type :in-memory :shared shared-transport})
+                        config
+                        {:type :in-memory :shared shared-transport})
         server (mcp-server/create-server server-config)
         client (mcp-client/create-client
-                {:transport {:type :in-memory
-                             :shared shared-transport}
-                 :client-info {:name "test-client" :version "1.0.0"}
-                 :protocol-version "2025-06-18"})]
+                 {:transport {:type :in-memory
+                              :shared shared-transport}
+                  :client-info {:name "test-client" :version "1.0.0"}
+                  :protocol-version "2025-06-18"})]
     {:server server
      :client client}))
 

@@ -1,12 +1,12 @@
 (ns mcp-tasks.story-tools
   "Story management tools"
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.io :as io]
-   [clojure.string :as str]
-   [mcp-tasks.path-helper :as path-helper]
-   [mcp-tasks.response :as response]
-   [mcp-tasks.story-tasks :as story-tasks]))
+    [clojure.data.json :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
+    [mcp-tasks.path-helper :as path-helper]
+    [mcp-tasks.response :as response]
+    [mcp-tasks.story-tasks :as story-tasks]))
 
 (defn- next-story-task-impl
   "Implementation of next-story-task tool.
@@ -110,9 +110,9 @@
 
         ;; Mark task as complete
         (let [updated-content (story-tasks/mark-task-complete
-                               content
-                               (:index first-incomplete)
-                               completion-comment)]
+                                content
+                                (:index first-incomplete)
+                                completion-comment)]
           (spit story-tasks-file updated-content))
 
         (if use-git?
