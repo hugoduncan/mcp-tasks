@@ -31,7 +31,7 @@ Parse the arguments: $ARGUMENTS
 3. Mark the task as complete:
    - After task execution completes successfully, use the `complete-task`
      tool
-   - Parameters: category (from step 1), task-text (partial match from
+   - Parameters: category (from step 1), title (partial match from
      beginning of task), and optionally completion-comment
    - Confirm to the user that the task has been marked complete
 

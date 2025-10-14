@@ -17,21 +17,21 @@
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
-  Finds a task by exact match (task-id or task-text) and moves it from 
+  Finds a task by exact match (task-id or title) and moves it from
   tasks.ednl to complete.ednl with optional completion comment.
-  
-  At least one of task-id or task-text must be provided.
+
+  At least one of task-id or title must be provided.
   If both are provided, they must refer to the same task.
 
   Returns:
   - Git mode enabled: Two text items (completion message + JSON with :modified-files)
   - Git mode disabled: Single text item (completion message only)"
-  [config _context {:keys [task-id task-text completion-comment category]}]
+  [config _context {:keys [task-id title completion-comment category]}]
   (try
     ;; Validate at least one identifier provided
-    (when (and (nil? task-id) (nil? task-text))
-      (throw (ex-info "Must provide either task-id or task-text"
-                      {:task-id task-id :task-text task-text})))
+    (when (and (nil? task-id) (nil? title))
+      (throw (ex-info "Must provide either task-id or title"
+                      {:task-id task-id :title title})))
 
     (let [use-git? (:use-git? config)
           tasks-path (path-helper/task-path config ["tasks.ednl"])
@@ -50,12 +50,12 @@
 
       ;; Find task by ID or exact title match
       (let [task-by-id (when task-id (tasks/get-task task-id))
-            tasks-by-title (when task-text (tasks/find-by-title task-text))
+            tasks-by-title (when title (tasks/find-by-title title))
 
             ;; Determine which task to complete
             task (cond
                    ;; Both provided - verify they match
-                   (and task-id task-text)
+                   (and task-id title)
                    (cond
                      (nil? task-by-id)
                      (throw (ex-info "Task ID not found"
@@ -63,12 +63,12 @@
 
                      (empty? tasks-by-title)
                      (throw (ex-info "No task found with exact title match"
-                                     {:task-text task-text}))
+                                     {:title title}))
 
                      (not (some #(= (:id %) task-id) tasks-by-title))
                      (throw (ex-info "Task ID and task text do not refer to the same task"
                                      {:task-id task-id
-                                      :task-text task-text
+                                      :title title
                                       :task-by-id task-by-id
                                       :tasks-by-title (mapv :id tasks-by-title)}))
 
@@ -81,15 +81,15 @@
                                        {:task-id task-id})))
 
                    ;; Only title provided
-                   task-text
+                   title
                    (cond
                      (empty? tasks-by-title)
                      (throw (ex-info "No task found with exact title match"
-                                     {:task-text task-text}))
+                                     {:title title}))
 
                      (> (count tasks-by-title) 1)
                      (throw (ex-info "Multiple tasks found with same title - use task-id to disambiguate"
-                                     {:task-text task-text
+                                     {:title title
                                       :matching-task-ids (mapv :id tasks-by-title)
                                       :matching-tasks tasks-by-title}))
 
@@ -135,17 +135,17 @@
   (if (:use-git? config)
     "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
-   Identifies tasks by exact match using task-id or task-text (title).
+   Identifies tasks by exact match using task-id or title (title).
    At least one identifier must be provided.
 
    Parameters:
    - task-id: (optional) Exact task ID
-   - task-text: (optional) Exact task title match
+   - title: (optional) Exact task title match
    - category: (optional) For backwards compatibility - verifies task category if provided
    - completion-comment: (optional) Comment appended to task description
 
-   If both task-id and task-text are provided, they must refer to the same task.
-   If only task-text is provided and multiple tasks have the same title, an error is returned.
+   If both task-id and title are provided, they must refer to the same task.
+   If only title is provided and multiple tasks have the same title, an error is returned.
 
    Returns two text items:
    1. A completion status message
@@ -153,23 +153,23 @@
       relative to .mcp-tasks for use in git commit workflows."
     "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
-   Identifies tasks by exact match using task-id or task-text (title).
+   Identifies tasks by exact match using task-id or title (title).
    At least one identifier must be provided.
 
    Parameters:
    - task-id: (optional) Exact task ID
-   - task-text: (optional) Exact task title match
+   - title: (optional) Exact task title match
    - category: (optional) For backwards compatibility - verifies task category if provided
    - completion-comment: (optional) Comment appended to task description
 
-   If both task-id and task-text are provided, they must refer to the same task.
-   If only task-text is provided and multiple tasks have the same title, an error is returned.
+   If both task-id and title are provided, they must refer to the same task.
+   If only title is provided and multiple tasks have the same title, an error is returned.
 
    Returns a completion status message."))
 
 (defn complete-task-tool
   "Tool to complete a task and move it from tasks to complete directory.
-  
+
   Accepts config parameter containing :use-git? flag. When git mode is enabled,
   returns modified file paths for git commit workflow. When disabled, returns
   only completion message."
@@ -182,7 +182,7 @@
     {"task-id"
      {:type "integer"
       :description "Exact task ID to complete"}
-     "task-text"
+     "title"
      {:type "string"
       :description "Exact task title to match"}
      "category"
@@ -204,10 +204,10 @@
 
   Additional parameters:
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
-  - unique?: If true, enforce that 0 or 1 task matches (error if >1)
+  - unique: If true, enforce that 0 or 1 task matches (error if >1)
 
   Returns JSON-encoded response with tasks vector and metadata."
-  [config _context {:keys [category parent-id title-pattern limit unique?]}]
+  [config _context {:keys [category parent-id title-pattern limit unique]}]
   (try
     ;; Determine effective limit
     ;; If unique? is true, effective limit is always 1
@@ -225,13 +225,13 @@
 
       ;; Validate limit and unique? compatibility
       ;; Only error if limit was explicitly provided AND is > 1
-      (when (and unique? provided-limit? (> requested-limit 1))
+      (when (and unique provided-limit? (> requested-limit 1))
         (let [response-data {:error "limit must be 1 when unique? is true (or omit limit)"
                              :metadata {:provided-limit requested-limit :unique? true}}]
           (throw (ex-info "Incompatible parameters"
                           {:response response-data}))))
 
-      (let [effective-limit (if unique? 1 requested-limit)
+      (let [effective-limit (if unique 1 requested-limit)
             tasks-path (path-helper/task-path config ["tasks.ednl"])
             tasks-file (:absolute tasks-path)]
 
@@ -249,7 +249,7 @@
               result-count (count limited-tasks)]
 
           ;; Check unique? constraint
-          (when (and unique? (> total-matches 1))
+          (when (and unique (> total-matches 1))
             (let [response-data {:error "Multiple tasks matched but :unique? was specified"
                                  :metadata {:count result-count
                                             :total-matches total-matches}}]
@@ -309,7 +309,7 @@
      "limit"
      {:type "integer"
       :description "Maximum number of tasks to return (default: 5, must be > 0)"}
-     "unique?"
+     "unique"
      {:type "boolean"
       :description "If true, enforce that 0 or 1 task matches (error if >1)"}}
     :required []}
@@ -352,33 +352,25 @@
   Returns two content items:
   1. Text message for human readability
   2. Structured data map with 'task' and 'metadata' keys"
-  [config _context {:keys [category task-text prepend story-name type]}]
+  [config _context
+   {:keys [category title description prepend type parent-id]}]
   (try
+    (when parent-id
+      (or (tasks/get-task parent-id)
+          (throw (ex-info "Parent story not found"
+                          {:parent-id parent-id}))))
+
     (let [tasks-file (prepare-task-file config)
-          ;; Parse task-text into title and description
-          lines (str/split-lines task-text)
-          title (first lines)
-          description (if (> (count lines) 1)
-                        (str/join "\n" (rest lines))
-                        "")
-          ;; If story-name provided, find the story task
-          parent-id (when story-name
-                      (or (find-story-by-name story-name)
-                          (throw (ex-info "Story not found"
-                                          {:story-name story-name}))))
           ;; Create task map with all required fields
           task-map {:title title
-                    :description description
+                    :description (or description "")
                     :design ""
                     :category category
                     :status :open
                     :type (keyword (or type "task"))
                     :meta {}
+                    :parent-id parent-id
                     :relations []}
-          ;; Add parent-id if this is a story task
-          task-map (if parent-id
-                     (assoc task-map :parent-id parent-id)
-                     task-map)
           ;; Add task to in-memory state and get the assigned ID
           task-id (tasks/add-task task-map :prepend? (boolean prepend))
           ;; Get the complete task with ID
@@ -390,7 +382,14 @@
                   :text (str "Task added to " tasks-file)}
                  {:type "text"
                   :text (json/write-str
-                          {:task (select-keys created-task [:id :title :category :type :status :parent-id])
+                          {:task (select-keys
+                                   created-task
+                                   [:id
+                                    :title
+                                    :category
+                                    :type
+                                    :status
+                                    :parent-id])
                            :metadata {:file tasks-file
                                       :operation "add-task"}})}]
        :isError false})
@@ -402,12 +401,13 @@
   []
   (let [category-descs (prompts/category-descriptions)
         categories (sort (keys category-descs))]
-    (if (seq categories)
-      (str "Add a task to tasks.ednl\n\nAvailable categories:\n"
-           (str/join "\n"
-                     (for [cat categories]
-                       (format "- %s: %s" cat (get category-descs cat)))))
-      "Add a task to tasks.ednl")))
+    [categories
+     (if (seq categories)
+       (str "Add a task to tasks.ednl\n\nAvailable categories:\n"
+            (str/join "\n"
+                      (for [cat categories]
+                        (format "- %s: %s" cat (get category-descs cat)))))
+       "Add a task to tasks.ednl")]))
 
 (defn add-task-tool
   "Tool to add a task to a specific category.
@@ -420,29 +420,33 @@
 
   Accepts config parameter for future git-aware functionality."
   [config]
-  {:name "add-task"
-   :description (add-task-description)
-   :inputSchema
-   {:type "object"
-    :properties
-    {"category"
-     {:type "string"
-      :description "The task category name"}
-     "task-text"
-     {:type "string"
-      :description "The task text to add"}
-     "type"
-     {:type "string"
-      :enum ["task" "bug" "feature" "story" "chore"]
-      :description "The type of task (defaults to 'task')"}
-     "story-name"
-     {:type "string"
-      :description "Optional story name to associate this task with"}
-     "prepend"
-     {:type "boolean"
-      :description "If true, add task at the beginning instead of the end"}}
-    :required ["category" "task-text"]}
-   :implementation (partial add-task-impl config)})
+  (let [[categories description] (add-task-description)]
+    {:name "add-task"
+     :description description
+     :inputSchema
+     {:type "object"
+      :properties
+      {"category"
+       {:enum (vec categories)
+        :description "The task category name"}
+       "title"
+       {:type "string"
+        :description "The task title"}
+       "description"
+       {:type "string"
+        :description "A description of the task"}
+       "type"
+       {:enum ["task" "bug" "feature" "story" "chore"]
+        :description "The type of task (defaults to 'task')"
+        :default "task"}
+       "parent-id"
+       {:type "integer"
+        :description "Optional task-id of parent"}
+       "prepend"
+       {:type "boolean"
+        :description "If true, add task at the beginning instead of the end"}}
+      :required ["category" "title"]}
+     :implementation (partial add-task-impl config)}))
 
 (defn- update-task-impl
   "Implementation of update-task tool.
