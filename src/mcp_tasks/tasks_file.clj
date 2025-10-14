@@ -28,14 +28,16 @@
         (if (schema/valid-task? task)
           task
           (do
-            (println (format "Warning: Invalid task at line %d: %s"
-                             line-number
-                             (pr-str (schema/explain-task task))))
+            (binding [*out* *err*]
+              (println (format "Warning: Invalid task at line %d: %s"
+                               line-number
+                               (pr-str (schema/explain-task task)))))
             nil)))
       (catch Exception e
-        (println (format "Warning: Malformed EDN at line %d: %s"
-                         line-number
-                         (.getMessage e)))
+        (binding [*out* *err*]
+          (println (format "Warning: Malformed EDN at line %d: %s"
+                           line-number
+                           (.getMessage e))))
         nil))))
 
 (defn- write-ednl-atomic
