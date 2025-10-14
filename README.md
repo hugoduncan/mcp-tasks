@@ -369,13 +369,8 @@ The `.mcp-tasks` directory can optionally be a git repository for version contro
 ```
 .mcp-tasks/          # Task tracking directory
 ├── .git/            # Optional: Version control for task history
-├── tasks/           # Active tasks (- [ ] format)
-│   ├── simple.md
-│   ├── feature.md
-│   └── bugfix.md
-├── complete/        # Completed task archive (- [x] format)
-│   ├── simple.md
-│   └── feature.md
+├── tasks.ednl       # Active tasks (EDN lines format)
+├── complete.ednl    # Completed task archive (EDN lines format)
 └── prompts/         # Category-specific instructions (optional)
     └── feature.md
 ```
