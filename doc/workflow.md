@@ -864,7 +864,7 @@ git worktree add ../project-refactor refactor-branch
 
 ### Workflow with Worktrees
 
-1. **Separate task streams** - Each worktree can have its own `.mcp-tasks/tasks/<category>.md` with relevant tasks
+1. **Separate task streams** - Each worktree can have its own `.mcp-tasks/tasks.ednl` with relevant tasks
 
 2. **Process tasks independently** - Work in each worktree:
    ```bash

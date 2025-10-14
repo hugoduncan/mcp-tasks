@@ -94,7 +94,7 @@
             message-text (get-in prompt [:messages 0 :content :text])]
         (is (= "next-nonexistent" (:name prompt)))
         (is (re-find #"nonexistent task" message-text))
-        (is (re-find #"\.mcp-tasks/tasks/nonexistent\.md" message-text))))
+        (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))))
 
     (testing "generates prompts with proper category substitution"
       (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
@@ -102,7 +102,6 @@
             message-text (get-in prompt [:messages 0 :content :text])]
         (is (= "next-simple" (:name prompt)))
         (is (re-find #"simple task" message-text))
-        (is (re-find #"\.mcp-tasks/tasks/simple\.md" message-text))
         (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))
         (is (re-find #"\.mcp-tasks/complete\.ednl" message-text))))
 
@@ -116,7 +115,7 @@
       (let [prompts (sut/create-prompts {:use-git? true} ["nonexistent"])
             prompt (first prompts)]
         (is (= "next-nonexistent" (:name prompt)))
-        (is (= "Process the next incomplete task from .mcp-tasks/tasks/nonexistent.md"
+        (is (= "Execute the next nonexistent task from .mcp-tasks/tasks.ednl"
                (:description prompt)))))
 
     (testing "includes git instructions when use-git? is true"
@@ -152,7 +151,7 @@
     (testing "generates prompt text for category"
       (let [text (#'sut/read-task-prompt-text {:use-git? true} "simple")]
         (is (string? text))
-        (is (re-find #"\.mcp-tasks/tasks/simple\.md" text))
+        (is (re-find #"\.mcp-tasks/tasks\.ednl" text))
         (is (re-find #"first incomplete task" text))))
 
     (testing "config parameter doesn't affect output"

@@ -76,14 +76,13 @@
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category.
   Config parameter included for API consistency but not currently used."
-  [_config category]
-  (format "- Read the file .mcp-tasks/tasks/%s.md
+  [_config _category]
+  "- Read the file .mcp-tasks/tasks.ednl
 
 - Find the first incomplete task (marked with `- [ ]`) You can use the
   `next-task` tool to retrieve the next task without executing it.
 - Show the task description
-"
-          category))
+")
 
 (defn- default-prompt-text
   "Generate default execution instructions for a category."
@@ -148,7 +147,7 @@
                              execution-instructions
                              (complete-task-prompt-text config category))
             description (or (get metadata "description")
-                            (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
+                            (format "Execute the next %s task from .mcp-tasks/tasks.ednl" category))]
         (prompts/valid-prompt?
           {:name (str "next-" category)
            :description description
