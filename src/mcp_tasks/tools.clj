@@ -211,7 +211,7 @@
   Adds a task to tasks.ednl. If prepend is true, adds at the beginning;
   otherwise appends at the end. If story-name is provided, the task is
   associated with that story via :parent-id."
-  [config _context {:keys [category task-text prepend story-name]}]
+  [config _context {:keys [category task-text prepend story-name type]}]
   (try
     (let [tasks-file (prepare-task-file config)
           ;; Parse task-text into title and description
@@ -231,7 +231,7 @@
                     :design ""
                     :category category
                     :status :open
-                    :type :task
+                    :type (keyword (or type "task"))
                     :meta {}
                     :relations []}
           ;; Add parent-id if this is a story task
@@ -276,6 +276,10 @@
      "task-text"
      {:type "string"
       :description "The task text to add"}
+     "type"
+     {:type "string"
+      :enum ["task" "bug" "feature" "story" "chore"]
+      :description "The type of task (defaults to 'task')"}
      "story-name"
      {:type "string"
       :description "Optional story name to associate this task with"}
