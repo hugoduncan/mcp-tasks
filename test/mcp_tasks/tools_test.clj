@@ -1,6 +1,7 @@
 (ns mcp-tasks.tools-test
   (:require
     [babashka.fs :as fs]
+    [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -186,6 +187,74 @@
         (is (str/includes? (get-in result [:content 0 :text]) "Must provide either"))))))
 
 ;; Integration Tests
+
+;; add-task-impl tests
+
+(deftest add-task-returns-structured-data
+  ;; Tests that add-task-impl returns both text message and structured data
+  (testing "add-task"
+    (testing "returns text message and structured data"
+      (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
+                                                           :task-text "Test task\nWith description"})]
+        (is (false? (:isError result)))
+        (is (= 2 (count (:content result))))
+        ;; First content item is text message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (str/includes? (:text text-content) "Task added to")))
+        ;; Second content item is structured data
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)]
+          (is (= "text" (:type data-content)))
+          (is (contains? data :task))
+          (is (contains? data :metadata))
+          ;; Verify task fields
+          (let [task (:task data)]
+            (is (contains? task :id))
+            (is (= "Test task" (:title task)))
+            (is (= "test" (:category task)))
+            (is (= "task" (:type task)))
+            (is (= "open" (:status task))))
+          ;; Verify metadata
+          (let [metadata (:metadata data)]
+            (is (contains? metadata :file))
+            (is (= "add-task" (:operation metadata)))))))))
+
+(deftest add-task-includes-parent-id-for-story-tasks
+  ;; Tests that add-task includes parent-id in structured data for story tasks
+  (testing "add-task"
+    (testing "includes parent-id for story tasks"
+      ;; First create a story task
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "test story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}])
+      ;; Load the story into memory
+      (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
+      ;; Add a child task to the story
+      (let [result (#'sut/add-task-impl (test-config) nil {:category "simple"
+                                                           :task-text "Child task"
+                                                           :story-name "test story"})]
+        (is (false? (:isError result)))
+        ;; Verify structured data includes parent-id
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)
+              task (:task data)]
+          (is (= 1 (:parent-id task)))
+          (is (= "Child task" (:title task)))
+          (is (= "simple" (:category task))))))))
+
+(deftest add-task-omits-nil-parent-id
+  ;; Tests that parent-id is included in response but is nil for non-story tasks
+  (testing "add-task"
+    (testing "includes parent-id field (as nil) for non-story tasks"
+      (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
+                                                           :task-text "Regular task"})]
+        (is (false? (:isError result)))
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)
+              task (:task data)]
+          ;; parent-id should be present in select-keys but will be nil
+          (is (nil? (:parent-id task)))
+          (is (= "Regular task" (:title task))))))))
 
 (deftest ^:integration complete-workflow-add-next-complete
   ;; Integration test for complete workflow: add task → next task → complete task

@@ -286,7 +286,11 @@
 
   Adds a task to tasks.ednl. If prepend is true, adds at the beginning;
   otherwise appends at the end. If story-name is provided, the task is
-  associated with that story via :parent-id."
+  associated with that story via :parent-id.
+
+  Returns two content items:
+  1. Text message for human readability
+  2. Structured data map with 'task' and 'metadata' keys"
   [config _context {:keys [category task-text prepend story-name type]}]
   (try
     (let [tasks-file (prepare-task-file config)
@@ -313,13 +317,21 @@
           ;; Add parent-id if this is a story task
           task-map (if parent-id
                      (assoc task-map :parent-id parent-id)
-                     task-map)]
-      ;; Add task to in-memory state
-      (tasks/add-task task-map :prepend? (boolean prepend))
+                     task-map)
+          ;; Add task to in-memory state and get the assigned ID
+          task-id (tasks/add-task task-map :prepend? (boolean prepend))
+          ;; Get the complete task with ID
+          created-task (tasks/get-task task-id)]
       ;; Save to EDNL file
       (tasks/save-tasks! tasks-file)
+      ;; Return two content items: text message and structured data
       {:content [{:type "text"
-                  :text (str "Task added to " tasks-file)}]
+                  :text (str "Task added to " tasks-file)}
+                 {:type "text"
+                  :text (json/write-str
+                          {:task (select-keys created-task [:id :title :category :type :status :parent-id])
+                           :metadata {:file tasks-file
+                                      :operation "add-task"}})}]
        :isError false})
     (catch Exception e
       (response/error-response e))))
@@ -338,6 +350,12 @@
 
 (defn add-task-tool
   "Tool to add a task to a specific category.
+
+  Returns two content items:
+  1. Text message: 'Task added to <file-path>' for human readability
+  2. Structured data (JSON): Map with 'task' and 'metadata' keys
+     - task: {:id, :title, :category, :type, :status, :parent-id}
+     - metadata: {:file, :operation}
 
   Accepts config parameter for future git-aware functionality."
   [config]
