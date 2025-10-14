@@ -12,8 +12,9 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Retrieve the story using the `select-tasks` tool with `title-pattern` matching the story name and `:unique? true`
-   - The story is stored as a task with `:type :story` in `.mcp-tasks/tasks.ednl`
+1. Retrieve the story using the `select-tasks` tool with `title-pattern`
+   matching the story name and `:unique? true`
+   - The story is stored as a task with `:type :story
    - If the story doesn't exist, inform the user and stop
 
 2. Display the story content to the user
@@ -44,9 +45,9 @@ Parse the arguments: $ARGUMENTS
 6. Once approved, add each task using the `add-task` tool:
    - For each task, call `add-task` with:
      - `category`: the selected category (simple, medium, large, clarify-task)
-     - `task-text`: task title on first line, then description including
+     - `title`: task title on first line, then description including
        "Part of story: task-id <story-id> \"<story-title>\""
-     - `story-name`: the story name (this automatically sets :parent-id)
+     - `parent-id`: the story id
      - `type`: "task" (or "bug", "feature", etc. if appropriate)
    - Tasks will be added to `.mcp-tasks/tasks.ednl` with the story as parent
    - Add tasks in order (dependencies first)
