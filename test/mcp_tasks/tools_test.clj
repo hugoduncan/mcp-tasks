@@ -1,7 +1,6 @@
 (ns mcp-tasks.tools-test
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]

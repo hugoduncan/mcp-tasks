@@ -2,7 +2,6 @@
   "Tests for story task filtering using enhanced next-task tool"
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -34,20 +33,6 @@
   (let [file (io/file *test-dir* ".mcp-tasks" "tasks.ednl")]
     (.mkdirs (.getParentFile file))
     (tasks-file/write-tasks (.getPath file) tasks)))
-
-(defn- read-tasks-ednl
-  "Read tasks from tasks.ednl file"
-  []
-  (let [file (io/file *test-dir* ".mcp-tasks" "tasks.ednl")]
-    (when (.exists file)
-      (tasks-file/read-ednl (.getPath file)))))
-
-(defn- read-complete-ednl
-  "Read tasks from complete.ednl file"
-  []
-  (let [file (io/file *test-dir* ".mcp-tasks" "complete.ednl")]
-    (when (.exists file)
-      (tasks-file/read-ednl (.getPath file)))))
 
 ;; next-task with parent-id filter Tests
 

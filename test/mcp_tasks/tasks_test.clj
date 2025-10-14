@@ -1,6 +1,5 @@
 (ns mcp-tasks.tasks-test
   (:require
-    [clojure.java.io :as io]
     [clojure.test :refer [deftest testing is use-fixtures]]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tasks-file :as tasks-file]))
