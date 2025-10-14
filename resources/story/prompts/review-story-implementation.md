@@ -47,7 +47,7 @@ Parse the arguments: $ARGUMENTS
      a) For each selected suggestion, use the `add-task` tool for each task:
         - Use the `add-task` tool with these parameters:
           - `category`: pick an appropriate category based on the task complexity
-          - `task-text`: "STORY: <story-name> - <task description>" the task description can span multiple lines.
+          - `title`: "STORY: <story-name> - <task description>" the task description can span multiple lines.
           - `story-name`: the story name from step 1
           - `prepend`: false (to append tasks)
 
@@ -55,7 +55,7 @@ Parse the arguments: $ARGUMENTS
         ```
         add-task(
           category="medium",
-          task-text="STORY: my-story - Add error handling for edge cases\n throw exceptions if edge cases not supported",
+          title="STORY: my-story - Add error handling for edge cases\n throw exceptions if edge cases not supported",
           story-name="my-story",
           prepend=false
         )
