@@ -17,7 +17,7 @@
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
-  Moves first task from tasks/<category>.ednl to complete/<category>.ednl,
+  Moves first task from tasks.ednl to complete.ednl,
   verifying it matches the provided task-text and optionally adding a
   completion comment.
 
@@ -27,8 +27,8 @@
   [config _context {:keys [category task-text completion-comment]}]
   (try
     (let [use-git? (:use-git? config)
-          tasks-path (path-helper/task-path config ["tasks" (str category ".ednl")])
-          complete-path (path-helper/task-path config ["complete" (str category ".ednl")])
+          tasks-path (path-helper/task-path config ["tasks.ednl"])
+          complete-path (path-helper/task-path config ["complete.ednl"])
           tasks-file (:absolute tasks-path)
           complete-file (:absolute complete-path)
           ;; Paths relative to .mcp-tasks
@@ -37,9 +37,8 @@
 
       ;; Load tasks from EDNL file
       (when-not (file-exists? tasks-file)
-        (throw (ex-info "No tasks found in category"
-                        {:category category
-                         :file tasks-file})))
+        (throw (ex-info "Tasks file not found"
+                        {:file tasks-file})))
 
       (tasks/load-tasks! tasks-file)
 
@@ -89,7 +88,7 @@
   [config]
   (if (:use-git? config)
     "Complete a task by moving it from
-   .mcp-tasks/tasks/<category>.ednl to .mcp-tasks/complete/<category>.ednl.
+   .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
    Verifies the first task matches the provided text, marks it complete, and
    optionally adds a completion comment.
@@ -99,7 +98,7 @@
    2. A JSON-encoded map with :modified-files key containing file paths
       relative to .mcp-tasks for use in git commit workflows."
     "Complete a task by moving it from
-   .mcp-tasks/tasks/<category>.ednl to .mcp-tasks/complete/<category>.ednl.
+   .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
    Verifies the first task matches the provided text, marks it complete, and
    optionally adds a completion comment.
@@ -133,11 +132,11 @@
 (defn next-task-impl
   "Implementation of next-task tool.
 
-  Returns the first task from tasks/<category>.ednl in a map with :category and :task keys,
+  Returns the first task from tasks.ednl in a map with :category and :task keys,
   or a map with :category and :status keys if there are no tasks."
   [config _context {:keys [category]}]
   (try
-    (let [tasks-path (path-helper/task-path config ["tasks" (str category ".ednl")])
+    (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
           tasks-file (:absolute tasks-path)]
 
       ;; Load tasks from EDNL file
@@ -168,7 +167,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "next-task"
-   :description "Return the next task from tasks/<category>.ednl"
+   :description "Return the next task from tasks.ednl"
    :inputSchema
    {:type "object"
     :properties
