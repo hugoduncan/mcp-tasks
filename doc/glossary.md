@@ -48,7 +48,7 @@
 
 **MCP Server**: A process implementing the Model Context Protocol, providing tools/prompts/resources to AI agents.
 
-**Tool**: An MCP capability that agents can invoke to perform actions (e.g., `next-task`, `complete-task`, `add-task`).
+**Tool**: An MCP capability that agents can invoke to perform actions (e.g., `select-tasks`, `complete-task`, `add-task`).
 
 ## Workflow Terms
 

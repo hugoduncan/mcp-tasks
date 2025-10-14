@@ -13,12 +13,12 @@ Parse the arguments: $ARGUMENTS
 ## Process
 
 1. Find the story and its first incomplete child task:
-   - First, use `next-task` with `title-pattern` to find the story task
-   - Then use `next-task` with `parent-id` filter to get the first incomplete child
+   - First, use `select-tasks` with `title-pattern` and `:unique? true` to find the story task
+   - Then use `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - If no incomplete tasks found, inform the user that all tasks are
      complete and stop
    - If no category is found for the task, inform the user and stop
-   - The tool returns :task and :category
+   - The tool returns :tasks (a vector) and :metadata
 
 2. Execute the task directly using the category workflow:
    - Execute the `next-<category>` prompt from the `mcp-tasks` server

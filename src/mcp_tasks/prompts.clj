@@ -80,7 +80,7 @@
   "- Read the file .mcp-tasks/tasks.ednl
 
 - Find the first incomplete task (marked with `- [ ]`) You can use the
-  `next-task` tool to retrieve the next task without executing it.
+  `select-tasks` tool with `:limit 1` to retrieve the next task without executing it.
 - Show the task description
 ")
 
@@ -120,7 +120,7 @@
   "Create MCP prompts for a sequence of categories.
 
   For each category, creates a prompt that:
-  - Uses the next-task tool to retrieve tasks from .mcp-tasks/tasks.ednl
+  - Uses the select-tasks tool with :limit 1 to retrieve tasks from .mcp-tasks/tasks.ednl
   - Uses instructions from .mcp-tasks/prompts/<category>.md if available,
     otherwise uses default instructions based on next-simple
   - Uses the complete-task tool to mark tasks complete and move them to .mcp-tasks/complete.ednl

@@ -314,7 +314,7 @@ Break the refined story into executable tasks:
 **Key elements:**
 - Each task has `:parent-id` field linking it to the story
 - Tasks stored in unified `.mcp-tasks/tasks.ednl` file
-- Use `next-task` with `parent-id` filter to query story tasks
+- Use `select-tasks` with `parent-id` filter to query story tasks
 - Tasks are ordered by dependencies (earlier tasks first)
 
 #### 3. Task Execution
@@ -326,8 +326,8 @@ Execute story tasks one at a time:
 ```
 
 **Process:**
-1. Agent finds the story task using `next-task` with `title-pattern`
-2. Finds first incomplete child using `next-task` with `parent-id` filter
+1. Agent finds the story task using `select-tasks` with `title-pattern` and `:unique? true`
+2. Finds first incomplete child using `select-tasks` with `parent-id` filter and `:limit 1`
 3. Extracts the task category and details from the EDN record
 4. Executes the task directly using the category's workflow
 5. Upon success, marks the task as complete using `complete-task` tool
@@ -570,56 +570,53 @@ When you run `/mcp-tasks:execute-story-task user-auth`:
 
 ### Story Tools
 
-#### next-task (with filtering for stories)
+#### select-tasks
 
-The `next-task` tool supports optional filtering parameters that enable story task queries:
+The `select-tasks` tool supports optional filtering parameters that enable story task queries and returns multiple tasks:
 
 **Parameters:**
 - `category` (string, optional) - Filter by task category
 - `parent-id` (integer, optional) - Filter by parent task ID (for finding story child tasks)
 - `title-pattern` (string, optional) - Filter by title pattern (regex or substring match)
+- `limit` (integer, optional, default: 5) - Maximum number of tasks to return
+- `unique?` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
 
-All parameters are optional and AND-ed together when provided.
+All filter parameters are optional and AND-ed together when provided.
 
 **Returns:**
 
-A map with three keys:
-- `:task` (string) - The full task text (title + description)
-- `:category` (string) - The task's category
-- `:task-id` (integer) - The task's unique identifier
-
-Returns `{:status "No matching tasks found"}` if no tasks match the filters.
+A map with two keys:
+- `:tasks` (vector) - Vector of task maps (empty if no matches)
+- `:metadata` (map) - Selection metadata (count, total-matches, limited?)
 
 **Example - Finding a story by title:**
 ```clojure
 ;; Call
-{:title-pattern "user-auth"}
+{:title-pattern "user-auth" :unique? true}
 
 ;; Return
-{:task "Complete remaining work for EDN storage migration"
- :category "story"
- :task-id 13}
+{:tasks [{:id 13 :title "User Authentication" :category "story" ...}]
+ :metadata {:count 1 :total-matches 1 :limited? false}}
 ```
 
 **Example - Finding story child tasks:**
 ```clojure
 ;; First find the story
-{:title-pattern "user-auth"}  ; Returns {:task-id 13 ...}
+{:title-pattern "user-auth" :unique? true}  ; Returns {:tasks [{:id 13 ...}] ...}
 
 ;; Then find first incomplete child
-{:parent-id 13}
+{:parent-id 13 :limit 1}
 
 ;; Return
-{:task "Enhance next-task tool to support filtering\n\n- Change the next-task tool..."
- :category "medium"
- :task-id 29}
+{:tasks [{:id 29 :title "Enhance select-tasks tool" :category "medium" ...}]
+ :metadata {:count 1 :total-matches 3 :limited? true}}
 ```
 
 **Usage:**
 ```
-Use next-task with title-pattern to find story tasks, then use parent-id
-to query child tasks. The returned task-id can be used with complete-task.
-This replaces the deprecated next-story-task tool.
+Use select-tasks with title-pattern and :unique? true to find story tasks,
+then use parent-id to query child tasks. Use :limit to control how many
+tasks are returned. The task :id can be used with complete-task.
 ```
 
 #### complete-task
@@ -748,7 +745,7 @@ Break down a story into categorized, executable tasks.
 **Key characteristics:**
 - Task descriptions are specific enough to be actionable without additional context
 - Tasks are stored in unified `.mcp-tasks/tasks.ednl` with `:parent-id` linking
-- Use `next-task` with `parent-id` filter to query story tasks
+- Use `select-tasks` with `parent-id` filter to query story tasks
 - Multi-line descriptions are supported in the `:description` field
 - Tasks are ordered to respect dependencies
 
@@ -770,8 +767,8 @@ Execute the next task from a story.
 
 **Behavior:**
 1. Finds the story and its first incomplete child task:
-   - First, uses `next-task` with `title-pattern` to find the story in tasks.ednl
-   - Then uses `next-task` with `parent-id` filter to get the first incomplete child
+   - First, uses `select-tasks` with `title-pattern` and `:unique? true` to find the story in tasks.ednl
+   - Then uses `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - If no incomplete tasks found, informs the user and stops
    - If no category is found for the task, informs the user and stops
 2. Executes the task directly using the category workflow:

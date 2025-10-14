@@ -67,7 +67,7 @@ The system provides story support for managing larger features or initiatives th
    - Each task uses appropriate `:category` for execution workflow
 
 3. **Execute Story Task** - Execute the next incomplete task from a story
-   - Finds story and first incomplete child using `next-task` tool with filtering
+   - Finds story and first incomplete child using `select-tasks` tool with filtering
    - Executes task directly using category-specific workflow (e.g., simple, medium, large)
    - Marks task as complete using `complete-task` tool after successful execution
 
@@ -87,7 +87,7 @@ Story tasks are stored in `.mcp-tasks/tasks.ednl` as regular Task records with:
 - `:category` field determining which execution workflow to use
 - All other standard Task schema fields (`:title`, `:description`, `:design`, etc.)
 
-Story tasks are retrieved using the `next-task` tool with `parent-id` filtering.
+Story tasks are retrieved using the `select-tasks` tool with `parent-id` filtering.
 
 **Branch Management:**
 Story execution includes automatic branch management:
@@ -96,7 +96,7 @@ Story execution includes automatic branch management:
 - Manual merge/push after story completion
 
 **Story Tools:**
-- `next-task` - Get next task with optional filtering (use `parent-id` for story tasks)
+- `select-tasks` - Get tasks with optional filtering (use `parent-id` for story tasks)
 - `complete-task` - Mark any task (including story tasks) as complete
 
 ## If you see a problem that needs fixing

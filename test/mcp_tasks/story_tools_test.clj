@@ -1,8 +1,8 @@
 (ns mcp-tasks.story-tools-test
-  "Tests for story task filtering using enhanced next-task tool"
+  "Tests for story task filtering using enhanced select-tasks tool"
   (:require
     [babashka.fs :as fs]
-    [clojure.edn :as edn]
+    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.tasks-file :as tasks-file]
@@ -34,11 +34,11 @@
     (.mkdirs (.getParentFile file))
     (tasks-file/write-tasks (.getPath file) tasks)))
 
-;; next-task with parent-id filter Tests
+;; select-tasks with parent-id filter Tests
 
-(deftest next-task-returns-first-incomplete-child-by-parent-id
-  ;; Test that next-task with parent-id filter returns the first incomplete child task
-  (testing "next-task with parent-id filter"
+(deftest select-tasks-returns-first-incomplete-child-by-parent-id
+  ;; Test that select-tasks with parent-id filter returns the first incomplete child task
+  (testing "select-tasks with parent-id filter"
     (testing "returns first incomplete child task"
       (let [story {:id 1
                    :type :story
@@ -81,21 +81,22 @@
                                :relations []}]
         (write-tasks-ednl [story completed-task first-incomplete second-incomplete])
         (let [config {:base-dir *test-dir* :use-git? false}
-              result (#'tools/next-task-impl
+              result (#'tools/select-tasks-impl
                       config
                       nil
-                      {:parent-id 1})]
+                      {:parent-id 1 :limit 1})]
           (is (false? (:isError result)))
-          (let [task (edn/read-string (get-in result [:content 0 :text]))]
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+                task (first (:tasks response))]
             (is (= "First incomplete" (:title task)))
             (is (= "With details" (:description task)))
             (is (= "medium" (:category task)))
             (is (= 3 (:id task)))))))))
 
-(deftest next-task-returns-no-match-when-no-incomplete-children
-  ;; Test that next-task with parent-id filter returns no match when no incomplete children
-  (testing "next-task with parent-id filter"
-    (testing "returns no match when no incomplete children"
+(deftest select-tasks-returns-no-match-when-no-incomplete-children
+  ;; Test that select-tasks with parent-id filter returns empty tasks when no incomplete children
+  (testing "select-tasks with parent-id filter"
+    (testing "returns empty tasks when no incomplete children"
       (let [story {:id 1
                    :type :story
                    :title "test-story"
@@ -117,17 +118,17 @@
                             :relations []}]
         (write-tasks-ednl [story completed-task])
         (let [config {:base-dir *test-dir* :use-git? false}
-              result (#'tools/next-task-impl
+              result (#'tools/select-tasks-impl
                       config
                       nil
                       {:parent-id 1})]
           (is (false? (:isError result)))
-          (let [data (edn/read-string (get-in result [:content 0 :text]))]
-            (is (= "No matching tasks found" (:status data)))))))))
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+            (is (empty? (:tasks response)))))))))
 
-(deftest next-task-by-title-pattern-finds-story
-  ;; Test that next-task with title-pattern can find story tasks
-  (testing "next-task with title-pattern filter"
+(deftest select-tasks-by-title-pattern-finds-story
+  ;; Test that select-tasks with title-pattern can find story tasks
+  (testing "select-tasks with title-pattern filter"
     (testing "finds story by title pattern"
       (let [story {:id 1
                    :type :story
@@ -149,19 +150,20 @@
                         :relations []}]
         (write-tasks-ednl [story other-task])
         (let [config {:base-dir *test-dir* :use-git? false}
-              result (#'tools/next-task-impl
+              result (#'tools/select-tasks-impl
                       config
                       nil
-                      {:title-pattern "test-story"})]
+                      {:title-pattern "test-story" :limit 1})]
           (is (false? (:isError result)))
-          (let [task (edn/read-string (get-in result [:content 0 :text]))]
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+                task (first (:tasks response))]
             (is (= "test-story" (:title task)))
             (is (= "story" (:category task)))
             (is (= 1 (:id task)))))))))
 
-(deftest next-task-combines-multiple-filters
-  ;; Test that next-task can combine parent-id and category filters
-  (testing "next-task with multiple filters"
+(deftest select-tasks-combines-multiple-filters
+  ;; Test that select-tasks can combine parent-id and category filters
+  (testing "select-tasks with multiple filters"
     (testing "combines parent-id and category filters"
       (let [story {:id 1
                    :type :story
@@ -194,12 +196,13 @@
                          :relations []}]
         (write-tasks-ednl [story simple-task medium-task])
         (let [config {:base-dir *test-dir* :use-git? false}
-              result (#'tools/next-task-impl
+              result (#'tools/select-tasks-impl
                       config
                       nil
-                      {:parent-id 1 :category "medium"})]
+                      {:parent-id 1 :category "medium" :limit 1})]
           (is (false? (:isError result)))
-          (let [task (edn/read-string (get-in result [:content 0 :text]))]
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+                task (first (:tasks response))]
             (is (= "Medium task" (:title task)))
             (is (= "medium" (:category task)))
             (is (= 3 (:id task)))))))))

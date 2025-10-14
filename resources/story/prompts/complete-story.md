@@ -16,13 +16,13 @@ Use this tool after all story tasks are complete and the implementation has been
 
 ## Process
 
-1. Retrieve the story using the `next-task` tool with `title-pattern` matching the story name
+1. Retrieve the story using the `select-tasks` tool with `title-pattern` matching the story name and `:unique? true`
    - The story is stored as a task with `:type :story` in `.mcp-tasks/tasks.ednl`
    - If the story doesn't exist in tasks.ednl, check complete.ednl
    - If already in complete.ednl, inform the user it's already completed
 
 2. Verify all child tasks are complete:
-   - Use `next-task` with `parent-id` filter to check for any incomplete child tasks
+   - Use `select-tasks` with `parent-id` filter to check for any incomplete child tasks
    - If incomplete tasks remain, inform the user and list them
    - Do not proceed with story completion until all tasks are done
 

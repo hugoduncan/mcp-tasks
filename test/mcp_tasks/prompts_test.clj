@@ -235,7 +235,7 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"next-task" content))
+        (is (re-find #"select-tasks" content))
         (is (re-find #"update-task" content))
         (is (re-find #"interactive" content))))
 
@@ -266,7 +266,7 @@
         (is (some? content))
         (is (string? content))
         (is (re-find #"story-name" content))
-        (is (re-find #"next-task.*tool.*title-pattern" content))
+        (is (re-find #"select-tasks.*tool.*title-pattern" content))
         (is (re-find #"add-task" content))
         (is (re-find #"tasks\.ednl" content))
         (is (re-find #"category" content))))
@@ -311,14 +311,14 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"next-task" content))
+        (is (re-find #"select-tasks" content))
         (is (re-find #"complete-task" content))
         (is (re-find #"category" content))))
 
     (testing "includes task execution workflow"
       (let [prompt (sut/get-story-prompt "execute-story-task")
             content (:content prompt)]
-        (is (re-find #"next-task" content))
+        (is (re-find #"select-tasks" content))
         (is (re-find #"complete-task" content))))
 
     (testing "appears in list-story-prompts"

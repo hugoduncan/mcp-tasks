@@ -234,6 +234,94 @@
       (is (nil? (tasks/get-next-incomplete :parent-id 999)))
       (is (nil? (tasks/get-next-incomplete :title-pattern "nonexistent"))))))
 
+(deftest get-tasks-test
+  ;; Test get-tasks returns multiple matching tasks in order
+  (testing "get-tasks"
+    (testing "returns empty vector when no tasks exist"
+      (is (= [] (tasks/get-tasks))))
+
+    (testing "returns all incomplete tasks in order"
+      (reset! tasks/task-ids [1 2 4])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2
+                           4 test-task-4})
+      (let [result (tasks/get-tasks)]
+        (is (= 3 (count result)))
+        (is (= [1 2 4] (map :id result)))))
+
+    (testing "filters by category and returns multiple matches"
+      (reset! tasks/task-ids [1 2 4])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2
+                           4 test-task-4})
+      (let [result (tasks/get-tasks :category "simple")]
+        (is (= 2 (count result)))
+        (is (= [1 4] (map :id result)))))
+
+    (testing "filters by parent-id and returns multiple children"
+      (let [child-1 (assoc test-task-3 :id 5 :status :open :parent-id 1)
+            child-2 (assoc test-task-3 :id 6 :status :open :parent-id 1)]
+        (reset! tasks/task-ids [1 5 6])
+        (reset! tasks/tasks {1 test-task-1
+                             5 child-1
+                             6 child-2})
+        (let [result (tasks/get-tasks :parent-id 1)]
+          (is (= 2 (count result)))
+          (is (= [5 6] (map :id result))))))
+
+    (testing "filters by title-pattern with substring match"
+      (reset! tasks/task-ids [1 2 4])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2
+                           4 test-task-4})
+      (let [result (tasks/get-tasks :title-pattern "Task")]
+        (is (= 3 (count result)))
+        (is (= [1 2 4] (map :id result)))))
+
+    (testing "filters by title-pattern with regex"
+      (reset! tasks/task-ids [1 2 4])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2
+                           4 test-task-4})
+      (let [result (tasks/get-tasks :title-pattern "Task [12]")]
+        (is (= 2 (count result)))
+        (is (= [1 2] (map :id result)))))
+
+    (testing "combines multiple filters with AND"
+      (let [task-5 (assoc test-task-1 :id 5 :category "simple" :title "Simple A")
+            task-6 (assoc test-task-2 :id 6 :category "simple" :title "Simple B")]
+        (reset! tasks/task-ids [1 5 6])
+        (reset! tasks/tasks {1 test-task-1
+                             5 task-5
+                             6 task-6})
+        (let [result (tasks/get-tasks :category "simple" :title-pattern "Simple")]
+          (is (= 2 (count result)))
+          (is (= [5 6] (map :id result))))))
+
+    (testing "skips closed tasks"
+      (reset! tasks/task-ids [3 1 2])
+      (reset! tasks/tasks {3 test-task-3
+                           1 test-task-1
+                           2 test-task-2})
+      (let [result (tasks/get-tasks)]
+        (is (= 2 (count result)))
+        (is (= [1 2] (map :id result)))))
+
+    (testing "returns empty vector when no tasks match filters"
+      (reset! tasks/task-ids [1])
+      (reset! tasks/tasks {1 test-task-1})
+      (is (= [] (tasks/get-tasks :category "nonexistent")))
+      (is (= [] (tasks/get-tasks :parent-id 999)))
+      (is (= [] (tasks/get-tasks :title-pattern "nonexistent"))))
+
+    (testing "preserves task order from tasks.ednl"
+      (reset! tasks/task-ids [4 1 2])
+      (reset! tasks/tasks {4 test-task-4
+                           1 test-task-1
+                           2 test-task-2})
+      (let [result (tasks/get-tasks)]
+        (is (= [4 1 2] (map :id result)))))))
+
 ;; Mutation API Tests
 
 (deftest add-task-test

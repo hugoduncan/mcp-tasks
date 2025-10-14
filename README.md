@@ -114,7 +114,7 @@ The agent will:
 
 ```bash
 # Check what was completed
-# Use the next-task tool to view completed tasks in .mcp-tasks/complete.ednl
+# Use the select-tasks tool to view completed tasks in .mcp-tasks/complete.ednl
 
 # Review the git commit
 git log -1 --stat
@@ -264,7 +264,7 @@ Available built-in templates (use `--list-prompts` to see all):
 The prompt file provides custom execution instructions for the category, replacing the default implementation approach.
 
 **Prompt Structure:**
-- Initial steps: Read next task from `tasks.ednl` using `next-task` tool
+- Initial steps: Read next task from `tasks.ednl` using `select-tasks` tool
 - Middle steps: Custom instructions (from `.mcp-tasks/prompts/<category>.md`) or default implementation steps
 - Final steps: Commit changes, mark task complete using `complete-task` tool (moves to `complete.ednl`), update task tracking
 

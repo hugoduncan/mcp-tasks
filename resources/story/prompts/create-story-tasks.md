@@ -12,7 +12,7 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Retrieve the story using the `next-task` tool with `title-pattern` matching the story name
+1. Retrieve the story using the `select-tasks` tool with `title-pattern` matching the story name and `:unique? true`
    - The story is stored as a task with `:type :story` in `.mcp-tasks/tasks.ednl`
    - If the story doesn't exist, inform the user and stop
 
@@ -60,5 +60,5 @@ Parse the arguments: $ARGUMENTS
 - Task descriptions should be specific enough to be actionable without additional context
 - All story tasks automatically get `:parent-id` linking to the story
 - Tasks are stored in the unified `tasks.ednl` file, not separate markdown files
-- Use `next-task` with `parent-id` filtering to find story tasks
+- Use `select-tasks` with `parent-id` filtering to find story tasks
 - Tasks should be ordered to respect dependencies (e.g., create before use)
