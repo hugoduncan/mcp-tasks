@@ -44,7 +44,6 @@
 	    "mcp__mcp-tasks__clj-eval",
 	    "mcp__mcp-tasks__complete-story-task",
 	    "mcp__mcp-tasks__complete-task",
-	    "mcp__mcp-tasks__next-story-task",
 	    "mcp__mcp-tasks__next-task",
 	    "mcp__mcp-tasks__complete-story"
 	],

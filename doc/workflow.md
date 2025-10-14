@@ -731,8 +731,9 @@ Execute the next task from a story's task list.
 - `story-name` - The name of the story (without .md extension)
 
 **Behavior:**
-1. Finds the first incomplete task using the `next-story-task` tool:
-   - Returns task-id, task-text, category, and task-index
+1. Finds the story and its first incomplete child task:
+   - First, uses `next-task` with `title-pattern` to find the story task
+   - Then uses `next-task` with `parent-id` filter to get the first incomplete child
    - If no incomplete tasks found, informs the user and stops
    - If no category is found for the task, informs the user and stops
 2. Executes the task directly using the category workflow:
@@ -740,7 +741,7 @@ Execute the next task from a story's task list.
    - Uses the category-specific workflow from `.mcp-tasks/prompts/<category>.md`
    - Completes all implementation steps according to the category workflow
 3. After successful execution, marks the task as complete:
-   - Uses the `complete-task` tool with the task-id from step 1
+   - Uses the `complete-task` tool with category and task-text
    - Parameters: category, task-text (partial match), and optionally completion-comment
    - Task is marked as :status :closed and moved from tasks.ednl to complete.ednl
    - Confirms completion to the user

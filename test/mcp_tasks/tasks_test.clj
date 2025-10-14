@@ -178,6 +178,63 @@
       (reset! tasks/tasks {1 test-task-1})
       (is (false? (tasks/verify-task-text 1 "No match"))))))
 
+(deftest get-next-incomplete-test
+  ;; Test get-next-incomplete with various filter combinations
+  (testing "get-next-incomplete"
+    (testing "returns nil when no tasks exist"
+      (is (nil? (tasks/get-next-incomplete))))
+
+    (testing "filters by category"
+      (reset! tasks/task-ids [1 2])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2})
+      (is (= test-task-1 (tasks/get-next-incomplete :category "simple")))
+      (is (= test-task-2 (tasks/get-next-incomplete :category "medium"))))
+
+    (testing "filters by parent-id"
+      (let [child-task (assoc test-task-3 :id 5 :status :open :parent-id 1)]
+        (reset! tasks/task-ids [1 5])
+        (reset! tasks/tasks {1 test-task-1
+                             5 child-task})
+        (is (= child-task (tasks/get-next-incomplete :parent-id 1)))))
+
+    (testing "filters by title-pattern with regex"
+      (reset! tasks/task-ids [1 2])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2})
+      (is (= test-task-1 (tasks/get-next-incomplete :title-pattern "Task 1")))
+      (is (= test-task-2 (tasks/get-next-incomplete :title-pattern "Task 2"))))
+
+    (testing "filters by title-pattern with substring match"
+      (reset! tasks/task-ids [1 2])
+      (reset! tasks/tasks {1 test-task-1
+                           2 test-task-2})
+      (is (= test-task-1 (tasks/get-next-incomplete :title-pattern "Task"))))
+
+    (testing "combines multiple filters with AND"
+      (let [child-1 (assoc test-task-3 :id 5 :status :open :parent-id 1 :category "simple" :title "Child A")
+            child-2 (assoc test-task-3 :id 6 :status :open :parent-id 1 :category "medium" :title "Child B")]
+        (reset! tasks/task-ids [1 5 6])
+        (reset! tasks/tasks {1 test-task-1
+                             5 child-1
+                             6 child-2})
+        (is (= child-1 (tasks/get-next-incomplete :parent-id 1 :category "simple")))
+        (is (= child-2 (tasks/get-next-incomplete :parent-id 1 :category "medium")))
+        (is (= child-1 (tasks/get-next-incomplete :parent-id 1 :title-pattern "Child A")))))
+
+    (testing "skips closed tasks"
+      (reset! tasks/task-ids [3 1])
+      (reset! tasks/tasks {3 test-task-3
+                           1 test-task-1})
+      (is (= test-task-1 (tasks/get-next-incomplete))))
+
+    (testing "returns nil when no tasks match filters"
+      (reset! tasks/task-ids [1])
+      (reset! tasks/tasks {1 test-task-1})
+      (is (nil? (tasks/get-next-incomplete :category "nonexistent")))
+      (is (nil? (tasks/get-next-incomplete :parent-id 999)))
+      (is (nil? (tasks/get-next-incomplete :title-pattern "nonexistent"))))))
+
 ;; Mutation API Tests
 
 (deftest add-task-test
