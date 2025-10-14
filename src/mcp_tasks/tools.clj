@@ -299,3 +299,54 @@
       :description "If true, add task at the beginning instead of the end"}}
     :required ["category" "task-text"]}
    :implementation (partial add-task-impl config)})
+
+(defn- update-task-impl
+  "Implementation of update-task tool.
+
+  Updates specified fields of an existing task in tasks.ednl."
+  [config _context {:keys [task-id title description design]}]
+  (try
+    (let [tasks-file (prepare-task-file config)]
+      ;; Load tasks
+      (tasks/load-tasks! tasks-file)
+      ;; Build updates map from provided fields
+      (let [updates (cond-> {}
+                      title (assoc :title title)
+                      description (assoc :description description)
+                      design (assoc :design design))]
+        (when (empty? updates)
+          (throw (ex-info "No fields to update" {:task-id task-id})))
+        ;; Update task in memory
+        (tasks/update-task task-id updates)
+        ;; Save to EDNL file
+        (tasks/save-tasks! tasks-file)
+        {:content [{:type "text"
+                    :text (str "Task " task-id " updated in " tasks-file)}]
+         :isError false}))
+    (catch Exception e
+      (response/error-response e))))
+
+(defn update-task-tool
+  "Tool to update fields of an existing task.
+
+  Accepts config parameter for future git-aware functionality."
+  [config]
+  {:name "update-task"
+   :description "Update fields of an existing task by ID. Only provided fields will be updated."
+   :inputSchema
+   {:type "object"
+    :properties
+    {"task-id"
+     {:type "integer"
+      :description "The ID of the task to update"}
+     "title"
+     {:type "string"
+      :description "New title for the task (optional)"}
+     "description"
+     {:type "string"
+      :description "New description for the task (optional)"}
+     "design"
+     {:type "string"
+      :description "New design notes for the task (optional)"}}
+    :required ["task-id"]}
+   :implementation (partial update-task-impl config)})

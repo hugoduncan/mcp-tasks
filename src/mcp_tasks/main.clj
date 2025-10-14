@@ -112,7 +112,8 @@
     {:transport transport
      :tools {"complete-task" (tools/complete-task-tool config)
              "next-task" (tools/next-task-tool config)
-             "add-task" (tools/add-task-tool config)}
+             "add-task" (tools/add-task-tool config)
+             "update-task" (tools/update-task-tool config)}
      :prompts all-prompts
      :resources (resources/prompt-resources all-prompts)}))
 
