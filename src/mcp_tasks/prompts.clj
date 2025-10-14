@@ -76,14 +76,13 @@
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category.
   Config parameter included for API consistency but not currently used."
-  [_config category]
-  (format "- Read the file .mcp-tasks/tasks/%s.md
+  [_config _category]
+  "- Read the file .mcp-tasks/tasks.ednl
 
 - Find the first incomplete task (marked with `- [ ]`) You can use the
   `next-task` tool to retrieve the next task without executing it.
 - Show the task description
-"
-          category))
+")
 
 (defn- default-prompt-text
   "Generate default execution instructions for a category."
@@ -121,10 +120,10 @@
   "Create MCP prompts for a sequence of categories.
 
   For each category, creates a prompt that:
-  - Reads tasks from .mcp-tasks/tasks/<category>.md
+  - Uses the next-task tool to retrieve tasks from .mcp-tasks/tasks.ednl
   - Uses instructions from .mcp-tasks/prompts/<category>.md if available,
     otherwise uses default instructions based on next-simple
-  - Moves completed tasks to .mcp-tasks/complete/<category>.md
+  - Uses the complete-task tool to mark tasks complete and move them to .mcp-tasks/complete.ednl
   - Conditionally includes git commit instructions based on config :use-git? value
 
   The prompt text is automatically composed from three parts:
@@ -148,7 +147,7 @@
                              execution-instructions
                              (complete-task-prompt-text config category))
             description (or (get metadata "description")
-                            (format "Process the next incomplete task from .mcp-tasks/tasks/%s.md" category))]
+                            (format "Execute the next %s task from .mcp-tasks/tasks.ednl" category))]
         (prompts/valid-prompt?
           {:name (str "next-" category)
            :description description
