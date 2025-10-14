@@ -51,8 +51,8 @@ Task relationships are defined as:
 The system provides story support for managing larger features or initiatives that span multiple tasks:
 
 **Story Storage Structure:**
-- `.mcp-tasks/story/stories/<story-name>.md` - Active story descriptions
-- `.mcp-tasks/story/complete/<story-name>.md` - Completed stories archive
+- Stories are stored as tasks in `.mcp-tasks/tasks.ednl` with `:type :story`
+- Completed stories are moved to `.mcp-tasks/complete.ednl` with `:status :closed`
 - `.mcp-tasks/story/prompts/<story-name>.md` - Custom story-specific prompts (optional)
 
 **Story Workflow:**

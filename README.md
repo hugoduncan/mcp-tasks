@@ -19,7 +19,7 @@ Task-based workflow management for AI agents via Model Context Protocol (MCP).
 claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
 
 # Initialize task directories
-mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+mkdir -p .mcp-tasks/prompts
 
 # (Optional) Initialize as git repository for version control
 cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
@@ -30,19 +30,20 @@ clojure -M:mcp-tasks --list-prompts
 # Install prompt templates (optional)
 clojure -M:mcp-tasks --install-prompts simple,clarify-task
 
-# Create your first task
-echo "- [ ] Add README badges for build status" > .mcp-tasks/tasks/simple.md
+# Add your first task using the MCP tool
+# In Claude Code, use the add-task tool:
+# - category: "simple"
+# - task-text: "Add README badges for build status"
 
-# Or create a story for larger features
-mkdir -p .mcp-tasks/story/stories
-echo "# Add CI Pipeline" > .mcp-tasks/story/stories/ci-setup.md
-echo "" >> .mcp-tasks/story/stories/ci-setup.md
-echo "Set up GitHub Actions for automated testing and deployment" >> .mcp-tasks/story/stories/ci-setup.md
+# Or add a story for larger features
+# - category: "large" 
+# - type: "story"
+# - task-text: "Add CI Pipeline"
 
-# Run in Claude Code
+# Execute tasks in Claude Code
 /mcp-tasks:next-simple
 # Or for story-based development
-/mcp-tasks:refine-story ci-setup
+/mcp-tasks:create-story-tasks "Add CI Pipeline"
 ```
 
 **[Installation Guide](doc/install.md)** • **[Workflow Documentation](doc/workflow.md)**
@@ -80,12 +81,12 @@ See **[doc/install.md](doc/install.md)** for complete setup instructions for Cla
 
 ### 1. Create Task Files
 
-Tasks live in `.mcp-tasks/tasks/<category>.md` as markdown checkboxes:
+Tasks are stored in `.mcp-tasks/tasks.ednl` as EDN records:
 
-```markdown
-- [ ] Implement user authentication with JWT tokens
-- [ ] Add error handling to API endpoints
-- [ ] Write integration tests for payment flow
+```clojure
+{:id 1 :category "simple" :title "Implement user authentication" :status :open ...}
+{:id 2 :category "simple" :title "Add error handling to API endpoints" :status :open ...}
+{:id 3 :category "simple" :title "Write integration tests" :status :open ...}
 ```
 
 ### 2. Run Task Prompts
@@ -102,34 +103,34 @@ Example:
 ```
 
 The agent will:
-- Read the first `- [ ]` task
+- Read the first task with matching category from `tasks.ednl`
 - Analyze requirements in project context
 - Implement the solution
 - Commit changes to your repository
-- Move completed task to `.mcp-tasks/complete/<category>.md`
-- Mark task as `- [x]` in completion archive
+- Move completed task to `complete.ednl` with `:status :closed`
 - Commit the task repo (if git mode enabled)
 
 ### 3. Review and Iterate
 
 ```bash
 # Check what was completed
-cat .mcp-tasks/complete/simple.md
+# Use the next-task tool to view completed tasks in .mcp-tasks/complete.ednl
 
 # Review the git commit
 git log -1 --stat
 
-# Add more tasks
-echo "- [ ] Optimize database queries" >> .mcp-tasks/tasks/simple.md
+# Add more tasks using the add-task tool
+# In Claude Code: add-task with category "simple" and task-text "Optimize database queries"
 ```
 
 ### Real Workflow Example
 
 ```bash
-# Add tasks for different categories
-echo "- [ ] Add user profile endpoint" > .mcp-tasks/tasks/feature.md
-echo "- [ ] Fix memory leak in worker process" > .mcp-tasks/tasks/bugfix.md
-echo "- [ ] Extract validation logic to separate module" > .mcp-tasks/tasks/refactor.md
+# Add tasks for different categories using the add-task tool
+# In Claude Code:
+# - add-task category: "feature", task-text: "Add user profile endpoint"
+# - add-task category: "bugfix", task-text: "Fix memory leak in worker process"  
+# - add-task category: "refactor", task-text: "Extract validation logic to separate module"
 
 # Process tasks by priority
 /mcp-tasks:next-bugfix      # Agent fixes memory leak, commits
@@ -137,7 +138,7 @@ echo "- [ ] Extract validation logic to separate module" > .mcp-tasks/tasks/refa
 /mcp-tasks:next-refactor    # Agent extracts validation, commits
 
 # Check completion history
-cat .mcp-tasks/complete/bugfix.md
+# View completed tasks in .mcp-tasks/complete.ednl
 ```
 
 See **[doc/workflow.md](doc/workflow.md)** for advanced patterns including git worktrees for parallel task execution.
@@ -147,21 +148,22 @@ See **[doc/workflow.md](doc/workflow.md)** for advanced patterns including git w
 For larger features that require multiple related tasks, use story workflows:
 
 ```bash
-# Create a story describing the feature
-cat > .mcp-tasks/story/stories/user-auth.md <<'EOF'
-# User Authentication System
-
-Implement JWT-based authentication with user registration, login, and password reset.
-
-Requirements:
-- User registration with email validation
-- JWT token generation and validation
-- Password hashing with bcrypt
-- Password reset via email
-EOF
+# Create a story using the add-task tool
+# In Claude Code:
+# add-task with:
+#   category: "large"
+#   type: "story"
+#   task-text: "User Authentication System"
+#   description: "Implement JWT-based authentication with user registration, login, and password reset.
+#
+# Requirements:
+# - User registration with email validation
+# - JWT token generation and validation
+# - Password hashing with bcrypt
+# - Password reset via email"
 
 # Refine the story interactively with agent
-/mcp-tasks:refine-story user-auth
+/mcp-tasks:refine-story "User Authentication System"
 
 # Break down into executable tasks
 /mcp-tasks:create-story-tasks user-auth
@@ -194,7 +196,7 @@ cd .mcp-tasks && git init && cd ..
 
 # Non-git mode: Auto-enabled if no .mcp-tasks/.git directory
 # Just create the directory structure - no git needed
-mkdir -p .mcp-tasks/tasks .mcp-tasks/complete
+mkdir -p .mcp-tasks/prompts
 ```
 
 **2. Explicit Configuration (Optional)**
@@ -221,14 +223,20 @@ Override auto-detection by creating `.mcp-tasks.edn` in your project root (sibli
 
 ### Custom Categories
 
-Categories auto-discover from filenames in `.mcp-tasks/tasks/`. Create new categories by adding task files:
+Categories are defined by creating prompt files in `.mcp-tasks/prompts/`. Create new categories by adding prompt templates:
 
 ```bash
-mkdir -p .mcp-tasks/tasks
-echo "- [ ] First documentation task" > .mcp-tasks/tasks/docs.md
+mkdir -p .mcp-tasks/prompts
+cat > .mcp-tasks/prompts/docs.md <<'EOF'
+---
+description: Execute documentation tasks
+---
+# Documentation Task Workflow
+[Your custom execution steps here]
+EOF
 ```
 
-Now `/mcp-tasks:next-docs` is available.
+Now `/mcp-tasks:next-docs` is available for tasks with `category: "docs"`.
 
 ### Category-Specific Instructions
 
@@ -256,9 +264,9 @@ Available built-in templates (use `--list-prompts` to see all):
 The prompt file provides custom execution instructions for the category, replacing the default implementation approach.
 
 **Prompt Structure:**
-- Initial steps: Read task from `.mcp-tasks/tasks/<category>.md`
+- Initial steps: Read next task from `tasks.ednl` using `next-task` tool
 - Middle steps: Custom instructions (from `.mcp-tasks/prompts/<category>.md`) or default implementation steps
-- Final steps: Commit changes, move to `.mcp-tasks/complete/<category>.md`, update task tracking
+- Final steps: Commit changes, mark task complete using `complete-task` tool (moves to `complete.ednl`), update task tracking
 
 See **[doc/workflow.md#category-specific-instructions](doc/workflow.md#category-specific-instructions)** for examples.
 
