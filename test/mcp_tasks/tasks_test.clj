@@ -459,13 +459,13 @@
         (is (= [test-task-2] (tasks-file/read-ednl from-file)))
         (is (= [test-task-1] (tasks-file/read-ednl to-file)))))
 
-    (testing "keeps task in memory after move"
+    (testing "removes task from memory after move"
       (let [from-file (temp-file)
             to-file (temp-file)]
         (tasks-file/append-task from-file test-task-1)
         (tasks/load-tasks! from-file)
         (tasks/move-task! 1 from-file to-file)
-        (is (= test-task-1 (tasks/get-task 1)))))
+        (is (nil? (tasks/get-task 1)))))
 
     (testing "throws on non-existent task"
       (let [from-file (temp-file)

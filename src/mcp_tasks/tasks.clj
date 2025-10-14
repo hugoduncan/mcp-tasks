@@ -290,7 +290,8 @@
   "Move task from one file to another.
 
   Atomically removes task from source file and appends to destination file.
-  Updates in-memory state accordingly.
+  Updates in-memory state by removing the task (since in-memory state represents
+  only tasks.ednl, not complete.ednl).
   Throws ex-info if task not found."
   [id from-file to-file]
   (when-not (get-task id)
@@ -300,5 +301,6 @@
     (tasks-file/delete-task from-file id)
     ;; Append to destination file
     (tasks-file/append-task to-file task)
-    ;; No need to update in-memory state - task still exists, just in different file
+    ;; Remove from in-memory state since it's no longer in tasks.ednl
+    (delete-task id)
     task))
