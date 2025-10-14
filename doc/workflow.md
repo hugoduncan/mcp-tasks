@@ -169,13 +169,15 @@ Stories provide a higher-level workflow for breaking down larger features or epi
 
 ### Story File Structure
 
-Stories are stored in `.mcp-tasks/story/stories/<story-name>.md` as markdown files containing:
+Stories are stored in `.mcp-tasks/tasks.ednl` as EDN records with `:type :story`. Story tasks are stored in the same file as regular Task records with `:parent-id` linking them to their parent story.
 
-**Example story file:**
-```markdown
-# User Authentication Story
-
-## Goal
+**Example story in tasks.ednl:**
+```clojure
+{:id 13
+ :status :open
+ :type :story
+ :title "User Authentication Story"
+ :description "## Goal
 Implement a complete user authentication system with JWT tokens.
 
 ## Requirements
@@ -189,7 +191,36 @@ Implement a complete user authentication system with JWT tokens.
 - Use industry-standard JWT libraries
 - Implement bcrypt for password hashing
 - Add Redis for rate limiting
-- Follow OAuth 2.0 patterns where applicable
+- Follow OAuth 2.0 patterns where applicable"
+ :category "large"
+ :design ""
+ :meta {}
+ :relations []}
+```
+
+**Example story tasks in tasks.ednl:**
+```clojure
+{:id 35
+ :parent-id 13
+ :status :open
+ :type :task
+ :title "Set up JWT library dependencies"
+ :description "Add JWT library to deps.edn, configure for HS256 algorithm"
+ :category "simple"
+ :design ""
+ :meta {}
+ :relations []}
+
+{:id 36
+ :parent-id 13
+ :status :open
+ :type :task
+ :title "Implement password hashing utilities"
+ :description "Create namespace for bcrypt password hashing"
+ :category "medium"
+ :design ""
+ :meta {}
+ :relations []}
 ```
 
 ### Story Workflow Cycle
@@ -203,16 +234,16 @@ Refine a rough story idea into a detailed specification:
 ```
 
 **Process:**
-- Agent reads the initial story from `.mcp-tasks/story/stories/<story-name>.md`
+- Agent finds the story record in `.mcp-tasks/tasks.ednl` by title pattern
 - Asks clarifying questions about requirements, constraints, and approach
 - Iteratively refines the story with your feedback
-- Saves the refined story back to the file
+- Updates the story's `:description` field in tasks.ednl
 
 **Example interaction:**
 ```
 User: /mcp-tasks:refine-story user-auth
 
-Agent: I've read your user-auth story. Let me ask some clarifying questions:
+Agent: I've found your user-auth story in tasks.ednl. Let me ask some clarifying questions:
 1. Which JWT library should we use?
 2. What's the token expiration policy?
 3. Should we support refresh tokens?
@@ -221,11 +252,11 @@ Agent: I've read your user-auth story. Let me ask some clarifying questions:
 User: [Provides answers]
 
 Agent: Based on your answers, here's the refined story...
-[Shows updated story]
+[Shows updated story description]
 
 User: Looks good!
 
-Agent: Story saved to .mcp-tasks/story/stories/user-auth.md
+Agent: Story updated in .mcp-tasks/tasks.ednl
 ```
 
 #### 2. Task Breakdown
@@ -237,46 +268,54 @@ Break the refined story into executable tasks:
 ```
 
 **Process:**
-- Agent reads the story file
+- Agent reads the story from `.mcp-tasks/tasks.ednl`
 - Analyzes requirements and identifies discrete tasks
 - Assigns each task to an appropriate category (simple, medium, large)
-- Creates task file at `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
-- Gets your approval before saving
+- Uses the `add-task` tool to create each task with `:parent-id` linking to the story
+- Gets your approval before creating tasks
+- Tasks are added to `.mcp-tasks/tasks.ednl` in dependency order
 
-**Task file format:**
-```markdown
-# Tasks for user-auth Story
+**Example tasks created:**
+```clojure
+{:id 40
+ :parent-id 13
+ :status :open
+ :type :task
+ :title "Set up JWT library dependencies"
+ :description "Add JWT library to deps.edn, configure for HS256 algorithm, add test dependencies for token validation testing."
+ :category "simple"
+ :design ""
+ :meta {}
+ :relations []}
 
-## Foundation
+{:id 41
+ :parent-id 13
+ :status :open
+ :type :task
+ :title "Implement password hashing utilities"
+ :description "Create namespace for bcrypt password hashing with functions for hash generation and verification. Include edge case handling for invalid inputs."
+ :category "medium"
+ :design ""
+ :meta {}
+ :relations []}
 
-- [ ] STORY: user-auth - Set up JWT library dependencies
-  Add JWT library to deps.edn, configure for HS256 algorithm, add
-  test dependencies for token validation testing.
-
-CATEGORY: simple
-
-- [ ] STORY: user-auth - Implement password hashing utilities
-  Create namespace for bcrypt password hashing with functions for
-  hash generation and verification. Include edge case handling for
-  invalid inputs.
-
-CATEGORY: medium
-
-## Authentication Core
-
-- [ ] STORY: user-auth - Build JWT token generation endpoint
-  Implement /api/auth/login endpoint that validates credentials,
-  generates JWT token with user claims, returns token and expiry.
-  Handle invalid credentials gracefully.
-
-CATEGORY: medium
+{:id 42
+ :parent-id 13
+ :status :open
+ :type :task
+ :title "Build JWT token generation endpoint"
+ :description "Implement /api/auth/login endpoint that validates credentials, generates JWT token with user claims, returns token and expiry. Handle invalid credentials gracefully."
+ :category "medium"
+ :design ""
+ :meta {}
+ :relations []}
 ```
 
-**Key format elements:**
-- Each task starts with `- [ ] STORY: <story-name> - <description>`
-- Multi-line task descriptions are indented under the checkbox line
-- Each task has a `CATEGORY: <category>` line on its own line
-- Tasks can be organized into sections with markdown headings
+**Key elements:**
+- Each task has `:parent-id` field linking it to the story
+- Tasks stored in unified `.mcp-tasks/tasks.ednl` file
+- Use `next-task` with `parent-id` filter to query story tasks
+- Tasks are ordered by dependencies (earlier tasks first)
 
 #### 3. Task Execution
 
@@ -287,18 +326,19 @@ Execute story tasks one at a time:
 ```
 
 **Process:**
-1. Agent finds the story task and first incomplete child using `next-task` tool with filtering
-2. Extracts the task text and category
-3. Executes the task directly using the category's workflow
-4. Upon success, marks the task as complete using `complete-task` tool
-5. Task is moved from tasks.ednl to complete.ednl
+1. Agent finds the story task using `next-task` with `title-pattern`
+2. Finds first incomplete child using `next-task` with `parent-id` filter
+3. Extracts the task category and details from the EDN record
+4. Executes the task directly using the category's workflow
+5. Upon success, marks the task as complete using `complete-task` tool
+6. Task is moved from tasks.ednl to complete.ednl with `:status :closed`
 
 **Example execution:**
 ```
 User: /mcp-tasks:execute-story-task user-auth
 
-Agent: Found next task: "STORY: user-auth - Set up JWT library dependencies"
-       Task ID: 42
+Agent: Found story: User Authentication Story (ID: 13)
+       Found next task: "Set up JWT library dependencies" (ID: 40)
        Category: simple
 
        [Executes task using simple workflow...]
@@ -312,18 +352,20 @@ Agent: Found next task: "STORY: user-auth - Set up JWT library dependencies"
 
 #### 4. Progress Tracking
 
-Check story progress at any time:
+Check story progress at any time by querying the EDN files:
 
 ```bash
-# View all tasks
-cat .mcp-tasks/story/story-tasks/<story-name>-tasks.md
+# View all tasks for a story
+grep -A 10 ":parent-id 13" .mcp-tasks/tasks.ednl
 
-# Count completed vs total tasks
-grep -c "^- \[x\]" .mcp-tasks/story/story-tasks/user-auth-tasks.md
-grep -c "^- \[ \]" .mcp-tasks/story/story-tasks/user-auth-tasks.md
+# Count incomplete story tasks
+grep -c ":parent-id 13" .mcp-tasks/tasks.ednl
+
+# View completed story tasks
+grep -A 10 ":parent-id 13" .mcp-tasks/complete.ednl
 ```
 
-Completed tasks are marked with `- [x]` but remain in the story task file for the full context.
+Completed tasks are moved to `complete.ednl` with `:status :closed`, preserving the full task context including `:parent-id`.
 
 ### Story Branch Management
 
@@ -354,37 +396,37 @@ echo '{:use-git? true :story-branch-management? true}' > .mcp-tasks.edn
 ### Complete Story Workflow Example
 
 ```bash
-# 1. Create initial story file
-cat > .mcp-tasks/story/stories/user-auth.md <<EOF
-# User Authentication
-
-We need user authentication with JWT tokens.
-EOF
+# 1. Create initial story using add-task tool
+# Use the MCP add-task tool or manually add to tasks.ednl:
+# {:id 50 :status :open :type :story :title "User Authentication"
+#  :description "We need user authentication with JWT tokens."
+#  :category "large" :design "" :meta {} :relations []}
 
 # 2. Refine the story
-# Run: /mcp-tasks:refine-story user-auth
+# Run: /mcp-tasks:refine-story "User Authentication"
 # [Interactive refinement with agent]
 
 # 3. Break into tasks
-# Run: /mcp-tasks:create-story-tasks user-auth
+# Run: /mcp-tasks:create-story-tasks "User Authentication"
 # [Agent proposes task breakdown, you approve]
+# Tasks are created in tasks.ednl with :parent-id 50
 
 # 4. Execute tasks one by one
-# Run: /mcp-tasks:execute-story-task user-auth
-# [First task executes]
+# Run: /mcp-tasks:execute-story-task "User Authentication"
+# [First task executes and moves to complete.ednl]
 
-# Run: /mcp-tasks:execute-story-task user-auth
-# [Second task executes]
+# Run: /mcp-tasks:execute-story-task "User Authentication"
+# [Second task executes and moves to complete.ednl]
 
 # ... repeat until all tasks complete
 
 # 5. Review the completed work
-cat .mcp-tasks/story/story-tasks/user-auth-tasks.md
-# All tasks marked with [x]
+grep ":parent-id 50" .mcp-tasks/complete.ednl
+# All story tasks with :status :closed
 
 # 6. Merge story branch (if using branch management)
 git checkout master
-git merge user-auth
+git merge user-authentication
 ```
 
 ### Story Prompt Customization
@@ -448,8 +490,8 @@ description: Break down stories with strict 2-hour task limits
 
 Break down the story into tasks following these rules:
 
-1. Read the story from `.mcp-tasks/story/stories/{story-name}.md`
-2. If the file doesn't exist, inform the user and stop
+1. Find the story in `.mcp-tasks/tasks.ednl` by title pattern
+2. If the story doesn't exist, inform the user and stop
 3. Analyze the story and create specific, actionable tasks
 4. Apply strict category rules:
    - simple: Must complete in under 2 hours, no external dependencies
@@ -460,15 +502,14 @@ Break down the story into tasks following these rules:
    - Estimated time in task description
    - Explicit dependencies listed
 6. Present the breakdown with time estimates
-7. Get user approval before writing to `.mcp-tasks/story/story-tasks/{story-name}-tasks.md`
+7. Get user approval before creating tasks using the add-task tool
 
-Task format:
-- [ ] STORY: {story-name} - <title>
-  <description>
-  Estimated time: X hours
-  Dependencies: <list or "none">
-
-CATEGORY: <category>
+Task creation:
+For each task, use add-task with:
+- category: <category>
+- task-text: "<title>\n<description>\nEstimated time: X hours\nDependencies: <list or 'none'>"
+- story-name: {story-name}
+- type: "task"
 ```
 
 This override enforces time-based categorization and explicit dependency tracking that may not be in the default prompt.
@@ -632,15 +673,15 @@ In git mode, use the modified-files output to commit the task tracking change.
 
 #### refine-story
 
-Interactively refine a story document with user feedback.
+Interactively refine a story with user feedback.
 
 **Arguments:**
-- `story-name` - The name of the story to refine (without .md extension)
+- `story-name` - The title or pattern matching the story to refine
 
 **Behavior:**
-1. Reads the story file from `.mcp-tasks/story/stories/<story-name>.md`
-2. If the file doesn't exist, informs the user and stops
-3. Displays the current story content
+1. Finds the story in `.mcp-tasks/tasks.ednl` using title pattern matching
+2. If the story doesn't exist, informs the user and stops
+3. Displays the current story content from the `:description` field
 4. Enters an interactive refinement loop:
    - Analyzes the story for clarity, completeness, and feasibility
    - Suggests specific improvements
@@ -650,8 +691,8 @@ Interactively refine a story document with user feedback.
    - Incorporates user modifications
    - Continues until user is satisfied
 5. Shows the final refined story for approval
-6. If approved, writes the updated content back to the story file
-7. Confirms the save operation
+6. If approved, updates the story's `:description` field in tasks.ednl
+7. Confirms the update operation
 
 **Key characteristics:**
 - Collaborative and iterative process
@@ -661,11 +702,11 @@ Interactively refine a story document with user feedback.
 
 **Usage example:**
 ```
-/mcp-tasks:refine-story user-authentication
+/mcp-tasks:refine-story "User Authentication"
 
-The agent will read the user-authentication story, analyze it, and guide
-you through an interactive refinement process to improve the story's clarity
-and completeness.
+The agent will find the User Authentication story in tasks.ednl, analyze it,
+and guide you through an interactive refinement process to improve the story's
+clarity and completeness.
 ```
 
 #### create-story-tasks
@@ -673,18 +714,16 @@ and completeness.
 Break down a story into categorized, executable tasks.
 
 **Arguments:**
-- `story-name` - The name of the story to break down (without .md extension)
+- `story-name` - The title or pattern matching the story to break down
 
 **Behavior:**
-1. Reads the story file from `.mcp-tasks/story/stories/<story-name>.md`
-2. If the file doesn't exist, informs the user and stops
-3. Displays the story content
+1. Finds the story in `.mcp-tasks/tasks.ednl` using title pattern matching
+2. If the story doesn't exist, informs the user and stops
+3. Displays the story content from the `:description` field
 4. Analyzes the story and breaks it down into specific, actionable tasks:
    - Each task is concrete and achievable
    - Tasks follow a logical sequence (dependencies first)
-   - Related tasks are grouped into sections
-   - Each task is prefixed with `STORY: <story-name> - `
-   - Each task has a `CATEGORY: <category>` line after the task description
+   - Related tasks are grouped logically
 5. Applies category selection guidance:
    - `simple` - Straightforward tasks, small changes, documentation updates
    - `medium` - Tasks requiring analysis and design, moderate complexity
@@ -692,58 +731,57 @@ Break down a story into categorized, executable tasks.
    - `clarify-task` - Tasks that need clarification before execution
 6. Presents the task breakdown to the user with category assignments
 7. Gets user feedback and makes adjustments
-8. Once approved, writes the tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
-   - Includes a header: `# Tasks for <story-name> Story`
-   - Organizes tasks by logical sections with `## Section Name` headers
-   - Maintains the checkbox format with STORY prefix and CATEGORY metadata
-   - Ensures blank lines between tasks for readability
-9. Confirms the save operation
+8. Once approved, creates each task using the `add-task` tool:
+   - Sets `:parent-id` to link the task to the story
+   - Assigns the appropriate `:category`
+   - Sets `:type` (typically "task", "bug", or "feature")
+   - Includes reference to story in description
+   - Tasks are added in dependency order
+9. Confirms task creation with count and next steps
 
-**Task format:**
-```markdown
-- [ ] STORY: <story-name> - <brief task title>
-  <additional task details on continuation lines>
-  <more details as needed>
-
-CATEGORY: <category>
-```
+**Task creation parameters:**
+- `category`: The selected category (simple, medium, large, clarify-task)
+- `task-text`: Title on first line, then description
+- `story-name`: Story name (automatically sets `:parent-id`)
+- `type`: "task", "bug", "feature", or "chore"
 
 **Key characteristics:**
 - Task descriptions are specific enough to be actionable without additional context
-- The STORY prefix helps track which story each task belongs to
-- The CATEGORY line is metadata used for routing
-- Multi-line task descriptions are supported and encouraged
+- Tasks are stored in unified `.mcp-tasks/tasks.ednl` with `:parent-id` linking
+- Use `next-task` with `parent-id` filter to query story tasks
+- Multi-line descriptions are supported in the `:description` field
 - Tasks are ordered to respect dependencies
 
 **Usage example:**
 ```
-/mcp-tasks:create-story-tasks user-authentication
+/mcp-tasks:create-story-tasks "User Authentication"
 
-The agent will read the user-authentication story, break it down into
-discrete tasks, assign categories, and save the task list after your approval.
+The agent will find the User Authentication story in tasks.ednl, break it down
+into discrete tasks, assign categories, and create them using the add-task tool
+after your approval.
 ```
 
 #### execute-story-task
 
-Execute the next task from a story's task list.
+Execute the next task from a story.
 
 **Arguments:**
-- `story-name` - The name of the story (without .md extension)
+- `story-name` - The title or pattern matching the story
 
 **Behavior:**
 1. Finds the story and its first incomplete child task:
-   - First, uses `next-task` with `title-pattern` to find the story task
+   - First, uses `next-task` with `title-pattern` to find the story in tasks.ednl
    - Then uses `next-task` with `parent-id` filter to get the first incomplete child
    - If no incomplete tasks found, informs the user and stops
    - If no category is found for the task, informs the user and stops
 2. Executes the task directly using the category workflow:
-   - The task is already in tasks.ednl with its task-id
+   - The task is in tasks.ednl with its `:id` and `:parent-id`
    - Uses the category-specific workflow from `.mcp-tasks/prompts/<category>.md`
    - Completes all implementation steps according to the category workflow
 3. After successful execution, marks the task as complete:
    - Uses the `complete-task` tool with category and task-text
    - Parameters: category, task-text (partial match), and optionally completion-comment
-   - Task is marked as :status :closed and moved from tasks.ednl to complete.ednl
+   - Task is marked as `:status :closed` and moved from tasks.ednl to complete.ednl
    - Confirms completion to the user
 
 **Branch management (conditional):**
@@ -760,18 +798,18 @@ If `:story-branch-management?` is false (default):
 - Executes tasks on the current branch without any branch operations
 
 **Key characteristics:**
-- Tasks are stored in `.mcp-tasks/tasks.ednl` with parent-child relationships
-- Story tasks are child tasks with :parent-id pointing to the story
+- All data stored in `.mcp-tasks/tasks.ednl` with parent-child relationships via `:parent-id`
+- Story tasks are EDN records with `:parent-id` pointing to the story's `:id`
 - The category workflow finds and executes the task by its position in the queue
 - If task execution fails, the task is not marked as complete
 - Branch management is optional and controlled by configuration
 
 **Usage example:**
 ```
-/mcp-tasks:execute-story-task user-authentication
+/mcp-tasks:execute-story-task "User Authentication"
 
-The agent will find the next incomplete task from the user-authentication story,
-execute it directly using that category's workflow, and mark it as complete
+The agent will find the next incomplete task from the User Authentication story
+in tasks.ednl, execute it using that category's workflow, and mark it complete
 using the complete-task tool upon success.
 ```
 
