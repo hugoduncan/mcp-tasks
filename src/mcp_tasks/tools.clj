@@ -254,6 +254,127 @@
     :required []}
    :implementation (partial next-task-impl config)})
 
+(defn- select-tasks-impl
+  "Implementation of select-tasks tool.
+
+  Accepts optional filters (same as next-task):
+  - category: Task category name
+  - parent-id: Parent task ID for filtering children
+  - title-pattern: Pattern to match task titles (regex or substring)
+
+  Additional parameters:
+  - limit: Maximum number of tasks to return (default: 5, must be > 0)
+  - unique?: If true, enforce that 0 or 1 task matches (error if >1)
+
+  Returns JSON-encoded response with tasks vector and metadata."
+  [config _context {:keys [category parent-id title-pattern limit unique?]}]
+  (try
+    ;; Determine effective limit
+    ;; If unique? is true, effective limit is always 1
+    ;; Otherwise use provided limit or default to 5
+    (let [provided-limit? (some? limit)
+          default-limit 5
+          requested-limit (or limit default-limit)]
+
+      ;; Validate limit parameter if provided
+      (when (and provided-limit? (<= requested-limit 0))
+        (let [response-data {:error "limit must be a positive integer (> 0)"
+                             :metadata {:provided-limit requested-limit}}]
+          (throw (ex-info "Invalid limit parameter"
+                          {:response response-data}))))
+
+      ;; Validate limit and unique? compatibility
+      ;; Only error if limit was explicitly provided AND is > 1
+      (when (and unique? provided-limit? (> requested-limit 1))
+        (let [response-data {:error "limit must be 1 when unique? is true (or omit limit)"
+                             :metadata {:provided-limit requested-limit :unique? true}}]
+          (throw (ex-info "Incompatible parameters"
+                          {:response response-data}))))
+
+      (let [effective-limit (if unique? 1 requested-limit)
+            tasks-path (path-helper/task-path config ["tasks.ednl"])
+            tasks-file (:absolute tasks-path)]
+
+        ;; Load tasks from EDNL file
+        (when (file-exists? tasks-file)
+          (tasks/load-tasks! tasks-file))
+
+        ;; Get all matching incomplete tasks
+        (let [all-tasks (tasks/get-tasks
+                          :category category
+                          :parent-id parent-id
+                          :title-pattern title-pattern)
+              total-matches (count all-tasks)
+              limited-tasks (vec (take effective-limit all-tasks))
+              result-count (count limited-tasks)]
+
+          ;; Check unique? constraint
+          (when (and unique? (> total-matches 1))
+            (let [response-data {:error "Multiple tasks matched but :unique? was specified"
+                                 :metadata {:count result-count
+                                            :total-matches total-matches}}]
+              (throw (ex-info "unique? constraint violated"
+                              {:response response-data}))))
+
+          ;; Build success response
+          (let [response-data {:tasks limited-tasks
+                               :metadata {:count result-count
+                                          :total-matches total-matches
+                                          :limited? (> total-matches result-count)}}]
+            {:content [{:type "text"
+                        :text (json/write-str response-data)}]
+             :isError false}))))
+
+    (catch clojure.lang.ExceptionInfo e
+      ;; Handle validation errors with structured response
+      (if-let [response-data (:response (ex-data e))]
+        {:content [{:type "text"
+                    :text (json/write-str response-data)}]
+         :isError false}
+        (response/error-response e)))
+
+    (catch Exception e
+      (response/error-response e))))
+
+(defn select-tasks-tool
+  "Tool to return multiple tasks with optional filters and limits.
+
+  Accepts optional filters:
+  - category: Task category name
+  - parent-id: Parent task ID for filtering children
+  - title-pattern: Pattern to match task titles (regex or substring)
+  - limit: Maximum number of tasks to return (default: 5, must be > 0)
+  - unique?: If true, enforce that 0 or 1 task matches (error if >1)
+
+  All filters are AND-ed together.
+
+  Returns JSON-encoded response:
+  Success: {\"tasks\": [...], \"metadata\": {...}}
+  Error: {\"error\": \"...\", \"metadata\": {...}}"
+  [config]
+  {:name "select-tasks"
+   :description "Return multiple tasks from tasks.ednl with optional filters and limits"
+   :inputSchema
+   {:type "object"
+    :properties
+    {"category"
+     {:type "string"
+      :description "The task category name"}
+     "parent-id"
+     {:type "integer"
+      :description "Parent task ID for filtering children"}
+     "title-pattern"
+     {:type "string"
+      :description "Pattern to match task titles (regex or substring)"}
+     "limit"
+     {:type "integer"
+      :description "Maximum number of tasks to return (default: 5, must be > 0)"}
+     "unique?"
+     {:type "boolean"
+      :description "If true, enforce that 0 or 1 task matches (error if >1)"}}
+    :required []}
+   :implementation (partial select-tasks-impl config)})
+
 (defn- find-story-by-name
   "Find a story task by name in loaded tasks.
 

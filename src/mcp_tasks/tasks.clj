@@ -131,6 +131,38 @@
          (filter title-match?)
          first)))
 
+(defn get-tasks
+  "Find all incomplete tasks matching optional filters.
+
+  Filters are AND-ed together:
+  - category: Task category must match exactly
+  - parent-id: Task must be a child of this parent
+  - title-pattern: Task title must match pattern (regex or substring)
+
+  Returns vector of task maps in the order they appear in tasks.ednl.
+  Returns empty vector if no matching incomplete tasks found."
+  [& {:keys [category parent-id title-pattern]}]
+  (let [ids @task-ids
+        task-map @tasks
+        ;; Build regex if possible, otherwise use substring match
+        title-matcher (when title-pattern
+                        (try
+                          (re-pattern title-pattern)
+                          (catch Exception _
+                            ;; Fall back to substring match
+                            nil)))
+        title-match? (cond
+                       (nil? title-pattern) (constantly true)
+                       title-matcher #(re-find title-matcher (:title % ""))
+                       :else #(str/includes? (:title % "") title-pattern))]
+    (->> ids
+         (map #(get task-map %))
+         (filter #(not= (:status %) :closed))
+         (filter #(or (nil? category) (= (:category %) category)))
+         (filter #(or (nil? parent-id) (= (:parent-id %) parent-id)))
+         (filter title-match?)
+         vec)))
+
 (defn find-by-title
   "Find all tasks with exact title match.
 

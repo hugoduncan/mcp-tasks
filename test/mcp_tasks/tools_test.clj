@@ -304,3 +304,144 @@
         (is (false? (:isError result)))
         (let [response (edn/read-string (get-in result [:content 0 :text]))]
           (is (= "No matching tasks found" (:status response))))))))
+
+(deftest select-tasks-returns-multiple-tasks
+  ;; Test select-tasks returns all matching tasks
+  (testing "select-tasks returns multiple matching tasks"
+    ;; Add three tasks
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task One"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task Two"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task Three"})
+
+    (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test"})
+          response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+      (is (false? (:isError result)))
+      (is (= 3 (count (:tasks response))))
+      (is (= 3 (get-in response [:metadata :count])))
+      (is (= 3 (get-in response [:metadata :total-matches])))
+      (is (false? (get-in response [:metadata :limited?])))
+      (is (= ["Task One" "Task Two" "Task Three"]
+             (map :title (:tasks response)))))))
+
+(deftest select-tasks-limit-parameter
+  ;; Test :limit parameter correctly limits results
+  (testing "select-tasks :limit parameter"
+    ;; Add five tasks
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 1"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 2"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 3"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 4"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 5"})
+
+    (testing "returns up to limit tasks"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 3})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 3 (count (:tasks response))))
+        (is (= 3 (get-in response [:metadata :count])))
+        (is (= 5 (get-in response [:metadata :total-matches])))
+        (is (true? (get-in response [:metadata :limited?])))
+        (is (= ["Task 1" "Task 2" "Task 3"]
+               (map :title (:tasks response))))))
+
+    (testing "uses default limit of 5"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 5 (count (:tasks response))))
+        (is (= 5 (get-in response [:metadata :count])))
+        (is (= 5 (get-in response [:metadata :total-matches])))
+        (is (false? (get-in response [:metadata :limited?])))))))
+
+(deftest select-tasks-unique-constraint
+  ;; Test :unique? enforces 0 or 1 task
+  (testing "select-tasks :unique? constraint"
+    (testing "returns task when exactly one matches"
+      (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Unique Task"})
+
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique? true})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:tasks response))))
+        (is (= 1 (get-in response [:metadata :count])))
+        (is (= 1 (get-in response [:metadata :total-matches])))
+        (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
+
+    (testing "returns empty when no matches"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "nonexistent" :unique? true})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 0 (count (:tasks response))))
+        (is (= 0 (get-in response [:metadata :count])))
+        (is (= 0 (get-in response [:metadata :total-matches])))))
+
+    (testing "returns error when multiple tasks match"
+      (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task One"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task Two"})
+
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique? true})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (contains? response :error))
+        (is (str/includes? (:error response) "Multiple tasks matched"))
+        (is (= 3 (get-in response [:metadata :total-matches])))))))
+
+(deftest select-tasks-validation-errors
+  ;; Test parameter validation errors
+  (testing "select-tasks validation errors"
+    (testing "non-positive limit returns error"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit 0})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (contains? response :error))
+        (is (str/includes? (:error response) "positive integer"))
+        (is (= 0 (get-in response [:metadata :provided-limit])))))
+
+    (testing "negative limit returns error"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit -5})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (contains? response :error))
+        (is (str/includes? (:error response) "positive integer"))))
+
+    (testing "limit > 1 with unique? true returns error"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit 5 :unique? true})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (contains? response :error))
+        (is (str/includes? (:error response) "limit must be 1 when unique?"))
+        (is (= 5 (get-in response [:metadata :provided-limit])))
+        (is (true? (get-in response [:metadata :unique?])))))))
+
+(deftest select-tasks-empty-results
+  ;; Test empty results return empty tasks vector
+  (testing "select-tasks empty results"
+    (let [result (#'sut/select-tasks-impl (test-config) nil {:category "nonexistent"})
+          response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+      (is (false? (:isError result)))
+      (is (= [] (:tasks response)))
+      (is (= 0 (get-in response [:metadata :count])))
+      (is (= 0 (get-in response [:metadata :total-matches])))
+      (is (false? (get-in response [:metadata :limited?]))))))
+
+(deftest select-tasks-metadata-accuracy
+  ;; Test metadata contains accurate information
+  (testing "select-tasks metadata accuracy"
+    ;; Add tasks
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task A"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task B"})
+    (#'sut/add-task-impl (test-config) nil {:category "other" :task-text "Task C"})
+
+    (testing "metadata reflects filtering and limiting"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (= 1 (get-in response [:metadata :count])))
+        (is (= 2 (get-in response [:metadata :total-matches])))
+        (is (true? (get-in response [:metadata :limited?])))))
+
+    (testing "metadata when not limited"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 10})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (= 2 (get-in response [:metadata :count])))
+        (is (= 2 (get-in response [:metadata :total-matches])))
+        (is (false? (get-in response [:metadata :limited?])))))))
