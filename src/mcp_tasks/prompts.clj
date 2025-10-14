@@ -93,18 +93,14 @@
 (defn- complete-task-prompt-text
   "Generate prompt text for completing and tracking a task.
   Conditionally includes git commit instructions based on config :use-git? value."
-  [config category]
-  (let [base-text (format "- Move the completed task to .mcp-tasks/complete/%s.md (append to
-  end, mark as complete with `- [x]`). You can use the `complete-task` tool to
-  mark a task as complete and move it to the completed archive.
-
-- Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave
-  the file empty rather than deleting it)
+  [config _category]
+  (let [base-text "- Mark the completed task as complete using the `complete-task` tool.
+  This will update the task's status to :closed and move it from 
+  .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
 - Summarise any deviations in the execution of the task, compared to the task
   spec.
 "
-                          category category)
         git-text "\n- Commit the task tracking changes in the .mcp-tasks git repository\n"]
     (if (:use-git? config)
       (str base-text git-text)
