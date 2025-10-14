@@ -194,66 +194,6 @@
     :required []}
    :implementation (partial complete-task-impl config)})
 
-(defn next-task-impl
-  "Implementation of next-task tool.
-
-  Accepts optional filters:
-  - category: Task category name
-  - parent-id: Parent task ID for filtering children
-  - title-pattern: Pattern to match task titles (regex or substring)
-
-  Returns the complete task map with all fields from the Task schema,
-  or a map with :status key if there are no matching tasks."
-  [config _context {:keys [category parent-id title-pattern]}]
-  (try
-    (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
-          tasks-file (:absolute tasks-path)]
-
-      ;; Load tasks from EDNL file
-      (when (file-exists? tasks-file)
-        (tasks/load-tasks! tasks-file))
-
-      ;; Get next incomplete task with filters
-      (if-let [task (tasks/get-next-incomplete
-                      :category category
-                      :parent-id parent-id
-                      :title-pattern title-pattern)]
-        {:content [{:type "text"
-                    :text (pr-str task)}]
-         :isError false}
-        {:content [{:type "text"
-                    :text (pr-str {:status "No matching tasks found"})}]
-         :isError false}))
-    (catch Exception e
-      (response/error-response e))))
-
-(defn next-task-tool
-  "Tool to return the next task with optional filters.
-
-  Accepts optional filters:
-  - category: Task category name
-  - parent-id: Parent task ID for filtering children
-  - title-pattern: Pattern to match task titles (regex or substring)
-
-  All filters are AND-ed together."
-  [config]
-  {:name "next-task"
-   :description "Return the next task from tasks.ednl"
-   :inputSchema
-   {:type "object"
-    :properties
-    {"category"
-     {:type "string"
-      :description "The task category name"}
-     "parent-id"
-     {:type "integer"
-      :description "Parent task ID for filtering children"}
-     "title-pattern"
-     {:type "string"
-      :description "Pattern to match task titles (regex or substring)"}}
-    :required []}
-   :implementation (partial next-task-impl config)})
-
 (defn- select-tasks-impl
   "Implementation of select-tasks tool.
 

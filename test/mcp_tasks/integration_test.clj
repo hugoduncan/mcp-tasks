@@ -162,7 +162,7 @@
 
             (let [tool-names (set (map :name tools))]
               (is (contains? tool-names "complete-task"))
-              (is (contains? tool-names "next-task"))
+              (is (contains? tool-names "select-tasks"))
               (is (contains? tool-names "add-task"))
 
               (doseq [tool tools]

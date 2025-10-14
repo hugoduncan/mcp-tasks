@@ -12,8 +12,8 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Get the story task using the `next-task` tool:
-   - Use `title-pattern` parameter with the story name to find the story task
+1. Get the story task using the `select-tasks` tool:
+   - Use `title-pattern` parameter with the story name and `:unique? true` to find the story task
    - If the task doesn't exist, inform the user and stop
    - The story description is in the task's `:description` field
 

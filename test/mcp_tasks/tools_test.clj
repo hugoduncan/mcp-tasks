@@ -257,9 +257,9 @@
           (is (= "Regular task" (:title task))))))))
 
 (deftest ^:integration complete-workflow-add-next-complete
-  ;; Integration test for complete workflow: add task → next task → complete task
+  ;; Integration test for complete workflow: add task → select task → complete task
   (testing "complete workflow with EDN storage"
-    (testing "add → next → complete workflow"
+    (testing "add → select → complete workflow"
       ;; Add first task
       (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
                                                            :task-text "First task\nWith description"})]
@@ -275,9 +275,10 @@
         (is (false? (:isError result))))
 
       ;; Get next task - should be first task
-      (let [result (#'sut/next-task-impl (test-config) nil {:category "test"})]
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [task (edn/read-string (get-in result [:content 0 :text]))]
+        (let [response (edn/read-string (get-in result [:content 0 :text]))
+              task (first (:tasks response))]
           (is (= "test" (:category task)))
           (is (= "First task" (:title task)))
           (is (= "With description" (:description task)))))
@@ -288,9 +289,10 @@
         (is (false? (:isError result))))
 
       ;; Get next task - should now be second task
-      (let [result (#'sut/next-task-impl (test-config) nil {:category "test"})]
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [task (edn/read-string (get-in result [:content 0 :text]))]
+        (let [response (edn/read-string (get-in result [:content 0 :text]))
+              task (first (:tasks response))]
           (is (= "test" (:category task)))
           (is (= "Second task" (:title task)))))
 
@@ -300,10 +302,10 @@
         (is (false? (:isError result))))
 
       ;; Get next task - should have no more tasks
-      (let [result (#'sut/next-task-impl (test-config) nil {:category "test"})]
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
         (is (false? (:isError result)))
         (let [response (edn/read-string (get-in result [:content 0 :text]))]
-          (is (= "No matching tasks found" (:status response))))))))
+          (is (empty? (:tasks response))))))))
 
 (deftest select-tasks-returns-multiple-tasks
   ;; Test select-tasks returns all matching tasks

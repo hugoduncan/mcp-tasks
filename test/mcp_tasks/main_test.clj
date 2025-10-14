@@ -158,26 +158,26 @@
     (testing "tools receive config with git mode enabled"
       (let [config {:use-git? true}
             complete-tool (tools/complete-task-tool config)
-            next-tool (tools/next-task-tool config)
+            next-tool (tools/select-tasks-tool config)
             add-tool (tools/add-task-tool config)]
         (is (map? complete-tool))
         (is (= "complete-task" (:name complete-tool)))
         (is (fn? (:implementation complete-tool)))
         (is (map? next-tool))
-        (is (= "next-task" (:name next-tool)))
+        (is (= "select-tasks" (:name next-tool)))
         (is (map? add-tool))
         (is (= "add-task" (:name add-tool)))))
 
     (testing "tools receive config with git mode disabled"
       (let [config {:use-git? false}
             complete-tool (tools/complete-task-tool config)
-            next-tool (tools/next-task-tool config)
+            next-tool (tools/select-tasks-tool config)
             add-tool (tools/add-task-tool config)]
         (is (map? complete-tool))
         (is (= "complete-task" (:name complete-tool)))
         (is (fn? (:implementation complete-tool)))
         (is (map? next-tool))
-        (is (= "next-task" (:name next-tool)))
+        (is (= "select-tasks" (:name next-tool)))
         (is (map? add-tool))
         (is (= "add-task" (:name add-tool)))))
 
@@ -276,7 +276,7 @@
         (is (= transport (:transport server-config)))
         (is (map? (:tools server-config)))
         (is (contains? (:tools server-config) "complete-task"))
-        (is (contains? (:tools server-config) "next-task"))
+        (is (contains? (:tools server-config) "select-tasks"))
         (is (contains? (:tools server-config) "add-task"))))
 
     (testing "includes story prompts"
