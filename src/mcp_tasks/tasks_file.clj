@@ -55,7 +55,7 @@
 ;; Public API
 
 (defn read-ednl
-  "Read all tasks from an EDNL file.
+  "Read all tasks from an EDNL (EDN Lines) file.
 
   Returns vector of task maps. Missing files return empty vector.
   Malformed or invalid lines are skipped with warnings."
