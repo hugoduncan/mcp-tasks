@@ -9,14 +9,17 @@
   metosin/malli {:mvn/version "0.16.4"}}
 
  :aliases
- {:dev    {:override-deps
+ {:dev    {:extra-deps
+           {babashka/fs {:mvn/version "0.5.22"}}
+           :override-deps
            {org.hugpduncan/mcp-clj-server
             {:git/url   "https://github.com/hugoduncan/mcp-clj"
              :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
              :deps/root "projects/test-dep"}}}
   :test   {:extra-paths ["test"]
            :extra-deps
-           {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+           {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+            babashka/fs {:mvn/version "0.5.22"}}
            :override-deps
            {org.hugpduncan/mcp-clj-server
             {:git/url   "https://github.com/hugoduncan/mcp-clj"

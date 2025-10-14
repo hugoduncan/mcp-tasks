@@ -1,5 +1,6 @@
 (ns mcp-tasks.story-tools-test
   (:require
+    [babashka.fs :as fs]
     [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
@@ -7,52 +8,43 @@
     [mcp-tasks.story-tools :as sut]
     [mcp-tasks.tasks-file :as tasks-file]))
 
-(def test-fixtures-dir
-  "Temporary directory for test fixtures"
-  (str (System/getProperty "java.io.tmpdir") "/mcp-tasks-story-test-" (rand-int 100000)))
-
-(defn- cleanup-test-fixtures
-  "Remove test fixtures directory"
-  []
-  (let [dir (io/file test-fixtures-dir)]
-    (when (.exists dir)
-      (doseq [file (reverse (file-seq dir))]
-        (.delete file)))))
+(def ^:dynamic *test-dir* nil)
 
 (defn- setup-test-dir
   "Create test fixtures directory"
-  []
-  (cleanup-test-fixtures)
-  (.mkdirs (io/file test-fixtures-dir ".mcp-tasks")))
+  [test-dir]
+  (.mkdirs (io/file test-dir ".mcp-tasks")))
 
 (defn test-fixture
   [f]
-  (setup-test-dir)
-  (try
-    (f)
-    (finally
-      (cleanup-test-fixtures))))
+  (let [dir (fs/create-temp-dir {:prefix "mcp-tasks-story-test-"})]
+    (try
+      (binding [*test-dir* (str dir)]
+        (setup-test-dir *test-dir*)
+        (f))
+      (finally
+        (fs/delete-tree dir)))))
 
 (use-fixtures :each test-fixture)
 
 (defn- write-tasks-ednl
   "Write tasks to tasks.ednl file"
   [tasks]
-  (let [file (io/file test-fixtures-dir ".mcp-tasks" "tasks.ednl")]
+  (let [file (io/file *test-dir* ".mcp-tasks" "tasks.ednl")]
     (.mkdirs (.getParentFile file))
     (tasks-file/write-tasks (.getPath file) tasks)))
 
 (defn- read-tasks-ednl
   "Read tasks from tasks.ednl file"
   []
-  (let [file (io/file test-fixtures-dir ".mcp-tasks" "tasks.ednl")]
+  (let [file (io/file *test-dir* ".mcp-tasks" "tasks.ednl")]
     (when (.exists file)
       (tasks-file/read-ednl (.getPath file)))))
 
 (defn- read-complete-ednl
   "Read tasks from complete.ednl file"
   []
-  (let [file (io/file test-fixtures-dir ".mcp-tasks" "complete.ednl")]
+  (let [file (io/file *test-dir* ".mcp-tasks" "complete.ednl")]
     (when (.exists file)
       (tasks-file/read-ednl (.getPath file)))))
 
@@ -102,7 +94,7 @@
                                :meta {}
                                :relations []}]
         (write-tasks-ednl [story completed-task first-incomplete second-incomplete])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/next-story-task-impl
                       config
                       nil
@@ -138,7 +130,7 @@
                             :meta {}
                             :relations []}]
         (write-tasks-ednl [story completed-task])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/next-story-task-impl
                       config
                       nil
@@ -155,7 +147,7 @@
   (testing "next-story-task"
     (testing "errors when story not found"
       (write-tasks-ednl [])
-      (let [config {:base-dir test-fixtures-dir :use-git? false}
+      (let [config {:base-dir *test-dir* :use-git? false}
             result (#'sut/next-story-task-impl
                     config
                     nil
@@ -190,7 +182,7 @@
                   :meta {}
                   :relations []}]
         (write-tasks-ednl [story task])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/complete-story-task-impl
                       config
                       nil
@@ -230,7 +222,7 @@
                   :meta {}
                   :relations []}]
         (write-tasks-ednl [story task])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/complete-story-task-impl
                       config
                       nil
@@ -256,7 +248,7 @@
                    :meta {}
                    :relations []}]
         (write-tasks-ednl [story])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/complete-story-task-impl
                       config
                       nil
@@ -290,7 +282,7 @@
                   :meta {}
                   :relations []}]
         (write-tasks-ednl [story task])
-        (let [config {:base-dir test-fixtures-dir :use-git? true}
+        (let [config {:base-dir *test-dir* :use-git? true}
               result (#'sut/complete-story-task-impl
                       config
                       nil
@@ -342,7 +334,7 @@
                    :meta {}
                    :relations []}]
         (write-tasks-ednl [story task1 task2])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/complete-story-impl
                       config
                       nil
@@ -371,7 +363,7 @@
                    :meta {}
                    :relations []}]
         (write-tasks-ednl [story])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/complete-story-impl
                       config
                       nil
@@ -387,7 +379,7 @@
   (testing "complete-story"
     (testing "errors when story not found"
       (write-tasks-ednl [])
-      (let [config {:base-dir test-fixtures-dir :use-git? false}
+      (let [config {:base-dir *test-dir* :use-git? false}
             result (#'sut/complete-story-impl
                     config
                     nil
@@ -420,7 +412,7 @@
                   :meta {}
                   :relations []}]
         (write-tasks-ednl [story task])
-        (let [config {:base-dir test-fixtures-dir :use-git? false}
+        (let [config {:base-dir *test-dir* :use-git? false}
               result (#'sut/complete-story-impl
                       config
                       nil
@@ -443,7 +435,7 @@
                    :meta {}
                    :relations []}]
         (write-tasks-ednl [story])
-        (let [config {:base-dir test-fixtures-dir :use-git? true}
+        (let [config {:base-dir *test-dir* :use-git? true}
               result (#'sut/complete-story-impl
                       config
                       nil
