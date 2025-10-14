@@ -235,8 +235,8 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/story/stories" content))
+        (is (re-find #"next-task" content))
+        (is (re-find #"update-task" content))
         (is (re-find #"interactive" content))))
 
     (testing "appears in list-story-prompts"
@@ -267,9 +267,9 @@
         (is (string? content))
         (is (re-find #"story-name" content))
         (is (re-find #"\.mcp-tasks/story/stories" content))
-        (is (re-find #"\.mcp-tasks/story/story-tasks" content))
-        (is (re-find #"STORY:" content))
-        (is (re-find #"CATEGORY:" content))))
+        (is (re-find #"add-task" content))
+        (is (re-find #"tasks\.ednl" content))
+        (is (re-find #"category" content))))
 
     (testing "includes category selection guidance"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
@@ -282,8 +282,8 @@
     (testing "includes task format examples"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
             content (:content prompt)]
-        (is (re-find #"multi-line" content))
-        (is (re-find #"checkbox" content))))
+        (is (re-find #"task-text" content))
+        (is (re-find #"Part of story:" content))))
 
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)
