@@ -11,12 +11,36 @@ An MCP (Model Context Protocol) server that provides task-based workflow managem
 ## Architecture
 
 **Task Storage Structure:**
-- `.mcp-tasks/task/<category-name>.md` - Incomplete tasks for each category
-- `.mcp-tasks/completed/<category-name>.md` - Completed tasks archive
-- `.mcp-tasks/prompt/<category-name>.md` - Category-specific execution prompts
+- `.mcp-tasks/tasks.ednl` - All incomplete tasks stored as EDN records
+- `.mcp-tasks/complete.ednl` - All completed tasks archive
+- `.mcp-tasks/prompts/<category-name>.md` - Category-specific execution prompts
 
 **Task File Format:**
-Each category's markdown file contains tasks as checkbox items that can be marked incomplete `- [ ]` or complete `- [x]`.
+Tasks are stored in EDNL (EDN Lines) format where each line is a valid EDN map representing a Task record. The Task schema (defined in `src/mcp_tasks/schema.clj`) includes:
+
+```clojure
+{:id            ;; int - unique task identifier
+ :parent-id     ;; int or nil - optional parent task reference
+ :status        ;; :open | :closed | :in-progress | :blocked
+ :title         ;; string - task title
+ :description   ;; string - detailed task description
+ :design        ;; string - design notes
+ :category      ;; string - execution category (simple, medium, large, etc.)
+ :type          ;; :task | :bug | :feature | :story | :chore
+ :meta          ;; map - arbitrary string key-value metadata
+ :relations     ;; vector of Relation maps
+}
+```
+
+**Relation Schema:**
+Task relationships are defined as:
+
+```clojure
+{:id         ;; int - relation identifier
+ :relates-to ;; int - target task ID
+ :as-type    ;; :blocked-by | :related | :discovered-during
+}
+```
 
 **Dependencies:**
 - Depends on local `mcp-clj` server library at `../mcp-clj/projects/server`
@@ -60,6 +84,8 @@ The system provides story support for managing larger features or initiatives th
    - Preserves implementation history for reference
 
 **Story Task Format:**
+Story tasks are stored in markdown format at `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
+
 ```markdown
 - [ ] STORY: <story-name> - <brief task title>
   <additional task details on continuation lines>
@@ -68,6 +94,8 @@ The system provides story support for managing larger features or initiatives th
 Part of story: @path-to-story-file
 CATEGORY: <category>
 ```
+
+When executed, story tasks are added to the category queue in `.mcp-tasks/tasks.ednl` as regular Task records with `parent-id` linking to the story.
 
 **Branch Management:**
 Story execution includes automatic branch management:

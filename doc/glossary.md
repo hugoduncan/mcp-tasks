@@ -2,36 +2,43 @@
 
 ## Task Management Terms
 
-**Archive**: The `.mcp-tasks/complete/` directory where completed tasks are moved with `- [x]` markers.
+**Archive**: The `.mcp-tasks/complete.ednl` file where completed tasks are stored with `:status :closed`.
 
-**Category**: A task organization unit that determines which prompt will be used to execute a task.
-Each category has a queue of tasks in .mcp-tasks/tasks/<category>.md.
+**Category**: A task organization unit that determines which prompt will be used to execute a task. Each task has a `:category` field that determines its execution workflow.
 
-**Category Discovery**: Automatic detection of available categories by scanning `.mcp-tasks/` subdirectories for `.md` files.
+**Category Discovery**: Automatic detection of available categories by scanning `.mcp-tasks/prompts/` for `.md` files.
 
-**Complete**: Moving a task from `tasks/<category>.md` to `complete/<category>.md` and marking it with `- [x]`.
+**Complete**: Changing a task's `:status` from `:open` to `:closed` and moving it from `tasks.ednl` to `complete.ednl`.
 
-**Completion Comment**: Optional text appended to a task when marking it complete.
+**Completion Comment**: Optional text appended to a task's `:description` field when marking it complete.
 
 **Category Instructions**: Category-specific execution steps defined in `.mcp-tasks/prompts/<category>.md`.
 
+**EDN (Extensible Data Notation)**: Clojure's data format used for task storage, providing rich data types and human-readable structure.
+
+**EDNL (EDN Lines)**: Line-oriented EDN format where each line contains a complete EDN data structure. Used in `tasks.ednl` and `complete.ednl` files.
+
 **Frontmatter**: YAML-style metadata at the start of prompt files delimited by `---`, containing key-value pairs.
 
-**Incomplete Task**: A task marked with `- [ ]` checkbox syntax in markdown.
+**Incomplete Task**: A task with `:status :open` in the `tasks.ednl` file.
 
-**Next Task**: The first incomplete task (first `- [ ]` item) in a category's task file.
+**Next Task**: For a given category, the first task in `tasks.ednl` with matching `:category` field and `:status :open`.
 
 **Prompt**: An MCP resource that instructs agents on how to execute tasks for a specific category.
 
 **Prompt Resource**: An MCP resource exposing a prompt via the `prompt://` URI scheme, enabling programmatic access and inspection.
 
+**Relation**: A typed connection between tasks (e.g., `:blocked-by`, `:related`, `:discovered-during`). Stored in a task's `:relations` vector.
+
 **Resource URI**: A unique identifier for an MCP resource, such as `prompt://next-simple` or `prompt://refine-story`.
 
-**Task**: A single checkbox item (`- [ ]` or `- [x]`) in a markdown file under `.mcp-tasks/`.
+**Task**: An EDN map representing a unit of work with fields defined by the Task schema in `src/mcp_tasks/schema.clj`.
 
-**Task File**: A markdown file containing checkbox-formatted tasks at `.mcp-tasks/tasks/<category>.md`.
+**Task File**: The `tasks.ednl` or `complete.ednl` file containing tasks in EDNL format.
 
-**Task Text**: The content of a task line after the checkbox marker (e.g., for `- [ ] Fix bug`, the task text is "Fix bug").
+**Task Schema**: Malli schema defining required task fields: `:id`, `:status`, `:title`, `:description`, `:design`, `:category`, `:type`, `:meta`, `:relations`, and optional `:parent-id`.
+
+**Task Text**: For display purposes, typically the combination of a task's `:title` and `:description` fields.
 
 **Task Tracking Repository**: The `.mcp-tasks/` directory as a separate git repository for version-controlling task history.
 
@@ -45,12 +52,12 @@ Each category has a queue of tasks in .mcp-tasks/tasks/<category>.md.
 
 ## Workflow Terms
 
-**Audit Trail**: Historical record of completed tasks preserved in `.mcp-tasks/complete/` with full context.
+**Audit Trail**: Historical record of completed tasks preserved in `complete.ednl` with full context.
 
 **Execution Instructions**: The steps an agent follows when processing a task (steps 4-6 in the workflow).
 
-**Prepend**: Adding a new task at the beginning of a task file rather than the end.
+**Prepend**: Adding a new task at the beginning of `tasks.ednl` rather than the end. Tasks are ordered, with earlier tasks having higher priority.
 
-**Task Lifecycle**: The progression of a task from creation → incomplete → completed → archived.
+**Task Lifecycle**: The progression of a task from creation → `:status :open` → `:status :closed` → archived in `complete.ednl`.
 
 **Worktree Workflow**: Using git worktrees to isolate task execution by category in separate directories.

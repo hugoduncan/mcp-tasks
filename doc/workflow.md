@@ -63,7 +63,7 @@ When using the `complete-task` tool:
 - **Git mode**: Returns completion message plus JSON with modified file paths for commit workflows
   ```
   Task completed: <task description>
-  {"modified-files": ["tasks/simple.md", "complete/simple.md"]}
+  {"modified-files": ["tasks.ednl", "complete.ednl"]}
   ```
 
 - **Non-git mode**: Returns only the completion message
@@ -114,32 +114,25 @@ echo ".mcp-tasks/" >> .gitignore
 
 ## Basic Workflow
 
-### 1. Edit Task Files
+### 1. Add Tasks
 
-Tasks are stored in markdown files under `.mcp-tasks/tasks/<category>.md`. Each task is a checkbox item:
+Tasks are stored in EDN format in `.mcp-tasks/tasks.ednl`. Use the `add-task` tool to add tasks:
 
-```markdown
-- [ ] First task to complete
-- [ ] Second task to complete
-- [ ] Third task to complete
+```bash
+# Add a task via MCP tool
+# The tool will create an EDN record with all required fields
 ```
 
 **Key points:**
-- Each line starting with `- [ ]` is an incomplete task
-- Tasks are processed in order from top to bottom
-- You can include detailed specifications and sub-bullets within each task
+- Tasks are EDN maps with fields: `:id`, `:status`, `:title`, `:description`, `:category`, etc.
+- Tasks with matching `:category` are processed in order from top to bottom
+- You can include detailed specifications in the `:description` field
 
 ### 2. Order Tasks
 
-Arrange tasks in the sequence you want them executed. The agent will always process the first incomplete task (the first `- [ ]` item).
+Tasks in `tasks.ednl` are processed in order from top to bottom. The agent will always process the first task with matching `:category` and `:status :open`.
 
-**Example:**
-
-```markdown
-- [ ] High priority: Fix critical bug in authentication
-- [ ] Medium priority: Add user profile feature
-- [ ] Low priority: Refactor deprecated code
-```
+To reorder tasks, you can manually edit `tasks.ednl` or use the `add-task` tool with `prepend: true` to add high-priority tasks at the beginning.
 
 ### 3. Run Task Prompts
 
@@ -155,12 +148,12 @@ Execute the next task in a category by running:
 - `/mcp-tasks:next-bugfix` - Process next bugfix task
 
 The agent will:
-1. Read the first incomplete task
+1. Read the first task with matching category and `:status :open`
 2. Analyze the task specification
 3. Plan the implementation
 4. Execute the solution
 5. Commit changes to your repository
-6. Mark the task as complete and move it to `.mcp-tasks/complete/<category>.md`
+6. Mark the task as complete (`:status :closed`) and move it to `.mcp-tasks/complete.ednl`
 
 ### 4. Review and Iterate
 
@@ -594,7 +587,7 @@ Completes a task in a story's task list by marking it as done.
 
 Git mode enabled:
 - Text item 1: Completion status message
-- Text item 2: JSON-encoded map with `:modified-files` key containing file paths relative to `.mcp-tasks`
+- Text item 2: JSON-encoded map with `:modified-files` key (Note: With EDN storage, this references `tasks.ednl` and `complete.ednl` instead of category-specific markdown files)
 
 Git mode disabled:
 - Single text item: Completion status message
@@ -802,13 +795,14 @@ The system discovers categories automatically by scanning `.mcp-tasks/` subdirec
 
 ### Custom Categories
 
-Create a new category by adding a task file:
+Create a new category by adding a task with that category:
 
 ```bash
-echo "- [ ] My first task" > .mcp-tasks/tasks/my-category.md
+# Use the add-task tool with your custom category name
+# Example: {:category "my-category" :title "My first task" ...}
 ```
 
-The category will be automatically discovered, and you can run:
+The category will be automatically discovered from existing tasks, and you can run:
 
 ```
 /mcp-tasks:next-my-category
@@ -868,12 +862,12 @@ git worktree add ../project-refactor refactor-branch
 
 ### Moving Tasks Between Categories
 
-Simply cut and paste task lines between category files:
+Edit the task's `:category` field in `tasks.ednl`:
 
 ```bash
-# Move a task from simple to feature category
-vim .mcp-tasks/tasks/simple.md     # Remove task line
-vim .mcp-tasks/tasks/feature.md    # Add task line
+# Open tasks.ednl and change the :category field
+vim .mcp-tasks/tasks.ednl
+# Find the task and change {:category "simple" ...} to {:category "feature" ...}
 ```
 
 ### Reviewing Completed Tasks
@@ -881,31 +875,46 @@ vim .mcp-tasks/tasks/feature.md    # Add task line
 Check what has been accomplished:
 
 ```bash
-cat .mcp-tasks/complete/<category>.md
+cat .mcp-tasks/complete.ednl
 ```
 
-Completed tasks are marked with `- [x]` and include the full task specification.
+Completed tasks have `:status :closed` and include the full task specification as an EDN map.
 
 ### Task Specifications
 
 Tasks can be as simple or detailed as needed:
 
 **Simple task:**
-```markdown
-- [ ] Add error logging to the API module
+```clojure
+{:id 1
+ :status :open
+ :title "Add error logging to the API module"
+ :description ""
+ :category "simple"
+ :type :task
+ :design ""
+ :meta {}
+ :relations []}
 ```
 
 **Detailed task:**
-```markdown
-- [ ] Implement user authentication system
-  - Use JWT tokens for session management
-  - Support email/password login
-  - Add password reset flow
-  - Include rate limiting on login endpoints
-  - Write comprehensive tests
+```clojure
+{:id 2
+ :status :open
+ :title "Implement user authentication system"
+ :description "Use JWT tokens for session management
+Support email/password login
+Add password reset flow
+Include rate limiting on login endpoints
+Write comprehensive tests"
+ :category "medium"
+ :type :feature
+ :design ""
+ :meta {}
+ :relations []}
 ```
 
-The agent will read and consider all details when implementing the task.
+The agent will read and consider all details in the `:title` and `:description` fields when implementing the task.
 
 ## Tips and Best Practices
 
@@ -930,8 +939,8 @@ git add .
 git commit -m "Initialize mcp-tasks repository"
 cd ..
 
-# 2. Add tasks to a category
-echo "- [ ] Fix login timeout issue" >> .mcp-tasks/tasks/bugfix.md
+# 2. Add tasks to a category (use the add-task MCP tool)
+# The tool will append the task to tasks.ednl with category "bugfix"
 
 # 3. Process a bugfix task
 # Run: /mcp-tasks:next-bugfix
@@ -942,7 +951,7 @@ git log -1 --stat                        # Main repo commits
 cd .mcp-tasks && git log -1 --stat && cd ..  # Task tracking commits
 
 # 5. Check completed tasks
-cat .mcp-tasks/complete/bugfix.md
+cat .mcp-tasks/complete.ednl
 ```
 
 ### Example: Non-Git Mode Workflow
@@ -954,8 +963,8 @@ mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
 # 2. Optionally configure non-git mode explicitly
 echo '{:use-git? false}' > .mcp-tasks.edn
 
-# 3. Add tasks to a category
-echo "- [ ] Add user profile endpoint" >> .mcp-tasks/tasks/feature.md
+# 3. Add tasks to a category (use the add-task MCP tool)
+# The tool will append the task to tasks.ednl with category "feature"
 
 # 4. Process a feature task
 # Run: /mcp-tasks:next-feature
@@ -965,19 +974,20 @@ echo "- [ ] Add user profile endpoint" >> .mcp-tasks/tasks/feature.md
 git log -1 --stat                # Only main repo commits
 
 # 6. Check completed tasks (files updated without version control)
-cat .mcp-tasks/complete/feature.md
+cat .mcp-tasks/complete.ednl
 ```
 
 ## Troubleshooting
 
 **Task not processing:**
-- Verify the task file exists: `ls .mcp-tasks/tasks/<category>.md`
-- Check the task has `- [ ]` format (incomplete checkbox)
-- Ensure no other tasks are marked incomplete above it
+- Verify tasks exist: `cat .mcp-tasks/tasks.ednl`
+- Check the task has `:status :open`
+- Ensure the task has the correct `:category` field
+- Tasks are processed in order from top to bottom
 
 **Category not found:**
-- The category is auto-discovered from filenames
-- Create the task file if it doesn't exist
+- Categories are auto-discovered from tasks in `tasks.ednl`
+- Add a task with the desired category using the `add-task` tool
 - Restart your MCP client to refresh the category list
 
 **Changes not committed:**
