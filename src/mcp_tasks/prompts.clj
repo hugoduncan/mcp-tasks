@@ -121,10 +121,10 @@
   "Create MCP prompts for a sequence of categories.
 
   For each category, creates a prompt that:
-  - Reads tasks from .mcp-tasks/tasks/<category>.md
+  - Uses the next-task tool to retrieve tasks from .mcp-tasks/tasks.ednl
   - Uses instructions from .mcp-tasks/prompts/<category>.md if available,
     otherwise uses default instructions based on next-simple
-  - Moves completed tasks to .mcp-tasks/complete/<category>.md
+  - Uses the complete-task tool to mark tasks complete and move them to .mcp-tasks/complete.ednl
   - Conditionally includes git commit instructions based on config :use-git? value
 
   The prompt text is automatically composed from three parts:

@@ -15,13 +15,13 @@
   - :relative - Path relative to .mcp-tasks root (for git operations)
 
   Examples:
-    (task-path {} [\"tasks\" \"simple.md\"])
-    => {:absolute \".mcp-tasks/tasks/simple.md\"
-        :relative \"tasks/simple.md\"}
+    (task-path {} [\"tasks.ednl\"])
+    => {:absolute \".mcp-tasks/tasks.ednl\"
+        :relative \"tasks.ednl\"}
 
-    (task-path {:base-dir \"/home/user\"} [\"story\" \"stories\" \"foo.md\"])
-    => {:absolute \"/home/user/.mcp-tasks/story/stories/foo.md\"
-        :relative \"story/stories/foo.md\"}"
+    (task-path {:base-dir \"/home/user\"} [\"complete.ednl\"])
+    => {:absolute \"/home/user/.mcp-tasks/complete.ednl\"
+        :relative \"complete.ednl\"}"
   [config path-segments]
   (let [base-dir (:base-dir config)
         relative-path (str/join "/" path-segments)
