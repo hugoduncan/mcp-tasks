@@ -287,8 +287,8 @@ Execute story tasks one at a time:
 ```
 
 **Process:**
-1. Agent finds the first incomplete task using `next-story-task` tool
-2. Extracts the task-id, task text, and category
+1. Agent finds the story task and first incomplete child using `next-task` tool with filtering
+2. Extracts the task text and category
 3. Executes the task directly using the category's workflow
 4. Upon success, marks the task as complete using `complete-task` tool
 5. Task is moved from tasks.ednl to complete.ednl
@@ -529,49 +529,56 @@ When you run `/mcp-tasks:execute-story-task user-auth`:
 
 ### Story Tools
 
-#### next-story-task
+#### next-task (with filtering for stories)
 
-Returns the next incomplete task from a story's task list.
+The `next-task` tool supports optional filtering parameters that enable story task queries:
 
 **Parameters:**
-- `story-name` (string, required) - The story name without -tasks.md suffix
+- `category` (string, optional) - Filter by task category
+- `parent-id` (integer, optional) - Filter by parent task ID (for finding story child tasks)
+- `title-pattern` (string, optional) - Filter by title pattern (regex or substring match)
+
+All parameters are optional and AND-ed together when provided.
 
 **Returns:**
 
 A map with three keys:
-- `:task-text` (string or nil) - The full multi-line task text including the STORY prefix, excluding the CATEGORY line
-- `:category` (string or nil) - The category assigned to this task
-- `:task-index` (integer or nil) - The zero-based index of the task in the story task file
+- `:task` (string) - The full task text (title + description)
+- `:category` (string) - The task's category
+- `:task-id` (integer) - The task's unique identifier
 
-Returns nil values for all keys if no incomplete tasks are found.
+Returns `{:status "No matching tasks found"}` if no tasks match the filters.
 
-**Behavior:**
-- Reads story task file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
-- Parses the markdown to find the first task marked with `- [ ]`
-- Extracts the task text (all continuation lines until the CATEGORY line)
-- Extracts the category from the `CATEGORY: <category>` metadata line
-- Returns an error if the story task file doesn't exist
-
-**Example:**
+**Example - Finding a story by title:**
 ```clojure
 ;; Call
-{:story-name "user-auth"}
+{:title-pattern "user-auth"}
 
-;; Return value (success)
-{:task-text "STORY: user-auth - Set up JWT library dependencies\nAdd JWT library to deps.edn..."
- :category "simple"
- :task-index 0}
+;; Return
+{:task "Complete remaining work for EDN storage migration"
+ :category "story"
+ :task-id 13}
+```
 
-;; Return value (no tasks)
-{:task-text nil
- :category nil
- :task-index nil}
+**Example - Finding story child tasks:**
+```clojure
+;; First find the story
+{:title-pattern "user-auth"}  ; Returns {:task-id 13 ...}
+
+;; Then find first incomplete child
+{:parent-id 13}
+
+;; Return
+{:task "Enhance next-task tool to support filtering\n\n- Change the next-task tool..."
+ :category "medium"
+ :task-id 29}
 ```
 
 **Usage:**
 ```
-Use the next-story-task tool to inspect the next task without executing it.
-This is useful for planning or verifying task order.
+Use next-task with title-pattern to find story tasks, then use parent-id
+to query child tasks. The returned task-id can be used with complete-task.
+This replaces the deprecated next-story-task tool.
 ```
 
 #### complete-task

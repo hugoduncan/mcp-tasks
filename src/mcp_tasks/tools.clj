@@ -132,9 +132,14 @@
 (defn next-task-impl
   "Implementation of next-task tool.
 
-  Returns the first task from tasks.ednl in a map with :category and :task keys,
-  or a map with :category and :status keys if there are no tasks."
-  [config _context {:keys [category]}]
+  Accepts optional filters:
+  - category: Task category name
+  - parent-id: Parent task ID for filtering children
+  - title-pattern: Pattern to match task titles (regex or substring)
+
+  Returns the first matching task from tasks.ednl in a map with :category and :task keys,
+  or a map with :status key if there are no matching tasks."
+  [config _context {:keys [category parent-id title-pattern]}]
   (try
     (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
           tasks-file (:absolute tasks-path)]
@@ -143,28 +148,38 @@
       (when (file-exists? tasks-file)
         (tasks/load-tasks! tasks-file))
 
-      ;; Get next incomplete task
-      (if-let [task (tasks/get-next-incomplete-by-category category)]
+      ;; Get next incomplete task with filters
+      (if-let [task (tasks/get-next-incomplete
+                      :category category
+                      :parent-id parent-id
+                      :title-pattern title-pattern)]
         (let [title (:title task)
               description (:description task "")
               task-text (if (str/blank? description)
                           title
-                          (str title "\n" description))]
+                          (str title "\n" description))
+              task-category (:category task)
+              task-id (:id task)]
           {:content [{:type "text"
-                      :text (pr-str {:category category
-                                     :task task-text})}]
+                      :text (pr-str {:category task-category
+                                     :task task-text
+                                     :task-id task-id})}]
            :isError false})
         {:content [{:type "text"
-                    :text (pr-str {:category category
-                                   :status "No more tasks in this category"})}]
+                    :text (pr-str {:status "No matching tasks found"})}]
          :isError false}))
     (catch Exception e
       (response/error-response e))))
 
 (defn next-task-tool
-  "Tool to return the next task from a specific category.
+  "Tool to return the next task with optional filters.
 
-  Accepts config parameter for future git-aware functionality."
+  Accepts optional filters:
+  - category: Task category name
+  - parent-id: Parent task ID for filtering children
+  - title-pattern: Pattern to match task titles (regex or substring)
+
+  All filters are AND-ed together."
   [config]
   {:name "next-task"
    :description "Return the next task from tasks.ednl"
@@ -173,8 +188,14 @@
     :properties
     {"category"
      {:type "string"
-      :description "The task category name"}}
-    :required ["category"]}
+      :description "The task category name"}
+     "parent-id"
+     {:type "integer"
+      :description "Parent task ID for filtering children"}
+     "title-pattern"
+     {:type "string"
+      :description "Pattern to match task titles (regex or substring)"}}
+    :required []}
    :implementation (partial next-task-impl config)})
 
 (defn- find-story-by-name

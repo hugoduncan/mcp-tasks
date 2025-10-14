@@ -100,6 +100,37 @@
          (filter #(not= (:status %) :closed))
          first)))
 
+(defn get-next-incomplete
+  "Find first incomplete task matching optional filters.
+
+  Filters are AND-ed together:
+  - category: Task category must match exactly
+  - parent-id: Task must be a child of this parent
+  - title-pattern: Task title must match pattern (regex or substring)
+
+  Returns task map or nil if no matching incomplete tasks found."
+  [& {:keys [category parent-id title-pattern]}]
+  (let [ids @task-ids
+        task-map @tasks
+        ;; Build regex if possible, otherwise use substring match
+        title-matcher (when title-pattern
+                        (try
+                          (re-pattern title-pattern)
+                          (catch Exception _
+                            ;; Fall back to substring match
+                            nil)))
+        title-match? (cond
+                       (nil? title-pattern) (constantly true)
+                       title-matcher #(re-find title-matcher (:title % ""))
+                       :else #(str/includes? (:title % "") title-pattern))]
+    (->> ids
+         (map #(get task-map %))
+         (filter #(not= (:status %) :closed))
+         (filter #(or (nil? category) (= (:category %) category)))
+         (filter #(or (nil? parent-id) (= (:parent-id %) parent-id)))
+         (filter title-match?)
+         first)))
+
 (defn verify-task-text
   "Check if task with given ID has text that starts with partial-text.
 

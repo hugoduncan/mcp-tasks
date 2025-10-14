@@ -277,8 +277,7 @@
         (is (map? (:tools server-config)))
         (is (contains? (:tools server-config) "complete-task"))
         (is (contains? (:tools server-config) "next-task"))
-        (is (contains? (:tools server-config) "add-task"))
-        (is (contains? (:tools server-config) "next-story-task"))))
+        (is (contains? (:tools server-config) "add-task"))))
 
     (testing "includes story prompts"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")

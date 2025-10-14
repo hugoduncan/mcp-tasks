@@ -69,7 +69,7 @@ The system provides story support for managing larger features or initiatives th
    - Writes tasks
 
 3. **Execute Story Task** - Execute the next incomplete task from a story
-   - Finds first incomplete task using `next-story-task` tool
+   - Finds story and first incomplete child using `next-task` tool with filtering
    - Executes task directly using category-specific workflow (e.g., simple, medium, large)
    - Marks task as complete using `complete-task` tool after successful execution
 
@@ -103,7 +103,7 @@ Story execution includes automatic branch management:
 - Manual merge/push after story completion
 
 **Story Tools:**
-- `next-story-task` - Get next incomplete task from a story
+- `next-task` - Get next task with optional filtering (use `parent-id` for story tasks)
 - `complete-task` - Mark any task (including story tasks) as complete
 
 ## If you see a problem that needs fixing

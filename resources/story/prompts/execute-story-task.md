@@ -12,23 +12,25 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Find the first incomplete task using the `next-story-task` tool:
+1. Find the story and its first incomplete child task:
+   - First, use `next-task` with `title-pattern` to find the story task
+   - Then use `next-task` with `parent-id` filter to get the first incomplete child
    - If no incomplete tasks found, inform the user that all tasks are
      complete and stop
    - If no category is found for the task, inform the user and stop
-   - The tool returns :task-text, :category, :task-id, and :task-index
+   - The tool returns :task and :category
 
 2. Execute the task directly using the category workflow:
    - Execute the `next-<category>` prompt from the `mcp-tasks` server
    - For example, if category is "simple", execute the `next-simple` prompt
    - Run `/mcp-tasks:next-<category>` or use the
      `prompt://next-<category>` resource to access the prompt
-   - The task is already in the tasks queue with its task-id
+   - The task is already in the tasks queue
    - Complete all implementation steps according to the category workflow
 
 3. Mark the task as complete:
    - After task execution completes successfully, use the `complete-task`
-     tool with the task-id from step 1
+     tool
    - Parameters: category (from step 1), task-text (partial match from
      beginning of task), and optionally completion-comment
    - Confirm to the user that the task has been marked complete

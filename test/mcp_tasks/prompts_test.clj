@@ -311,14 +311,14 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"next-story-task" content))
+        (is (re-find #"next-task" content))
         (is (re-find #"complete-task" content))
         (is (re-find #"category" content))))
 
     (testing "includes task execution workflow"
       (let [prompt (sut/get-story-prompt "execute-story-task")
             content (:content prompt)]
-        (is (re-find #"next-story-task" content))
+        (is (re-find #"next-task" content))
         (is (re-find #"complete-task" content))))
 
     (testing "appears in list-story-prompts"

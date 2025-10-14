@@ -147,5 +147,4 @@
       (let [result (#'sut/next-task-impl (test-config) nil {:category "test"})]
         (is (false? (:isError result)))
         (let [response (edn/read-string (get-in result [:content 0 :text]))]
-          (is (= "test" (:category response)))
-          (is (= "No more tasks in this category" (:status response))))))))
+          (is (= "No matching tasks found" (:status response))))))))

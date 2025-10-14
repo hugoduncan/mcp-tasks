@@ -1,12 +1,13 @@
 (ns mcp-tasks.story-tools-test
+  "Tests for story task filtering using enhanced next-task tool"
   (:require
     [babashka.fs :as fs]
     [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
-    [mcp-tasks.story-tools :as sut]
-    [mcp-tasks.tasks-file :as tasks-file]))
+    [mcp-tasks.tasks-file :as tasks-file]
+    [mcp-tasks.tools :as tools]))
 
 (def ^:dynamic *test-dir* nil)
 
@@ -48,11 +49,11 @@
     (when (.exists file)
       (tasks-file/read-ednl (.getPath file)))))
 
-;; next-story-task Tests
+;; next-task with parent-id filter Tests
 
-(deftest next-story-task-returns-first-incomplete-child
-  ;; Test that next-story-task-impl returns the first incomplete child task
-  (testing "next-story-task"
+(deftest next-task-returns-first-incomplete-child-by-parent-id
+  ;; Test that next-task with parent-id filter returns the first incomplete child task
+  (testing "next-task with parent-id filter"
     (testing "returns first incomplete child task"
       (let [story {:id 1
                    :type :story
@@ -95,21 +96,20 @@
                                :relations []}]
         (write-tasks-ednl [story completed-task first-incomplete second-incomplete])
         (let [config {:base-dir *test-dir* :use-git? false}
-              result (#'sut/next-story-task-impl
+              result (#'tools/next-task-impl
                       config
                       nil
-                      {:story-name "test-story"})]
+                      {:parent-id 1})]
           (is (false? (:isError result)))
           (let [data (edn/read-string (get-in result [:content 0 :text]))]
-            (is (= "First incomplete\nWith details" (:task-text data)))
+            (is (= "First incomplete\nWith details" (:task data)))
             (is (= "medium" (:category data)))
-            (is (= 3 (:task-id data)))
-            (is (= 1 (:task-index data)))))))))
+            (is (= 3 (:task-id data)))))))))
 
-(deftest next-story-task-returns-nil-when-no-incomplete
-  ;; Test that next-story-task-impl returns nil values when no incomplete tasks
-  (testing "next-story-task"
-    (testing "returns nil values when no incomplete tasks"
+(deftest next-task-returns-no-match-when-no-incomplete-children
+  ;; Test that next-task with parent-id filter returns no match when no incomplete children
+  (testing "next-task with parent-id filter"
+    (testing "returns no match when no incomplete children"
       (let [story {:id 1
                    :type :story
                    :title "test-story"
@@ -131,27 +131,89 @@
                             :relations []}]
         (write-tasks-ednl [story completed-task])
         (let [config {:base-dir *test-dir* :use-git? false}
-              result (#'sut/next-story-task-impl
+              result (#'tools/next-task-impl
                       config
                       nil
-                      {:story-name "test-story"})]
+                      {:parent-id 1})]
           (is (false? (:isError result)))
           (let [data (edn/read-string (get-in result [:content 0 :text]))]
-            (is (nil? (:task-text data)))
-            (is (nil? (:category data)))
-            (is (nil? (:task-id data)))
-            (is (nil? (:task-index data)))))))))
+            (is (= "No matching tasks found" (:status data)))))))))
 
-(deftest next-story-task-errors-when-story-not-found
-  ;; Test that next-story-task-impl errors when story not found
-  (testing "next-story-task"
-    (testing "errors when story not found"
-      (write-tasks-ednl [])
-      (let [config {:base-dir *test-dir* :use-git? false}
-            result (#'sut/next-story-task-impl
-                    config
-                    nil
-                    {:story-name "nonexistent"})]
-        (is (true? (:isError result)))
-        (is (re-find #"Story not found"
-                     (get-in result [:content 0 :text])))))))
+(deftest next-task-by-title-pattern-finds-story
+  ;; Test that next-task with title-pattern can find story tasks
+  (testing "next-task with title-pattern filter"
+    (testing "finds story by title pattern"
+      (let [story {:id 1
+                   :type :story
+                   :title "test-story"
+                   :description ""
+                   :design ""
+                   :category "story"
+                   :status :open
+                   :meta {}
+                   :relations []}
+            other-task {:id 2
+                        :type :task
+                        :title "Some other task"
+                        :description ""
+                        :design ""
+                        :category "simple"
+                        :status :open
+                        :meta {}
+                        :relations []}]
+        (write-tasks-ednl [story other-task])
+        (let [config {:base-dir *test-dir* :use-git? false}
+              result (#'tools/next-task-impl
+                      config
+                      nil
+                      {:title-pattern "test-story"})]
+          (is (false? (:isError result)))
+          (let [data (edn/read-string (get-in result [:content 0 :text]))]
+            (is (= "test-story" (:task data)))
+            (is (= "story" (:category data)))
+            (is (= 1 (:task-id data)))))))))
+
+(deftest next-task-combines-multiple-filters
+  ;; Test that next-task can combine parent-id and category filters
+  (testing "next-task with multiple filters"
+    (testing "combines parent-id and category filters"
+      (let [story {:id 1
+                   :type :story
+                   :title "test-story"
+                   :description ""
+                   :design ""
+                   :category "story"
+                   :status :open
+                   :meta {}
+                   :relations []}
+            simple-task {:id 2
+                         :parent-id 1
+                         :type :task
+                         :title "Simple task"
+                         :description ""
+                         :design ""
+                         :category "simple"
+                         :status :open
+                         :meta {}
+                         :relations []}
+            medium-task {:id 3
+                         :parent-id 1
+                         :type :task
+                         :title "Medium task"
+                         :description ""
+                         :design ""
+                         :category "medium"
+                         :status :open
+                         :meta {}
+                         :relations []}]
+        (write-tasks-ednl [story simple-task medium-task])
+        (let [config {:base-dir *test-dir* :use-git? false}
+              result (#'tools/next-task-impl
+                      config
+                      nil
+                      {:parent-id 1 :category "medium"})]
+          (is (false? (:isError result)))
+          (let [data (edn/read-string (get-in result [:content 0 :text]))]
+            (is (= "Medium task" (:task data)))
+            (is (= "medium" (:category data)))
+            (is (= 3 (:task-id data)))))))))
