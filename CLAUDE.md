@@ -11,12 +11,36 @@ An MCP (Model Context Protocol) server that provides task-based workflow managem
 ## Architecture
 
 **Task Storage Structure:**
-- `.mcp-tasks/task/<category-name>.md` - Incomplete tasks for each category
-- `.mcp-tasks/completed/<category-name>.md` - Completed tasks archive
-- `.mcp-tasks/prompt/<category-name>.md` - Category-specific execution prompts
+- `.mcp-tasks/tasks.ednl` - All incomplete tasks stored as EDN records
+- `.mcp-tasks/complete.ednl` - All completed tasks archive
+- `.mcp-tasks/prompts/<category-name>.md` - Category-specific execution prompts
 
 **Task File Format:**
-Each category's markdown file contains tasks as checkbox items that can be marked incomplete `- [ ]` or complete `- [x]`.
+Tasks are stored in EDNL (EDN Lines) format where each line is a valid EDN map representing a Task record. The Task schema (defined in `src/mcp_tasks/schema.clj`) includes:
+
+```clojure
+{:id            ;; int - unique task identifier
+ :parent-id     ;; int or nil - optional parent task reference
+ :status        ;; :open | :closed | :in-progress | :blocked
+ :title         ;; string - task title
+ :description   ;; string - detailed task description
+ :design        ;; string - design notes
+ :category      ;; string - execution category (simple, medium, large, etc.)
+ :type          ;; :task | :bug | :feature | :story | :chore
+ :meta          ;; map - arbitrary string key-value metadata
+ :relations     ;; vector of Relation maps
+}
+```
+
+**Relation Schema:**
+Task relationships are defined as:
+
+```clojure
+{:id         ;; int - relation identifier
+ :relates-to ;; int - target task ID
+ :as-type    ;; :blocked-by | :related | :discovered-during
+}
+```
 
 **Dependencies:**
 - Depends on local `mcp-clj` server library at `../mcp-clj/projects/server`
@@ -28,9 +52,7 @@ The system provides story support for managing larger features or initiatives th
 
 **Story Storage Structure:**
 - `.mcp-tasks/story/stories/<story-name>.md` - Active story descriptions
-- `.mcp-tasks/story/story-tasks/<story-name>-tasks.md` - Task breakdown for each story
 - `.mcp-tasks/story/complete/<story-name>.md` - Completed stories archive
-- `.mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md` - Completed task lists archive
 - `.mcp-tasks/story/prompts/<story-name>.md` - Custom story-specific prompts (optional)
 
 **Story Workflow:**
@@ -40,15 +62,14 @@ The system provides story support for managing larger features or initiatives th
    - Improves clarity, completeness, and actionability
 
 2. **Create Story Tasks** - Break down a story into categorized, executable tasks
-   - Reads story from `.mcp-tasks/story/stories/<story-name>.md`
-   - Creates task breakdown with STORY prefix and CATEGORY metadata
-   - Writes tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
+   - Reads story
+   - Creates tasks in `.mcp-tasks/tasks.ednl` with `:parent-id` linking to story
+   - Each task uses appropriate `:category` for execution workflow
 
 3. **Execute Story Task** - Execute the next incomplete task from a story
-   - Finds first incomplete task using `next-story-task` tool
-   - Adds task to appropriate category queue based on CATEGORY metadata
-   - Executes using category-specific workflow (e.g., simple, medium, large)
-   - Marks story task as complete after successful execution
+   - Finds story and first incomplete child using `next-task` tool with filtering
+   - Executes task directly using category-specific workflow (e.g., simple, medium, large)
+   - Marks task as complete using `complete-task` tool after successful execution
 
 4. **Review Story Implementation** - Review completed implementation
    - Analyzes implementation against story requirements
@@ -60,25 +81,29 @@ The system provides story support for managing larger features or initiatives th
    - Preserves implementation history for reference
 
 **Story Task Format:**
-```markdown
-- [ ] STORY: <story-name> - <brief task title>
-  <additional task details on continuation lines>
-  <more details as needed>
+Story tasks are stored in `.mcp-tasks/tasks.ednl` as regular Task records with:
+- `:parent-id` field set to the story's task ID
+- `:type` typically set to `:task`, `:bug`, or `:feature`
+- `:category` field determining which execution workflow to use
+- All other standard Task schema fields (`:title`, `:description`, `:design`, etc.)
 
-Part of story: @path-to-story-file
-CATEGORY: <category>
-```
+Story tasks are retrieved using the `next-task` tool with `parent-id` filtering.
 
 **Branch Management:**
 Story execution includes automatic branch management:
-- Creates `<story-name>` branch if not already on it
+- Creates `<story-name>` branch if not already on it (branch name is the story title lowercased, with spaces replaced by dashes, and all special characters removed)
 - Keeps all story tasks on the same branch
 - Manual merge/push after story completion
 
 **Story Tools:**
-- `next-story-task` - Get next incomplete task from a story
-- `complete-story-task` - Mark a story task as complete
-- `complete-story` - Archive completed story and tasks
+- `next-task` - Get next task with optional filtering (use `parent-id` for story tasks)
+- `complete-task` - Mark any task (including story tasks) as complete
+
+## If you see a problem that needs fixing
+
+If you see something that is a problem, or could be improved, that is
+not directly to the current task, add a task to address the issue and
+move on with the original task.
 
 ## Development Commands
 

@@ -4,7 +4,7 @@ description: Break down a story into categorized, executable tasks
 argument-hint: <story-name> [additional-context...]
 ---
 
-Create a task breakdown for the story.  Do not implement the story.
+Create a task breakdown for the story. Do not implement the story.
 
 Parse the arguments: $ARGUMENTS
 - The first word/token is the story name (without .md extension)
@@ -18,19 +18,15 @@ Parse the arguments: $ARGUMENTS
 2. Display the story content to the user
 
 3. Analyze the story and break it down into specific, actionable tasks:
-   - Each task must be prefixed with `- [ ] STORY: <story-name> - ` to
-     indicate it belongs to this story
    - Each task should be concrete and achievable
    - Tasks should follow a logical sequence (dependencies first)
    - A single task may contain multiple steps, as long as they are
      logically grouped
    - Don't create lots of very simple tasks, try and group them
    - The task description contains enough context to implement it without
-     any other context.
-   - update unit tests if needed, as part of each task
-   - Each task must have a reference to the story file
-   - Each task must have a `CATEGORY: <category>` line on its own line
-     after the task description
+     any other context
+   - Update unit tests if needed, as part of each task
+   - Each task should reference the story file for context
 
 4. Category selection guidance:
    - `simple` - Straightforward tasks, small changes, documentation updates
@@ -38,38 +34,30 @@ Parse the arguments: $ARGUMENTS
    - `large` - Complex tasks needing extensive planning and implementation
    - `clarify-task` - Tasks that need clarification before execution
 
-5. Task format (multi-line supported):
-
-   Each task should be a checkbox item.
-
-   ```
-   - [ ] STORY: <story-name> - <brief task title>
-     <additional task details on continuation lines>
-     <more details as needed>
-
-   Part of story: @path-to-story-file
-   CATEGORY: <category>
-   ```
-
-6. Present the task breakdown to the user:
+5. Present the task breakdown to the user:
    - Show all tasks organized by section
-   - Include category assignments
+   - Include category assignments for each task
    - Get user feedback and approval
    - Make adjustments based on feedback
 
-7. Once approved, write the tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
-   - Include a header: `# Tasks for <story-name> Story`
-   - Organize tasks by logical sections with `## Section Name` headers
-   - Maintain the checkbox format with STORY prefix and CATEGORY metadata
-   - Ensure blank lines between tasks for readability
+6. Once approved, add each task using the `add-task` tool:
+   - For each task, call `add-task` with:
+     - `category`: the selected category (simple, medium, large, clarify-task)
+     - `task-text`: task title on first line, then description including
+       "Part of story: @.mcp-tasks/story/stories/<story-name>.md"
+     - `story-name`: the story name (this automatically sets :parent-id)
+     - `type`: "task" (or "bug", "feature", etc. if appropriate)
+   - Tasks will be added to `.mcp-tasks/tasks.ednl` with the story as parent
+   - Add tasks in order (dependencies first)
 
-8. Confirm the save operation to the user
+7. Confirm task creation to the user:
+   - Report how many tasks were created
+   - Mention they can be executed with `/mcp-tasks:execute-story-task <story-name>`
 
 ## Notes
 
 - Task descriptions should be specific enough to be actionable without additional context
-- The STORY prefix helps track which story each task belongs to
-- The CATEGORY line is metadata used for routing and should be on its own line
-- Multi-line task descriptions are supported and encouraged for clarity
+- All story tasks automatically get `:parent-id` linking to the story
+- Tasks are stored in the unified `tasks.ednl` file, not separate markdown files
+- Use `next-task` with `parent-id` filtering to find story tasks
 - Tasks should be ordered to respect dependencies (e.g., create before use)
-- Section headers help organize related tasks for better readability

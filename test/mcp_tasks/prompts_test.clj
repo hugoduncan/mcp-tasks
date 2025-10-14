@@ -103,7 +103,8 @@
         (is (= "next-simple" (:name prompt)))
         (is (re-find #"simple task" message-text))
         (is (re-find #"\.mcp-tasks/tasks/simple\.md" message-text))
-        (is (re-find #"\.mcp-tasks/complete/simple\.md" message-text))))
+        (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))
+        (is (re-find #"\.mcp-tasks/complete\.ednl" message-text))))
 
     (testing "uses metadata description when available"
       (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
@@ -165,25 +166,25 @@
     (testing "includes git instructions when use-git? is true"
       (let [text (#'sut/complete-task-prompt-text {:use-git? true} "simple")]
         (is (string? text))
-        (is (re-find #"\.mcp-tasks/complete/simple\.md" text))
-        (is (re-find #"\.mcp-tasks/tasks/simple\.md" text))
+        (is (re-find #"\.mcp-tasks/tasks\.ednl" text))
+        (is (re-find #"\.mcp-tasks/complete\.ednl" text))
         (is (re-find #"Commit the task tracking changes in the \.mcp-tasks git repository" text))))
 
     (testing "omits git instructions when use-git? is false"
       (let [text (#'sut/complete-task-prompt-text {:use-git? false} "simple")]
         (is (string? text))
-        (is (re-find #"\.mcp-tasks/complete/simple\.md" text))
-        (is (re-find #"\.mcp-tasks/tasks/simple\.md" text))
+        (is (re-find #"\.mcp-tasks/tasks\.ednl" text))
+        (is (re-find #"\.mcp-tasks/complete\.ednl" text))
         (is (not (re-find #"Commit" text)))
         (is (not (re-find #"git" text)))))
 
-    (testing "includes file operation instructions in both modes"
+    (testing "includes complete-task tool usage instructions in both modes"
       (let [text-git (#'sut/complete-task-prompt-text {:use-git? true} "simple")
             text-no-git (#'sut/complete-task-prompt-text {:use-git? false} "simple")]
-        (is (re-find #"Move the completed task" text-git))
-        (is (re-find #"Remove the task" text-git))
-        (is (re-find #"Move the completed task" text-no-git))
-        (is (re-find #"Remove the task" text-no-git))))))
+        (is (re-find #"Mark the completed task as complete" text-git))
+        (is (re-find #"complete-task.*tool" text-git))
+        (is (re-find #"Mark the completed task as complete" text-no-git))
+        (is (re-find #"complete-task.*tool" text-no-git))))))
 
 (deftest get-story-prompt-test
   ;; Test that get-story-prompt retrieves prompts from file overrides or
@@ -235,8 +236,8 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/story/stories" content))
+        (is (re-find #"next-task" content))
+        (is (re-find #"update-task" content))
         (is (re-find #"interactive" content))))
 
     (testing "appears in list-story-prompts"
@@ -267,9 +268,9 @@
         (is (string? content))
         (is (re-find #"story-name" content))
         (is (re-find #"\.mcp-tasks/story/stories" content))
-        (is (re-find #"\.mcp-tasks/story/story-tasks" content))
-        (is (re-find #"STORY:" content))
-        (is (re-find #"CATEGORY:" content))))
+        (is (re-find #"add-task" content))
+        (is (re-find #"tasks\.ednl" content))
+        (is (re-find #"category" content))))
 
     (testing "includes category selection guidance"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
@@ -282,8 +283,8 @@
     (testing "includes task format examples"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
             content (:content prompt)]
-        (is (re-find #"multi-line" content))
-        (is (re-find #"checkbox" content))))
+        (is (re-find #"task-text" content))
+        (is (re-find #"Part of story:" content))))
 
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)
@@ -311,17 +312,15 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/story/story-tasks" content))
-        (is (re-find #"CATEGORY" content))))
+        (is (re-find #"next-task" content))
+        (is (re-find #"complete-task" content))
+        (is (re-find #"category" content))))
 
     (testing "includes task execution workflow"
       (let [prompt (sut/get-story-prompt "execute-story-task")
             content (:content prompt)]
-        (is (re-find #"add-task" content))
-        (is (re-find #"prepend" content))
-        (is (re-find #"next-story-task" content))
-        (is (re-find #"complete-story-task" content))))
+        (is (re-find #"next-task" content))
+        (is (re-find #"complete-task" content))))
 
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)

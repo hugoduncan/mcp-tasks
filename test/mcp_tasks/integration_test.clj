@@ -5,7 +5,6 @@
    configurations using in-memory transport. File operation behavior is
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
-    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -13,7 +12,8 @@
     [mcp-clj.mcp-client.core :as mcp-client]
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.config :as config]
-    [mcp-tasks.main :as main]))
+    [mcp-tasks.main :as main]
+    [mcp-tasks.tasks-file :as tasks-file]))
 
 (def test-project-dir (.getAbsolutePath (io/file "test-resources/integration-test")))
 
@@ -164,7 +164,6 @@
               (is (contains? tool-names "complete-task"))
               (is (contains? tool-names "next-task"))
               (is (contains? tool-names "add-task"))
-              (is (contains? tool-names "next-story-task"))
 
               (doseq [tool tools]
                 (is (contains? tool :name))
@@ -324,183 +323,30 @@
           (mcp-client/close! client)
           ((:stop server)))))))
 
-(deftest ^:integ next-story-task-tool-test
-  ;; Test the next-story-task tool integration.
-  (testing "next-story-task tool"
-    (write-config-file "{:use-git? false}")
+;; next-story-task tool removed - functionality replaced by next-task with parent-id filter
 
-    (let [{:keys [server client]} (create-test-server-and-client)]
-      (try
-        (testing "returns task info when story tasks exist"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-tasks-dir "test-story-tasks.md")
-                  (str "# Test Story Tasks\n\n"
-                       "- [ ] STORY: test-story - First incomplete task\n"
-                       "  With more details\n"
-                       "\n"
-                       "CATEGORY: medium\n"
-                       "\n"
-                       "- [x] STORY: test-story - Completed task\n"
-                       "\n"
-                       "CATEGORY: simple\n")))
+;; complete-story-task tool removed - use regular complete-task tool with EDN storage
 
-          (let [tools-response @(mcp-client/list-tools client)
-                tools (:tools tools-response)
-                tool-names (set (map :name tools))]
-            (is (contains? tool-names "next-story-task"))
-
-            (let [result @(mcp-client/call-tool client
-                                                "next-story-task"
-                                                {:story-name "test-story"})
-                  text (-> result :content first :text)]
-              (is (not (:isError result)))
-              (is (string? text))
-              (let [parsed (read-string text)]
-                (is (map? parsed))
-                (is (= "medium" (:category parsed)))
-                (is (= 0 (:task-index parsed)))
-                (is (string? (:task-text parsed)))
-                (is (re-find #"First incomplete task" (:task-text parsed)))))))
-
-        (testing "returns nil values when no incomplete tasks"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-tasks-dir "complete-story-tasks.md")
-                  (str "# Complete Story Tasks\n\n"
-                       "- [x] STORY: complete-story - All done\n"
-                       "\n"
-                       "CATEGORY: simple\n")))
-
-          (let [result @(mcp-client/call-tool client
-                                              "next-story-task"
-                                              {:story-name "complete-story"})
-                text (-> result :content first :text)]
-            (is (not (:isError result)))
-            (let [parsed (read-string text)]
-              (is (map? parsed))
-              (is (nil? (:task-text parsed)))
-              (is (nil? (:category parsed)))
-              (is (nil? (:task-index parsed))))))
-
-        (testing "returns error when story file not found"
-          (let [result @(mcp-client/call-tool client
-                                              "next-story-task"
-                                              {:story-name "nonexistent"})]
-            (is (:isError result))
-            (is (re-find #"Story tasks file not found"
-                         (-> result :content first :text)))))
-
-        (finally
-          (mcp-client/close! client)
-          ((:stop server)))))))
-
-(deftest ^:integ complete-story-task-tool-test
-  ;; Test the complete-story-task tool integration.
-  (testing "complete-story-task tool"
-    (write-config-file "{:use-git? false}")
-
-    (let [{:keys [server client]} (create-test-server-and-client)]
-      (try
-        (testing "completes task when story tasks exist"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-tasks-dir "test-story-tasks.md")
-                  (str "# Test Story Tasks\n\n"
-                       "- [ ] STORY: test-story - First incomplete task\n"
-                       "  With more details\n"
-                       "\n"
-                       "CATEGORY: medium\n"
-                       "\n"
-                       "- [ ] STORY: test-story - Second incomplete task\n"
-                       "\n"
-                       "CATEGORY: simple\n"))
-
-            (let [tools-response @(mcp-client/list-tools client)
-                  tools (:tools tools-response)
-                  tool-names (set (map :name tools))]
-              (is (contains? tool-names "complete-story-task"))
-
-              (let [result @(mcp-client/call-tool client
-                                                  "complete-story-task"
-                                                  {:story-name "test-story"
-                                                   :task-text "STORY: test-story - First"})]
-                (is (not (:isError result)))
-                (is (= 1 (count (:content result))))
-                (is (re-find #"completed" (-> result :content first :text)))
-
-                ;; Verify file was updated
-                (let [updated-content (slurp (io/file story-tasks-dir "test-story-tasks.md"))]
-                  (is (re-find #"- \[x\] STORY: test-story - First incomplete task" updated-content))
-                  (is (re-find #"- \[ \] STORY: test-story - Second incomplete task" updated-content)))))))
-
-        (testing "returns modified files when git mode enabled"
-          (write-config-file "{:use-git? true}")
-          (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
-          (let [{:keys [server client]} (create-test-server-and-client)]
-            (try
-              (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-                (.mkdirs story-tasks-dir)
-                (spit (io/file story-tasks-dir "git-test-tasks.md")
-                      (str "- [ ] STORY: git-test - Task to complete\n\n"
-                           "CATEGORY: simple\n")))
-
-              (let [result @(mcp-client/call-tool client
-                                                  "complete-story-task"
-                                                  {:story-name "git-test"
-                                                   :task-text "STORY: git-test - Task"})]
-                (is (not (:isError result)))
-                (is (= 2 (count (:content result))))
-                (let [json-text (-> result :content second :text)
-                      parsed (json/read-str json-text :key-fn keyword)]
-                  (is (= ["story/story-tasks/git-test-tasks.md"]
-                         (:modified-files parsed)))))
-              (finally
-                (mcp-client/close! client)
-                ((:stop server))))))
-
-        (testing "returns error when story file not found"
-          (let [result @(mcp-client/call-tool client
-                                              "complete-story-task"
-                                              {:story-name "nonexistent"
-                                               :task-text "some task"})]
-            (is (:isError result))
-            (is (re-find #"Story tasks file not found"
-                         (-> result :content first :text)))))
-
-        (testing "returns error when task text does not match"
-          (let [story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-tasks-dir "mismatch-tasks.md")
-                  (str "- [ ] STORY: mismatch - Actual task\n\n"
-                       "CATEGORY: simple\n")))
-
-          (let [result @(mcp-client/call-tool client
-                                              "complete-story-task"
-                                              {:story-name "mismatch"
-                                               :task-text "STORY: mismatch - Wrong task"})]
-            (is (:isError result))
-            (is (re-find #"does not match"
-                         (-> result :content first :text)))))
-
-        (finally
-          (mcp-client/close! client)
-          ((:stop server)))))))
-
-(deftest ^:integ add-task-to-new-story-tasks-file-test
-  ;; Tests that add-task creates a new story-tasks file with header when adding
-  ;; first task to a story.
+(deftest ^:integ add-task-with-story-name-test
+  ;; Tests that add-task with story-name creates child tasks with parent-id in EDN storage.
   (testing "add-task tool with story-name"
-    (testing "creates new story-tasks file with header"
+    (testing "adds child task with parent-id to tasks.ednl"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
-                story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-dir)
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-dir "new-story.md") "# New Story\n\nDescription"))
+          ;; Create a story task in tasks.ednl
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                story-task {:id 1
+                            :title "new-story"
+                            :description "Story description"
+                            :design ""
+                            :category "large"
+                            :status :open
+                            :type :story
+                            :meta {}
+                            :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task]))
 
           (let [result @(mcp-client/call-tool client
                                               "add-task"
@@ -510,32 +356,53 @@
             (is (not (:isError result)))
             (is (re-find #"Task added" (-> result :content first :text)))
 
-            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "new-story-tasks.md")]
-              (is (.exists story-tasks-file))
-              (let [content (slurp story-tasks-file)]
-                (is (re-find #"# Tasks for new-story Story" content))
-                (is (re-find #"- \[ \] First task for story" content))
-                (is (re-find #"CATEGORY: simple" content)))))
+            ;; Verify task was added to tasks.ednl with parent-id
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  child-tasks (filter #(= (:parent-id %) 1) tasks)]
+              (is (= 2 (count tasks)) "Should have story + child task")
+              (is (= 1 (count child-tasks)) "Should have one child task")
+              (let [child-task (first child-tasks)]
+                (is (= "First task for story" (:title child-task)))
+                (is (= "simple" (:category child-task)))
+                (is (= :task (:type child-task)))
+                (is (= :open (:status child-task)))
+                (is (= 1 (:parent-id child-task))))))
 
           (finally
             (mcp-client/close! client)
             ((:stop server))))))))
 
-(deftest ^:integ add-task-to-existing-story-tasks-file-append-test
-  ;; Tests that add-task appends to existing story-tasks file.
+(deftest ^:integ add-task-with-story-name-append-test
+  ;; Tests that add-task with story-name appends child tasks in correct order.
   (testing "add-task tool with story-name"
-    (testing "appends to existing story-tasks file"
+    (testing "appends child tasks to tasks.ednl"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
-                story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-dir)
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-dir "existing-story.md") "# Existing Story")
-            (spit (io/file story-tasks-dir "existing-story-tasks.md")
-                  "# Tasks for existing-story Story\n- [ ] First task\nCATEGORY: simple"))
+          ;; Create a story task with one existing child in tasks.ednl
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                story-task {:id 1
+                            :title "existing-story"
+                            :description ""
+                            :design ""
+                            :category "large"
+                            :status :open
+                            :type :story
+                            :meta {}
+                            :relations []}
+                first-child {:id 2
+                             :parent-id 1
+                             :title "First task"
+                             :description ""
+                             :design ""
+                             :category "simple"
+                             :status :open
+                             :type :task
+                             :meta {}
+                             :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task first-child]))
 
           (let [result @(mcp-client/call-tool client
                                               "add-task"
@@ -544,32 +411,53 @@
                                                :story-name "existing-story"})]
             (is (not (:isError result)))
 
-            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "existing-story-tasks.md")
-                  content (slurp story-tasks-file)]
-              (is (re-find #"- \[ \] First task" content))
-              (is (re-find #"- \[ \] Second task" content))
-              (is (re-find #"CATEGORY: medium" content))
-              (is (re-find #"CATEGORY: simple\n\n- \[ \] Second task" content))))
+            ;; Verify second task was appended
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  child-tasks (filter #(= (:parent-id %) 1) tasks)]
+              (is (= 3 (count tasks)) "Should have story + 2 child tasks")
+              (is (= 2 (count child-tasks)) "Should have two child tasks")
+              (let [first-task (first child-tasks)
+                    second-task (second child-tasks)]
+                (is (= "First task" (:title first-task)))
+                (is (= "simple" (:category first-task)))
+                (is (= "Second task" (:title second-task)))
+                (is (= "medium" (:category second-task))))))
 
           (finally
             (mcp-client/close! client)
             ((:stop server))))))))
 
-(deftest ^:integ add-task-to-existing-story-tasks-file-prepend-test
-  ;; Tests that add-task prepends to existing story-tasks file when prepend is true.
+(deftest ^:integ add-task-with-story-name-prepend-test
+  ;; Tests that add-task with story-name and prepend flag prepends child tasks.
   (testing "add-task tool with story-name"
-    (testing "prepends to existing story-tasks file when prepend is true"
+    (testing "prepends child tasks to tasks.ednl when prepend is true"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")
-                story-tasks-dir (io/file test-project-dir ".mcp-tasks" "story" "story-tasks")]
-            (.mkdirs story-dir)
-            (.mkdirs story-tasks-dir)
-            (spit (io/file story-dir "prepend-story.md") "# Prepend Story")
-            (spit (io/file story-tasks-dir "prepend-story-tasks.md")
-                  "# Tasks for prepend-story Story\n- [ ] Existing task\nCATEGORY: simple"))
+          ;; Create a story task with one existing child in tasks.ednl
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                story-task {:id 1
+                            :title "prepend-story"
+                            :description ""
+                            :design ""
+                            :category "large"
+                            :status :open
+                            :type :story
+                            :meta {}
+                            :relations []}
+                existing-child {:id 2
+                                :parent-id 1
+                                :title "Existing task"
+                                :description ""
+                                :design ""
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {}
+                                :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task existing-child]))
 
           (let [result @(mcp-client/call-tool client
                                               "add-task"
@@ -579,29 +467,38 @@
                                                :prepend true})]
             (is (not (:isError result)))
 
-            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "prepend-story-tasks.md")
-                  content (slurp story-tasks-file)
-                  lines (str/split-lines content)]
-              (is (re-find #"- \[ \] New first task" (first (filter #(re-find #"- \[ \]" %) lines))))
-              (is (re-find #"CATEGORY: large" content))
-              (is (re-find #"CATEGORY: simple" content))
-              (is (re-find #"- \[ \] New first task\nCATEGORY: large\n\n" content))))
+            ;; Verify new task was prepended (appears first in file)
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))]
+              (is (= 3 (count tasks)) "Should have story + 2 child tasks")
+              ;; The prepended task should appear before the existing task in the file
+              (let [task-titles (mapv :title tasks)]
+                (is (= ["New first task" "prepend-story" "Existing task"] task-titles)))))
 
           (finally
             (mcp-client/close! client)
             ((:stop server))))))))
 
 (deftest ^:integ add-task-preserves-category-tasks-workflow-test
-  ;; Tests that adding story tasks doesn't affect regular category task workflow.
+  ;; Tests that adding story tasks and category tasks both work in unified EDN storage.
   (testing "add-task tool"
-    (testing "preserves category tasks workflow when story tasks are used"
+    (testing "handles both story and category tasks in unified storage"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [story-dir (io/file test-project-dir ".mcp-tasks" "story" "stories")]
-            (.mkdirs story-dir)
-            (spit (io/file story-dir "test-story.md") "# Test Story"))
+          ;; Create a story task in tasks.ednl
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                story-task {:id 1
+                            :title "test-story"
+                            :description ""
+                            :design ""
+                            :category "large"
+                            :status :open
+                            :type :story
+                            :meta {}
+                            :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task]))
 
           (let [story-result @(mcp-client/call-tool client
                                                     "add-task"
@@ -615,26 +512,32 @@
             (is (not (:isError story-result)))
             (is (not (:isError category-result)))
 
-            (let [story-tasks-file (io/file test-project-dir ".mcp-tasks" "story" "story-tasks" "test-story-tasks.md")
-                  category-tasks-file (io/file test-project-dir ".mcp-tasks" "tasks" "simple.md")]
-              (is (.exists story-tasks-file))
-              (is (.exists category-tasks-file))
-
-              (let [story-content (slurp story-tasks-file)
-                    category-content (slurp category-tasks-file)]
-                (is (re-find #"Story task" story-content))
-                (is (re-find #"CATEGORY: simple" story-content))
-                (is (re-find #"Category task" category-content))
-                (is (not (re-find #"CATEGORY:" category-content))))))
+            ;; Verify both tasks are in tasks.ednl
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  story-children (filter #(= (:parent-id %) 1) tasks)
+                  category-tasks (filter #(and (nil? (:parent-id %))
+                                               (= (:type %) :task)) tasks)]
+              (is (= 3 (count tasks)) "Should have story + story child + category task")
+              (is (= 1 (count story-children)) "Should have one story child")
+              (is (= 1 (count category-tasks)) "Should have one category task")
+              (let [story-child (first story-children)
+                    category-task (first category-tasks)]
+                (is (= "Story task" (:title story-child)))
+                (is (= "simple" (:category story-child)))
+                (is (= 1 (:parent-id story-child)))
+                (is (= "Category task" (:title category-task)))
+                (is (= "simple" (:category category-task)))
+                (is (nil? (:parent-id category-task))))))
 
           (finally
             (mcp-client/close! client)
             ((:stop server))))))))
 
-(deftest ^:integ add-task-story-file-validation-test
-  ;; Tests that add-task returns error when story file doesn't exist.
+(deftest ^:integ add-task-story-validation-test
+  ;; Tests that add-task returns error when story task doesn't exist in tasks.ednl.
   (testing "add-task tool with story-name"
-    (testing "returns error when story file doesn't exist"
+    (testing "returns error when story task doesn't exist"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
@@ -645,7 +548,110 @@
                                                :task-text "Task for nonexistent"
                                                :story-name "nonexistent"})]
             (is (:isError result))
-            (is (re-find #"Story does not exist"
+            (is (re-find #"Story not found"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ update-task-tool-test
+  ;; Tests that update-task tool can update task fields and persist changes to tasks.ednl.
+  (testing "update-task tool"
+    (testing "updates task fields and persists to tasks.ednl"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create an initial task in tasks.ednl
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 1
+                              :title "Original title"
+                              :description "Original desc"
+                              :design "Original design"
+                              :category "simple"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Update the task using the tool
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :title "Updated title"
+                                               :description "Updated desc"
+                                               :design "Updated design"})]
+            (is (not (:isError result)))
+            (is (re-find #"Task 1 updated"
+                         (-> result :content first :text)))
+
+            ;; Verify task was updated in tasks.ednl
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  updated-task (first tasks)]
+              (is (= 1 (count tasks)))
+              (is (= "Updated title" (:title updated-task)))
+              (is (= "Updated desc" (:description updated-task)))
+              (is (= "Updated design" (:design updated-task)))
+              ;; Other fields should remain unchanged
+              (is (= :open (:status updated-task)))
+              (is (= "simple" (:category updated-task)))
+              (is (= :task (:type updated-task)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "updates only specified fields"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create an initial task
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 2
+                              :title "Keep title"
+                              :description "Change desc"
+                              :design "Keep design"
+                              :category "medium"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Update only description field
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 2
+                                               :description "New desc"})]
+            (is (not (:isError result)))
+
+            ;; Verify only description changed
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  updated-task (first tasks)]
+              (is (= "Keep title" (:title updated-task)))
+              (is (= "New desc" (:description updated-task)))
+              (is (= "Keep design" (:design updated-task)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "returns error for non-existent task ID"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 999
+                                               :title "New title"})]
+            (is (:isError result))
+            (is (re-find #"Task not found"
                          (-> result :content first :text))))
 
           (finally

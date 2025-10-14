@@ -12,8 +12,10 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
-   - If the file doesn't exist, inform the user and stop
+1. Get the story task using the `next-task` tool:
+   - Use `title-pattern` parameter with the story name to find the story task
+   - If the task doesn't exist, inform the user and stop
+   - The story description is in the task's `:description` field
 
 2. Analyze the current branch against the description of the story:
    - Does the code implement the story correctly?

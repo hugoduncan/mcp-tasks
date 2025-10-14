@@ -277,9 +277,7 @@
         (is (map? (:tools server-config)))
         (is (contains? (:tools server-config) "complete-task"))
         (is (contains? (:tools server-config) "next-task"))
-        (is (contains? (:tools server-config) "add-task"))
-        (is (contains? (:tools server-config) "next-story-task"))
-        (is (contains? (:tools server-config) "complete-story-task"))))
+        (is (contains? (:tools server-config) "add-task"))))
 
     (testing "includes story prompts"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
@@ -353,81 +351,4 @@
             (.delete (io/file tasks-dir "simple.md"))
             (.delete tasks-dir)
             (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))))
-
-(deftest complete-story-integration-test
-  ;; Test that complete-story tool works end-to-end through the MCP server config
-  (testing "complete-story integration"
-    (testing "tool is registered in server config"
-      (let [config {:use-git? false}
-            transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)]
-        (is (map? (:tools server-config)))
-        (is (contains? (:tools server-config) "complete-story"))
-        (is (map? (get (:tools server-config) "complete-story")))
-        (is (= "complete-story" (:name (get (:tools server-config) "complete-story"))))))
-
-    (testing "successfully completes story through tool interface"
-      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
-            _ (.mkdirs temp-dir)
-            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            stories-dir (io/file mcp-tasks-dir "story" "stories")
-            tasks-dir (io/file mcp-tasks-dir "story" "story-tasks")
-            _ (.mkdirs stories-dir)
-            _ (.mkdirs tasks-dir)
-            story-file (io/file stories-dir "test-story.md")
-            tasks-file (io/file tasks-dir "test-story-tasks.md")
-            _ (spit story-file "# Test Story\n\nStory content here")
-            _ (spit tasks-file "- [x] Task 1\n\nCATEGORY: simple\n")
-            config {:use-git? false :base-dir (.getPath temp-dir)}
-            transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)
-            complete-story-tool (get (:tools server-config) "complete-story")
-            result ((:implementation complete-story-tool)
-                    nil
-                    {:story-name "test-story"})]
-        (try
-          (is (false? (:isError result)))
-          (is (= 1 (count (:content result))))
-          (is (re-find #"marked as complete" (get-in result [:content 0 :text])))
-          (is (not (.exists story-file)))
-          (is (not (.exists tasks-file)))
-          (is (.exists (io/file mcp-tasks-dir "story" "complete" "test-story.md")))
-          (is (.exists (io/file mcp-tasks-dir "story" "story-tasks-complete" "test-story-tasks.md")))
-          (finally
-            (doseq [file (reverse (file-seq mcp-tasks-dir))]
-              (.delete file))
-            (.delete temp-dir)))))
-
-    (testing "returns modified files in git mode"
-      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
-            _ (.mkdirs temp-dir)
-            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            stories-dir (io/file mcp-tasks-dir "story" "stories")
-            tasks-dir (io/file mcp-tasks-dir "story" "story-tasks")
-            _ (.mkdirs stories-dir)
-            _ (.mkdirs tasks-dir)
-            story-file (io/file stories-dir "test-story.md")
-            tasks-file (io/file tasks-dir "test-story-tasks.md")
-            _ (spit story-file "# Test Story")
-            _ (spit tasks-file "- [x] Task\n\nCATEGORY: simple\n")
-            config {:use-git? true :base-dir (.getPath temp-dir)}
-            transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)
-            complete-story-tool (get (:tools server-config) "complete-story")
-            result ((:implementation complete-story-tool)
-                    nil
-                    {:story-name "test-story"})]
-        (try
-          (is (false? (:isError result)))
-          (is (= 2 (count (:content result))))
-          (is (= "text" (:type (second (:content result)))))
-          (let [json-text (:text (second (:content result)))]
-            (is (string? json-text))
-            (is (re-find #"modified-files" json-text)))
-          (finally
-            (doseq [file (reverse (file-seq mcp-tasks-dir))]
-              (.delete file))
             (.delete temp-dir)))))))

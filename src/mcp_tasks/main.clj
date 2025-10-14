@@ -9,7 +9,6 @@
     [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
     [mcp-tasks.resources :as resources]
-    [mcp-tasks.story-tools :as story-tools]
     [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
@@ -114,9 +113,7 @@
      :tools {"complete-task" (tools/complete-task-tool config)
              "next-task" (tools/next-task-tool config)
              "add-task" (tools/add-task-tool config)
-             "next-story-task" (story-tools/next-story-task-tool config)
-             "complete-story-task" (story-tools/complete-story-task-tool config)
-             "complete-story" (story-tools/complete-story-tool config)}
+             "update-task" (tools/update-task-tool config)}
      :prompts all-prompts
      :resources (resources/prompt-resources all-prompts)}))
 
