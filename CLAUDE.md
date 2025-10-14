@@ -64,15 +64,14 @@ The system provides story support for managing larger features or initiatives th
    - Improves clarity, completeness, and actionability
 
 2. **Create Story Tasks** - Break down a story into categorized, executable tasks
-   - Reads story from `.mcp-tasks/story/stories/<story-name>.md`
+   - Reads story
    - Creates task breakdown with STORY prefix and CATEGORY metadata
-   - Writes tasks to `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
+   - Writes tasks
 
 3. **Execute Story Task** - Execute the next incomplete task from a story
    - Finds first incomplete task using `next-story-task` tool
-   - Adds task to appropriate category queue based on CATEGORY metadata
-   - Executes using category-specific workflow (e.g., simple, medium, large)
-   - Marks story task as complete after successful execution
+   - Executes task directly using category-specific workflow (e.g., simple, medium, large)
+   - Marks task as complete using `complete-task` tool after successful execution
 
 4. **Review Story Implementation** - Review completed implementation
    - Analyzes implementation against story requirements
@@ -105,8 +104,13 @@ Story execution includes automatic branch management:
 
 **Story Tools:**
 - `next-story-task` - Get next incomplete task from a story
-- `complete-story-task` - Mark a story task as complete
-- `complete-story` - Archive completed story and tasks
+- `complete-task` - Mark any task (including story tasks) as complete
+
+## If you see a problem that needs fixing
+
+If you see something that is a problem, or could be improved, that is
+not directly to the current task, add a task to address the issue and
+move on with the original task.
 
 ## Development Commands
 

@@ -311,17 +311,15 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/story/story-tasks" content))
-        (is (re-find #"CATEGORY" content))))
+        (is (re-find #"next-story-task" content))
+        (is (re-find #"complete-task" content))
+        (is (re-find #"category" content))))
 
     (testing "includes task execution workflow"
       (let [prompt (sut/get-story-prompt "execute-story-task")
             content (:content prompt)]
-        (is (re-find #"add-task" content))
-        (is (re-find #"prepend" content))
         (is (re-find #"next-story-task" content))
-        (is (re-find #"complete-story-task" content))))
+        (is (re-find #"complete-task" content))))
 
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)

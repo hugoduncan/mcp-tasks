@@ -287,25 +287,25 @@ Execute story tasks one at a time:
 ```
 
 **Process:**
-1. Agent finds the first incomplete task in the story task file
-2. Extracts the task text and category
-3. Adds the task to the front of the category's queue
-4. Executes the task using the category's workflow
-5. Upon success, marks the story task as complete
-6. Updates the story task file with `- [x]` marker
+1. Agent finds the first incomplete task using `next-story-task` tool
+2. Extracts the task-id, task text, and category
+3. Executes the task directly using the category's workflow
+4. Upon success, marks the task as complete using `complete-task` tool
+5. Task is moved from tasks.ednl to complete.ednl
 
 **Example execution:**
 ```
 User: /mcp-tasks:execute-story-task user-auth
 
 Agent: Found next task: "STORY: user-auth - Set up JWT library dependencies"
+       Task ID: 42
        Category: simple
 
-       [Adds task to simple queue and executes it...]
+       [Executes task using simple workflow...]
 
        [After completion...]
 
-       Task completed successfully. Marked as complete in story tasks file.
+       Task completed successfully and moved to complete.ednl
 ```
 
 **Repeat** this command until all story tasks are complete.
@@ -574,56 +574,49 @@ Use the next-story-task tool to inspect the next task without executing it.
 This is useful for planning or verifying task order.
 ```
 
-#### complete-story-task
+#### complete-task
 
-Completes a task in a story's task list by marking it as done.
+Story tasks use the same `complete-task` tool as regular tasks. Tasks are stored in `.mcp-tasks/tasks.ednl` with parent-child relationships, where story tasks have a `:parent-id` field linking them to their parent story.
 
 **Parameters:**
-- `story-name` (string, required) - The story name without -tasks.md suffix
-- `task-text` (string, required) - Partial text from the beginning of the task to verify (without the `- [ ]` checkbox prefix)
+- `category` (string, required) - The task category
+- `task-text` (string, required) - Partial text from the beginning of the task to verify
 - `completion-comment` (string, optional) - Optional comment to append to the completed task
 
 **Returns:**
 
 Git mode enabled:
 - Text item 1: Completion status message
-- Text item 2: JSON-encoded map with `:modified-files` key (Note: With EDN storage, this references `tasks.ednl` and `complete.ednl` instead of category-specific markdown files)
+- Text item 2: JSON-encoded map with `:modified-files` key containing `["tasks.ednl", "complete.ednl"]`
 
 Git mode disabled:
 - Single text item: Completion status message
 
 **Behavior:**
-- Reads story task file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
-- Finds the first incomplete task (marked with `- [ ]`)
-- Verifies the task text matches the provided `task-text` parameter (case-insensitive, whitespace-normalized)
-- Changes `- [ ]` to `- [x]` for the matched task
-- Optionally appends the completion comment on a new line after the task
-- Writes the updated content back to the story task file
-- Returns an error if:
-  - Story task file doesn't exist
-  - No incomplete tasks are found
-  - The first incomplete task doesn't match the provided text
+- Finds the first task with matching category and `:status :open` in `tasks.ednl`
+- Verifies the task text matches the provided `task-text` parameter
+- Marks the task as `:status :closed`
+- Optionally appends the completion comment to the `:description` field
+- Moves the task from `tasks.ednl` to `complete.ednl`
+- Returns an error if no matching task is found
 
 **Example:**
 ```clojure
 ;; Call
-{:story-name "user-auth"
- :task-text "STORY: user-auth - Set up JWT library"
- :completion-comment "Added buddy-sign library"}
+{:category "medium"
+ :task-text "Simplify story workflow"
+ :completion-comment "Removed redundant tools"}
 
 ;; Return (git mode)
-"Story task completed in .mcp-tasks/story/story-tasks/user-auth-tasks.md"
-"{\"modified-files\": [\"story-tasks/user-auth-tasks.md\"]}"
-
-;; Return (non-git mode)
-"Story task completed in .mcp-tasks/story/story-tasks/user-auth-tasks.md"
+"Task completed and moved to .mcp-tasks/complete.ednl"
+"{\"modified-files\": [\"tasks.ednl\", \"complete.ednl\"]}"
 ```
 
 **Usage:**
 ```
-Use complete-story-task after successfully executing a story task to mark
-it as complete in the story task file. The tool verifies you're completing
-the correct task before making changes.
+Use complete-task after successfully executing any task (including story tasks)
+to mark it as complete and archive it. The tool works uniformly for both
+standalone tasks and story child tasks.
 
 In git mode, use the modified-files output to commit the task tracking change.
 ```
@@ -731,25 +724,18 @@ Execute the next task from a story's task list.
 - `story-name` - The name of the story (without .md extension)
 
 **Behavior:**
-1. Reads the story tasks file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`
-2. If the file doesn't exist, informs the user and stops
-3. Finds the first incomplete task (marked with `- [ ]`)
-4. Parses the task to extract:
-   - Task text (everything from `- [ ] STORY:` until the `CATEGORY:` line)
-   - Category (from the `CATEGORY: <category>` line)
-5. If no incomplete tasks found, informs the user and stops
-6. If no CATEGORY line found, informs the user and stops
-7. Adds the task to the category queue:
-   - Uses the `add-task` tool to prepend the task to the category's queue
-   - Parameters: category (extracted), task-text (full multi-line description), prepend (true)
-8. Executes the task:
-   - Uses the category-specific next-task workflow
-   - Follows the category's execution instructions from `.mcp-tasks/prompts/<category>.md`
+1. Finds the first incomplete task using the `next-story-task` tool:
+   - Returns task-id, task-text, category, and task-index
+   - If no incomplete tasks found, informs the user and stops
+   - If no category is found for the task, informs the user and stops
+2. Executes the task directly using the category workflow:
+   - The task is already in tasks.ednl with its task-id
+   - Uses the category-specific workflow from `.mcp-tasks/prompts/<category>.md`
    - Completes all implementation steps according to the category workflow
-9. After successful execution, marks the story task as complete:
-   - Changes `- [ ]` to `- [x]` for the executed task
-   - Writes the updated content back to the story tasks file
-   - Uses the `complete-story-task` tool if available
+3. After successful execution, marks the task as complete:
+   - Uses the `complete-task` tool with the task-id from step 1
+   - Parameters: category, task-text (partial match), and optionally completion-comment
+   - Task is marked as :status :closed and moved from tasks.ednl to complete.ednl
    - Confirms completion to the user
 
 **Branch management (conditional):**
@@ -766,11 +752,10 @@ If `:story-branch-management?` is false (default):
 - Executes tasks on the current branch without any branch operations
 
 **Key characteristics:**
-- The task text includes the full multi-line description from the story tasks file
-- The CATEGORY line is used only for routing and is not included in the task text added to the category queue
-- If task execution fails, the story task is not marked as complete
-- The story task file tracks overall story progress
-- Individual category queues manage immediate execution
+- Tasks are stored in `.mcp-tasks/tasks.ednl` with parent-child relationships
+- Story tasks are child tasks with :parent-id pointing to the story
+- The category workflow finds and executes the task by its position in the queue
+- If task execution fails, the task is not marked as complete
 - Branch management is optional and controlled by configuration
 
 **Usage example:**
@@ -778,8 +763,8 @@ If `:story-branch-management?` is false (default):
 /mcp-tasks:execute-story-task user-authentication
 
 The agent will find the next incomplete task from the user-authentication story,
-add it to the appropriate category queue, execute it using that category's
-workflow, and mark it as complete upon success.
+execute it directly using that category's workflow, and mark it as complete
+using the complete-task tool upon success.
 ```
 
 ## Task Categories

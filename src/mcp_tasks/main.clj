@@ -114,9 +114,7 @@
      :tools {"complete-task" (tools/complete-task-tool config)
              "next-task" (tools/next-task-tool config)
              "add-task" (tools/add-task-tool config)
-             "next-story-task" (story-tools/next-story-task-tool config)
-             "complete-story-task" (story-tools/complete-story-task-tool config)
-             "complete-story" (story-tools/complete-story-tool config)}
+             "next-story-task" (story-tools/next-story-task-tool config)}
      :prompts all-prompts
      :resources (resources/prompt-resources all-prompts)}))
 
