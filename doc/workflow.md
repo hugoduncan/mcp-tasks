@@ -819,10 +819,9 @@ Categories allow you to organize tasks by type and apply different execution str
 
 ### Default Categories
 
-The system discovers categories automatically by scanning `.mcp-tasks/` subdirectories:
-- `tasks/` - Active task files
-- `complete/` - Completed task archives
-- `prompts/` - Category-specific execution instructions (optional)
+The system discovers categories automatically from:
+- Tasks in `tasks.ednl` - Each task's `:category` field defines its category
+- Prompts in `.mcp-tasks/prompts/` - Optional category-specific execution instructions (e.g., `simple.md`, `medium.md`)
 
 ### Custom Categories
 
