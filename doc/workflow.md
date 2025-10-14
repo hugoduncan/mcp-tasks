@@ -579,7 +579,7 @@ The `select-tasks` tool supports optional filtering parameters that enable story
 - `parent-id` (integer, optional) - Filter by parent task ID (for finding story child tasks)
 - `title-pattern` (string, optional) - Filter by title pattern (regex or substring match)
 - `limit` (integer, optional, default: 5) - Maximum number of tasks to return
-- `unique?` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
+- `unique` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
 
 All filter parameters are optional and AND-ed together when provided.
 
@@ -592,7 +592,7 @@ A map with two keys:
 **Example - Finding a story by title:**
 ```clojure
 ;; Call
-{:title-pattern "user-auth" :unique? true}
+{:title-pattern "user-auth" :unique true}
 
 ;; Return
 {:tasks [{:id 13 :title "User Authentication" :category "story" ...}]
@@ -602,7 +602,7 @@ A map with two keys:
 **Example - Finding story child tasks:**
 ```clojure
 ;; First find the story
-{:title-pattern "user-auth" :unique? true}  ; Returns {:tasks [{:id 13 ...}] ...}
+{:title-pattern "user-auth" :unique true}  ; Returns {:tasks [{:id 13 ...}] ...}
 
 ;; Then find first incomplete child
 {:parent-id 13 :limit 1}
@@ -614,7 +614,7 @@ A map with two keys:
 
 **Usage:**
 ```
-Use select-tasks with title-pattern and :unique? true to find story tasks,
+Use select-tasks with title-pattern and unique: true to find story tasks,
 then use parent-id to query child tasks. Use :limit to control how many
 tasks are returned. The task :id can be used with complete-task.
 ```
@@ -738,8 +738,9 @@ Break down a story into categorized, executable tasks.
 
 **Task creation parameters:**
 - `category`: The selected category (simple, medium, large, clarify-task)
-- `title`: Title on first line, then description
-- `story-name`: Story name (automatically sets `:parent-id`)
+- `title`: Task title
+- `description`: Task description (optional, multiline supported)
+- `parent-id`: Parent story's task ID (optional, for story tasks)
 - `type`: "task", "bug", "feature", or "chore"
 
 **Key characteristics:**
@@ -767,7 +768,7 @@ Execute the next task from a story.
 
 **Behavior:**
 1. Finds the story and its first incomplete child task:
-   - First, uses `select-tasks` with `title-pattern` and `:unique? true` to find the story in tasks.ednl
+   - First, uses `select-tasks` with `title-pattern` and `unique: true` to find the story in tasks.ednl
    - Then uses `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - If no incomplete tasks found, informs the user and stops
    - If no category is found for the task, informs the user and stops

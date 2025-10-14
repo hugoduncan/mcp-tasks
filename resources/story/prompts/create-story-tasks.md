@@ -13,8 +13,8 @@ Parse the arguments: $ARGUMENTS
 ## Process
 
 1. Retrieve the story using the `select-tasks` tool with `title-pattern`
-   matching the story name and `:unique? true`
-   - The story is stored as a task with `:type :story
+   matching the story name and `unique: true`
+   - The story is stored as a task with `:type :story`
    - If the story doesn't exist, inform the user and stop
 
 2. Display the story content to the user

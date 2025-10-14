@@ -226,8 +226,8 @@
       ;; Validate limit and unique? compatibility
       ;; Only error if limit was explicitly provided AND is > 1
       (when (and unique provided-limit? (> requested-limit 1))
-        (let [response-data {:error "limit must be 1 when unique? is true (or omit limit)"
-                             :metadata {:provided-limit requested-limit :unique? true}}]
+        (let [response-data {:error "limit must be 1 when unique is true (or omit limit)"
+                             :metadata {:provided-limit requested-limit :unique true}}]
           (throw (ex-info "Incompatible parameters"
                           {:response response-data}))))
 
@@ -250,7 +250,7 @@
 
           ;; Check unique? constraint
           (when (and unique (> total-matches 1))
-            (let [response-data {:error "Multiple tasks matched but :unique? was specified"
+            (let [response-data {:error "Multiple tasks matched but :unique was specified"
                                  :metadata {:count result-count
                                             :total-matches total-matches}}]
               (throw (ex-info "unique? constraint violated"

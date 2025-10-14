@@ -439,12 +439,12 @@
         (is (false? (get-in response [:metadata :limited?])))))))
 
 (deftest select-tasks-unique-constraint
-  ;; Test :unique? enforces 0 or 1 task
-  (testing "select-tasks :unique? constraint"
+  ;; Test :unique enforces 0 or 1 task
+  (testing "select-tasks :unique constraint"
     (testing "returns task when exactly one matches"
       (#'sut/add-task-impl (test-config) nil {:category "test" :title "Unique Task"})
 
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique? true})
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 1 (count (:tasks response))))
@@ -453,7 +453,7 @@
         (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
 
     (testing "returns empty when no matches"
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "nonexistent" :unique? true})
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "nonexistent" :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 0 (count (:tasks response))))
@@ -464,7 +464,7 @@
       (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task One"})
       (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task Two"})
 
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique? true})
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (contains? response :error))
@@ -489,14 +489,14 @@
         (is (contains? response :error))
         (is (str/includes? (:error response) "positive integer"))))
 
-    (testing "limit > 1 with unique? true returns error"
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit 5 :unique? true})
+    (testing "limit > 1 with unique true returns error"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit 5 :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (contains? response :error))
-        (is (str/includes? (:error response) "limit must be 1 when unique?"))
+        (is (str/includes? (:error response) "limit must be 1 when unique"))
         (is (= 5 (get-in response [:metadata :provided-limit])))
-        (is (true? (get-in response [:metadata :unique?])))))))
+        (is (true? (get-in response [:metadata :unique])))))))
 
 (deftest select-tasks-empty-results
   ;; Test empty results return empty tasks vector

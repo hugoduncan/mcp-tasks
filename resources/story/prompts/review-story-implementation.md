@@ -13,7 +13,7 @@ Parse the arguments: $ARGUMENTS
 ## Process
 
 1. Get the story task using the `select-tasks` tool:
-   - Use `title-pattern` parameter with the story name and `:unique? true` to find the story task
+   - Use `title-pattern` parameter with the story name and `unique: true` to find the story task
    - If the task doesn't exist, inform the user and stop
    - The story description is in the task's `:description` field
 
@@ -47,16 +47,18 @@ Parse the arguments: $ARGUMENTS
      a) For each selected suggestion, use the `add-task` tool for each task:
         - Use the `add-task` tool with these parameters:
           - `category`: pick an appropriate category based on the task complexity
-          - `title`: "STORY: <story-name> - <task description>" the task description can span multiple lines.
-          - `story-name`: the story name from step 1
+          - `title`: "STORY: <story-name> - <task description>"
+          - `description`: the task description (can span multiple lines)
+          - `parent-id`: the story's task ID from step 1
           - `prepend`: false (to append tasks)
 
         Example:
         ```
         add-task(
           category="medium",
-          title="STORY: my-story - Add error handling for edge cases\n throw exceptions if edge cases not supported",
-          story-name="my-story",
+          title="STORY: my-story - Add error handling for edge cases",
+          description="throw exceptions if edge cases not supported",
+          parent-id=42,
           prepend=false
         )
         ```
