@@ -137,7 +137,7 @@
   - parent-id: Parent task ID for filtering children
   - title-pattern: Pattern to match task titles (regex or substring)
 
-  Returns the first matching task from tasks.ednl in a map with :category and :task keys,
+  Returns the complete task map with all fields from the Task schema,
   or a map with :status key if there are no matching tasks."
   [config _context {:keys [category parent-id title-pattern]}]
   (try
@@ -153,18 +153,9 @@
                       :category category
                       :parent-id parent-id
                       :title-pattern title-pattern)]
-        (let [title (:title task)
-              description (:description task "")
-              task-text (if (str/blank? description)
-                          title
-                          (str title "\n" description))
-              task-category (:category task)
-              task-id (:id task)]
-          {:content [{:type "text"
-                      :text (pr-str {:category task-category
-                                     :task task-text
-                                     :task-id task-id})}]
-           :isError false})
+        {:content [{:type "text"
+                    :text (pr-str task)}]
+         :isError false}
         {:content [{:type "text"
                     :text (pr-str {:status "No matching tasks found"})}]
          :isError false}))

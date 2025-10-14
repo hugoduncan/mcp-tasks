@@ -101,10 +101,11 @@
                       nil
                       {:parent-id 1})]
           (is (false? (:isError result)))
-          (let [data (edn/read-string (get-in result [:content 0 :text]))]
-            (is (= "First incomplete\nWith details" (:task data)))
-            (is (= "medium" (:category data)))
-            (is (= 3 (:task-id data)))))))))
+          (let [task (edn/read-string (get-in result [:content 0 :text]))]
+            (is (= "First incomplete" (:title task)))
+            (is (= "With details" (:description task)))
+            (is (= "medium" (:category task)))
+            (is (= 3 (:id task)))))))))
 
 (deftest next-task-returns-no-match-when-no-incomplete-children
   ;; Test that next-task with parent-id filter returns no match when no incomplete children
@@ -168,10 +169,10 @@
                       nil
                       {:title-pattern "test-story"})]
           (is (false? (:isError result)))
-          (let [data (edn/read-string (get-in result [:content 0 :text]))]
-            (is (= "test-story" (:task data)))
-            (is (= "story" (:category data)))
-            (is (= 1 (:task-id data)))))))))
+          (let [task (edn/read-string (get-in result [:content 0 :text]))]
+            (is (= "test-story" (:title task)))
+            (is (= "story" (:category task)))
+            (is (= 1 (:id task)))))))))
 
 (deftest next-task-combines-multiple-filters
   ;; Test that next-task can combine parent-id and category filters
@@ -213,7 +214,7 @@
                       nil
                       {:parent-id 1 :category "medium"})]
           (is (false? (:isError result)))
-          (let [data (edn/read-string (get-in result [:content 0 :text]))]
-            (is (= "Medium task" (:task data)))
-            (is (= "medium" (:category data)))
-            (is (= 3 (:task-id data)))))))))
+          (let [task (edn/read-string (get-in result [:content 0 :text]))]
+            (is (= "Medium task" (:title task)))
+            (is (= "medium" (:category task)))
+            (is (= 3 (:id task)))))))))

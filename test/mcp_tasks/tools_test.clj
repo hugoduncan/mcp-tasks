@@ -122,9 +122,10 @@
       ;; Get next task - should be first task
       (let [result (#'sut/next-task-impl (test-config) nil {:category "test"})]
         (is (false? (:isError result)))
-        (let [response (edn/read-string (get-in result [:content 0 :text]))]
-          (is (= "test" (:category response)))
-          (is (str/starts-with? (:task response) "First task"))))
+        (let [task (edn/read-string (get-in result [:content 0 :text]))]
+          (is (= "test" (:category task)))
+          (is (= "First task" (:title task)))
+          (is (= "With description" (:description task)))))
 
       ;; Complete first task
       (let [result (#'sut/complete-task-impl (test-config) nil {:category "test"
@@ -134,9 +135,9 @@
       ;; Get next task - should now be second task
       (let [result (#'sut/next-task-impl (test-config) nil {:category "test"})]
         (is (false? (:isError result)))
-        (let [response (edn/read-string (get-in result [:content 0 :text]))]
-          (is (= "test" (:category response)))
-          (is (str/starts-with? (:task response) "Second task"))))
+        (let [task (edn/read-string (get-in result [:content 0 :text]))]
+          (is (= "test" (:category task)))
+          (is (= "Second task" (:title task)))))
 
       ;; Complete second task
       (let [result (#'sut/complete-task-impl (test-config) nil {:category "test"
