@@ -2,7 +2,7 @@
   "Tests for story task filtering using enhanced select-tasks tool"
   (:require
     [babashka.fs :as fs]
-    [clojure.edn :as edn]
+    [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.tasks-file :as tasks-file]
@@ -86,7 +86,7 @@
                       nil
                       {:parent-id 1 :limit 1})]
           (is (false? (:isError result)))
-          (let [response (edn/read-string (get-in result [:content 0 :text]))
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
                 task (first (:tasks response))]
             (is (= "First incomplete" (:title task)))
             (is (= "With details" (:description task)))
@@ -123,7 +123,7 @@
                       nil
                       {:parent-id 1})]
           (is (false? (:isError result)))
-          (let [response (edn/read-string (get-in result [:content 0 :text]))]
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (empty? (:tasks response)))))))))
 
 (deftest select-tasks-by-title-pattern-finds-story
@@ -155,7 +155,7 @@
                       nil
                       {:title-pattern "test-story" :limit 1})]
           (is (false? (:isError result)))
-          (let [response (edn/read-string (get-in result [:content 0 :text]))
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
                 task (first (:tasks response))]
             (is (= "test-story" (:title task)))
             (is (= "story" (:category task)))
@@ -201,7 +201,7 @@
                       nil
                       {:parent-id 1 :category "medium" :limit 1})]
           (is (false? (:isError result)))
-          (let [response (edn/read-string (get-in result [:content 0 :text]))
+          (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
                 task (first (:tasks response))]
             (is (= "Medium task" (:title task)))
             (is (= "medium" (:category task)))

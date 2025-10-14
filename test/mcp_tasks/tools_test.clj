@@ -2,7 +2,6 @@
   (:require
     [babashka.fs :as fs]
     [clojure.data.json :as json]
-    [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -277,7 +276,7 @@
       ;; Get next task - should be first task
       (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [response (edn/read-string (get-in result [:content 0 :text]))
+        (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
               task (first (:tasks response))]
           (is (= "test" (:category task)))
           (is (= "First task" (:title task)))
@@ -291,7 +290,7 @@
       ;; Get next task - should now be second task
       (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [response (edn/read-string (get-in result [:content 0 :text]))
+        (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
               task (first (:tasks response))]
           (is (= "test" (:category task)))
           (is (= "Second task" (:title task)))))
@@ -304,7 +303,7 @@
       ;; Get next task - should have no more tasks
       (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [response (edn/read-string (get-in result [:content 0 :text]))]
+        (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (empty? (:tasks response))))))))
 
 (deftest select-tasks-returns-multiple-tasks
