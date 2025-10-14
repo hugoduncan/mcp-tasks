@@ -52,9 +52,7 @@ The system provides story support for managing larger features or initiatives th
 
 **Story Storage Structure:**
 - `.mcp-tasks/story/stories/<story-name>.md` - Active story descriptions
-- `.mcp-tasks/story/story-tasks/<story-name>-tasks.md` - Task breakdown for each story
 - `.mcp-tasks/story/complete/<story-name>.md` - Completed stories archive
-- `.mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md` - Completed task lists archive
 - `.mcp-tasks/story/prompts/<story-name>.md` - Custom story-specific prompts (optional)
 
 **Story Workflow:**
@@ -65,8 +63,8 @@ The system provides story support for managing larger features or initiatives th
 
 2. **Create Story Tasks** - Break down a story into categorized, executable tasks
    - Reads story
-   - Creates task breakdown with STORY prefix and CATEGORY metadata
-   - Writes tasks
+   - Creates tasks in `.mcp-tasks/tasks.ednl` with `:parent-id` linking to story
+   - Each task uses appropriate `:category` for execution workflow
 
 3. **Execute Story Task** - Execute the next incomplete task from a story
    - Finds story and first incomplete child using `next-task` tool with filtering
@@ -83,18 +81,13 @@ The system provides story support for managing larger features or initiatives th
    - Preserves implementation history for reference
 
 **Story Task Format:**
-Story tasks are stored in markdown format at `.mcp-tasks/story/story-tasks/<story-name>-tasks.md`:
+Story tasks are stored in `.mcp-tasks/tasks.ednl` as regular Task records with:
+- `:parent-id` field set to the story's task ID
+- `:type` typically set to `:task`, `:bug`, or `:feature`
+- `:category` field determining which execution workflow to use
+- All other standard Task schema fields (`:title`, `:description`, `:design`, etc.)
 
-```markdown
-- [ ] STORY: <story-name> - <brief task title>
-  <additional task details on continuation lines>
-  <more details as needed>
-
-Part of story: @path-to-story-file
-CATEGORY: <category>
-```
-
-When executed, story tasks are added to the category queue in `.mcp-tasks/tasks.ednl` as regular Task records with `parent-id` linking to the story.
+Story tasks are retrieved using the `next-task` tool with `parent-id` filtering.
 
 **Branch Management:**
 Story execution includes automatic branch management:
