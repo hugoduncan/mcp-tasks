@@ -315,20 +315,6 @@
     :required []}
    :implementation (partial select-tasks-impl config)})
 
-(defn- find-story-by-name
-  "Find a story task by name in loaded tasks.
-
-  Returns the story task ID or nil if not found."
-  [story-name]
-  (let [task-map @tasks/tasks
-        task-ids @tasks/task-ids]
-    (->> task-ids
-         (map #(get task-map %))
-         (filter #(and (= (:type %) :story)
-                       (= (:title %) story-name)))
-         first
-         :id)))
-
 (defn- prepare-task-file
   "Prepare task file for adding a task.
 
