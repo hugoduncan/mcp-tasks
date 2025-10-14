@@ -131,6 +131,18 @@
          (filter title-match?)
          first)))
 
+(defn find-by-title
+  "Find all tasks with exact title match.
+
+  Returns vector of matching tasks (may be empty or contain multiple tasks)."
+  [title]
+  (let [ids @task-ids
+        task-map @tasks]
+    (->> ids
+         (map #(get task-map %))
+         (filter #(= (:title %) title))
+         vec)))
+
 (defn verify-task-text
   "Check if task with given ID has text that starts with partial-text.
 

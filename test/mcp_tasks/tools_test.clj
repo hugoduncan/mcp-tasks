@@ -99,6 +99,93 @@
           (is (= 1 (count complete-tasks)))
           (is (str/includes? (:description (first complete-tasks)) "Added feature X")))))))
 
+(deftest completes-task-by-id
+  ;; Tests that complete-task-impl can find and complete a task by exact ID
+  (testing "complete-task"
+    (testing "completes task by exact task-id"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "first task" :description "detail" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "other" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 2})]
+        (is (false? (:isError result)))
+        ;; Verify task 2 is complete
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "second task" (:title (first complete-tasks))))
+          (is (= :closed (:status (first complete-tasks)))))
+        ;; Verify task 1 remains in tasks
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= "first task" (:title (first tasks)))))))))
+
+(deftest completes-task-by-exact-title
+  ;; Tests that complete-task-impl finds tasks by exact title match
+  (testing "complete-task"
+    (testing "completes task by exact title match"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "first task" :description "detail" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-text "second task"})]
+        (is (false? (:isError result)))
+        ;; Verify second task is complete
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "second task" (:title (first complete-tasks)))))))))
+
+(deftest rejects-ambiguous-title
+  ;; Tests that complete-task-impl rejects when multiple tasks have the same title
+  (testing "complete-task"
+    (testing "rejects multiple tasks with same title"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "duplicate" :description "first" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "duplicate" :description "second" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-text "duplicate"})]
+        (is (true? (:isError result)))
+        (is (str/includes? (get-in result [:content 0 :text]) "Multiple tasks found"))))))
+
+(deftest verifies-id-and-text-match
+  ;; Tests that when both task-id and task-text are provided, they must refer to the same task
+  (testing "complete-task"
+    (testing "verifies task-id and task-text refer to same task"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "first task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      ;; Mismatched ID and text
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1 :task-text "second task"})]
+        (is (true? (:isError result)))
+        (is (str/includes? (get-in result [:content 0 :text]) "do not refer to the same task")))
+      ;; Matching ID and text
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 2 :task-text "second task"})]
+        (is (false? (:isError result)))))))
+
+(deftest requires-at-least-one-identifier
+  ;; Tests that either task-id or task-text must be provided
+  (testing "complete-task"
+    (testing "requires either task-id or task-text"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {})]
+        (is (true? (:isError result)))
+        (is (str/includes? (get-in result [:content 0 :text]) "Must provide either"))))))
+
 ;; Integration Tests
 
 (deftest ^:integration complete-workflow-add-next-complete

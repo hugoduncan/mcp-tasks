@@ -17,21 +17,27 @@
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
-  Moves first task from tasks.ednl to complete.ednl,
-  verifying it matches the provided task-text and optionally adding a
-  completion comment.
+  Finds a task by exact match (task-id or task-text) and moves it from 
+  tasks.ednl to complete.ednl with optional completion comment.
+  
+  At least one of task-id or task-text must be provided.
+  If both are provided, they must refer to the same task.
 
   Returns:
   - Git mode enabled: Two text items (completion message + JSON with :modified-files)
   - Git mode disabled: Single text item (completion message only)"
-  [config _context {:keys [category task-text completion-comment]}]
+  [config _context {:keys [task-id task-text completion-comment category]}]
   (try
+    ;; Validate at least one identifier provided
+    (when (and (nil? task-id) (nil? task-text))
+      (throw (ex-info "Must provide either task-id or task-text"
+                      {:task-id task-id :task-text task-text})))
+
     (let [use-git? (:use-git? config)
           tasks-path (path-helper/task-path config ["tasks.ednl"])
           complete-path (path-helper/task-path config ["complete.ednl"])
           tasks-file (:absolute tasks-path)
           complete-file (:absolute complete-path)
-          ;; Paths relative to .mcp-tasks
           tasks-rel-path (:relative tasks-path)
           complete-rel-path (:relative complete-path)]
 
@@ -42,44 +48,84 @@
 
       (tasks/load-tasks! tasks-file)
 
-      ;; Get next incomplete task
-      (if-let [task (tasks/get-next-incomplete-by-category category)]
-        (let [task-id (:id task)
-              title (:title task)
-              description (:description task "")
-              full-text (if (str/blank? description)
-                          title
-                          (str title "\n" description))]
+      ;; Find task by ID or exact title match
+      (let [task-by-id (when task-id (tasks/get-task task-id))
+            tasks-by-title (when task-text (tasks/find-by-title task-text))
 
-          ;; Verify task text matches
-          (when-not (or (str/starts-with? full-text task-text)
-                        (str/starts-with? title task-text))
-            (throw (ex-info "First task does not match provided text"
-                            {:category category
-                             :expected task-text
-                             :actual full-text})))
+            ;; Determine which task to complete
+            task (cond
+                   ;; Both provided - verify they match
+                   (and task-id task-text)
+                   (cond
+                     (nil? task-by-id)
+                     (throw (ex-info "Task ID not found"
+                                     {:task-id task-id}))
 
-          ;; Mark task as complete in memory
-          (tasks/mark-complete task-id completion-comment)
+                     (empty? tasks-by-title)
+                     (throw (ex-info "No task found with exact title match"
+                                     {:task-text task-text}))
 
-          ;; Move task from tasks file to complete file
-          (tasks/move-task! task-id tasks-file complete-file)
+                     (not (some #(= (:id %) task-id) tasks-by-title))
+                     (throw (ex-info "Task ID and task text do not refer to the same task"
+                                     {:task-id task-id
+                                      :task-text task-text
+                                      :task-by-id task-by-id
+                                      :tasks-by-title (mapv :id tasks-by-title)}))
 
-          (if use-git?
-            ;; Git mode: return message + JSON with modified files
-            {:content [{:type "text"
-                        :text (str "Task completed and moved to " complete-file)}
-                       {:type "text"
-                        :text (json/write-str {:modified-files [tasks-rel-path
-                                                                complete-rel-path]})}]
-             :isError false}
-            ;; Non-git mode: return message only
-            {:content [{:type "text"
-                        :text (str "Task completed and moved to " complete-file)}]
-             :isError false}))
-        (throw (ex-info "No tasks found in category"
-                        {:category category
-                         :file tasks-file}))))
+                     :else task-by-id)
+
+                   ;; Only ID provided
+                   task-id
+                   (or task-by-id
+                       (throw (ex-info "Task ID not found"
+                                       {:task-id task-id})))
+
+                   ;; Only title provided
+                   task-text
+                   (cond
+                     (empty? tasks-by-title)
+                     (throw (ex-info "No task found with exact title match"
+                                     {:task-text task-text}))
+
+                     (> (count tasks-by-title) 1)
+                     (throw (ex-info "Multiple tasks found with same title - use task-id to disambiguate"
+                                     {:task-text task-text
+                                      :matching-task-ids (mapv :id tasks-by-title)
+                                      :matching-tasks tasks-by-title}))
+
+                     :else (first tasks-by-title)))]
+
+        ;; Verify category if provided (for backwards compatibility)
+        (when (and category (not= (:category task) category))
+          (throw (ex-info "Task category does not match"
+                          {:expected-category category
+                           :actual-category (:category task)
+                           :task-id (:id task)})))
+
+        ;; Verify task is not already closed
+        (when (= (:status task) :closed)
+          (throw (ex-info "Task is already closed"
+                          {:task-id (:id task)
+                           :title (:title task)})))
+
+        ;; Mark task as complete in memory
+        (tasks/mark-complete (:id task) completion-comment)
+
+        ;; Move task from tasks file to complete file
+        (tasks/move-task! (:id task) tasks-file complete-file)
+
+        (if use-git?
+          ;; Git mode: return message + JSON with modified files
+          {:content [{:type "text"
+                      :text (str "Task " (:id task) " completed and moved to " complete-file)}
+                     {:type "text"
+                      :text (json/write-str {:modified-files [tasks-rel-path
+                                                              complete-rel-path]})}]
+           :isError false}
+          ;; Non-git mode: return message only
+          {:content [{:type "text"
+                      :text (str "Task " (:id task) " completed and moved to " complete-file)}]
+           :isError false})))
     (catch Exception e
       (response/error-response e))))
 
@@ -87,21 +133,37 @@
   "Generate description for complete-task tool based on config."
   [config]
   (if (:use-git? config)
-    "Complete a task by moving it from
-   .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
+    "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
-   Verifies the first task matches the provided text, marks it complete, and
-   optionally adds a completion comment.
+   Identifies tasks by exact match using task-id or task-text (title).
+   At least one identifier must be provided.
+
+   Parameters:
+   - task-id: (optional) Exact task ID
+   - task-text: (optional) Exact task title match
+   - category: (optional) For backwards compatibility - verifies task category if provided
+   - completion-comment: (optional) Comment appended to task description
+
+   If both task-id and task-text are provided, they must refer to the same task.
+   If only task-text is provided and multiple tasks have the same title, an error is returned.
 
    Returns two text items:
    1. A completion status message
    2. A JSON-encoded map with :modified-files key containing file paths
       relative to .mcp-tasks for use in git commit workflows."
-    "Complete a task by moving it from
-   .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
+    "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
-   Verifies the first task matches the provided text, marks it complete, and
-   optionally adds a completion comment.
+   Identifies tasks by exact match using task-id or task-text (title).
+   At least one identifier must be provided.
+
+   Parameters:
+   - task-id: (optional) Exact task ID
+   - task-text: (optional) Exact task title match
+   - category: (optional) For backwards compatibility - verifies task category if provided
+   - completion-comment: (optional) Comment appended to task description
+
+   If both task-id and task-text are provided, they must refer to the same task.
+   If only task-text is provided and multiple tasks have the same title, an error is returned.
 
    Returns a completion status message."))
 
@@ -117,16 +179,19 @@
    :inputSchema
    {:type "object"
     :properties
-    {"category"
-     {:type "string"
-      :description "The task category name"}
+    {"task-id"
+     {:type "integer"
+      :description "Exact task ID to complete"}
      "task-text"
      {:type "string"
-      :description "Partial text from the beginning of the task to verify"}
+      :description "Exact task title to match"}
+     "category"
+     {:type "string"
+      :description "(Optional) Task category for backwards compatibility - verifies category matches if provided"}
      "completion-comment"
      {:type "string"
       :description "Optional comment to append to the completed task"}}
-    :required ["category" "task-text"]}
+    :required []}
    :implementation (partial complete-task-impl config)})
 
 (defn next-task-impl
