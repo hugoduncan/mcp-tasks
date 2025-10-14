@@ -555,3 +555,106 @@
           (finally
             (mcp-client/close! client)
             ((:stop server))))))))
+
+(deftest ^:integ update-task-tool-test
+  ;; Tests that update-task tool can update task fields and persist changes to tasks.ednl.
+  (testing "update-task tool"
+    (testing "updates task fields and persists to tasks.ednl"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create an initial task in tasks.ednl
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 1
+                              :title "Original title"
+                              :description "Original desc"
+                              :design "Original design"
+                              :category "simple"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Update the task using the tool
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :title "Updated title"
+                                               :description "Updated desc"
+                                               :design "Updated design"})]
+            (is (not (:isError result)))
+            (is (re-find #"Task 1 updated"
+                         (-> result :content first :text)))
+
+            ;; Verify task was updated in tasks.ednl
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  updated-task (first tasks)]
+              (is (= 1 (count tasks)))
+              (is (= "Updated title" (:title updated-task)))
+              (is (= "Updated desc" (:description updated-task)))
+              (is (= "Updated design" (:design updated-task)))
+              ;; Other fields should remain unchanged
+              (is (= :open (:status updated-task)))
+              (is (= "simple" (:category updated-task)))
+              (is (= :task (:type updated-task)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "updates only specified fields"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create an initial task
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 2
+                              :title "Keep title"
+                              :description "Change desc"
+                              :design "Keep design"
+                              :category "medium"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Update only description field
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 2
+                                               :description "New desc"})]
+            (is (not (:isError result)))
+
+            ;; Verify only description changed
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                  updated-task (first tasks)]
+              (is (= "Keep title" (:title updated-task)))
+              (is (= "New desc" (:description updated-task)))
+              (is (= "Keep design" (:design updated-task)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "returns error for non-existent task ID"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 999
+                                               :title "New title"})]
+            (is (:isError result))
+            (is (re-find #"Task not found"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
