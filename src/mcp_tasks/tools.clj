@@ -14,70 +14,6 @@
   [file-path]
   (.exists (io/file file-path)))
 
-(defn- read-task-file
-  "Read task file and return content as string.
-  Returns an empty string if file doesn't exist"
-  [file-path]
-  (if (file-exists? file-path)
-    (slurp file-path)
-    ""))
-
-(defn- write-task-file
-  "Write content to task file atomically"
-  [file-path content]
-  (let [file (io/file file-path)
-        parent (.getParentFile file)]
-    (when parent
-      (.mkdirs parent))
-    (let [temp-file (io/file (str file-path ".tmp"))]
-      (spit temp-file content)
-      (.renameTo temp-file file))))
-
-(defn- parse-tasks
-  "Parse markdown task list into individual task strings.
-  Returns vector of task strings, each starting with '- [ ]' or '- [x]'"
-  [content]
-  (let [lines (str/split-lines content)
-        task-pattern #"^- \[([ x])\] (.*)"]
-    (loop [lines lines
-           current-task []
-           tasks []]
-      (if (empty? lines)
-        (if (seq current-task)
-          (conj tasks (str/join "\n" current-task))
-          tasks)
-        (let [line (first lines)
-              rest-lines (rest lines)]
-          (if (re-matches task-pattern line)
-            ;; Start of new task
-            (if (seq current-task)
-              (recur rest-lines [line]
-                     (conj tasks (str/join "\n" current-task)))
-              (recur rest-lines [line] tasks))
-            ;; Continuation of current task or empty line
-            (if (seq current-task)
-              (recur rest-lines (conj current-task line) tasks)
-              (recur rest-lines [] tasks))))))))
-
-(defn- task-matches?
-  "Check if task text starts with the given partial text.
-   The test is case-insensitive and ignores whitespace."
-  [task-text partial-text]
-  (let [normalize #(-> % str/lower-case (str/replace #"\s+" " ") str/trim)
-        task-content (-> task-text
-                         (str/replace #"^- \[([ x])\] " "")
-                         normalize)
-        search-text (normalize partial-text)]
-    (str/starts-with? task-content search-text)))
-
-(defn- mark-complete
-  "Mark task as complete and optionally append completion comment"
-  [task-text completion-comment]
-  (let [completed-task (str/replace task-text #"^- \[ \]" "- [x]")]
-    (if (and completion-comment (not (str/blank? completion-comment)))
-      (str completed-task "\n\n" (str/trim completion-comment))
-      completed-task)))
-
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
@@ -242,104 +178,73 @@
     :required ["category"]}
    :implementation (partial next-task-impl config)})
 
-(defn- prepare-story-task-file
-  "Prepare story task file for adding a task.
+(defn- find-story-by-name
+  "Find a story task by name in loaded tasks.
 
-  Validates story exists and returns [file-path content] tuple.
-  Initializes file with header if empty."
-  [config story-name]
-  (let [story-path (path-helper/task-path config ["story" "stories" (str story-name ".md")])
-        story-file (:absolute story-path)]
-    (when-not (file-exists? story-file)
-      (throw (ex-info "Story does not exist"
-                      {:story-name story-name
-                       :expected-file story-file})))
-    (let [story-tasks-path (path-helper/task-path config ["story" "story-tasks" (str story-name "-tasks.md")])
-          story-tasks-file (:absolute story-tasks-path)
-          content (read-task-file story-tasks-file)
-          content (if (str/blank? content)
-                    (str "# Tasks for " story-name " Story\n")
-                    content)]
-      [story-tasks-file content])))
+  Returns the story task ID or nil if not found."
+  [story-name]
+  (let [task-map @tasks/tasks
+        task-ids @tasks/task-ids]
+    (->> task-ids
+         (map #(get task-map %))
+         (filter #(and (= (:type %) :story)
+                       (= (:title %) story-name)))
+         first
+         :id)))
 
-(defn- prepare-category-task-file
-  "Prepare category task file for adding a task.
+(defn- prepare-task-file
+  "Prepare task file for adding a task.
 
-  Loads tasks from EDNL file into memory.
+  Loads tasks from tasks.ednl into memory.
   Returns the absolute file path."
-  [config category]
-  (let [tasks-path (path-helper/task-path config ["tasks" (str category ".ednl")])
+  [config]
+  (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)]
     ;; Load existing tasks into memory if file exists
     (when (file-exists? tasks-file)
       (tasks/load-tasks! tasks-file))
     tasks-file))
 
-(defn- format-task-content
-  "Format task content for adding to a task file.
-
-  Returns the new file content with the task added."
-  [task-text category tasks-content prepend story-name]
-  (let [new-task (if story-name
-                   (str "- [ ] " task-text "\nCATEGORY: " category)
-                   (str "- [ ] " task-text))
-        separator (if story-name "\n\n" "\n")
-        header-only? (and story-name
-                          (= tasks-content (str "# Tasks for " story-name " Story\n")))]
-    (cond
-      (or (str/blank? tasks-content) header-only?)
-      (if header-only?
-        (str tasks-content new-task)
-        new-task)
-
-      prepend
-      (str new-task separator tasks-content)
-
-      :else
-      (str tasks-content separator new-task))))
-
 (defn add-task-impl
   "Implementation of add-task tool.
 
-  Adds a task to tasks/<category>.ednl (for category tasks) or
-  tasks/<story-name>-tasks.md (for story tasks).
-  If prepend is true, adds at the beginning; otherwise appends at the end.
-  If story-name is provided, the task is associated with that story and
-  includes CATEGORY metadata. Creates the story-tasks file if it doesn't exist."
+  Adds a task to tasks.ednl. If prepend is true, adds at the beginning;
+  otherwise appends at the end. If story-name is provided, the task is
+  associated with that story via :parent-id."
   [config _context {:keys [category task-text prepend story-name]}]
   (try
-    (if story-name
-      ;; Story task: use markdown format
-      (let [[tasks-file tasks-content] (prepare-story-task-file config story-name)
-            new-content (format-task-content task-text category tasks-content prepend story-name)]
-        (write-task-file tasks-file new-content)
-        {:content [{:type "text"
-                    :text (str "Task added to " tasks-file)}]
-         :isError false})
-      ;; Category task: use EDN format
-      (let [tasks-file (prepare-category-task-file config category)
-            ;; Parse task-text into title and description
-            lines (str/split-lines task-text)
-            title (first lines)
-            description (if (> (count lines) 1)
-                          (str/join "\n" (rest lines))
-                          "")
-            ;; Create task map with all required fields
-            task-map {:title title
-                      :description description
-                      :design ""
-                      :category category
-                      :status :open
-                      :type :task
-                      :meta {}
-                      :relations []}]
-        ;; Add task to in-memory state
-        (tasks/add-task task-map :prepend? (boolean prepend))
-        ;; Save to EDNL file
-        (tasks/save-tasks! tasks-file)
-        {:content [{:type "text"
-                    :text (str "Task added to " tasks-file)}]
-         :isError false}))
+    (let [tasks-file (prepare-task-file config)
+          ;; Parse task-text into title and description
+          lines (str/split-lines task-text)
+          title (first lines)
+          description (if (> (count lines) 1)
+                        (str/join "\n" (rest lines))
+                        "")
+          ;; If story-name provided, find the story task
+          parent-id (when story-name
+                      (or (find-story-by-name story-name)
+                          (throw (ex-info "Story not found"
+                                          {:story-name story-name}))))
+          ;; Create task map with all required fields
+          task-map {:title title
+                    :description description
+                    :design ""
+                    :category category
+                    :status :open
+                    :type :task
+                    :meta {}
+                    :relations []}
+          ;; Add parent-id if this is a story task
+          task-map (if parent-id
+                     (assoc task-map :parent-id parent-id)
+                     task-map)]
+      ;; Add task to in-memory state
+      (tasks/add-task task-map :prepend? (boolean prepend))
+      ;; Save to EDNL file
+      (tasks/save-tasks! tasks-file)
+      {:content [{:type "text"
+                  :text (str "Task added to " tasks-file)}]
+       :isError false})
     (catch Exception e
       (response/error-response e))))
 
@@ -349,11 +254,11 @@
   (let [category-descs (prompts/category-descriptions)
         categories (sort (keys category-descs))]
     (if (seq categories)
-      (str "Add a task to tasks/<category>.ednl\n\nAvailable categories:\n"
+      (str "Add a task to tasks.ednl\n\nAvailable categories:\n"
            (str/join "\n"
                      (for [cat categories]
                        (format "- %s: %s" cat (get category-descs cat)))))
-      "Add a task to tasks/<category>.ednl")))
+      "Add a task to tasks.ednl")))
 
 (defn add-task-tool
   "Tool to add a task to a specific category.

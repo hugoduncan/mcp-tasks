@@ -100,6 +100,9 @@
 
 - Remove the task from .mcp-tasks/tasks/%s.md (if removing the last task, leave
   the file empty rather than deleting it)
+
+- Summarise any deviations in the execution of the task, compared to the task
+  spec.
 "
                           category category)
         git-text "\n- Commit the task tracking changes in the .mcp-tasks git repository\n"]
