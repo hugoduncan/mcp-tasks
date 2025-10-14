@@ -16,21 +16,27 @@ Use this tool after all story tasks are complete and the implementation has been
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
-   - If the file doesn't exist, inform the user and stop
-   - If the file is already in `.mcp-tasks/story/complete/`, inform the user it's already completed
+1. Retrieve the story using the `next-task` tool with `title-pattern` matching the story name
+   - The story is stored as a task with `:type :story` in `.mcp-tasks/tasks.ednl`
+   - If the story doesn't exist in tasks.ednl, check complete.ednl
+   - If already in complete.ednl, inform the user it's already completed
 
-2. If a completion comment is provided:
-   - Append the comment to the story content
-   - Add a separator and timestamp if appropriate
+2. Verify all child tasks are complete:
+   - Use `next-task` with `parent-id` filter to check for any incomplete child tasks
+   - If incomplete tasks remain, inform the user and list them
+   - Do not proceed with story completion until all tasks are done
 
-3. Move the story file from `.mcp-tasks/story/stories/<story-name>.md` to `.mcp-tasks/story/complete/<story-name>.md`
+3. Complete the story using the `complete-task` tool:
+   - Use the story's task-id or exact title
+   - Include the completion comment if provided
+   - The story will be marked with `:status :closed` and moved from `tasks.ednl` to `complete.ednl`
 
-4. Move the story tasks file from `.mcp-tasks/story/story-tasks/<story-name>-tasks.md` to `.mcp-tasks/story/story-tasks-complete/<story-name>-tasks.md`
-   - If the tasks file doesn't exist, skip this step with a note
+4. Complete all child tasks (if not already done):
+   - For each child task of the story, use `complete-task`
+   - This moves each task from `tasks.ednl` to `complete.ednl`
 
 5. If git workflow is enabled:
-   - Stage the file changes (both story and tasks files, source and destination)
+   - Stage the changes to `.mcp-tasks/tasks.ednl` and `.mcp-tasks/complete.ednl`
    - Return the modified file paths for commit
 
 6. Confirm completion to the user
@@ -43,6 +49,7 @@ Use this tool after all story tasks are complete and the implementation has been
 
 ## Notes
 
-- Completed stories and their task lists remain accessible in the archive for historical reference
-- Both the story file and its task list are moved to their respective complete directories
+- Completed stories and their child tasks remain accessible in `.mcp-tasks/complete.ednl` for historical reference
+- Both the story task and all child tasks are marked with `:status :closed` and moved to `complete.ednl`
 - If git workflow is enabled, you should commit the changes after completion
+- The story and its tasks can be reviewed by reading `complete.ednl` or using appropriate tools

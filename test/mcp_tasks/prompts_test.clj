@@ -267,7 +267,7 @@
         (is (some? content))
         (is (string? content))
         (is (re-find #"story-name" content))
-        (is (re-find #"\.mcp-tasks/story/stories" content))
+        (is (re-find #"next-task.*tool.*title-pattern" content))
         (is (re-find #"add-task" content))
         (is (re-find #"tasks\.ednl" content))
         (is (re-find #"category" content))))

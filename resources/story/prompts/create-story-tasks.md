@@ -12,8 +12,9 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Read the story file from `.mcp-tasks/story/stories/<story-name>.md`
-   - If the file doesn't exist, inform the user and stop
+1. Retrieve the story using the `next-task` tool with `title-pattern` matching the story name
+   - The story is stored as a task with `:type :story` in `.mcp-tasks/tasks.ednl`
+   - If the story doesn't exist, inform the user and stop
 
 2. Display the story content to the user
 
@@ -44,7 +45,7 @@ Parse the arguments: $ARGUMENTS
    - For each task, call `add-task` with:
      - `category`: the selected category (simple, medium, large, clarify-task)
      - `task-text`: task title on first line, then description including
-       "Part of story: @.mcp-tasks/story/stories/<story-name>.md"
+       "Part of story: task-id <story-id> \"<story-title>\""
      - `story-name`: the story name (this automatically sets :parent-id)
      - `type`: "task" (or "bug", "feature", etc. if appropriate)
    - Tasks will be added to `.mcp-tasks/tasks.ednl` with the story as parent

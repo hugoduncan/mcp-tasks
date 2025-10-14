@@ -62,7 +62,7 @@ Parse the arguments: $ARGUMENTS
         ```
 
      c) Confirm to user:
-        "✓ Added N task(s) to <story-name>-tasks.md:"
+        "✓ Added N task(s) to tasks.ednl for story '<story-name>':"
         List each task with its category in a bullet format
 
    - If user selects 'none' or provides no selections, skip task creation
