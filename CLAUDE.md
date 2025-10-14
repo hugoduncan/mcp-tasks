@@ -98,7 +98,7 @@ When executed, story tasks are added to the category queue in `.mcp-tasks/tasks.
 
 **Branch Management:**
 Story execution includes automatic branch management:
-- Creates `<story-name>` branch if not already on it
+- Creates `<story-name>` branch if not already on it (branch name is the story title lowercased, with spaces replaced by dashes, and all special characters removed)
 - Keeps all story tasks on the same branch
 - Manual merge/push after story completion
 
