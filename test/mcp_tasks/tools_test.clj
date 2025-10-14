@@ -3,12 +3,14 @@
     [clojure.data.json :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing]]
+    [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tasks-file :as tasks-file]
     [mcp-tasks.tools :as sut]))
 
-(def ^:private test-fixtures-dir "test-resources/tools-test")
+(def ^:private test-fixtures-dir
+  "Temporary directory for test fixtures"
+  (str (System/getProperty "java.io.tmpdir") "/mcp-tasks-tools-test-" (rand-int 100000)))
 
 (defn- cleanup-test-fixtures
   []
@@ -20,8 +22,8 @@
 (defn- setup-test-dir
   []
   (cleanup-test-fixtures)
-  (.mkdirs (io/file test-fixtures-dir "tasks"))
-  (.mkdirs (io/file test-fixtures-dir "complete")))
+  (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "tasks"))
+  (.mkdirs (io/file test-fixtures-dir ".mcp-tasks" "complete")))
 
 (defn- write-test-file
   [path content]
@@ -41,13 +43,13 @@
 (defn- write-ednl-test-file
   "Write tasks as EDNL format to test file."
   [path tasks]
-  (let [file-path (str test-fixtures-dir "/" path)]
+  (let [file-path (str test-fixtures-dir "/.mcp-tasks/" path)]
     (tasks-file/write-tasks file-path tasks)))
 
 (defn- read-ednl-test-file
   "Read tasks from EDNL test file."
   [path]
-  (let [file-path (str test-fixtures-dir "/" path)]
+  (let [file-path (str test-fixtures-dir "/.mcp-tasks/" path)]
     (tasks-file/read-ednl file-path)))
 
 (defn- reset-tasks-state!
@@ -60,12 +62,24 @@
 
 (def ^:private test-config
   "Config that points to test fixtures directory."
-  {:tasks-dir test-fixtures-dir})
+  {:base-dir test-fixtures-dir :use-git? false})
 
 (defn- with-test-files
   "Stub wrapper for old tests - most old tests will need updating."
   [f]
   (f))
+
+(defn- test-fixture
+  "Fixture that sets up and cleans up test directory for each test."
+  [f]
+  (setup-test-dir)
+  (reset-tasks-state!)
+  (try
+    (f)
+    (finally
+      (cleanup-test-fixtures))))
+
+(use-fixtures :each test-fixture)
 
 ;; complete-task-impl tests
 
@@ -74,12 +88,10 @@
   ;; task from tasks/<category>.ednl to complete/<category>.ednl
   (testing "complete-task"
     (testing "moves first task from tasks to complete"
-      (setup-test-dir)
-      (reset-tasks-state!)
       ;; Create EDNL file with two tasks
       (write-ednl-test-file "tasks/test.ednl"
-                            [{:id 1 :title "first task" :description "detail line" :category "test" :status :open}
-                             {:id 2 :title "second task" :category "test" :status :open}])
+                            [{:id 1 :parent-id nil :title "first task" :description "detail line" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
       (let [result (#'sut/complete-task-impl
                     test-config
                     nil
@@ -94,17 +106,14 @@
         ;; Verify tasks file has only the second task
         (let [tasks (read-ednl-test-file "tasks/test.ednl")]
           (is (= 1 (count tasks)))
-          (is (= "second task" (:title (first tasks))))))
-      (cleanup-test-fixtures))))
+          (is (= "second task" (:title (first tasks)))))))))
 
 (deftest adds-completion-comment-when-provided
   ;; Tests that completion comments are appended to completed tasks
   (testing "complete-task"
     (testing "adds completion comment when provided"
-      (setup-test-dir)
-      (reset-tasks-state!)
       (write-ednl-test-file "tasks/test.ednl"
-                            [{:id 1 :title "task with comment" :category "test" :status :open}])
+                            [{:id 1 :parent-id nil :title "task with comment" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
       (let [result (#'sut/complete-task-impl
                     test-config
                     nil
@@ -114,8 +123,7 @@
         (is (false? (:isError result)))
         (let [complete-tasks (read-ednl-test-file "complete/test.ednl")]
           (is (= 1 (count complete-tasks)))
-          (is (str/includes? (:description (first complete-tasks)) "Added feature X"))))
-      (cleanup-test-fixtures))))
+          (is (str/includes? (:description (first complete-tasks)) "Added feature X")))))))
 
 (deftest appends-to-existing-complete-file
   ;; Tests that completed tasks are appended to existing complete file
@@ -633,9 +641,6 @@
   ;; Integration test for complete workflow: add task → next task → complete task
   (testing "complete workflow with EDN storage"
     (testing "add → next → complete workflow"
-      (setup-test-dir)
-      (reset-tasks-state!)
-
       ;; Add first task
       (let [result (#'sut/add-task-impl test-config nil {:category "test"
                                                          :task-text "First task\nWith description"})]
@@ -679,6 +684,4 @@
         (is (false? (:isError result)))
         (let [response (clojure.edn/read-string (get-in result [:content 0 :text]))]
           (is (= "test" (:category response)))
-          (is (= "No more tasks in this category" (:status response)))))
-
-      (cleanup-test-fixtures))))
+          (is (= "No more tasks in this category" (:status response))))))))
