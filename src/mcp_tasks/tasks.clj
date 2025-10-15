@@ -135,6 +135,7 @@
   "Find all tasks matching optional filters.
 
   Filters are AND-ed together:
+  - task-id: Task ID must match exactly
   - category: Task category must match exactly
   - parent-id: Task must be a child of this parent
   - title-pattern: Task title must match pattern (regex or substring)
@@ -144,7 +145,7 @@
 
   Returns vector of task maps in the order they appear in tasks.ednl.
   Returns empty vector if no matching tasks found."
-  [& {:keys [category parent-id title-pattern type status]}]
+  [& {:keys [task-id category parent-id title-pattern type status]}]
   (let [ids @task-ids
         task-map @tasks
         ;; Build regex if possible, otherwise use substring match
@@ -165,6 +166,7 @@
     (->> ids
          (map #(get task-map %))
          (filter status-match?)
+         (filter #(or (nil? task-id) (= (:id %) task-id)))
          (filter #(or (nil? category) (= (:category %) category)))
          (filter #(or (nil? parent-id) (= (:parent-id %) parent-id)))
          (filter #(or (nil? type) (= (:type %) type)))
