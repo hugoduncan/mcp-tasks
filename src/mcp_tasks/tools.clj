@@ -332,8 +332,8 @@
   "Implementation of add-task tool.
 
   Adds a task to tasks.ednl. If prepend is true, adds at the beginning;
-  otherwise appends at the end. If story-name is provided, the task is
-  associated with that story via :parent-id.
+  otherwise appends at the end. If parent-id is provided, the task is
+  associated with that parent task.
 
   Returns two content items:
   1. Text message for human readability
@@ -341,44 +341,45 @@
   [config _context
    {:keys [category title description prepend type parent-id]}]
   (try
-    (when parent-id
-      (or (tasks/get-task parent-id)
-          (throw (ex-info "Parent story not found"
-                          {:parent-id parent-id}))))
+    (let [tasks-file (prepare-task-file config)]
+      ;; Validate parent-id if provided (tasks are already loaded by prepare-task-file)
+      (when parent-id
+        (or (tasks/get-task parent-id)
+            (throw (ex-info "Parent story not found"
+                            {:parent-id parent-id}))))
 
-    (let [tasks-file (prepare-task-file config)
-          ;; Create task map with all required fields
-          task-map {:title title
-                    :description (or description "")
-                    :design ""
-                    :category category
-                    :status :open
-                    :type (keyword (or type "task"))
-                    :meta {}
-                    :parent-id parent-id
-                    :relations []}
-          ;; Add task to in-memory state and get the assigned ID
-          task-id (tasks/add-task task-map :prepend? (boolean prepend))
-          ;; Get the complete task with ID
-          created-task (tasks/get-task task-id)]
-      ;; Save to EDNL file
-      (tasks/save-tasks! tasks-file)
-      ;; Return two content items: text message and structured data
-      {:content [{:type "text"
-                  :text (str "Task added to " tasks-file)}
-                 {:type "text"
-                  :text (json/write-str
-                          {:task (select-keys
-                                   created-task
-                                   [:id
-                                    :title
-                                    :category
-                                    :type
-                                    :status
-                                    :parent-id])
-                           :metadata {:file tasks-file
-                                      :operation "add-task"}})}]
-       :isError false})
+      ;; Create task map with all required fields
+      (let [task-map {:title title
+                      :description (or description "")
+                      :design ""
+                      :category category
+                      :status :open
+                      :type (keyword (or type "task"))
+                      :meta {}
+                      :parent-id parent-id
+                      :relations []}
+            ;; Add task to in-memory state and get the assigned ID
+            task-id (tasks/add-task task-map :prepend? (boolean prepend))
+            ;; Get the complete task with ID
+            created-task (tasks/get-task task-id)]
+        ;; Save to EDNL file
+        (tasks/save-tasks! tasks-file)
+        ;; Return two content items: text message and structured data
+        {:content [{:type "text"
+                    :text (str "Task added to " tasks-file)}
+                   {:type "text"
+                    :text (json/write-str
+                            {:task (select-keys
+                                     created-task
+                                     [:id
+                                      :title
+                                      :category
+                                      :type
+                                      :status
+                                      :parent-id])
+                             :metadata {:file tasks-file
+                                        :operation "add-task"}})}]
+         :isError false}))
     (catch Exception e
       (response/error-response e))))
 
