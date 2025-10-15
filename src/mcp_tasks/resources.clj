@@ -66,7 +66,7 @@
         (for [[prompt-name prompt] prompts-map]
           (let [uri (str "prompt://" prompt-name)
                 description (:description prompt)
-                impl=fn (fn [context uri]
+                impl-fn (fn [context uri]
                           (prompt-resource-implementation
                             context
                             prompts-map
@@ -76,7 +76,7 @@
               :uri uri
               :mime-type "text/markdown"
               :description description
-              :implementation impl=fn}]))))
+              :implementation impl-fn}]))))
 
 (defn category-prompt-resources
   "Create resource definitions for category prompts.
