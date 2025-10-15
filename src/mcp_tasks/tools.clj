@@ -198,6 +198,7 @@
   "Implementation of select-tasks tool.
 
   Accepts optional filters (same as next-task):
+  - task-id: Task ID to filter by
   - category: Task category name
   - parent-id: Parent task ID for filtering children
   - title-pattern: Pattern to match task titles (regex or substring)
@@ -209,7 +210,7 @@
   - unique: If true, enforce that 0 or 1 task matches (error if >1)
 
   Returns JSON-encoded response with tasks vector and metadata."
-  [config _context {:keys [category parent-id title-pattern type status limit unique]}]
+  [config _context {:keys [task-id category parent-id title-pattern type status limit unique]}]
   (try
     ;; Determine effective limit
     ;; If unique? is true, effective limit is always 1
@@ -247,6 +248,7 @@
 
         ;; Get all matching incomplete tasks
         (let [all-tasks (tasks/get-tasks
+                          :task-id task-id
                           :category category
                           :parent-id parent-id
                           :title-pattern title-pattern
@@ -288,6 +290,7 @@
   "Tool to return multiple tasks with optional filters and limits.
 
   Accepts optional filters:
+  - task-id: Task ID to filter by (returns at most one task)
   - category: Task category name
   - parent-id: Parent task ID for filtering children
   - title-pattern: Pattern to match task titles (regex or substring)
@@ -307,7 +310,10 @@
    :inputSchema
    {:type "object"
     :properties
-    {"category"
+    {"task-id"
+     {:type "integer"
+      :description "Task ID to filter by (returns at most one task)"}
+     "category"
      {:type "string"
       :description "The task category name"}
      "parent-id"

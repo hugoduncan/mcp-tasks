@@ -641,3 +641,59 @@
         (is (false? (:isError result)))
         (is (= 1 (count (:tasks response))))
         (is (= "Test open" (get-in response [:tasks 0 :title])))))))
+
+(deftest select-tasks-task-id-filter
+  ;; Test :task-id parameter filters tasks by ID
+  (testing "select-tasks :task-id filter"
+    ;; Add tasks
+    (let [task1 (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task One"})
+          task1-data (json/read-str (get-in task1 [:content 1 :text]) :key-fn keyword)
+          task1-id (get-in task1-data [:task :id])
+
+          task2 (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task Two"})
+          task2-data (json/read-str (get-in task2 [:content 1 :text]) :key-fn keyword)
+          task2-id (get-in task2-data [:task :id])
+
+          task3 (#'sut/add-task-impl (test-config) nil {:category "other" :title "Task Three"})
+          task3-data (json/read-str (get-in task3 [:content 1 :text]) :key-fn keyword)
+          task3-id (get-in task3-data [:task :id])]
+
+      (testing "filters by task-id to return single task"
+        (let [result (#'sut/select-tasks-impl (test-config) nil {:task-id task1-id})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+          (is (false? (:isError result)))
+          (is (= 1 (count (:tasks response))))
+          (is (= task1-id (get-in response [:tasks 0 :id])))
+          (is (= "Task One" (get-in response [:tasks 0 :title])))))
+
+      (testing "returns empty when task-id does not exist"
+        (let [result (#'sut/select-tasks-impl (test-config) nil {:task-id 99999})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+          (is (false? (:isError result)))
+          (is (= 0 (count (:tasks response))))
+          (is (= 0 (get-in response [:metadata :count])))
+          (is (= 0 (get-in response [:metadata :total-matches])))))
+
+      (testing "combines task-id filter with category filter"
+        ;; Task 2 has category "test", task 3 has category "other"
+        ;; Filtering by task3-id and category "test" should return empty
+        (let [result (#'sut/select-tasks-impl (test-config) nil {:task-id task3-id :category "test"})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+          (is (false? (:isError result)))
+          (is (= 0 (count (:tasks response)))))
+
+        ;; Filtering by task3-id and category "other" should return task 3
+        (let [result (#'sut/select-tasks-impl (test-config) nil {:task-id task3-id :category "other"})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+          (is (false? (:isError result)))
+          (is (= 1 (count (:tasks response))))
+          (is (= task3-id (get-in response [:tasks 0 :id])))
+          (is (= "Task Three" (get-in response [:tasks 0 :title])))))
+
+      (testing "task-id filter works with unique constraint"
+        (let [result (#'sut/select-tasks-impl (test-config) nil {:task-id task2-id :unique true})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+          (is (false? (:isError result)))
+          (is (= 1 (count (:tasks response))))
+          (is (= task2-id (get-in response [:tasks 0 :id])))
+          (is (= "Task Two" (get-in response [:tasks 0 :title]))))))))
