@@ -227,7 +227,8 @@
               (let [resource-names (set (map :name resources))]
                 ;; Check for some known prompts
                 (is (contains? resource-names "next-simple"))
-                (is (contains? resource-names "execute-story-task"))))))
+                (is (contains? resource-names "execute-story-task"))
+                (is (contains? resource-names "execute-task"))))))
 
         (testing "can read resource content"
           (let [resources-response @(mcp-client/list-resources client)

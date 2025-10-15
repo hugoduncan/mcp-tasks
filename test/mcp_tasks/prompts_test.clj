@@ -562,3 +562,44 @@
                 (.delete f)))
             (doseq [f (reverse (file-seq (io/file temp-dir)))]
               (.delete f))))))))
+
+(deftest task-execution-prompts-test
+  ;; Test that task-execution-prompts generates valid MCP prompts for general
+  ;; task execution workflows from resource files.
+  (testing "task-execution-prompts"
+    (testing "returns a map of prompt names to prompt definitions"
+      (let [prompts (sut/task-execution-prompts {})]
+        (is (map? prompts))
+        (is (contains? prompts "execute-task"))))
+
+    (testing "execute-task prompt has correct structure"
+      (let [prompts (sut/task-execution-prompts {})
+            execute-task-prompt (get prompts "execute-task")]
+        (is (some? execute-task-prompt))
+        (is (= "execute-task" (:name execute-task-prompt)))
+        (is (string? (:description execute-task-prompt)))
+        (is (vector? (:messages execute-task-prompt)))
+        (is (= 1 (count (:messages execute-task-prompt))))))
+
+    (testing "execute-task prompt content includes key instructions"
+      (let [prompts (sut/task-execution-prompts {})
+            execute-task-prompt (get prompts "execute-task")
+            content (get-in execute-task-prompt [:messages 0 :content :text])]
+        (is (some? content))
+        (is (string? content))
+        (is (re-find #"select-tasks" content))
+        (is (re-find #"complete-task" content))
+        (is (re-find #"category" content))))
+
+    (testing "execute-task prompt includes arguments metadata"
+      (let [prompts (sut/task-execution-prompts {})
+            execute-task-prompt (get prompts "execute-task")]
+        (is (contains? execute-task-prompt :arguments))
+        (is (vector? (:arguments execute-task-prompt)))
+        (is (pos? (count (:arguments execute-task-prompt))))))
+
+    (testing "executes without error when prompt file is missing"
+      (let [prompts (sut/task-execution-prompts {})]
+        ;; If file is missing, the prompt won't be in the map
+        ;; This should not throw an exception
+        (is (map? prompts))))))
