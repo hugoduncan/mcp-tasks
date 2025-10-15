@@ -108,52 +108,43 @@
 (defn- read-prompt-instructions
   "Read custom prompt instructions from .mcp-tasks/prompts/<category>.md if it exists.
 
+  Takes base-dir (project directory) and category name.
   Returns a map with :metadata and :content keys if the file exists, or nil if it doesn't.
   The :metadata key contains parsed frontmatter (may be nil), and :content contains
   the prompt text with frontmatter stripped."
-  [category]
-  (let [prompt-file (io/file ".mcp-tasks" "prompts" (str category ".md"))]
+  [base-dir category]
+  (let [prompt-file (io/file base-dir ".mcp-tasks" "prompts" (str category ".md"))]
     (when (.exists prompt-file)
       (parse-frontmatter (slurp prompt-file)))))
 
 (defn create-prompts
-  "Create MCP prompts for a sequence of categories.
+  "Generate MCP prompts for task categories.
 
-  For each category, creates a prompt that:
-  - Uses the select-tasks tool with :limit 1 to retrieve tasks from .mcp-tasks/tasks.ednl
-  - Uses instructions from .mcp-tasks/prompts/<category>.md if available,
-    otherwise uses default instructions based on next-simple
-  - Uses the complete-task tool to mark tasks complete and move them to .mcp-tasks/complete.ednl
-  - Conditionally includes git commit instructions based on config :use-git? value
-
-  The prompt text is automatically composed from three parts:
-  1. read-task-prompt-text - instructions for reading the next task
-  2. custom instructions or default-prompt-text - category-specific execution logic
-  3. complete-task-prompt-text - instructions for committing and tracking completion
-
-  If custom prompt files contain frontmatter with a 'description' field, that will be
-  used for the prompt's :description. Otherwise, a default description is generated.
+  Reads prompt instructions from .mcp-tasks/prompts/<category>.md files if they exist,
+  otherwise uses default prompt text. Each prompt provides complete workflow including
+  task lookup, execution instructions, and completion steps.
 
   Returns a vector of prompt maps suitable for registration with the MCP server."
   [config categories]
-  (vec
-    (for [category categories]
-      (let [prompt-data (read-prompt-instructions category)
-            metadata (:metadata prompt-data)
-            custom-content (:content prompt-data)
-            execution-instructions (or custom-content (default-prompt-text))
-            prompt-text (str "Please complete the next " category " task following these steps:\n\n"
-                             (read-task-prompt-text config category)
-                             execution-instructions
-                             (complete-task-prompt-text config category))
-            description (or (get metadata "description")
-                            (format "Execute the next %s task from .mcp-tasks/tasks.ednl" category))]
-        (prompts/valid-prompt?
-          {:name (str "next-" category)
-           :description description
-           :messages [{:role "user"
-                       :content {:type "text"
-                                 :text prompt-text}}]})))))
+  (let [base-dir (:base-dir config)]
+    (vec
+      (for [category categories]
+        (let [prompt-data (read-prompt-instructions base-dir category)
+              metadata (:metadata prompt-data)
+              custom-content (:content prompt-data)
+              execution-instructions (or custom-content (default-prompt-text))
+              prompt-text (str "Please complete the next " category " task following these steps:\n\n"
+                               (read-task-prompt-text config category)
+                               execution-instructions
+                               (complete-task-prompt-text config category))
+              description (or (get metadata "description")
+                              (format "Execute the next %s task from .mcp-tasks/tasks.ednl" category))]
+          (prompts/valid-prompt?
+            {:name (str "next-" category)
+             :description description
+             :messages [{:role "user"
+                         :content {:type "text"
+                                   :text prompt-text}}]}))))))
 
 (defn category-descriptions
   "Get descriptions for all discovered categories.
@@ -166,7 +157,7 @@
    (let [categories (discover-categories base-dir)]
      (into {}
            (for [category categories]
-             (let [prompt-data (read-prompt-instructions category)
+             (let [prompt-data (read-prompt-instructions base-dir category)
                    metadata (:metadata prompt-data)
                    description (or (get metadata "description")
                                    (format "Tasks for %s category" category))]
@@ -348,10 +339,11 @@
 
   Returns a vector of resource maps."
   [config]
-  (let [categories (discover-categories)]
+  (let [base-dir (:base-dir config)
+        categories (discover-categories base-dir)]
     (->> categories
          (keep (fn [category]
-                 (when-let [prompt-data (read-prompt-instructions category)]
+                 (when-let [prompt-data (read-prompt-instructions base-dir category)]
                    (let [description (or (get-in prompt-data [:metadata "description"])
                                          (str category " category instructions"))]
                      {:uri (str "prompt://category-" category)
