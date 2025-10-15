@@ -385,15 +385,15 @@
        :isError true}
 
       ;; Create task map with all required fields
-      (let [task-map {:title title
-                      :description (or description "")
-                      :design ""
-                      :category category
-                      :status :open
-                      :type (keyword (or type "task"))
-                      :meta {}
-                      :parent-id parent-id
-                      :relations []}
+      (let [task-map (cond-> {:title title
+                              :description (or description "")
+                              :design ""
+                              :category category
+                              :status :open
+                              :type (keyword (or type "task"))
+                              :meta {}
+                              :relations []}
+                       parent-id (assoc :parent-id parent-id))
             ;; Add task to in-memory state and get the assigned ID
             task-id (tasks/add-task task-map :prepend? (boolean prepend))
             ;; Get the complete task with ID
