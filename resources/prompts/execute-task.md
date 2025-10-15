@@ -43,15 +43,35 @@ If no arguments were provided:
 ### 2. Retrieve Category Instructions
 
 Once you have identified a single task:
-- Extract the task's `:category` field
-- Retrieve the category-specific execution instructions from the `prompt://category-<category>` resource
-- If the resource is not found, inform the user that category instructions are missing for this category and stop
+
+1. **Extract the category**: Get the `:category` field from the task (e.g., "simple", "medium", "large")
+
+2. **Retrieve category instructions**: Use the `ReadMcpResourceTool` to fetch the category-specific instructions:
+   - `server`: "mcp-tasks"
+   - `uri`: "prompt://category-<category>" (replace `<category>` with the task's category value)
+   - Example: For a task with `:category "medium"`, use URI `"prompt://category-medium"`
+
+3. **Handle missing resources**: If the `ReadMcpResourceTool` returns an error or the resource is not found:
+   - Inform the user: "Category instructions for '<category>' are not available. Please ensure the category prompt resource exists or contact the maintainer."
+   - Stop execution - do not proceed to step 3
+
+4. **Extract instructions**: The resource will return a `text` field containing the category-specific workflow steps
 
 ### 3. Execute the Task
 
-Follow the category-specific instructions retrieved in step 2 to execute the task.
+Follow the category-specific instructions retrieved in step 2 to execute the task:
 
-The category instructions define the execution workflow (e.g., analysis, design, implementation steps).
+1. **Provide task context**: When executing the category instructions, keep the following task information in mind:
+   - Task ID: `<task-id>`
+   - Title: `<title>`
+   - Description: `<description>`
+   - Design notes: `<design>` (if provided)
+   - Type: `<type>`
+   - Relations: `<relations>` (if any)
+
+2. **Follow the workflow**: The category instructions define a workflow with specific steps (e.g., analysis, design, planning, implementation). Execute each step in order.
+
+Note: The category instructions may include steps for finding the task (e.g., "Find the first incomplete task") - you can skip these steps since you already have the task identified from step 1.
 
 ### 4. Mark Task Complete
 
