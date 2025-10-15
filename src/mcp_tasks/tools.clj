@@ -381,6 +381,8 @@
                           {:error "Parent story not found"
                            :metadata {:attempted-operation "add-task"
                                       :parent-id parent-id
+                                      :title title
+                                      :category category
                                       :file tasks-file}})}]
        :isError true}
 

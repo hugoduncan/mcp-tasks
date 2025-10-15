@@ -343,6 +343,8 @@
           (let [metadata (:metadata data)]
             (is (= "add-task" (:attempted-operation metadata)))
             (is (= 999 (:parent-id metadata)))
+            (is (= "Child task" (:title metadata)))
+            (is (= "simple" (:category metadata)))
             (is (contains? metadata :file))))))))
 
 (deftest add-task-error-response-structure
