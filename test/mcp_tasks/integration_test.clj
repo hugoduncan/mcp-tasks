@@ -5,6 +5,7 @@
    configurations using in-memory transport. File operation behavior is
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -20,9 +21,9 @@
 (defn- cleanup-test-project
   []
   (let [dir (io/file test-project-dir)]
-    (when (.exists dir)
+    (when (fs/exists? dir)
       (doseq [file (reverse (file-seq dir))]
-        (.delete file)))))
+        (fs/delete file)))))
 
 (defn- setup-test-project
   []
@@ -348,11 +349,12 @@
                             :relations []}]
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task]))
 
-          (let [result @(mcp-client/call-tool client
-                                              "add-task"
-                                              {:category "simple"
-                                               :task-text "First task for story"
-                                               :story-name "new-story"})]
+          (let [result @(mcp-client/call-tool
+                          client
+                          "add-task"
+                          {:category   "simple"
+                           :title      "First task for story"
+                           :parent-id  1})]
             (is (not (:isError result)))
             (is (re-find #"Task added" (-> result :content first :text)))
 
@@ -404,11 +406,12 @@
                              :relations []}]
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task first-child]))
 
-          (let [result @(mcp-client/call-tool client
-                                              "add-task"
-                                              {:category "medium"
-                                               :task-text "Second task"
-                                               :story-name "existing-story"})]
+          (let [result @(mcp-client/call-tool
+                          client
+                          "add-task"
+                          {:category "medium"
+                           :title "Second task"
+                           :parent-id 1})]
             (is (not (:isError result)))
 
             ;; Verify second task was appended
@@ -462,7 +465,7 @@
           (let [result @(mcp-client/call-tool client
                                               "add-task"
                                               {:category "large"
-                                               :task-text "New first task"
+                                               :title "New first task"
                                                :story-name "prepend-story"
                                                :prepend true})]
             (is (not (:isError result)))
@@ -500,20 +503,25 @@
                             :relations []}]
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task]))
 
-          (let [story-result @(mcp-client/call-tool client
-                                                    "add-task"
-                                                    {:category "simple"
-                                                     :task-text "Story task"
-                                                     :story-name "test-story"})
-                category-result @(mcp-client/call-tool client
-                                                       "add-task"
-                                                       {:category "simple"
-                                                        :task-text "Category task"})]
+          (let [story-result @(mcp-client/call-tool
+                                client
+                                "add-task"
+                                {:category  "simple"
+                                 :title     "Story task"
+                                 :parent-id 1})
+                category-result @(mcp-client/call-tool
+                                   client
+                                   "add-task"
+                                   {:category "simple"
+                                    :title    "Category task"})]
             (is (not (:isError story-result)))
             (is (not (:isError category-result)))
 
             ;; Verify both tasks are in tasks.ednl
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file
+                               test-project-dir
+                               ".mcp-tasks"
+                               "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   story-children (filter #(= (:parent-id %) 1) tasks)
                   category-tasks (filter #(and (nil? (:parent-id %))
@@ -545,10 +553,10 @@
           (let [result @(mcp-client/call-tool client
                                               "add-task"
                                               {:category "simple"
-                                               :task-text "Task for nonexistent"
-                                               :story-name "nonexistent"})]
+                                               :title "Task for nonexistent"
+                                               :parent-id 99999})]
             (is (:isError result))
-            (is (re-find #"Story not found"
+            (is (re-find #"Parent story not found"
                          (-> result :content first :text))))
 
           (finally

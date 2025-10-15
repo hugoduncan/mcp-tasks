@@ -13,7 +13,7 @@ Parse the arguments: $ARGUMENTS
 ## Process
 
 1. Find the story and its first incomplete child task:
-   - First, use `select-tasks` with `title-pattern` and `:unique? true` to find the story task
+   - First, use `select-tasks` with `title-pattern` and `unique: true` to find the story task
    - Then use `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - If no incomplete tasks found, inform the user that all tasks are
      complete and stop
@@ -31,7 +31,7 @@ Parse the arguments: $ARGUMENTS
 3. Mark the task as complete:
    - After task execution completes successfully, use the `complete-task`
      tool
-   - Parameters: category (from step 1), task-text (partial match from
+   - Parameters: category (from step 1), title (partial match from
      beginning of task), and optionally completion-comment
    - Confirm to the user that the task has been marked complete
 

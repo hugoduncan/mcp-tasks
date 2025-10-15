@@ -282,7 +282,8 @@
     (testing "includes task format examples"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
             content (:content prompt)]
-        (is (re-find #"task-text" content))
+        (is (re-find #"title" content))
+        (is (re-find #"parent-id" content))
         (is (re-find #"Part of story:" content))))
 
     (testing "appears in list-story-prompts"

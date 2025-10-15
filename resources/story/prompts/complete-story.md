@@ -16,7 +16,7 @@ Use this tool after all story tasks are complete and the implementation has been
 
 ## Process
 
-1. Retrieve the story using the `select-tasks` tool with `title-pattern` matching the story name and `:unique? true`
+1. Retrieve the story using the `select-tasks` tool with `title-pattern` matching the story name and `unique: true`
    - The story is stored as a task with `:type :story` in `.mcp-tasks/tasks.ednl`
    - If the story doesn't exist in tasks.ednl, check complete.ednl
    - If already in complete.ednl, inform the user it's already completed

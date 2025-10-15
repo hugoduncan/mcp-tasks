@@ -507,8 +507,8 @@ Break down the story into tasks following these rules:
 Task creation:
 For each task, use add-task with:
 - category: <category>
-- task-text: "<title>\n<description>\nEstimated time: X hours\nDependencies: <list or 'none'>"
-- story-name: {story-name}
+- title
+- parent-id: {id of story}
 - type: "task"
 ```
 
@@ -579,7 +579,7 @@ The `select-tasks` tool supports optional filtering parameters that enable story
 - `parent-id` (integer, optional) - Filter by parent task ID (for finding story child tasks)
 - `title-pattern` (string, optional) - Filter by title pattern (regex or substring match)
 - `limit` (integer, optional, default: 5) - Maximum number of tasks to return
-- `unique?` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
+- `unique` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
 
 All filter parameters are optional and AND-ed together when provided.
 
@@ -592,7 +592,7 @@ A map with two keys:
 **Example - Finding a story by title:**
 ```clojure
 ;; Call
-{:title-pattern "user-auth" :unique? true}
+{:title-pattern "user-auth" :unique true}
 
 ;; Return
 {:tasks [{:id 13 :title "User Authentication" :category "story" ...}]
@@ -602,7 +602,7 @@ A map with two keys:
 **Example - Finding story child tasks:**
 ```clojure
 ;; First find the story
-{:title-pattern "user-auth" :unique? true}  ; Returns {:tasks [{:id 13 ...}] ...}
+{:title-pattern "user-auth" :unique true}  ; Returns {:tasks [{:id 13 ...}] ...}
 
 ;; Then find first incomplete child
 {:parent-id 13 :limit 1}
@@ -614,7 +614,7 @@ A map with two keys:
 
 **Usage:**
 ```
-Use select-tasks with title-pattern and :unique? true to find story tasks,
+Use select-tasks with title-pattern and unique: true to find story tasks,
 then use parent-id to query child tasks. Use :limit to control how many
 tasks are returned. The task :id can be used with complete-task.
 ```
@@ -625,7 +625,7 @@ Story tasks use the same `complete-task` tool as regular tasks. Tasks are stored
 
 **Parameters:**
 - `category` (string, required) - The task category
-- `task-text` (string, required) - Partial text from the beginning of the task to verify
+- `title` (string, required) - Partial text from the beginning of the task to verify
 - `completion-comment` (string, optional) - Optional comment to append to the completed task
 
 **Returns:**
@@ -639,7 +639,7 @@ Git mode disabled:
 
 **Behavior:**
 - Finds the first task with matching category and `:status :open` in `tasks.ednl`
-- Verifies the task text matches the provided `task-text` parameter
+- Verifies the task text matches the provided `title` parameter
 - Marks the task as `:status :closed`
 - Optionally appends the completion comment to the `:description` field
 - Moves the task from `tasks.ednl` to `complete.ednl`
@@ -649,7 +649,7 @@ Git mode disabled:
 ```clojure
 ;; Call
 {:category "medium"
- :task-text "Simplify story workflow"
+ :title "Simplify story workflow"
  :completion-comment "Removed redundant tools"}
 
 ;; Return (git mode)
@@ -738,8 +738,9 @@ Break down a story into categorized, executable tasks.
 
 **Task creation parameters:**
 - `category`: The selected category (simple, medium, large, clarify-task)
-- `task-text`: Title on first line, then description
-- `story-name`: Story name (automatically sets `:parent-id`)
+- `title`: Task title
+- `description`: Task description (optional, multiline supported)
+- `parent-id`: Parent story's task ID (optional, for story tasks)
 - `type`: "task", "bug", "feature", or "chore"
 
 **Key characteristics:**
@@ -767,7 +768,7 @@ Execute the next task from a story.
 
 **Behavior:**
 1. Finds the story and its first incomplete child task:
-   - First, uses `select-tasks` with `title-pattern` and `:unique? true` to find the story in tasks.ednl
+   - First, uses `select-tasks` with `title-pattern` and `unique: true` to find the story in tasks.ednl
    - Then uses `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - If no incomplete tasks found, informs the user and stops
    - If no category is found for the task, informs the user and stops
@@ -776,8 +777,8 @@ Execute the next task from a story.
    - Uses the category-specific workflow from `.mcp-tasks/prompts/<category>.md`
    - Completes all implementation steps according to the category workflow
 3. After successful execution, marks the task as complete:
-   - Uses the `complete-task` tool with category and task-text
-   - Parameters: category, task-text (partial match), and optionally completion-comment
+   - Uses the `complete-task` tool with category and title
+   - Parameters: category, title (partial match), and optionally completion-comment
    - Task is marked as `:status :closed` and moved from tasks.ednl to complete.ednl
    - Confirms completion to the user
 
@@ -866,7 +867,7 @@ git worktree add ../project-refactor refactor-branch
    ```bash
    cd ../project-feature
    # Run /mcp-tasks:next-feature
-   
+
    cd ../project-bugfix
    # Run /mcp-tasks:next-bugfix
    ```

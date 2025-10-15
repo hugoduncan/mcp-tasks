@@ -12,7 +12,7 @@ Parse the arguments: $ARGUMENTS
 
 ## Process
 
-1. Find the story task using `select-tasks` with `title-pattern` matching the story name and `:unique? true`
+1. Find the story task using `select-tasks` with `title-pattern` matching the story name and `unique: true`
    - If no story task is found, inform the user and stop
    - Extract the story's `:id`, `:title`, `:description`, and `:design` fields
 

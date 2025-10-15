@@ -1,6 +1,7 @@
 (ns mcp-tasks.resources-test
   "Unit tests for resource definitions"
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -8,14 +9,15 @@
     [mcp-tasks.prompts :as tp]
     [mcp-tasks.resources :as resources]))
 
-(def test-project-dir (.getAbsolutePath (io/file "test-resources/resources-test")))
+(def test-project-dir
+  (.getAbsolutePath (io/file "test-resources/resources-test")))
 
 (defn- cleanup-test-project
   []
   (let [dir (io/file test-project-dir)]
-    (when (.exists dir)
+    (when (fs/exists? dir)
       (doseq [file (reverse (file-seq dir))]
-        (.delete file)))))
+        (fs/delete file)))))
 
 (defn- setup-test-project
   []

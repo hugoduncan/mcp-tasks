@@ -33,12 +33,12 @@ clojure -M:mcp-tasks --install-prompts simple,clarify-task
 # Add your first task using the MCP tool
 # In Claude Code, use the add-task tool:
 # - category: "simple"
-# - task-text: "Add README badges for build status"
+# - title: "Add README badges for build status"
 
 # Or add a story for larger features
-# - category: "large" 
+# - category: "large"
 # - type: "story"
-# - task-text: "Add CI Pipeline"
+# - title: "Add CI Pipeline"
 
 # Execute tasks in Claude Code
 /mcp-tasks:next-simple
@@ -120,7 +120,7 @@ The agent will:
 git log -1 --stat
 
 # Add more tasks using the add-task tool
-# In Claude Code: add-task with category "simple" and task-text "Optimize database queries"
+# In Claude Code: add-task with category "simple" and title "Optimize database queries"
 ```
 
 ### Real Workflow Example
@@ -128,9 +128,9 @@ git log -1 --stat
 ```bash
 # Add tasks for different categories using the add-task tool
 # In Claude Code:
-# - add-task category: "feature", task-text: "Add user profile endpoint"
-# - add-task category: "bugfix", task-text: "Fix memory leak in worker process"  
-# - add-task category: "refactor", task-text: "Extract validation logic to separate module"
+# - add-task category: "feature", title: "Add user profile endpoint"
+# - add-task category: "bugfix", title: "Fix memory leak in worker process"
+# - add-task category: "refactor", title: "Extract validation logic to separate module"
 
 # Process tasks by priority
 /mcp-tasks:next-bugfix      # Agent fixes memory leak, commits
@@ -153,7 +153,7 @@ For larger features that require multiple related tasks, use story workflows:
 # add-task with:
 #   category: "large"
 #   type: "story"
-#   task-text: "User Authentication System"
+#   title: "User Authentication System"
 #   description: "Implement JWT-based authentication with user registration, login, and password reset.
 #
 # Requirements:

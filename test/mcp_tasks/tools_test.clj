@@ -62,14 +62,33 @@
   (testing "complete-task"
     (testing "moves first task from tasks to complete"
       ;; Create EDNL file with two tasks
-      (write-ednl-test-file "tasks.ednl"
-                            [{:id 1 :parent-id nil :title "first task" :description "detail line" :design "" :category "test" :type :task :status :open :meta {} :relations []}
-                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1
+          :parent-id nil
+          :title "first task"
+          :description "detail line"
+          :design ""
+          :category "test"
+          :type :task
+          :status :open
+          :meta {}
+          :relations []}
+         {:id 2
+          :parent-id nil
+          :title "second task"
+          :description ""
+          :design ""
+          :category "test"
+          :type :task
+          :status :open
+          :meta {}
+          :relations []}])
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
                     {:category "test"
-                     :task-text "first task"})]
+                     :title "first task"})]
         (is (false? (:isError result)))
         ;; Verify complete file has the completed task
         (let [complete-tasks (read-ednl-test-file "complete.ednl")]
@@ -91,7 +110,7 @@
                     (test-config)
                     nil
                     {:category "test"
-                     :task-text "task with comment"
+                     :title "task with comment"
                      :completion-comment "Added feature X"})]
         (is (false? (:isError result)))
         (let [complete-tasks (read-ednl-test-file "complete.ednl")]
@@ -124,13 +143,32 @@
   ;; Tests that complete-task-impl finds tasks by exact title match
   (testing "complete-task"
     (testing "completes task by exact title match"
-      (write-ednl-test-file "tasks.ednl"
-                            [{:id 1 :parent-id nil :title "first task" :description "detail" :design "" :category "test" :type :task :status :open :meta {} :relations []}
-                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1
+          :parent-id nil
+          :title "first task"
+          :description "detail"
+          :design ""
+          :category "test"
+          :type :task
+          :status :open
+          :meta {}
+          :relations []}
+         {:id 2
+          :parent-id nil
+          :title "second task"
+          :description ""
+          :design ""
+          :category "test"
+          :type :task
+          :status :open
+          :meta {}
+          :relations []}])
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
-                    {:task-text "second task"})]
+                    {:title "second task"})]
         (is (false? (:isError result)))
         ;; Verify second task is complete
         (let [complete-tasks (read-ednl-test-file "complete.ednl")]
@@ -141,20 +179,23 @@
   ;; Tests that complete-task-impl rejects when multiple tasks have the same title
   (testing "complete-task"
     (testing "rejects multiple tasks with same title"
-      (write-ednl-test-file "tasks.ednl"
-                            [{:id 1 :parent-id nil :title "duplicate" :description "first" :design "" :category "test" :type :task :status :open :meta {} :relations []}
-                             {:id 2 :parent-id nil :title "duplicate" :description "second" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "duplicate" :description "first" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+         {:id 2 :parent-id nil :title "duplicate" :description "second" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
-                    {:task-text "duplicate"})]
+                    {:title "duplicate"})]
         (is (true? (:isError result)))
-        (is (str/includes? (get-in result [:content 0 :text]) "Multiple tasks found"))))))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "Multiple tasks found"))))))
 
 (deftest verifies-id-and-text-match
-  ;; Tests that when both task-id and task-text are provided, they must refer to the same task
+  ;; Tests that when both task-id and title are provided, they must refer to the same task
   (testing "complete-task"
-    (testing "verifies task-id and task-text refer to same task"
+    (testing "verifies task-id and title refer to same task"
       (write-ednl-test-file "tasks.ednl"
                             [{:id 1 :parent-id nil :title "first task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
                              {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
@@ -162,20 +203,20 @@
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
-                    {:task-id 1 :task-text "second task"})]
+                    {:task-id 1 :title "second task"})]
         (is (true? (:isError result)))
         (is (str/includes? (get-in result [:content 0 :text]) "do not refer to the same task")))
       ;; Matching ID and text
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
-                    {:task-id 2 :task-text "second task"})]
+                    {:task-id 2 :title "second task"})]
         (is (false? (:isError result)))))))
 
 (deftest requires-at-least-one-identifier
-  ;; Tests that either task-id or task-text must be provided
+  ;; Tests that either task-id or title must be provided
   (testing "complete-task"
-    (testing "requires either task-id or task-text"
+    (testing "requires either task-id or title"
       (write-ednl-test-file "tasks.ednl"
                             [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
       (let [result (#'sut/complete-task-impl
@@ -193,8 +234,12 @@
   ;; Tests that add-task-impl returns both text message and structured data
   (testing "add-task"
     (testing "returns text message and structured data"
-      (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
-                                                           :task-text "Test task\nWith description"})]
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category  "test"
+                     :title "Test task"
+                     :description "With description"})]
         (is (false? (:isError result)))
         (is (= 2 (count (:content result))))
         ;; First content item is text message
@@ -224,14 +269,27 @@
   (testing "add-task"
     (testing "includes parent-id for story tasks"
       ;; First create a story task
-      (write-ednl-test-file "tasks.ednl"
-                            [{:id 1 :parent-id nil :title "test story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}])
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1
+          :parent-id nil
+          :title "test story"
+          :description ""
+          :design ""
+          :category "story"
+          :type :story
+          :status :open
+          :meta {}
+          :relations []}])
       ;; Load the story into memory
       (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
       ;; Add a child task to the story
-      (let [result (#'sut/add-task-impl (test-config) nil {:category "simple"
-                                                           :task-text "Child task"
-                                                           :story-name "test story"})]
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category   "simple"
+                     :title      "Child task"
+                     :parent-id  1})]
         (is (false? (:isError result)))
         ;; Verify structured data includes parent-id
         (let [data-content (second (:content result))
@@ -245,8 +303,11 @@
   ;; Tests that parent-id is included in response but is nil for non-story tasks
   (testing "add-task"
     (testing "includes parent-id field (as nil) for non-story tasks"
-      (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
-                                                           :task-text "Regular task"})]
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category "test"
+                     :title "Regular task"})]
         (is (false? (:isError result)))
         (let [data-content (second (:content result))
               data (json/read-str (:text data-content) :key-fn keyword)
@@ -260,59 +321,82 @@
   (testing "complete workflow with EDN storage"
     (testing "add → select → complete workflow"
       ;; Add first task
-      (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
-                                                           :task-text "First task\nWith description"})]
-        (when (:isError result)
-          (prn "Add first task error:" result))
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category  "test"
+                     :title "First task"
+                     :description "With description"})]
         (is (false? (:isError result))))
 
       ;; Add second task
-      (let [result (#'sut/add-task-impl (test-config) nil {:category "test"
-                                                           :task-text "Second task"})]
-        (when (:isError result)
-          (prn "Add second task error:" result))
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category  "test"
+                     :title "Second task"})]
         (is (false? (:isError result))))
 
       ;; Get next task - should be first task
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
+      (let [result (#'sut/select-tasks-impl
+                    (test-config)
+                    nil
+                    {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+        (let [response (json/read-str
+                         (get-in result [:content 0 :text])
+                         :key-fn keyword)
               task (first (:tasks response))]
           (is (= "test" (:category task)))
           (is (= "First task" (:title task)))
           (is (= "With description" (:description task)))))
 
       ;; Complete first task
-      (let [result (#'sut/complete-task-impl (test-config) nil {:category "test"
-                                                                :task-text "First task"})]
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:category  "test"
+                     :title "First task"})]
         (is (false? (:isError result))))
 
       ;; Get next task - should now be second task
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
+      (let [result (#'sut/select-tasks-impl
+                    (test-config)
+                    nil
+                    {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+        (let [response (json/read-str
+                         (get-in result [:content 0 :text])
+                         :key-fn keyword)
               task (first (:tasks response))]
           (is (= "test" (:category task)))
           (is (= "Second task" (:title task)))))
 
       ;; Complete second task
-      (let [result (#'sut/complete-task-impl (test-config) nil {:category "test"
-                                                                :task-text "Second task"})]
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:category  "test"
+                     :title "Second task"})]
         (is (false? (:isError result))))
 
       ;; Get next task - should have no more tasks
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})]
+      (let [result (#'sut/select-tasks-impl
+                    (test-config)
+                    nil
+                    {:category "test" :limit 1})]
         (is (false? (:isError result)))
-        (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (let [response (json/read-str
+                         (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (empty? (:tasks response))))))))
 
 (deftest select-tasks-returns-multiple-tasks
   ;; Test select-tasks returns all matching tasks
   (testing "select-tasks returns multiple matching tasks"
     ;; Add three tasks
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task One"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task Two"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task Three"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task One"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task Two"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task Three"})
 
     (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test"})
           response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
@@ -328,11 +412,11 @@
   ;; Test :limit parameter correctly limits results
   (testing "select-tasks :limit parameter"
     ;; Add five tasks
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 1"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 2"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 3"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 4"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task 5"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task 1"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task 2"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task 3"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task 4"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task 5"})
 
     (testing "returns up to limit tasks"
       (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 3})
@@ -355,12 +439,12 @@
         (is (false? (get-in response [:metadata :limited?])))))))
 
 (deftest select-tasks-unique-constraint
-  ;; Test :unique? enforces 0 or 1 task
-  (testing "select-tasks :unique? constraint"
+  ;; Test :unique enforces 0 or 1 task
+  (testing "select-tasks :unique constraint"
     (testing "returns task when exactly one matches"
-      (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Unique Task"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Unique Task"})
 
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique? true})
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 1 (count (:tasks response))))
@@ -369,7 +453,7 @@
         (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
 
     (testing "returns empty when no matches"
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "nonexistent" :unique? true})
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "nonexistent" :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 0 (count (:tasks response))))
@@ -377,10 +461,10 @@
         (is (= 0 (get-in response [:metadata :total-matches])))))
 
     (testing "returns error when multiple tasks match"
-      (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task One"})
-      (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task Two"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task One"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task Two"})
 
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique? true})
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (contains? response :error))
@@ -405,14 +489,14 @@
         (is (contains? response :error))
         (is (str/includes? (:error response) "positive integer"))))
 
-    (testing "limit > 1 with unique? true returns error"
-      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit 5 :unique? true})
+    (testing "limit > 1 with unique true returns error"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:limit 5 :unique true})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (contains? response :error))
-        (is (str/includes? (:error response) "limit must be 1 when unique?"))
+        (is (str/includes? (:error response) "limit must be 1 when unique"))
         (is (= 5 (get-in response [:metadata :provided-limit])))
-        (is (true? (get-in response [:metadata :unique?])))))))
+        (is (true? (get-in response [:metadata :unique])))))))
 
 (deftest select-tasks-empty-results
   ;; Test empty results return empty tasks vector
@@ -429,9 +513,9 @@
   ;; Test metadata contains accurate information
   (testing "select-tasks metadata accuracy"
     ;; Add tasks
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task A"})
-    (#'sut/add-task-impl (test-config) nil {:category "test" :task-text "Task B"})
-    (#'sut/add-task-impl (test-config) nil {:category "other" :task-text "Task C"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task A"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Task B"})
+    (#'sut/add-task-impl (test-config) nil {:category "other" :title "Task C"})
 
     (testing "metadata reflects filtering and limiting"
       (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :limit 1})
