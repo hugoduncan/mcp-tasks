@@ -394,10 +394,8 @@
                               :meta {}
                               :relations []}
                        parent-id (assoc :parent-id parent-id))
-            ;; Add task to in-memory state and get the assigned ID
-            task-id (tasks/add-task task-map :prepend? (boolean prepend))
-            ;; Get the complete task with ID
-            created-task (tasks/get-task task-id)]
+            ;; Add task to in-memory state and get the complete task with ID
+            created-task (tasks/add-task task-map :prepend? (boolean prepend))]
         ;; Save to EDNL file (unexpected errors like I/O will throw and be
         ;; caught by MCP server handler)
         (tasks/save-tasks! tasks-file)

@@ -329,10 +329,10 @@
     (testing "adds task with generated ID"
       (reset-state!)
       (let [task (dissoc test-task-1 :id)
-            new-id (tasks/add-task task)]
-        (is (= 1 new-id))
+            created-task (tasks/add-task task)]
+        (is (= 1 (:id created-task)))
         (is (= [1] @tasks/task-ids))
-        (is (= task (dissoc (tasks/get-task 1) :id)))))
+        (is (= task (dissoc created-task :id)))))
 
     (testing "increments next-id"
       (reset-state!)

@@ -207,7 +207,7 @@
   Options:
   - :prepend? - If true, add at beginning; otherwise add at end (default false)
 
-  Returns the newly assigned task ID."
+  Returns the complete task map with the newly assigned ID."
   [task & {:keys [prepend?] :or {prepend? false}}]
   (let [new-id @next-id
         task-with-id (assoc task :id new-id)]
@@ -228,7 +228,7 @@
       (swap! child-parent assoc new-id parent-id))
     ;; Increment next-id
     (vswap! next-id inc)
-    new-id))
+    task-with-id))
 
 (defn update-task
   "Update an existing task in memory.
