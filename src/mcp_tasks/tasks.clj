@@ -132,17 +132,19 @@
          first)))
 
 (defn get-tasks
-  "Find all incomplete tasks matching optional filters.
+  "Find all tasks matching optional filters.
 
   Filters are AND-ed together:
   - category: Task category must match exactly
   - parent-id: Task must be a child of this parent
   - title-pattern: Task title must match pattern (regex or substring)
   - type: Task type must match exactly (keyword: :task, :bug, :feature, :story, :chore)
+  - status: Task status must match exactly (keyword: :open, :closed, :in-progress, :blocked)
+            When nil (default), filters out closed tasks (same as old behavior)
 
   Returns vector of task maps in the order they appear in tasks.ednl.
-  Returns empty vector if no matching incomplete tasks found."
-  [& {:keys [category parent-id title-pattern type]}]
+  Returns empty vector if no matching tasks found."
+  [& {:keys [category parent-id title-pattern type status]}]
   (let [ids @task-ids
         task-map @tasks
         ;; Build regex if possible, otherwise use substring match
@@ -155,10 +157,14 @@
         title-match? (cond
                        (nil? title-pattern) (constantly true)
                        title-matcher #(re-find title-matcher (:title % ""))
-                       :else #(str/includes? (:title % "") title-pattern))]
+                       :else #(str/includes? (:title % "") title-pattern))
+        ;; Status filter: when nil, exclude closed; when specified, match exactly
+        status-match? (if (nil? status)
+                        #(not= (:status %) :closed)
+                        #(= (:status %) status))]
     (->> ids
          (map #(get task-map %))
-         (filter #(not= (:status %) :closed))
+         (filter status-match?)
          (filter #(or (nil? category) (= (:category %) category)))
          (filter #(or (nil? parent-id) (= (:parent-id %) parent-id)))
          (filter #(or (nil? type) (= (:type %) type)))

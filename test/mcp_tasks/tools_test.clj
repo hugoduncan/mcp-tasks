@@ -237,7 +237,7 @@
       (let [result (#'sut/add-task-impl
                     (test-config)
                     nil
-                    {:category  "test"
+                    {:category "test"
                      :title "Test task"
                      :description "With description"})]
         (is (false? (:isError result)))
@@ -287,9 +287,9 @@
       (let [result (#'sut/add-task-impl
                     (test-config)
                     nil
-                    {:category   "simple"
-                     :title      "Child task"
-                     :parent-id  1})]
+                    {:category "simple"
+                     :title "Child task"
+                     :parent-id 1})]
         (is (false? (:isError result)))
         ;; Verify structured data includes parent-id
         (let [data-content (second (:content result))
@@ -324,7 +324,7 @@
       (let [result (#'sut/add-task-impl
                     (test-config)
                     nil
-                    {:category  "test"
+                    {:category "test"
                      :title "First task"
                      :description "With description"})]
         (is (false? (:isError result))))
@@ -333,7 +333,7 @@
       (let [result (#'sut/add-task-impl
                     (test-config)
                     nil
-                    {:category  "test"
+                    {:category "test"
                      :title "Second task"})]
         (is (false? (:isError result))))
 
@@ -355,7 +355,7 @@
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
-                    {:category  "test"
+                    {:category "test"
                      :title "First task"})]
         (is (false? (:isError result))))
 
@@ -376,7 +376,7 @@
       (let [result (#'sut/complete-task-impl
                     (test-config)
                     nil
-                    {:category  "test"
+                    {:category "test"
                      :title "Second task"})]
         (is (false? (:isError result))))
 
@@ -570,3 +570,74 @@
         (is (false? (:isError result)))
         (is (= 1 (count (:tasks response))))
         (is (= "Bug fix" (get-in response [:tasks 0 :title])))))))
+
+(deftest select-tasks-status-filter
+  ;; Test :status parameter filters tasks by status
+  (testing "select-tasks :status filter"
+    (testing "filters by status open (default behavior)"
+      ;; Add tasks and complete one
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Open task 1"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Open task 2"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "To be closed"})
+      ;; Complete one task
+      (#'sut/complete-task-impl (test-config) nil {:title "To be closed"})
+
+      ;; Without status filter, should only return open tasks
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 2 (count (:tasks response))))
+        (is (= ["Open task 1" "Open task 2"]
+               (map :title (:tasks response))))))))
+
+(deftest select-tasks-status-open-explicit
+  ;; Test explicitly filtering by status open
+  (testing "select-tasks :status filter"
+    (testing "explicitly filters by status open"
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Open task"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "To close"})
+      (#'sut/complete-task-impl (test-config) nil {:title "To close"})
+
+      ;; Explicitly filter by open status
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:status "open"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:tasks response))))
+        (is (= "Open task" (get-in response [:tasks 0 :title])))
+        (is (= "open" (name (get-in response [:tasks 0 :status]))))))))
+
+(deftest select-tasks-status-in-progress
+  ;; Test filtering by status in-progress
+  (testing "select-tasks :status filter"
+    (testing "filters by status in-progress"
+      ;; Write tasks with different statuses directly to file
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "Open task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+         {:id 2 :parent-id nil :title "In progress task 1" :description "" :design "" :category "test" :type :task :status :in-progress :meta {} :relations []}
+         {:id 3 :parent-id nil :title "In progress task 2" :description "" :design "" :category "test" :type :task :status :in-progress :meta {} :relations []}])
+
+      ;; Filter by in-progress status
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:status "in-progress"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 2 (count (:tasks response))))
+        (is (= #{"In progress task 1" "In progress task 2"}
+               (set (map :title (:tasks response)))))
+        (is (every? #(= "in-progress" (name (:status %))) (:tasks response)))))))
+
+(deftest select-tasks-status-with-category
+  ;; Test combining status filter with category filter
+  (testing "select-tasks :status filter"
+    (testing "combines status filter with category filter"
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Test open"})
+      (#'sut/add-task-impl (test-config) nil {:category "other" :title "Other open"})
+      (#'sut/add-task-impl (test-config) nil {:category "test" :title "Test to close"})
+      (#'sut/complete-task-impl (test-config) nil {:title "Test to close"})
+
+      ;; Filter by category test and status open
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :status "open"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:tasks response))))
+        (is (= "Test open" (get-in response [:tasks 0 :title])))))))

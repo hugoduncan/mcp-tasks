@@ -579,6 +579,7 @@ The `select-tasks` tool supports optional filtering parameters that enable story
 - `parent-id` (integer, optional) - Filter by parent task ID (for finding story child tasks)
 - `title-pattern` (string, optional) - Filter by title pattern (regex or substring match)
 - `type` (string, optional) - Filter by task type (task, bug, feature, story, chore)
+- `status` (string, optional) - Filter by task status (open, closed, in-progress, blocked). When omitted, filters out closed tasks (default behavior)
 - `limit` (integer, optional, default: 5) - Maximum number of tasks to return
 - `unique` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
 
