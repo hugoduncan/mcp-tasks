@@ -1,19 +1,40 @@
 ---
 title: Execute Story Task
 description: Execute the next task from a story's task list
-argument-hint: <story-name> [additional-context...]
+argument-hint: <story-specification> [additional-context...]
 ---
 
 Execute the next incomplete task from the story.
 
 Parse the arguments: $ARGUMENTS
-- The first word/token is the story name (without .md extension)
+- The first word/token is the story specification
 - Everything after is additional context to consider when executing the task
+
+### Story Specification Formats
+
+The story can be specified in multiple ways:
+- **By ID**: "#59", "59", "story 59" (numeric formats)
+- **By title pattern**: "Make story prompts flexible" (text matching)
+
+### Parsing Logic
+
+1. **Extract the first token** from $ARGUMENTS as the story specification
+2. **Determine specification type**:
+   - If the token is numeric (e.g., "59") → treat as task-id
+   - If the token starts with "#" (e.g., "#59") → strip "#" and treat as task-id
+   - If the token matches "story N" pattern → extract N and treat as task-id
+   - Otherwise → treat as title-pattern
+3. **Use appropriate select-tasks filter**:
+   - For task-id: `task-id: N, type: story, unique: true`
+   - For title-pattern: `title-pattern: "...", type: story, unique: true`
 
 ## Process
 
 1. Find the story and its first incomplete child task:
-   - First, use `select-tasks` with `title-pattern` and `unique: true` to find the story task
+   - First, use `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true` to find the story task
+   - Handle errors:
+     - **No match**: Inform user no story found, suggest checking available stories
+     - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
    - Then use `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - If no incomplete tasks found, inform the user that all tasks are
      complete and stop
