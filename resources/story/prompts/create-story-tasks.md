@@ -1,20 +1,41 @@
 ---
 title: Create Story Tasks
 description: Break down a story into categorized, executable tasks
-argument-hint: <story-name> [additional-context...]
+argument-hint: <story-specification> [additional-context...]
 ---
 
 Create a task breakdown for the story. Do not implement the story.
 
 Parse the arguments: $ARGUMENTS
-- The first word/token is the story name (without .md extension)
+- The first word/token is the story specification
 - Everything after is additional context to consider when creating tasks
+
+### Story Specification Formats
+
+The story can be specified in multiple ways:
+- **By ID**: "#59", "59", "story 59" (numeric formats)
+- **By title pattern**: "Make story prompts flexible" (text matching)
+
+### Parsing Logic
+
+1. **Extract the first token** from $ARGUMENTS as the story specification
+2. **Determine specification type**:
+   - If the token is numeric (e.g., "59") → treat as task-id
+   - If the token starts with "#" (e.g., "#59") → strip "#" and treat as task-id
+   - If the token matches "story N" pattern → extract N and treat as task-id
+   - Otherwise → treat as title-pattern
+3. **Use appropriate select-tasks filter**:
+   - For task-id: `task-id: N, type: story, unique: true`
+   - For title-pattern: `title-pattern: "...", type: story, unique: true`
 
 ## Process
 
-1. Retrieve the story using the `select-tasks` tool with `title-pattern`
-   matching the story name and `unique: true`
+1. Retrieve the story using the `select-tasks` tool:
+   - Use the appropriate filter (task-id or title-pattern) with `type: story, unique: true`
    - The story is stored as a task with `:type :story`
+   - Handle errors:
+     - **No match**: Inform user no story found, suggest checking available stories
+     - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
    - If the story doesn't exist, inform the user and stop
 
 2. Display the story content to the user

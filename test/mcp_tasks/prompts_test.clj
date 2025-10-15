@@ -266,7 +266,7 @@
         (is (some? content))
         (is (string? content))
         (is (re-find #"story-name" content))
-        (is (re-find #"select-tasks.*tool.*title-pattern" content))
+        (is (re-find #"(?s)select-tasks.*title-pattern" content))
         (is (re-find #"add-task" content))
         (is (re-find #"tasks\.ednl" content))
         (is (re-find #"category" content))))
