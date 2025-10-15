@@ -201,13 +201,15 @@
   - category: Task category name
   - parent-id: Parent task ID for filtering children
   - title-pattern: Pattern to match task titles (regex or substring)
+  - type: Task type (keyword: :task, :bug, :feature, :story, :chore)
+  - status: Task status (keyword: :open, :closed, :in-progress, :blocked)
 
   Additional parameters:
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
   - unique: If true, enforce that 0 or 1 task matches (error if >1)
 
   Returns JSON-encoded response with tasks vector and metadata."
-  [config _context {:keys [category parent-id title-pattern limit unique]}]
+  [config _context {:keys [category parent-id title-pattern type status limit unique]}]
   (try
     ;; Determine effective limit
     ;; If unique? is true, effective limit is always 1
@@ -233,7 +235,11 @@
 
       (let [effective-limit (if unique 1 requested-limit)
             tasks-path (path-helper/task-path config ["tasks.ednl"])
-            tasks-file (:absolute tasks-path)]
+            tasks-file (:absolute tasks-path)
+            ;; Convert type string to keyword if provided
+            type-keyword (when type (keyword type))
+            ;; Convert status string to keyword if provided
+            status-keyword (when status (keyword status))]
 
         ;; Load tasks from EDNL file
         (when (file-exists? tasks-file)
@@ -243,7 +249,9 @@
         (let [all-tasks (tasks/get-tasks
                           :category category
                           :parent-id parent-id
-                          :title-pattern title-pattern)
+                          :title-pattern title-pattern
+                          :type type-keyword
+                          :status status-keyword)
               total-matches (count all-tasks)
               limited-tasks (vec (take effective-limit all-tasks))
               result-count (count limited-tasks)]
@@ -283,8 +291,10 @@
   - category: Task category name
   - parent-id: Parent task ID for filtering children
   - title-pattern: Pattern to match task titles (regex or substring)
+  - type: Task type (task, bug, feature, story, chore)
+  - status: Task status (open, closed, in-progress, blocked)
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
-  - unique?: If true, enforce that 0 or 1 task matches (error if >1)
+  - unique: If true, enforce that 0 or 1 task matches (error if >1)
 
   All filters are AND-ed together.
 
@@ -306,6 +316,14 @@
      "title-pattern"
      {:type "string"
       :description "Pattern to match task titles (regex or substring)"}
+     "type"
+     {:type "string"
+      :enum ["task" "bug" "feature" "story" "chore"]
+      :description "Task type to filter by"}
+     "status"
+     {:type "string"
+      :enum ["open" "closed" "in-progress" "blocked"]
+      :description "Task status to filter by"}
      "limit"
      {:type "integer"
       :description "Maximum number of tasks to return (default: 5, must be > 0)"}
