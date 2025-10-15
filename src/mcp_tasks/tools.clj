@@ -359,34 +359,47 @@
   otherwise appends at the end. If parent-id is provided, the task is
   associated with that parent task.
 
+  Error Handling:
+  - Tool-level validation errors (e.g., parent not found) are returned directly
+    in format: {:error \"...\" :metadata {...}} with :isError true
+  - Unexpected errors (e.g., file I/O) are allowed to throw and are caught
+    by the MCP server layer, which converts them to MCP error format
+
   Returns two content items:
   1. Text message for human readability
   2. Structured data map with 'task' and 'metadata' keys"
   [config _context
    {:keys [category title description prepend type parent-id]}]
-  (try
-    (let [tasks-file (prepare-task-file config)]
-      ;; Validate parent-id if provided (tasks are already loaded by prepare-task-file)
-      (when parent-id
-        (or (tasks/get-task parent-id)
-            (throw (ex-info "Parent story not found"
-                            {:parent-id parent-id}))))
+  (let [tasks-file (prepare-task-file config)]
+    ;; Tool-level validation: Check parent-id exists if provided
+    (if (and parent-id (not (tasks/get-task parent-id)))
+      ;; Return validation error in tool-level format (not MCP format)
+      {:content [{:type "text"
+                  :text "Parent story not found"}
+                 {:type "text"
+                  :text (json/write-str
+                          {:error "Parent story not found"
+                           :metadata {:attempted-operation "add-task"
+                                      :parent-id parent-id
+                                      :title title
+                                      :category category
+                                      :file tasks-file}})}]
+       :isError true}
 
       ;; Create task map with all required fields
-      (let [task-map {:title title
-                      :description (or description "")
-                      :design ""
-                      :category category
-                      :status :open
-                      :type (keyword (or type "task"))
-                      :meta {}
-                      :parent-id parent-id
-                      :relations []}
-            ;; Add task to in-memory state and get the assigned ID
-            task-id (tasks/add-task task-map :prepend? (boolean prepend))
-            ;; Get the complete task with ID
-            created-task (tasks/get-task task-id)]
-        ;; Save to EDNL file
+      (let [task-map (cond-> {:title title
+                              :description (or description "")
+                              :design ""
+                              :category category
+                              :status :open
+                              :type (keyword (or type "task"))
+                              :meta {}
+                              :relations []}
+                       parent-id (assoc :parent-id parent-id))
+            ;; Add task to in-memory state and get the complete task with ID
+            created-task (tasks/add-task task-map :prepend? (boolean prepend))]
+        ;; Save to EDNL file (unexpected errors like I/O will throw and be
+        ;; caught by MCP server handler)
         (tasks/save-tasks! tasks-file)
         ;; Return two content items: text message and structured data
         {:content [{:type "text"
@@ -403,9 +416,7 @@
                                       :parent-id])
                              :metadata {:file tasks-file
                                         :operation "add-task"}})}]
-         :isError false}))
-    (catch Exception e
-      (response/error-response e))))
+         :isError false}))))
 
 (defn- add-task-description
   "Build description for add-task tool with available categories and their descriptions."
@@ -426,8 +437,35 @@
   Returns two content items:
   1. Text message: 'Task added to <file-path>' for human readability
   2. Structured data (JSON): Map with 'task' and 'metadata' keys
-     - task: {:id, :title, :category, :type, :status, :parent-id}
-     - metadata: {:file, :operation}
+
+  Success response structure:
+  {
+    \"task\": {
+      \"id\": 42,
+      \"title\": \"Example task\",
+      \"category\": \"simple\",
+      \"type\": \"task\",
+      \"status\": \"open\",
+      \"parent-id\": null
+    },
+    \"metadata\": {
+      \"file\": \"./.mcp-tasks/tasks.ednl\",
+      \"operation\": \"add-task\"
+    }
+  }
+
+  Error response structure (e.g., parent not found):
+  {
+    \"error\": \"Parent story not found\",
+    \"metadata\": {
+      \"attempted-operation\": \"add-task\",
+      \"parent-id\": 99,
+      \"file\": \"./.mcp-tasks/tasks.ednl\"
+    }
+  }
+
+  Agent usage: On successful task creation, display the task-id and title to 
+  the user to confirm the task was added.
 
   Accepts config parameter for future git-aware functionality."
   [config]
