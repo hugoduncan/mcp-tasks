@@ -530,3 +530,43 @@
         (is (= 2 (get-in response [:metadata :count])))
         (is (= 2 (get-in response [:metadata :total-matches])))
         (is (false? (get-in response [:metadata :limited?])))))))
+
+(deftest select-tasks-type-filter
+  ;; Test :type parameter filters tasks by type
+  (testing "select-tasks :type filter"
+    ;; Add tasks with different types
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Regular task" :type "task"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Bug fix" :type "bug"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "New feature" :type "feature"})
+    (#'sut/add-task-impl (test-config) nil {:category "test" :title "Another task" :type "task"})
+
+    (testing "filters by type task"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:type "task"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 2 (count (:tasks response))))
+        (is (= ["Regular task" "Another task"]
+               (map :title (:tasks response))))))
+
+    (testing "filters by type bug"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:type "bug"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:tasks response))))
+        (is (= "Bug fix" (get-in response [:tasks 0 :title])))))
+
+    (testing "filters by type feature"
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:type "feature"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:tasks response))))
+        (is (= "New feature" (get-in response [:tasks 0 :title])))))
+
+    (testing "combines type filter with category filter"
+      (#'sut/add-task-impl (test-config) nil {:category "other" :title "Other bug" :type "bug"})
+
+      (let [result (#'sut/select-tasks-impl (test-config) nil {:category "test" :type "bug"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:tasks response))))
+        (is (= "Bug fix" (get-in response [:tasks 0 :title])))))))

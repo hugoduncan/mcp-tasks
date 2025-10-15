@@ -138,10 +138,11 @@
   - category: Task category must match exactly
   - parent-id: Task must be a child of this parent
   - title-pattern: Task title must match pattern (regex or substring)
+  - type: Task type must match exactly (keyword: :task, :bug, :feature, :story, :chore)
 
   Returns vector of task maps in the order they appear in tasks.ednl.
   Returns empty vector if no matching incomplete tasks found."
-  [& {:keys [category parent-id title-pattern]}]
+  [& {:keys [category parent-id title-pattern type]}]
   (let [ids @task-ids
         task-map @tasks
         ;; Build regex if possible, otherwise use substring match
@@ -160,6 +161,7 @@
          (filter #(not= (:status %) :closed))
          (filter #(or (nil? category) (= (:category %) category)))
          (filter #(or (nil? parent-id) (= (:parent-id %) parent-id)))
+         (filter #(or (nil? type) (= (:type %) type)))
          (filter title-match?)
          vec)))
 
