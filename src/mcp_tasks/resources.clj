@@ -64,16 +64,35 @@
   [prompts-map]
   (into {}
         (for [[prompt-name prompt] prompts-map]
-          (let [uri         (str "prompt://" prompt-name)
+          (let [uri (str "prompt://" prompt-name)
                 description (:description prompt)
-                impl=fn     (fn [context uri]
-                              (prompt-resource-implementation
-                                context
-                                prompts-map
-                                uri))]
+                impl=fn (fn [context uri]
+                          (prompt-resource-implementation
+                            context
+                            prompts-map
+                            uri))]
             [uri
-             {:name           prompt-name
-              :uri            uri
-              :mime-type      "text/markdown"
-              :description    description
+             {:name prompt-name
+              :uri uri
+              :mime-type "text/markdown"
+              :description description
               :implementation impl=fn}]))))
+
+(defn category-prompt-resources
+  "Create resource definitions for category prompts.
+
+  Takes a vector of category prompt resource maps from tp/category-prompt-resources.
+  Returns a map of resource URIs to resource definitions.
+  Each category prompt is exposed as a resource with URI pattern: prompt://category-<category>"
+  [category-resources-vec]
+  (into {}
+        (for [resource category-resources-vec]
+          (let [uri (:uri resource)
+                impl-fn (fn [_context _uri]
+                          {:contents [resource]})]
+            [uri
+             {:name (:name resource)
+              :uri uri
+              :mime-type (:mimeType resource)
+              :description (:description resource)
+              :implementation impl-fn}]))))
