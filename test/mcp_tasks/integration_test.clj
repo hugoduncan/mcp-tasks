@@ -29,9 +29,14 @@
   []
   (cleanup-test-project)
   (let [mcp-tasks-dir (io/file test-project-dir ".mcp-tasks")
-        tasks-dir (io/file mcp-tasks-dir "tasks")]
+        tasks-dir (io/file mcp-tasks-dir "tasks")
+        prompts-dir (io/file mcp-tasks-dir "prompts")]
     (.mkdirs tasks-dir)
-    ;; Create a simple.md file so discover-categories finds at least one category
+    (.mkdirs prompts-dir)
+    ;; Create a simple.md file in prompts dir with proper frontmatter
+    (spit (io/file prompts-dir "simple.md")
+          "---\ndescription: Test category for simple tasks\n---\nTest execution instructions\n")
+    ;; Also create a simple.md in tasks for backward compatibility with other tests
     (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")))
 
 (defn- write-config-file
@@ -311,15 +316,18 @@
             (doseq [resource resources]
               (let [uri (:uri resource)
                     read-response @(mcp-client/read-resource client uri)
-                    text (-> read-response :contents first :text)]
+                    text (-> read-response :contents first :text)
+                    is-category-resource? (str/starts-with? uri "prompt://category-")]
                 (is (not (:isError read-response))
                     (str "Should read resource successfully: " uri))
-                (is (str/starts-with? text "---\n")
-                    (str "Resource should have YAML frontmatter: " uri))
-                (is (str/includes? text "\n---\n")
-                    (str "Resource should have complete frontmatter: " uri))
-                (is (str/includes? text "description:")
-                    (str "Resource should have description metadata: " uri))))))
+                ;; Category resources have frontmatter stripped, only check other resources
+                (when-not is-category-resource?
+                  (is (str/starts-with? text "---\n")
+                      (str "Resource should have YAML frontmatter: " uri))
+                  (is (str/includes? text "\n---\n")
+                      (str "Resource should have complete frontmatter: " uri))
+                  (is (str/includes? text "description:")
+                      (str "Resource should have description metadata: " uri)))))))
 
         (finally
           (mcp-client/close! client)

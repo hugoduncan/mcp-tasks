@@ -49,29 +49,32 @@
           {:metadata (when (seq metadata) metadata)
            :content content})))))
 
+(defn- discover-prompt-files
+  "Discover .md prompt files in a directory.
+
+  Takes a File object and returns a sorted vector of filenames without .md extension.
+  Returns empty vector if directory doesn't exist."
+  [^File dir]
+  (if (.exists dir)
+    (->> (.listFiles dir)
+         (filter #(and (.isFile ^File %)
+                       (str/ends-with? (.getName ^File %) ".md")))
+         (map #(str/replace (.getName ^File %) #"\.md$" ""))
+         sort
+         vec)
+    []))
+
 (defn discover-categories
-  "Discover task categories by reading filenames from .mcp-tasks subdirectories.
+  "Discover task categories by reading filenames from .mcp-tasks/prompts subdirectory.
 
   Takes base-dir which should be the project directory (defaults to current dir).
-  Returns a sorted vector of unique category names (filenames without .md extension)
-  found across the tasks, complete, and prompts subdirectories."
+  Returns a sorted vector of category names (filenames without .md extension)
+  found in the prompts subdirectory."
   ([]
    (discover-categories (System/getProperty "user.dir")))
   ([base-dir]
-   (let [mcp-tasks-dir (io/file base-dir ".mcp-tasks")
-         subdirs ["tasks" "complete" "prompts"]
-         md-files (for [subdir subdirs
-                        :let [dir (io/file mcp-tasks-dir subdir)]
-                        :when (.exists dir)
-                        ^File file (.listFiles dir)
-                        :when (and (.isFile ^File file)
-                                   (str/ends-with?
-                                     (.getName file) ".md"))]
-                    (.getName file))
-         categories (into (sorted-set)
-                          (map #(str/replace % #"\.md$" ""))
-                          md-files)]
-     (vec categories))))
+   (let [prompts-dir (io/file base-dir ".mcp-tasks" "prompts")]
+     (discover-prompt-files prompts-dir))))
 
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category.
@@ -186,13 +189,7 @@
   resources/story/prompts directory."
   []
   (when-let [prompts-url (io/resource "story/prompts")]
-    (let [prompts-file (io/file (.toURI prompts-url))]
-      (when (.exists prompts-file)
-        (->> (.listFiles prompts-file)
-             (filter
-               #(and (.isFile ^File %)
-                     (str/ends-with? (.getName ^File %) ".md")))
-             (map #(str/replace (.getName ^File %) #"\.md$" "")))))))
+    (discover-prompt-files (io/file (.toURI prompts-url)))))
 
 (defn get-story-prompt
   "Get a story prompt by name, with file override support.
@@ -325,30 +322,38 @@
 (defn task-execution-prompts
   "Generate MCP prompts for general task execution workflows.
 
-  Reads prompt files from resources/prompts/ that are not category prompts.
-  Currently includes:
-  - execute-task: Flexible task execution based on selection criteria
+  Discovers prompt files from resources/prompts/ directory, excluding:
+  - Category instruction files (simple.md, medium.md, etc.)
+  - Internal files (default-prompt-text.md)
 
   Returns a map of prompt names to prompt definitions."
-  [_config]
-  (let [prompt-files ["execute-task"]
-        prompts-data (for [prompt-name prompt-files
-                           :let [resource-path (io/resource (str "prompts/" prompt-name ".md"))]
-                           :when resource-path]
-                       (let [file-content (slurp resource-path)
-                             {:keys [metadata content]} (parse-frontmatter file-content)
-                             description (or (get metadata "description")
-                                             (format "Task execution prompt: %s" prompt-name))
-                             arguments (parse-argument-hint metadata)]
-                         [prompt-name
-                          (prompts/valid-prompt?
-                            (cond-> {:name prompt-name
-                                     :description description
-                                     :messages [{:role "user"
-                                                 :content {:type "text"
-                                                           :text content}}]}
-                              (seq arguments) (assoc :arguments arguments)))]))]
-    (into {} prompts-data)))
+  [config]
+  (when-let [prompts-url (io/resource "prompts")]
+    (let [prompts-dir (io/file (.toURI prompts-url))
+          all-prompts (discover-prompt-files prompts-dir)
+          ;; Get category names to filter out
+          base-dir (or (:base-dir config) (System/getProperty "user.dir"))
+          categories (set (discover-categories base-dir))
+          ;; Filter out category instruction files and internal files
+          excluded-names (conj categories "default-prompt-text")
+          task-prompts (remove excluded-names all-prompts)
+          prompts-data (for [prompt-name task-prompts
+                             :let [resource-path (io/resource (str "prompts/" prompt-name ".md"))]
+                             :when resource-path]
+                         (let [file-content (slurp resource-path)
+                               {:keys [metadata content]} (parse-frontmatter file-content)
+                               description (or (get metadata "description")
+                                               (format "Task execution prompt: %s" prompt-name))
+                               arguments (parse-argument-hint metadata)]
+                           [prompt-name
+                            (prompts/valid-prompt?
+                              (cond-> {:name prompt-name
+                                       :description description
+                                       :messages [{:role "user"
+                                                   :content {:type "text"
+                                                             :text content}}]}
+                                (seq arguments) (assoc :arguments arguments)))]))]
+      (into {} prompts-data))))
 
 (defn category-prompt-resources
   "Generate MCP resources for category prompt files.

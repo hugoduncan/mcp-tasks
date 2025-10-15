@@ -186,9 +186,9 @@
             _ (.delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            tasks-dir (io/file mcp-tasks-dir "tasks")
-            _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")]
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")]
         (try
           (let [config {:use-git? true :base-dir (.getPath temp-dir)}
                 prompt-map (prompts/prompts config)
@@ -200,8 +200,8 @@
               (is (string? message-text))
               (is (re-find #"Commit the task tracking changes" message-text))))
           (finally
-            (.delete (io/file tasks-dir "simple.md"))
-            (.delete tasks-dir)
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))
 
@@ -210,9 +210,9 @@
             _ (.delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            tasks-dir (io/file mcp-tasks-dir "tasks")
-            _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")]
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")]
         (try
           (let [config {:use-git? false :base-dir (.getPath temp-dir)}
                 prompt-map (prompts/prompts config)
@@ -225,8 +225,8 @@
               (is (not
                     (re-find #"Commit the task tracking changes" message-text)))))
           (finally
-            (.delete (io/file tasks-dir "simple.md"))
-            (.delete tasks-dir)
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))
 
@@ -235,9 +235,9 @@
             _ (.delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            tasks-dir (io/file mcp-tasks-dir "tasks")
-            _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-file (io/file temp-dir ".mcp-tasks.edn")]
         (try
           (spit config-file "{:use-git? false}")
@@ -259,8 +259,8 @@
                       message-text)))))
           (finally
             (.delete config-file)
-            (.delete (io/file tasks-dir "simple.md"))
-            (.delete tasks-dir)
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))))
 
@@ -284,9 +284,9 @@
             _ (.delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            tasks-dir (io/file mcp-tasks-dir "tasks")
-            _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config {:use-git? false :base-dir (.getPath temp-dir)}
             transport {:type :in-memory}
             server-config (sut/create-server-config config transport)]
@@ -299,8 +299,8 @@
           (is (map? (get (:prompts server-config) "refine-story")))
           (is (= "refine-story" (:name (get (:prompts server-config) "refine-story"))))
           (finally
-            (.delete (io/file tasks-dir "simple.md"))
-            (.delete tasks-dir)
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))
 
@@ -309,9 +309,9 @@
             _ (.delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            tasks-dir (io/file mcp-tasks-dir "tasks")
-            _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config {:use-git? false :base-dir (.getPath temp-dir)}
             transport {:type :in-memory}
             server-config (sut/create-server-config config transport)]
@@ -320,8 +320,8 @@
           (is (contains? (:prompts server-config) "next-simple"))
           (is (contains? (:prompts server-config) "refine-story"))
           (finally
-            (.delete (io/file tasks-dir "simple.md"))
-            (.delete tasks-dir)
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))
 
@@ -330,9 +330,9 @@
             _ (.delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            tasks-dir (io/file mcp-tasks-dir "tasks")
-            _ (.mkdirs tasks-dir)
-            _ (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config {:use-git? false :base-dir (.getPath temp-dir)}
             transport {:type :in-memory}
             server-config (sut/create-server-config config transport)]
@@ -348,7 +348,7 @@
               (is (= "additional-context" (:name context-arg)))
               (is (false? (:required context-arg)))))
           (finally
-            (.delete (io/file tasks-dir "simple.md"))
-            (.delete tasks-dir)
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
             (.delete mcp-tasks-dir)
             (.delete temp-dir)))))))

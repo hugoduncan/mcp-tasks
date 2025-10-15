@@ -6,28 +6,27 @@
     [mcp-tasks.prompts :as sut]))
 
 (deftest discover-categories-test
-  ;; Test that discover-categories finds all unique categories across
-  ;; tasks, complete, and prompts subdirectories, returning them sorted
+  ;; Test that discover-categories finds categories from the
+  ;; .mcp-tasks/prompts subdirectory, returning them sorted
   ;; without .md extensions.
   (testing "discover-categories"
-    (testing "returns sorted unique categories from .mcp-tasks subdirectories"
+    (testing "returns sorted categories from .mcp-tasks/prompts directory"
       (let [categories (sut/discover-categories)]
         (is (vector? categories))
         (is (every? string? categories))
         (is (= categories (sort categories)))
         (is (not-any? #(re-find #"\.md$" %) categories))))
 
-    (testing "finds categories across all subdirectories"
+    (testing "finds categories from prompts subdirectory"
       (let [categories (sut/discover-categories)
             category-set (set categories)]
-        ;; Should find "simple" which exists in both tasks and complete
+        ;; Should find "simple" which exists in prompts
         (is (contains? category-set "simple"))))
 
-    (testing "returns unique categories when files exist in multiple subdirectories"
+    (testing "returns categories only from prompts subdirectory"
       (let [categories (sut/discover-categories)]
-        ;; "simple" exists in both tasks and complete subdirectories
-        ;; but should only appear once in the result
-        (is (= 1 (count (filter #(= "simple" %) categories))))))))
+        ;; Each category should appear exactly once
+        (is (= (count categories) (count (set categories))))))))
 
 (deftest parse-frontmatter-test
   ;; Test that parse-frontmatter correctly extracts metadata and content
