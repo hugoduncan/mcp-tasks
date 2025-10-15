@@ -372,6 +372,65 @@
           (is (contains? data :metadata))
           (is (map? (:metadata data))))))))
 
+(deftest add-task-schema-validation-error
+  ;; Tests that schema validation errors throw exceptions
+  (testing "add-task"
+    (testing "throws exception for invalid schema"
+      (testing "missing required title field"
+        ;; category and title are required by the tool's inputSchema
+        ;; but if we bypass that and pass invalid data to add-task-impl,
+        ;; the schema validation in tasks/add-task should catch it
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Invalid task schema"
+              (#'sut/add-task-impl
+               (test-config)
+               nil
+               {:category "test"
+                :title nil}))))
+      (testing "invalid status value"
+        ;; Status must be one of: :open, :closed, :in-progress, :blocked
+        ;; The task map created in add-task-impl sets status to :open,
+        ;; but we can test by creating an invalid task directly
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Invalid task schema"
+              (tasks/add-task
+                {:title "Test task"
+                 :description ""
+                 :design ""
+                 :category "test"
+                 :status :invalid-status
+                 :type :task
+                 :meta {}
+                 :relations []}))))
+      (testing "invalid type value"
+        ;; Type must be one of: :task, :bug, :feature, :story, :chore
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Invalid task schema"
+              (tasks/add-task
+                {:title "Test task"
+                 :description ""
+                 :design ""
+                 :category "test"
+                 :status :open
+                 :type :invalid-type
+                 :meta {}
+                 :relations []}))))
+      (testing "missing required description field"
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Invalid task schema"
+              (tasks/add-task
+                {:title "Test task"
+                 :design ""
+                 :category "test"
+                 :status :open
+                 :type :task
+                 :meta {}
+                 :relations []})))))))
+
 (deftest ^:integration complete-workflow-add-next-complete
   ;; Integration test for complete workflow: add task → select task → complete task
   (testing "complete workflow with EDN storage"
