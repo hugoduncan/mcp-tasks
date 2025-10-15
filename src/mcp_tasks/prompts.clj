@@ -330,3 +330,33 @@
                                       :content {:type "text"
                                                 :text tailored-content}}]}
                    (seq arguments) (assoc :arguments arguments)))])))))
+
+(defn category-prompt-resources
+  "Generate MCP resources for category prompt files.
+
+  Discovers all available categories and creates a resource for each category's
+  prompt file found in .mcp-tasks/prompts/<category>.md.
+
+  Each resource has:
+  - :uri \"prompt://category-<category>\"
+  - :name \"<category> category instructions\"
+  - :description from frontmatter or default
+  - :mimeType \"text/plain\"
+  - :text content after frontmatter stripped
+
+  Missing files are gracefully skipped (not included in result).
+
+  Returns a vector of resource maps."
+  [config]
+  (let [categories (discover-categories)]
+    (->> categories
+         (keep (fn [category]
+                 (when-let [prompt-data (read-prompt-instructions category)]
+                   (let [description (or (get-in prompt-data [:metadata "description"])
+                                         (str category " category instructions"))]
+                     {:uri (str "prompt://category-" category)
+                      :name (str category " category instructions")
+                      :description description
+                      :mimeType "text/plain"
+                      :text (:content prompt-data)}))))
+         vec)))

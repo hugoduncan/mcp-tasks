@@ -1,6 +1,7 @@
 (ns mcp-tasks.prompts-test
   (:require
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.prompts :as sut]))
 
@@ -499,3 +500,50 @@
             refine-with (get prompts-with-branch "refine-story")
             refine-without (get prompts-without-branch "refine-story")]
         (is (= (:messages refine-with) (:messages refine-without)))))))
+
+(deftest category-prompt-resources-test
+  ;; Tests the generation of MCP resources for category prompt files.
+  ;; Validates URI format, content extraction, and frontmatter handling.
+  (testing "category-prompt-resources"
+    (testing "generates resources for existing categories"
+      (let [config {}
+            resources (sut/category-prompt-resources config)
+            resource-uris (set (map :uri resources))]
+        (is (seq resources) "Should return non-empty vector")
+        (is (contains? resource-uris "prompt://category-simple"))
+        (is (contains? resource-uris "prompt://category-medium"))
+        (is (contains? resource-uris "prompt://category-large"))))
+
+    (testing "excludes frontmatter from content"
+      (let [config {}
+            resources (sut/category-prompt-resources config)
+            simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
+        (is (some? simple-resource))
+        (is (not (str/includes? (:text simple-resource) "---"))
+            "Content should not contain frontmatter delimiters")
+        (is (not (str/includes? (:text simple-resource) "description:"))
+            "Content should not contain frontmatter fields")))
+
+    (testing "uses description from frontmatter"
+      (let [config {}
+            resources (sut/category-prompt-resources config)
+            simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
+        (is (some? simple-resource))
+        (is (= "Execute simple tasks with basic workflow" (:description simple-resource)))))
+
+    (testing "handles missing files gracefully"
+      (let [config {}
+            resources (sut/category-prompt-resources config)
+            ;; Verify that only existing categories are included
+            resource-count (count resources)
+            known-categories ["simple" "medium" "large" "clarify-task"]]
+        ;; Should have at least the known categories
+        (is (>= resource-count (count known-categories)))
+        ;; All resources should have valid structure
+        (doseq [resource resources]
+          (is (string? (:uri resource)))
+          (is (str/starts-with? (:uri resource) "prompt://category-"))
+          (is (string? (:name resource)))
+          (is (string? (:description resource)))
+          (is (= "text/plain" (:mimeType resource)))
+          (is (string? (:text resource))))))))

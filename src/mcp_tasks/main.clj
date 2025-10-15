@@ -108,14 +108,17 @@
   Returns server configuration map suitable for mcp-server/create-server"
   [config transport]
   (let [all-prompts (merge (tp/prompts config)
-                           (tp/story-prompts config))]
+                           (tp/story-prompts config))
+        category-resources-vec (tp/category-prompt-resources config)
+        all-resources (merge (resources/prompt-resources all-prompts)
+                             (resources/category-prompt-resources category-resources-vec))]
     {:transport transport
      :tools {"complete-task" (tools/complete-task-tool config)
              "select-tasks" (tools/select-tasks-tool config)
              "add-task" (tools/add-task-tool config)
              "update-task" (tools/update-task-tool config)}
      :prompts all-prompts
-     :resources (resources/prompt-resources all-prompts)}))
+     :resources all-resources}))
 
 (defn- exit-process
   "Exit the process with the given code.
