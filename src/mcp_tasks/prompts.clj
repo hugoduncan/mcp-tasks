@@ -322,6 +322,34 @@
                                                 :text tailored-content}}]}
                    (seq arguments) (assoc :arguments arguments)))])))))
 
+(defn task-execution-prompts
+  "Generate MCP prompts for general task execution workflows.
+
+  Reads prompt files from resources/prompts/ that are not category prompts.
+  Currently includes:
+  - execute-task: Flexible task execution based on selection criteria
+
+  Returns a map of prompt names to prompt definitions."
+  [_config]
+  (let [prompt-files ["execute-task"]
+        prompts-data (for [prompt-name prompt-files
+                           :let [resource-path (io/resource (str "prompts/" prompt-name ".md"))]
+                           :when resource-path]
+                       (let [file-content (slurp resource-path)
+                             {:keys [metadata content]} (parse-frontmatter file-content)
+                             description (or (get metadata "description")
+                                             (format "Task execution prompt: %s" prompt-name))
+                             arguments (parse-argument-hint metadata)]
+                         [prompt-name
+                          (prompts/valid-prompt?
+                            (cond-> {:name prompt-name
+                                     :description description
+                                     :messages [{:role "user"
+                                                 :content {:type "text"
+                                                           :text content}}]}
+                              (seq arguments) (assoc :arguments arguments)))]))]
+    (into {} prompts-data)))
+
 (defn category-prompt-resources
   "Generate MCP resources for category prompt files.
 

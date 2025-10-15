@@ -108,7 +108,8 @@
   Returns server configuration map suitable for mcp-server/create-server"
   [config transport]
   (let [all-prompts (merge (tp/prompts config)
-                           (tp/story-prompts config))
+                           (tp/story-prompts config)
+                           (tp/task-execution-prompts config))
         category-resources-vec (tp/category-prompt-resources config)
         all-resources (merge (resources/prompt-resources all-prompts)
                              (resources/category-prompt-resources category-resources-vec))]
