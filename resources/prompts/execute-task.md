@@ -3,7 +3,8 @@ description: Execute a task based on selection criteria or context
 argument-hint: [selection-criteria...]
 ---
 
-Execute a task based on provided selection criteria or work with a task already in context.
+Execute a task based on provided selection criteria or work with a task
+already in context.
 
 ## Argument Parsing
 
@@ -11,7 +12,8 @@ Parse the arguments: $ARGUMENTS
 
 If arguments are provided:
 - Interpret them as selection criteria for the `select-tasks` tool
-- Map the criteria to the tool's parameters (category, parent-id, status, title-pattern, type, task-id)
+- Map the criteria to the tool's parameters (category, parent-id,
+  status, title-pattern, type, task-id)
 - Examples of argument formats you might encounter:
   - "category=simple" or "simple" → category filter
   - "parent-id=51" or "parent 51" → parent-id filter
@@ -32,9 +34,12 @@ If arguments were provided:
 - Use the `select-tasks` tool with the interpreted parameters
 - Do not include `limit` or `unique` parameters initially
 - Handle the response:
-  - **No matches**: Inform the user no tasks match the criteria, suggest adjustments
+  - **No matches**: Inform the user no tasks match the criteria, suggest
+    adjustments
   - **One match**: Proceed to step 2 with this task
-  - **Multiple matches**: List the matching tasks with their task-ids and titles, then ask the user to clarify which task to execute (they can provide a task-id or more specific criteria)
+  - **Multiple matches**: List the matching tasks with their task-ids
+    and titles, then ask the user to clarify which task to execute (they
+    can provide a task-id or more specific criteria)
 
 If no arguments were provided:
 - Work with the task already in context
@@ -44,24 +49,34 @@ If no arguments were provided:
 
 Once you have identified a single task:
 
-1. **Extract the category**: Get the `:category` field from the task (e.g., "simple", "medium", "large")
+1. **Extract the category**: Get the `:category` field from the task
+   (e.g., "simple", "medium", "large")
 
-2. **Retrieve category instructions**: Use the `ReadMcpResourceTool` to fetch the category-specific instructions:
+2. **Retrieve category instructions**: Use the `ReadMcpResourceTool` to
+   fetch the category-specific instructions:
    - `server`: "mcp-tasks"
-   - `uri`: "prompt://category-<category>" (replace `<category>` with the task's category value)
-   - Example: For a task with `:category "medium"`, use URI `"prompt://category-medium"`
+   - `uri`: "prompt://category-<category>" (replace `<category>` with
+     the task's category value)
+   - Example: For a task with `:category "medium"`, use URI
+     `"prompt://category-medium"`
 
-3. **Handle missing resources**: If the `ReadMcpResourceTool` returns an error or the resource is not found:
-   - Inform the user: "Category instructions for '<category>' are not available. Please ensure the category prompt resource exists or contact the maintainer."
+3. **Handle missing resources**: If the `ReadMcpResourceTool` returns an
+   error or the resource is not found:
+   - Inform the user: "Category instructions for '<category>' are not
+     available. Please ensure the category prompt resource exists or
+     contact the maintainer."
    - Stop execution - do not proceed to step 3
 
-4. **Extract instructions**: The resource will return a `text` field containing the category-specific workflow steps
+4. **Extract instructions**: The resource will return a `text` field
+   containing the category-specific workflow steps
 
 ### 3. Execute the Task
 
-Follow the category-specific instructions retrieved in step 2 to execute the task:
+Follow the category-specific instructions retrieved in step 2 to execute
+the task:
 
-1. **Provide task context**: When executing the category instructions, keep the following task information in mind:
+1. **Provide task context**: When executing the category instructions,
+   keep the following task information in mind:
    - Task ID: `<task-id>`
    - Title: `<title>`
    - Description: `<description>`
@@ -69,9 +84,9 @@ Follow the category-specific instructions retrieved in step 2 to execute the tas
    - Type: `<type>`
    - Relations: `<relations>` (if any)
 
-2. **Follow the workflow**: The category instructions define a workflow with specific steps (e.g., analysis, design, planning, implementation). Execute each step in order.
-
-Note: The category instructions may include steps for finding the task (e.g., "Find the first incomplete task") - you can skip these steps since you already have the task identified from step 1.
+2. **Follow the workflow**: The category instructions define a workflow
+   with specific steps (e.g., analysis, design, planning,
+   implementation). Execute each step in order.
 
 ### 4. Mark Task Complete
 
