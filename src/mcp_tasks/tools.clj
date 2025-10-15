@@ -462,6 +462,9 @@
     }
   }
 
+  Agent usage: On successful task creation, display the task-id and title to 
+  the user to confirm the task was added.
+
   Accepts config parameter for future git-aware functionality."
   [config]
   (let [[categories description] (add-task-description)]
