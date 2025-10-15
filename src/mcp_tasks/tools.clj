@@ -437,8 +437,32 @@
   Returns two content items:
   1. Text message: 'Task added to <file-path>' for human readability
   2. Structured data (JSON): Map with 'task' and 'metadata' keys
-     - task: {:id, :title, :category, :type, :status, :parent-id}
-     - metadata: {:file, :operation}
+
+  Success response structure:
+  {
+    \"task\": {
+      \"id\": 42,
+      \"title\": \"Example task\",
+      \"category\": \"simple\",
+      \"type\": \"task\",
+      \"status\": \"open\",
+      \"parent-id\": null
+    },
+    \"metadata\": {
+      \"file\": \"./.mcp-tasks/tasks.ednl\",
+      \"operation\": \"add-task\"
+    }
+  }
+
+  Error response structure (e.g., parent not found):
+  {
+    \"error\": \"Parent story not found\",
+    \"metadata\": {
+      \"attempted-operation\": \"add-task\",
+      \"parent-id\": 99,
+      \"file\": \"./.mcp-tasks/tasks.ednl\"
+    }
+  }
 
   Accepts config parameter for future git-aware functionality."
   [config]
