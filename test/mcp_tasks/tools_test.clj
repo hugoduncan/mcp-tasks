@@ -316,6 +316,62 @@
           (is (nil? (:parent-id task)))
           (is (= "Regular task" (:title task))))))))
 
+(deftest add-task-error-parent-not-found
+  ;; Tests error response when parent-id references non-existent task
+  (testing "add-task"
+    (testing "returns error when parent task not found"
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category "simple"
+                     :title "Child task"
+                     :parent-id 999})]
+        (is (true? (:isError result)))
+        (is (= 2 (count (:content result))))
+        ;; First content is error message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (= "Parent story not found" (:text text-content))))
+        ;; Second content is structured error data
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)]
+          (is (= "text" (:type data-content)))
+          (is (contains? data :error))
+          (is (contains? data :metadata))
+          (is (= "Parent story not found" (:error data)))
+          ;; Verify metadata contains operation context
+          (let [metadata (:metadata data)]
+            (is (= "add-task" (:attempted-operation metadata)))
+            (is (= 999 (:parent-id metadata)))
+            (is (contains? metadata :file))))))))
+
+(deftest add-task-error-response-structure
+  ;; Tests that all error responses follow the expected format
+  (testing "add-task"
+    (testing "error responses have correct structure"
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category "test"
+                     :title "Test task"
+                     :parent-id 888})]
+        (is (true? (:isError result)))
+        ;; Verify response structure
+        (is (map? result))
+        (is (contains? result :content))
+        (is (contains? result :isError))
+        (is (vector? (:content result)))
+        (is (= 2 (count (:content result))))
+        ;; Both content items should be text type
+        (is (every? #(= "text" (:type %)) (:content result)))
+        ;; Second content should be valid JSON with error/metadata
+        (let [data-text (:text (second (:content result)))
+              data (json/read-str data-text :key-fn keyword)]
+          (is (contains? data :error))
+          (is (string? (:error data)))
+          (is (contains? data :metadata))
+          (is (map? (:metadata data))))))))
+
 (deftest ^:integration complete-workflow-add-next-complete
   ;; Integration test for complete workflow: add task → select task → complete task
   (testing "complete workflow with EDN storage"
