@@ -17,8 +17,7 @@
   []
   (let [dir (io/file test-project-dir)]
     (when (fs/exists? dir)
-      (doseq [file (reverse (file-seq dir))]
-        (fs/delete file)))))
+      (fs/delete-tree dir))))
 
 (defn- setup-test-project
   []
