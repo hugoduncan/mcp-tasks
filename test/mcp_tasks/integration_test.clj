@@ -727,11 +727,11 @@
             (is (not (:isError read-response)))
             (is (string? text))
             (is (pos? (count text)))
-            (testing "content excludes frontmatter"
-              (is (not (str/includes? text "---"))
-                  "Should not contain frontmatter delimiters")
-              (is (not (str/includes? text "description:"))
-                  "Should not contain frontmatter fields"))
+            (testing "content includes frontmatter"
+              (is (str/includes? text "---")
+                  "Should contain frontmatter delimiters")
+              (is (str/includes? text "description:")
+                  "Should contain frontmatter fields"))
             (testing "content includes instructions"
               (is (str/includes? text "Analyze the task")))))
 

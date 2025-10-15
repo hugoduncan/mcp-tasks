@@ -366,7 +366,7 @@
   - :name \"<category> category instructions\"
   - :description from frontmatter or default
   - :mimeType \"text/markdown\"
-  - :text content after frontmatter stripped
+  - :text content with frontmatter preserved
 
   Missing files are gracefully skipped (not included in result).
 
@@ -377,11 +377,25 @@
     (->> categories
          (keep (fn [category]
                  (when-let [prompt-data (read-prompt-instructions base-dir category)]
-                   (let [description (or (get-in prompt-data [:metadata "description"])
-                                         (format "Execution instructions for %s category" category))]
+                   (let [metadata (:metadata prompt-data)
+                         content (:content prompt-data)
+                         description (or (get metadata "description")
+                                         (format "Execution instructions for %s category" category))
+                         ;; Reconstruct frontmatter if metadata exists
+                         frontmatter (when metadata
+                                       (let [lines (keep (fn [[k v]]
+                                                           (when v
+                                                             (str k ": " v)))
+                                                         metadata)]
+                                         (when (seq lines)
+                                           (str "---\n"
+                                                (str/join "\n" lines)
+                                                "\n---\n"))))
+                         ;; Include frontmatter in text if it exists
+                         text (str frontmatter content)]
                      {:uri (str "prompt://category-" category)
                       :name (str category " category instructions")
                       :description description
                       :mimeType "text/markdown"
-                      :text (:content prompt-data)}))))
+                      :text text}))))
          vec)))

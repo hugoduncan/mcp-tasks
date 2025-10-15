@@ -163,13 +163,13 @@
             (is (vector? (:contents read-response)))
             (is (pos? (count (:contents read-response))))))
 
-        (testing "category resources provide instructions without frontmatter"
+        (testing "category resources provide instructions with frontmatter"
           (let [read-response @(mcp-client/read-resource client "prompt://category-simple")
                 text (-> read-response :contents first :text)]
-            (is (not (str/includes? text "---"))
-                "Category resource should not contain frontmatter delimiters")
-            (is (not (str/includes? text "description:"))
-                "Category resource should not contain frontmatter fields")
+            (is (str/includes? text "---")
+                "Category resource should contain frontmatter delimiters")
+            (is (str/includes? text "description:")
+                "Category resource should contain frontmatter fields")
             (is (str/includes? text "Analyze the task")
                 "Category resource should contain execution instructions")))
 

@@ -525,14 +525,14 @@
             (is (contains? resource-uris "prompt://category-medium"))
             (is (contains? resource-uris "prompt://category-large"))))
 
-        (testing "excludes frontmatter from content"
+        (testing "includes frontmatter in content"
           (let [resources (sut/category-prompt-resources config)
                 simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
             (is (some? simple-resource))
-            (is (not (str/includes? (:text simple-resource) "---"))
-                "Content should not contain frontmatter delimiters")
-            (is (not (str/includes? (:text simple-resource) "description:"))
-                "Content should not contain frontmatter fields")))
+            (is (str/includes? (:text simple-resource) "---")
+                "Content should contain frontmatter delimiters")
+            (is (str/includes? (:text simple-resource) "description:")
+                "Content should contain frontmatter fields")))
 
         (testing "uses description from frontmatter"
           (let [resources (sut/category-prompt-resources config)
