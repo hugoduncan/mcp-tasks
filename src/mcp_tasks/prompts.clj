@@ -345,7 +345,7 @@
          (keep (fn [category]
                  (when-let [prompt-data (read-prompt-instructions base-dir category)]
                    (let [description (or (get-in prompt-data [:metadata "description"])
-                                         (str category " category instructions"))]
+                                         (format "Execution instructions for %s category" category))]
                      {:uri (str "prompt://category-" category)
                       :name (str category " category instructions")
                       :description description
