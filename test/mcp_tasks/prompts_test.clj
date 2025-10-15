@@ -505,45 +505,60 @@
   ;; Tests the generation of MCP resources for category prompt files.
   ;; Validates URI format, content extraction, and frontmatter handling.
   (testing "category-prompt-resources"
-    (testing "generates resources for existing categories"
-      (let [config {}
-            resources (sut/category-prompt-resources config)
-            resource-uris (set (map :uri resources))]
-        (is (seq resources) "Should return non-empty vector")
-        (is (contains? resource-uris "prompt://category-simple"))
-        (is (contains? resource-uris "prompt://category-medium"))
-        (is (contains? resource-uris "prompt://category-large"))))
+    (let [temp-dir (str (System/getProperty "java.io.tmpdir") "/mcp-tasks-test-" (System/currentTimeMillis))
+          prompts-dir (io/file temp-dir ".mcp-tasks" "prompts")
+          config {:base-dir temp-dir}]
+      (try
+        ;; Create test fixtures
+        (.mkdirs prompts-dir)
+        (spit (io/file prompts-dir "simple.md")
+              "---\ndescription: Execute simple tasks with basic workflow\n---\n\n## Simple Category Instructions\n\n- Analyze the task\n- Implement solution\n- Verify results")
+        (spit (io/file prompts-dir "medium.md")
+              "---\ndescription: Execute medium complexity tasks\n---\n\n## Medium Category Instructions\n\n- Deep analysis\n- Design approach\n- Implementation\n- Testing")
+        (spit (io/file prompts-dir "large.md")
+              "---\ndescription: Execute large tasks with detailed planning\n---\n\n## Large Category Instructions\n\n- Comprehensive analysis\n- Detailed design\n- Implementation\n- Testing\n- Documentation")
 
-    (testing "excludes frontmatter from content"
-      (let [config {}
-            resources (sut/category-prompt-resources config)
-            simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
-        (is (some? simple-resource))
-        (is (not (str/includes? (:text simple-resource) "---"))
-            "Content should not contain frontmatter delimiters")
-        (is (not (str/includes? (:text simple-resource) "description:"))
-            "Content should not contain frontmatter fields")))
+        (testing "generates resources for existing categories"
+          (let [resources (sut/category-prompt-resources config)
+                resource-uris (set (map :uri resources))]
+            (is (seq resources) "Should return non-empty vector")
+            (is (contains? resource-uris "prompt://category-simple"))
+            (is (contains? resource-uris "prompt://category-medium"))
+            (is (contains? resource-uris "prompt://category-large"))))
 
-    (testing "uses description from frontmatter"
-      (let [config {}
-            resources (sut/category-prompt-resources config)
-            simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
-        (is (some? simple-resource))
-        (is (= "Execute simple tasks with basic workflow" (:description simple-resource)))))
+        (testing "excludes frontmatter from content"
+          (let [resources (sut/category-prompt-resources config)
+                simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
+            (is (some? simple-resource))
+            (is (not (str/includes? (:text simple-resource) "---"))
+                "Content should not contain frontmatter delimiters")
+            (is (not (str/includes? (:text simple-resource) "description:"))
+                "Content should not contain frontmatter fields")))
 
-    (testing "handles missing files gracefully"
-      (let [config {}
-            resources (sut/category-prompt-resources config)
-            ;; Verify that only existing categories are included
-            resource-count (count resources)
-            known-categories ["simple" "medium" "large" "clarify-task"]]
-        ;; Should have at least the known categories
-        (is (>= resource-count (count known-categories)))
-        ;; All resources should have valid structure
-        (doseq [resource resources]
-          (is (string? (:uri resource)))
-          (is (str/starts-with? (:uri resource) "prompt://category-"))
-          (is (string? (:name resource)))
-          (is (string? (:description resource)))
-          (is (= "text/plain" (:mimeType resource)))
-          (is (string? (:text resource))))))))
+        (testing "uses description from frontmatter"
+          (let [resources (sut/category-prompt-resources config)
+                simple-resource (first (filter #(= (:uri %) "prompt://category-simple") resources))]
+            (is (some? simple-resource))
+            (is (= "Execute simple tasks with basic workflow" (:description simple-resource)))))
+
+        (testing "handles missing files gracefully"
+          (let [resources (sut/category-prompt-resources config)
+                resource-count (count resources)
+                known-categories ["simple" "medium" "large"]]
+            (is (>= resource-count (count known-categories)))
+            (doseq [resource resources]
+              (is (string? (:uri resource)))
+              (is (str/starts-with? (:uri resource) "prompt://category-"))
+              (is (string? (:name resource)))
+              (is (string? (:description resource)))
+              (is (= "text/plain" (:mimeType resource)))
+              (is (string? (:text resource))))))
+
+        (finally
+          ;; Cleanup
+          (when (.exists (io/file temp-dir))
+            (doseq [f (file-seq (io/file temp-dir))]
+              (when (.isFile f)
+                (.delete f)))
+            (doseq [f (reverse (file-seq (io/file temp-dir)))]
+              (.delete f))))))))
