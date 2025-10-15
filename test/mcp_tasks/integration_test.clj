@@ -572,6 +572,42 @@
             (mcp-client/close! client)
             ((:stop server))))))))
 
+(deftest ^:integ add-task-parent-id-validation-with-file-io-test
+  ;; Tests parent-id validation with actual file I/O and state management.
+  ;; Verifies that attempting to add a task with non-existent parent-id fails
+  ;; properly without modifying the tasks file.
+  (testing "add-task tool with parent-id validation"
+    (testing "verifies file state is unchanged after validation error"
+      (write-config-file "{:use-git? false}")
+
+      ;; Create a tasks.ednl file with a real task
+      (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            initial-task-content "{:id 1 :title \"Existing task\" :description \"Test\" :design \"\" :category \"simple\" :status :open :type :task :meta {} :relations []}\n"]
+        (spit tasks-file initial-task-content)
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Verify initial file content
+            (is (= initial-task-content (slurp tasks-file)))
+
+            ;; Attempt to add task with non-existent parent-id
+            (let [result @(mcp-client/call-tool client
+                                                "add-task"
+                                                {:category "simple"
+                                                 :title "Child task"
+                                                 :parent-id 99999})]
+              ;; Verify error response
+              (is (:isError result))
+              (is (re-find #"Parent story not found"
+                           (-> result :content first :text)))
+
+              ;; Verify file was not modified
+              (is (= initial-task-content (slurp tasks-file))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))))
+
 (deftest ^:integ update-task-tool-test
   ;; Tests that update-task tool can update task fields and persist changes to tasks.ednl.
   (testing "update-task tool"
