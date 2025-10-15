@@ -710,7 +710,7 @@
             (doseq [resource category-resources]
               (is (string? (:name resource)))
               (is (string? (:uri resource)))
-              (is (= "text/plain" (:mimeType resource)))
+              (is (= "text/markdown" (:mimeType resource)))
               (is (string? (:description resource))))))
 
         (testing "can read category prompt resource content"

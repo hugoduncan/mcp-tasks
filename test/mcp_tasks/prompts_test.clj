@@ -551,7 +551,7 @@
               (is (str/starts-with? (:uri resource) "prompt://category-"))
               (is (string? (:name resource)))
               (is (string? (:description resource)))
-              (is (= "text/plain" (:mimeType resource)))
+              (is (= "text/markdown" (:mimeType resource)))
               (is (string? (:text resource))))))
 
         (finally

@@ -360,7 +360,7 @@
   - :uri \"prompt://category-<category>\"
   - :name \"<category> category instructions\"
   - :description from frontmatter or default
-  - :mimeType \"text/plain\"
+  - :mimeType \"text/markdown\"
   - :text content after frontmatter stripped
 
   Missing files are gracefully skipped (not included in result).
@@ -377,6 +377,6 @@
                      {:uri (str "prompt://category-" category)
                       :name (str category " category instructions")
                       :description description
-                      :mimeType "text/plain"
+                      :mimeType "text/markdown"
                       :text (:content prompt-data)}))))
          vec)))

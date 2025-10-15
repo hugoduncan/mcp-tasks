@@ -179,7 +179,7 @@
                 resources (:resources resources-response)
                 simple-resource (first (filter #(= (:uri %) "prompt://category-simple")
                                                resources))]
-            (is (= "text/plain" (:mimeType simple-resource)))))
+            (is (= "text/markdown" (:mimeType simple-resource)))))
 
         (testing "each category resource has distinct content"
           (let [simple-response @(mcp-client/read-resource client "prompt://category-simple")
