@@ -556,6 +556,46 @@
       :required ["category" "title"]}
      :implementation (partial add-task-impl config)}))
 
+(defn- extract-provided-updates
+  "Extract and convert provided fields from arguments map.
+
+  Returns map with only the fields that were actually provided in arguments,
+  with appropriate type conversions applied.
+
+  Type conversions:
+  - :status, :type - string to keyword
+  - :meta - nil becomes {}
+  - :relations - nil becomes [], structure keys converted from strings to keywords"
+  [arguments]
+  (let [;; Define conversion functions for each field type
+        convert-relations (fn [relations]
+                            (if relations
+                              (mapv (fn [rel]
+                                      {:id (get rel "id")
+                                       :relates-to (get rel "relates-to")
+                                       :as-type (keyword (get rel "as-type"))})
+                                    relations)
+                              []))
+        conversions {:status keyword
+                     :type keyword
+                     :meta #(or % {})
+                     :relations convert-relations}
+
+        ;; List of all updatable fields
+        updatable-fields [:title :description :design :parent-id
+                          :status :category :type :meta :relations]]
+
+    ;; Build updates map by checking each field for presence
+    (reduce (fn [updates field-key]
+              (if (contains? arguments field-key)
+                (let [value (get arguments field-key)
+                      converter (get conversions field-key identity)
+                      converted-value (converter value)]
+                  (assoc updates field-key converted-value))
+                updates))
+            {}
+            updatable-fields)))
+
 (defn- update-task-impl
   "Implementation of update-task tool.
 
@@ -563,39 +603,14 @@
   Supports all mutable task fields with proper nil handling."
   [config _context arguments]
   (try
-    (let [{:keys [task-id title description design parent-id status category type meta relations]} arguments
+    (let [task-id (:task-id arguments)
           tasks-file (prepare-task-file config)]
 
       ;; Load tasks
       (tasks/load-tasks! tasks-file)
 
-      (let [provided-keys (set (keys arguments))
-
-            ;; Convert string enums to keywords
-            status-kw (when (contains? provided-keys :status) (keyword status))
-            type-kw (when (contains? provided-keys :type) (keyword type))
-
-            ;; Convert relations: string keys to keyword keys and :as-type to keyword
-            relations-converted (when (contains? provided-keys :relations)
-                                  (when relations
-                                    (mapv (fn [rel]
-                                            {:id (get rel "id")
-                                             :relates-to (get rel "relates-to")
-                                             :as-type (keyword (get rel "as-type"))})
-                                          relations)))
-
-            ;; Build updates map from provided fields only
-            ;; For meta and relations, nil means "clear" (set to empty collection)
-            updates (cond-> {}
-                      (contains? provided-keys :title) (assoc :title title)
-                      (contains? provided-keys :description) (assoc :description description)
-                      (contains? provided-keys :design) (assoc :design design)
-                      (contains? provided-keys :parent-id) (assoc :parent-id parent-id)
-                      (contains? provided-keys :status) (assoc :status status-kw)
-                      (contains? provided-keys :category) (assoc :category category)
-                      (contains? provided-keys :type) (assoc :type type-kw)
-                      (contains? provided-keys :meta) (assoc :meta (or meta {}))
-                      (contains? provided-keys :relations) (assoc :relations (or relations-converted [])))]
+      (let [;; Extract provided fields with conversions applied
+            updates (extract-provided-updates arguments)]
 
         ;; Validate at least one field provided
         (when (empty? updates)
@@ -604,9 +619,9 @@
         ;; Tool-level validation: parent-id exists if provided and non-nil
         (cond
           ;; Check parent-id existence
-          (and (contains? provided-keys :parent-id)
-               parent-id
-               (not (tasks/get-task parent-id)))
+          (and (contains? updates :parent-id)
+               (:parent-id updates)
+               (not (tasks/get-task (:parent-id updates))))
           {:content [{:type "text"
                       :text "Parent task not found"}
                      {:type "text"
@@ -614,7 +629,7 @@
                               {:error "Parent task not found"
                                :metadata {:attempted-operation "update-task"
                                           :task-id task-id
-                                          :parent-id parent-id
+                                          :parent-id (:parent-id updates)
                                           :file tasks-file}})}]
            :isError true}
 
