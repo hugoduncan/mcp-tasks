@@ -296,6 +296,7 @@
           (is (contains? (:prompts server-config) "create-story-tasks"))
           (is (contains? (:prompts server-config) "execute-story-task"))
           (is (contains? (:prompts server-config) "review-story-implementation"))
+          (is (contains? (:prompts server-config) "create-story-pr"))
           (is (map? (get (:prompts server-config) "refine-story")))
           (is (= "refine-story" (:name (get (:prompts server-config) "refine-story"))))
           (finally
@@ -345,6 +346,34 @@
             (let [[story-name-arg context-arg] (:arguments prompt)]
               (is (= "story-specification" (:name story-name-arg)))
               (is (false? (:required story-name-arg)))
+              (is (= "additional-context" (:name context-arg)))
+              (is (false? (:required context-arg)))))
+          (finally
+            (.delete (io/file prompts-dir "simple.md"))
+            (.delete prompts-dir)
+            (.delete mcp-tasks-dir)
+            (.delete temp-dir)))))
+
+    (testing "create-story-pr prompt has correct arguments"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (.delete temp-dir)
+            _ (.mkdirs temp-dir)
+            mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+            prompts-dir (io/file mcp-tasks-dir "prompts")
+            _ (.mkdirs prompts-dir)
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
+            config {:use-git? false :base-dir (.getPath temp-dir)}
+            transport {:type :in-memory}
+            server-config (sut/create-server-config config transport)]
+        (try
+          (let [prompt (get (:prompts server-config) "create-story-pr")]
+            (is (map? prompt))
+            (is (= "create-story-pr" (:name prompt)))
+            (is (vector? (:arguments prompt)))
+            (is (= 2 (count (:arguments prompt))))
+            (let [[story-spec-arg context-arg] (:arguments prompt)]
+              (is (= "story-specification" (:name story-spec-arg)))
+              (is (false? (:required story-spec-arg)))
               (is (= "additional-context" (:name context-arg)))
               (is (false? (:required context-arg)))))
           (finally
