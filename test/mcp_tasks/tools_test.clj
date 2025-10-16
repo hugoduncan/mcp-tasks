@@ -1771,9 +1771,17 @@
                     nil
                     {:task-id 2})]
         (is (false? (:isError result)))
-        ;; Verify response structure (1 item without git)
-        (is (= 1 (count (:content result))))
+        ;; Verify response structure (2 items without git)
+        (is (= 2 (count (:content result))))
         (is (= "Task 2 deleted successfully" (get-in result [:content 0 :text])))
+        ;; Second content item: deleted task data
+        (let [deleted-data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (contains? deleted-data :deleted))
+          (is (= 2 (:id (:deleted deleted-data))))
+          (is (= "deleted" (:status (:deleted deleted-data))))
+          (is (contains? deleted-data :metadata))
+          (is (= 1 (get-in deleted-data [:metadata :count])))
+          (is (= "deleted" (get-in deleted-data [:metadata :status]))))
         ;; Verify task 2 is in complete.ednl with :status :deleted
         (let [complete-tasks (read-ednl-test-file "complete.ednl")]
           (is (= 1 (count complete-tasks)))
@@ -2014,12 +2022,16 @@
           (is (= "text" (:type text-content)))
           (is (str/includes? (:text text-content) "Task 1 deleted")))
 
-        ;; Second content item: modified files
-        (let [files-content (second (:content result))
-              files-data (json/read-str (:text files-content) :key-fn keyword)]
-          (is (= "text" (:type files-content)))
-          (is (contains? files-data :modified-files))
-          (is (= 2 (count (:modified-files files-data)))))
+        ;; Second content item: deleted task data
+        (let [deleted-content (second (:content result))
+              deleted-data (json/read-str (:text deleted-content) :key-fn keyword)]
+          (is (= "text" (:type deleted-content)))
+          (is (contains? deleted-data :deleted))
+          (is (= 1 (:id (:deleted deleted-data))))
+          (is (= "deleted" (:status (:deleted deleted-data))))
+          (is (contains? deleted-data :metadata))
+          (is (= 1 (get-in deleted-data [:metadata :count])))
+          (is (= "deleted" (get-in deleted-data [:metadata :status]))))
 
         ;; Third content item: git status
         (let [git-content (nth (:content result) 2)

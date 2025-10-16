@@ -602,8 +602,8 @@
   If both are provided, they must refer to the same task.
 
   Returns:
-  - Git mode enabled: Three text items (deletion message + JSON with :modified-files + JSON with git status)
-  - Git mode disabled: Single text item (deletion message only)"
+  - Git mode enabled: Three text items (deletion message + JSON with deleted task data + JSON with git status)
+  - Git mode disabled: Two text items (deletion message + JSON with deleted task data)"
   [config _context {:keys [task-id title-pattern]}]
   ;; Validate at least one identifier provided
   (if (and (nil? task-id) (nil? title-pattern))
@@ -730,8 +730,30 @@
                                                             (:title task)
                                                             modified-files
                                                             "Delete"))]
-                      ;; Build response with git integration
-                      (build-completion-response msg-text modified-files use-git? git-result))))))))))))
+                      ;; Build response with deleted task data
+                      (if use-git?
+                        {:content [{:type "text"
+                                    :text msg-text}
+                                   {:type "text"
+                                    :text (json/write-str {:deleted updated-task
+                                                           :metadata {:count 1
+                                                                      :status "deleted"}})}
+                                   {:type "text"
+                                    :text (json/write-str
+                                            (cond-> {:git-status (if (:success git-result)
+                                                                   "success"
+                                                                   "error")
+                                                     :git-commit-sha (:commit-sha git-result)}
+                                              (:error git-result)
+                                              (assoc :git-error (:error git-result))))}]
+                         :isError false}
+                        {:content [{:type "text"
+                                    :text msg-text}
+                                   {:type "text"
+                                    :text (json/write-str {:deleted updated-task
+                                                           :metadata {:count 1
+                                                                      :status "deleted"}})}]
+                         :isError false}))))))))))))
 
 (defn delete-task-tool
   "Tool to delete a task by marking it :status :deleted and moving to complete.ednl.
