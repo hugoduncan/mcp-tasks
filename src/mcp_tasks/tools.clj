@@ -216,6 +216,182 @@
          :validation-errors (pr-str validation-result)
          :file tasks-file}))))
 
+(defn- setup-completion-context
+  "Prepares common context for task completion operations.
+  
+  Returns either:
+  - Error response map (with :isError true) if setup fails
+  - Context map with :use-git?, :tasks-file, :complete-file, :tasks-rel-path, :complete-rel-path"
+  [config]
+  (let [use-git? (:use-git? config)
+        tasks-path (path-helper/task-path config ["tasks.ednl"])
+        complete-path (path-helper/task-path config ["complete.ednl"])
+        tasks-file (:absolute tasks-path)
+        complete-file (:absolute complete-path)
+        tasks-rel-path (:relative tasks-path)
+        complete-rel-path (:relative complete-path)]
+
+    (if-not (file-exists? tasks-file)
+      (build-tool-error-response
+        "Tasks file not found"
+        "complete-task"
+        {:file tasks-file})
+
+      (do
+        (tasks/load-tasks! tasks-file :complete-file complete-file)
+        {:use-git? use-git?
+         :tasks-file tasks-file
+         :complete-file complete-file
+         :tasks-rel-path tasks-rel-path
+         :complete-rel-path complete-rel-path}))))
+
+(defn- complete-regular-task-
+  "Completes a regular task by marking it :status :closed and moving to complete.ednl.
+  
+  Parameters:
+  - config: Configuration map
+  - context: Context map from setup-completion-context
+  - task: Task map to complete
+  - completion-comment: Optional comment to append to task description
+  
+  Returns completion response map."
+  [config context task completion-comment]
+  (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context]
+    (tasks/mark-complete (:id task) completion-comment)
+    (tasks/move-task! (:id task) tasks-file complete-file)
+
+    (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
+          modified-files [tasks-rel-path complete-rel-path]
+          git-result (when use-git?
+                       (commit-task-changes (:base-dir config)
+                                            (:id task)
+                                            (:title task)
+                                            modified-files))]
+      (build-completion-response msg-text modified-files use-git? git-result))))
+
+(defn- complete-child-task-
+  "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
+  
+  Parameters:
+  - config: Configuration map
+  - context: Context map from setup-completion-context
+  - task: Task map to complete (must have :parent-id)
+  - completion-comment: Optional comment to append to task description
+  
+  Returns either:
+  - Error response if parent validation fails
+  - Completion response map"
+  [config context task completion-comment]
+  (let [{:keys [use-git? tasks-file tasks-rel-path]} context
+        parent (tasks/get-task (:parent-id task))]
+    (cond
+      (not parent)
+      (build-tool-error-response
+        "Parent task not found"
+        "complete-task"
+        {:task-id (:id task)
+         :parent-id (:parent-id task)
+         :file tasks-file})
+
+      (not= (:type parent) :story)
+      (build-tool-error-response
+        "Parent task is not a story"
+        "complete-task"
+        {:task-id (:id task)
+         :parent-id (:parent-id task)
+         :parent-type (:type parent)
+         :file tasks-file})
+
+      :else
+      (do
+        (tasks/mark-complete (:id task) completion-comment)
+        (tasks/save-tasks! tasks-file)
+
+        (let [msg-text (str "Task " (:id task) " completed")
+              modified-files [tasks-rel-path]
+              git-result (when use-git?
+                           (commit-task-changes (:base-dir config)
+                                                (:id task)
+                                                (:title task)
+                                                modified-files))]
+          (build-completion-response msg-text modified-files use-git? git-result))))))
+
+(defn- complete-story-task-
+  "Completes a story by validating all children are :status :closed, then atomically
+  archiving the story and all its children to complete.ednl.
+  
+  Parameters:
+  - config: Configuration map
+  - context: Context map from setup-completion-context
+  - task: Story task map to complete (must have :type :story)
+  - completion-comment: Optional comment to append to task description
+  
+  Returns either:
+  - Error response if children are not all closed
+  - Completion response map"
+  [config context task completion-comment]
+  (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context
+        children (tasks/get-children (:id task))
+        unclosed-children (filterv #(not= :closed (:status %)) children)]
+    (if (seq unclosed-children)
+      ;; Error: unclosed children exist
+      (build-tool-error-response
+        (str "Cannot complete story: " (count unclosed-children)
+             " child task" (when (> (count unclosed-children) 1) "s")
+             " still " (if (= 1 (count unclosed-children)) "is" "are")
+             " not closed")
+        "complete-task"
+        {:task-id (:id task)
+         :title (:title task)
+         :unclosed-children (mapv #(select-keys % [:id :title :status]) unclosed-children)
+         :file tasks-file})
+
+      ;; All children closed - proceed with atomic archival
+      (do
+        ;; Mark story as complete in memory
+        (tasks/mark-complete (:id task) completion-comment)
+
+        ;; Move story and all children to complete.ednl atomically
+        (let [all-ids (cons (:id task) (mapv :id children))
+              child-count (count children)]
+          (tasks/move-tasks! all-ids tasks-file complete-file)
+
+          ;; Prepare response
+          (let [msg-text (str "Story " (:id task) " completed and archived"
+                              (when (pos? child-count)
+                                (str " with " child-count " child task"
+                                     (when (> child-count 1) "s"))))
+                modified-files [tasks-rel-path complete-rel-path]
+                ;; Commit changes if git mode is enabled
+                commit-msg (str "Complete story #" (:id task) ": " (:title task)
+                                (when (pos? child-count)
+                                  (str " (with " child-count " task"
+                                       (when (> child-count 1) "s") ")")))
+                git-result (when use-git?
+                             ;; Use custom commit message for stories
+                             (try
+                               (let [git-dir (str (:base-dir config) "/.mcp-tasks")]
+                                 ;; Stage modified files
+                                 (apply sh/sh "git" "-C" git-dir "add" modified-files)
+                                 ;; Commit changes
+                                 (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
+                                   (if (zero? (:exit commit-result))
+                                     ;; Success - get commit SHA
+                                     (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
+                                           sha (str/trim (:out sha-result))]
+                                       {:success true
+                                        :commit-sha sha
+                                        :error nil})
+                                     ;; Commit failed
+                                     {:success false
+                                      :commit-sha nil
+                                      :error (str/trim (:err commit-result))})))
+                               (catch Exception e
+                                 {:success false
+                                  :commit-sha nil
+                                  :error (.getMessage e)})))]
+            (build-completion-response msg-text modified-files use-git? git-result)))))))
+
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
@@ -242,229 +418,112 @@
       {:task-id task-id
        :title title})
 
-    (let [use-git? (:use-git? config)
-          tasks-path (path-helper/task-path config ["tasks.ednl"])
-          complete-path (path-helper/task-path config ["complete.ednl"])
-          tasks-file (:absolute tasks-path)
-          complete-file (:absolute complete-path)
-          tasks-rel-path (:relative tasks-path)
-          complete-rel-path (:relative complete-path)]
+    ;; Setup common context and load tasks
+    (let [context (setup-completion-context config)]
+      (if (:isError context)
+        context
 
-      ;; Validate tasks file exists
-      (if-not (file-exists? tasks-file)
-        (build-tool-error-response
-          "Tasks file not found"
-          "complete-task"
-          {:file tasks-file})
+        (let [{:keys [tasks-file]} context
+              ;; Find task by ID or exact title match
+              task-by-id (when task-id (tasks/get-task task-id))
+              tasks-by-title (when title (tasks/find-by-title title))
 
-        (do
-          (tasks/load-tasks! tasks-file :complete-file complete-file)
+              ;; Determine which task to complete
+              task-result (cond
+                            ;; Both provided - verify they match
+                            (and task-id title)
+                            (cond
+                              (nil? task-by-id)
+                              (build-tool-error-response
+                                "Task ID not found"
+                                "complete-task"
+                                {:task-id task-id
+                                 :file tasks-file})
 
-          ;; Find task by ID or exact title match
-          (let [task-by-id (when task-id (tasks/get-task task-id))
-                tasks-by-title (when title (tasks/find-by-title title))
+                              (empty? tasks-by-title)
+                              (build-tool-error-response
+                                "No task found with exact title match"
+                                "complete-task"
+                                {:title title
+                                 :file tasks-file})
 
-                ;; Determine which task to complete
-                task-result (cond
-                              ;; Both provided - verify they match
-                              (and task-id title)
-                              (cond
-                                (nil? task-by-id)
+                              (not (some #(= (:id %) task-id) tasks-by-title))
+                              (build-tool-error-response
+                                "Task ID and task text do not refer to the same task"
+                                "complete-task"
+                                {:task-id task-id
+                                 :title title
+                                 :task-by-id task-by-id
+                                 :tasks-by-title (mapv :id tasks-by-title)
+                                 :file tasks-file})
+
+                              :else task-by-id)
+
+                            ;; Only ID provided
+                            task-id
+                            (or task-by-id
                                 (build-tool-error-response
                                   "Task ID not found"
                                   "complete-task"
                                   {:task-id task-id
-                                   :file tasks-file})
+                                   :file tasks-file}))
 
-                                (empty? tasks-by-title)
-                                (build-tool-error-response
-                                  "No task found with exact title match"
-                                  "complete-task"
-                                  {:title title
-                                   :file tasks-file})
-
-                                (not (some #(= (:id %) task-id) tasks-by-title))
-                                (build-tool-error-response
-                                  "Task ID and task text do not refer to the same task"
-                                  "complete-task"
-                                  {:task-id task-id
-                                   :title title
-                                   :task-by-id task-by-id
-                                   :tasks-by-title (mapv :id tasks-by-title)
-                                   :file tasks-file})
-
-                                :else task-by-id)
-
-                              ;; Only ID provided
-                              task-id
-                              (or task-by-id
-                                  (build-tool-error-response
-                                    "Task ID not found"
-                                    "complete-task"
-                                    {:task-id task-id
-                                     :file tasks-file}))
-
-                              ;; Only title provided
-                              title
-                              (cond
-                                (empty? tasks-by-title)
-                                (build-tool-error-response
-                                  "No task found with exact title match"
-                                  "complete-task"
-                                  {:title title
-                                   :file tasks-file})
-
-                                (> (count tasks-by-title) 1)
-                                (build-tool-error-response
-                                  "Multiple tasks found with same title - use task-id to disambiguate"
-                                  "complete-task"
-                                  {:title title
-                                   :matching-task-ids (mapv :id tasks-by-title)
-                                   :matching-tasks tasks-by-title
-                                   :file tasks-file})
-
-                                :else (first tasks-by-title)))]
-
-            ;; Check if task-result is an error response
-            (if (:isError task-result)
-              task-result
-
-              ;; task-result is the actual task - proceed with validations
-              (let [task task-result]
-                ;; Verify category if provided (for backwards compatibility)
-                (if (and category (not= (:category task) category))
-                  (build-tool-error-response
-                    "Task category does not match"
-                    "complete-task"
-                    {:expected-category category
-                     :actual-category (:category task)
-                     :task-id (:id task)
-                     :file tasks-file})
-
-                  ;; Verify task is not already closed
-                  (if (= (:status task) :closed)
-                    (build-tool-error-response
-                      "Task is already closed"
-                      "complete-task"
-                      {:task-id (:id task)
-                       :title (:title task)
-                       :file tasks-file})
-
-                    ;; All validations passed - complete the task
-                    (let [is-child? (some? (:parent-id task))
-                          is-story? (= (:type task) :story)]
-                      (cond
-                        ;; Story completion: validate children and archive atomically
-                        is-story?
-                        (let [children (tasks/get-children (:id task))
-                              unclosed-children (filterv #(not= :closed (:status %)) children)]
-                          (if (seq unclosed-children)
-                            ;; Error: unclosed children exist
-                            (build-tool-error-response
-                              (str "Cannot complete story: " (count unclosed-children)
-                                   " child task" (when (> (count unclosed-children) 1) "s")
-                                   " still " (if (= 1 (count unclosed-children)) "is" "are")
-                                   " not closed")
-                              "complete-task"
-                              {:task-id (:id task)
-                               :title (:title task)
-                               :unclosed-children (mapv #(select-keys % [:id :title :status]) unclosed-children)
-                               :file tasks-file})
-
-                            ;; All children closed - proceed with atomic archival
-                            (do
-                              ;; Mark story as complete in memory
-                              (tasks/mark-complete (:id task) completion-comment)
-
-                              ;; Move story and all children to complete.ednl atomically
-                              (let [all-ids (cons (:id task) (mapv :id children))
-                                    child-count (count children)]
-                                (tasks/move-tasks! all-ids tasks-file complete-file)
-
-                                ;; Prepare response
-                                (let [msg-text (str "Story " (:id task) " completed and archived"
-                                                    (when (pos? child-count)
-                                                      (str " with " child-count " child task"
-                                                           (when (> child-count 1) "s"))))
-                                      modified-files [tasks-rel-path complete-rel-path]
-                                      ;; Commit changes if git mode is enabled
-                                      commit-msg (str "Complete story #" (:id task) ": " (:title task)
-                                                      (when (pos? child-count)
-                                                        (str " (with " child-count " task"
-                                                             (when (> child-count 1) "s") ")")))
-                                      git-result (when use-git?
-                                                   ;; Use custom commit message for stories
-                                                   (try
-                                                     (let [git-dir (str (:base-dir config) "/.mcp-tasks")]
-                                                       ;; Stage modified files
-                                                       (apply sh/sh "git" "-C" git-dir "add" modified-files)
-                                                       ;; Commit changes
-                                                       (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
-                                                         (if (zero? (:exit commit-result))
-                                                           ;; Success - get commit SHA
-                                                           (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
-                                                                 sha (str/trim (:out sha-result))]
-                                                             {:success true
-                                                              :commit-sha sha
-                                                              :error nil})
-                                                           ;; Commit failed
-                                                           {:success false
-                                                            :commit-sha nil
-                                                            :error (str/trim (:err commit-result))})))
-                                                     (catch Exception e
-                                                       {:success false
-                                                        :commit-sha nil
-                                                        :error (.getMessage e)})))]
-                                  (build-completion-response msg-text modified-files use-git? git-result))))))
-
-                        ;; Story child completion: keep in tasks.ednl
-                        is-child?
-                        (let [parent (tasks/get-task (:parent-id task))]
-                          (if-not parent
-                            (build-tool-error-response
-                              "Parent task not found"
-                              "complete-task"
-                              {:task-id (:id task)
-                               :parent-id (:parent-id task)
-                               :file tasks-file})
-
-                            (if (not= (:type parent) :story)
+                            ;; Only title provided
+                            title
+                            (cond
+                              (empty? tasks-by-title)
                               (build-tool-error-response
-                                "Parent task is not a story"
+                                "No task found with exact title match"
                                 "complete-task"
-                                {:task-id (:id task)
-                                 :parent-id (:parent-id task)
-                                 :parent-type (:type parent)
+                                {:title title
                                  :file tasks-file})
 
-                              ;; Validation passed - proceed with existing completion logic
-                              (do
-                                (tasks/mark-complete (:id task) completion-comment)
-                                (tasks/save-tasks! tasks-file)
+                              (> (count tasks-by-title) 1)
+                              (build-tool-error-response
+                                "Multiple tasks found with same title - use task-id to disambiguate"
+                                "complete-task"
+                                {:title title
+                                 :matching-task-ids (mapv :id tasks-by-title)
+                                 :matching-tasks tasks-by-title
+                                 :file tasks-file})
 
-                                (let [msg-text (str "Task " (:id task) " completed")
-                                      modified-files [tasks-rel-path]
-                                      git-result (when use-git?
-                                                   (commit-task-changes (:base-dir config)
-                                                                        (:id task)
-                                                                        (:title task)
-                                                                        modified-files))]
-                                  (build-completion-response msg-text modified-files use-git? git-result))))))
+                              :else (first tasks-by-title)))]
 
-                        ;; Regular task completion: move to complete.ednl
-                        :else
-                        (do
-                          (tasks/mark-complete (:id task) completion-comment)
-                          (tasks/move-task! (:id task) tasks-file complete-file)
+          ;; Check if task-result is an error response
+          (if (:isError task-result)
+            task-result
 
-                          (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
-                                modified-files [tasks-rel-path complete-rel-path]
-                                git-result (when use-git?
-                                             (commit-task-changes (:base-dir config)
-                                                                  (:id task)
-                                                                  (:title task)
-                                                                  modified-files))]
-                            (build-completion-response msg-text modified-files use-git? git-result)))))))))))))))
+            ;; task-result is the actual task - proceed with validations
+            (let [task task-result]
+              ;; Verify category if provided (for backwards compatibility)
+              (cond
+                (and category (not= (:category task) category))
+                (build-tool-error-response
+                  "Task category does not match"
+                  "complete-task"
+                  {:expected-category category
+                   :actual-category (:category task)
+                   :task-id (:id task)
+                   :file tasks-file})
+
+                ;; Verify task is not already closed
+                (= (:status task) :closed)
+                (build-tool-error-response
+                  "Task is already closed"
+                  "complete-task"
+                  {:task-id (:id task)
+                   :title (:title task)
+                   :file tasks-file})
+
+                ;; All validations passed - dispatch to appropriate completion function
+                (= (:type task) :story)
+                (complete-story-task- config context task completion-comment)
+
+                (some? (:parent-id task))
+                (complete-child-task- config context task completion-comment)
+
+                :else
+                (complete-regular-task- config context task completion-comment)))))))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
