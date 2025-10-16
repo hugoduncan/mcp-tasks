@@ -30,7 +30,7 @@
 
 **Relation**: A typed connection between tasks (e.g., `:blocked-by`, `:related`, `:discovered-during`). Stored in a task's `:relations` vector.
 
-**Resource URI**: A unique identifier for an MCP resource, such as `prompt://next-simple` or `prompt://refine-story`.
+**Resource URI**: A unique identifier for an MCP resource, such as `prompt://next-simple` or `prompt://refine-task`.
 
 **Task**: An EDN map representing a unit of work with fields defined by the Task schema in `src/mcp_tasks/schema.clj`.
 

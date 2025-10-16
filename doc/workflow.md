@@ -230,7 +230,7 @@ Implement a complete user authentication system with JWT tokens.
 Refine a rough story idea into a detailed specification:
 
 ```
-/mcp-tasks:refine-story <story-name>
+/mcp-tasks:refine-task <story-name>
 ```
 
 **Process:**
@@ -241,7 +241,7 @@ Refine a rough story idea into a detailed specification:
 
 **Example interaction:**
 ```
-User: /mcp-tasks:refine-story user-auth
+User: /mcp-tasks:refine-task user-auth
 
 Agent: I've found your user-auth story in tasks.ednl. Let me ask some clarifying questions:
 1. Which JWT library should we use?
@@ -403,7 +403,7 @@ echo '{:use-git? true :story-branch-management? true}' > .mcp-tasks.edn
 #  :category "large" :design "" :meta {} :relations []}
 
 # 2. Refine the story
-# Run: /mcp-tasks:refine-story "User Authentication"
+# Run: /mcp-tasks:refine-task "User Authentication"
 # [Interactive refinement with agent]
 
 # 3. Break into tasks
@@ -434,7 +434,7 @@ git merge user-authentication
 Override the default story prompts by creating files in `.mcp-tasks/story/prompts/`:
 
 **Available prompts to override:**
-- `refine-story.md` - Story refinement instructions
+- `refine-task.md` - Task refinement instructions
 - `create-story-tasks.md` - Task breakdown instructions
 - `execute-story-task.md` - Task execution workflow
 
@@ -522,7 +522,7 @@ Story prompts and category prompts serve different purposes:
 - Guide story-level operations (refine, break down, execute)
 - Handle the story workflow and task distribution
 - Route tasks to appropriate categories
-- Three prompts: refine-story, create-story-tasks, execute-story-task
+- Three prompts: refine-task, create-story-tasks, execute-story-task
 
 **Category prompts** (`.mcp-tasks/prompts/<category>.md`):
 - Define how to execute individual tasks within a category
@@ -670,9 +670,9 @@ In git mode, use the modified-files output to commit the task tracking change.
 
 ### Story Prompts
 
-#### refine-story
+#### refine-task
 
-Interactively refine a story with user feedback.
+Interactively refine a task with user feedback.
 
 **Arguments:**
 - `story-name` - The title or pattern matching the story to refine
@@ -701,10 +701,10 @@ Interactively refine a story with user feedback.
 
 **Usage example:**
 ```
-/mcp-tasks:refine-story "User Authentication"
+/mcp-tasks:refine-task "User Authentication"
 
-The agent will find the User Authentication story in tasks.ednl, analyze it,
-and guide you through an interactive refinement process to improve the story's
+The agent will find the User Authentication task in tasks.ednl, analyze it,
+and guide you through an interactive refinement process to improve the task's
 clarity and completeness.
 ```
 

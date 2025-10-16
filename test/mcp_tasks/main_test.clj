@@ -292,13 +292,12 @@
             server-config (sut/create-server-config config transport)]
         (try
           (is (map? (:prompts server-config)))
-          (is (contains? (:prompts server-config) "refine-story"))
           (is (contains? (:prompts server-config) "create-story-tasks"))
           (is (contains? (:prompts server-config) "execute-story-task"))
           (is (contains? (:prompts server-config) "review-story-implementation"))
           (is (contains? (:prompts server-config) "create-story-pr"))
-          (is (map? (get (:prompts server-config) "refine-story")))
-          (is (= "refine-story" (:name (get (:prompts server-config) "refine-story"))))
+          (is (map? (get (:prompts server-config) "create-story-tasks")))
+          (is (= "create-story-tasks" (:name (get (:prompts server-config) "create-story-tasks"))))
           (finally
             (.delete (io/file prompts-dir "simple.md"))
             (.delete prompts-dir)
@@ -319,7 +318,7 @@
         (try
           (is (map? (:prompts server-config)))
           (is (contains? (:prompts server-config) "next-simple"))
-          (is (contains? (:prompts server-config) "refine-story"))
+          (is (contains? (:prompts server-config) "create-story-tasks"))
           (finally
             (.delete (io/file prompts-dir "simple.md"))
             (.delete prompts-dir)

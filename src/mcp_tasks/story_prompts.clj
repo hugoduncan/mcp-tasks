@@ -7,10 +7,6 @@
   (:require
     [clojure.java.io :as io]))
 
-(def refine-story
-  "Interactively refine a story document with user feedback."
-  (slurp (io/resource "story/prompts/refine-story.md")))
-
 (def create-story-tasks
   "Break down a story into categorized, executable tasks."
   (slurp (io/resource "story/prompts/create-story-tasks.md")))

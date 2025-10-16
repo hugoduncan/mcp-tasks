@@ -11,7 +11,7 @@ All four story prompts have been successfully updated with flexible story specif
 ## Prompts Tested
 
 1. `execute-story-task` - Execute next task from a story
-2. `refine-story` - Interactively refine a story  
+2. `refine-task` - Interactively refine a task
 3. `review-story-implementation` - Review story implementation
 4. `create-story-tasks` - Break down story into tasks
 
@@ -26,7 +26,7 @@ All four prompts implement identical parsing logic:
 
 **Files verified:**
 - `/resources/story/prompts/execute-story-task.md`
-- `/resources/story/prompts/refine-story.md`
+- `/resources/prompts/refine-task.md`
 - `/resources/story/prompts/review-story-implementation.md`
 - `/resources/story/prompts/create-story-tasks.md`
 
