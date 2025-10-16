@@ -196,15 +196,11 @@
   [config _context {:keys [task-id title completion-comment category]}]
   ;; Validate at least one identifier provided
   (if (and (nil? task-id) (nil? title))
-    {:content [{:type "text"
-                :text "Must provide either task-id or title"}
-               {:type "text"
-                :text (json/write-str
-                        {:error "Must provide either task-id or title"
-                         :metadata {:attempted-operation "complete-task"
-                                    :task-id task-id
-                                    :title title}})}]
-     :isError true}
+    (build-tool-error-response
+      "Must provide either task-id or title"
+      "complete-task"
+      {:task-id task-id
+       :title title})
 
     (let [use-git? (:use-git? config)
           tasks-path (path-helper/task-path config ["tasks.ednl"])
@@ -216,14 +212,10 @@
 
       ;; Validate tasks file exists
       (if-not (file-exists? tasks-file)
-        {:content [{:type "text"
-                    :text "Tasks file not found"}
-                   {:type "text"
-                    :text (json/write-str
-                            {:error "Tasks file not found"
-                             :metadata {:attempted-operation "complete-task"
-                                        :file tasks-file}})}]
-         :isError true}
+        (build-tool-error-response
+          "Tasks file not found"
+          "complete-task"
+          {:file tasks-file})
 
         (do
           (tasks/load-tasks! tasks-file :complete-file complete-file)
@@ -238,82 +230,58 @@
                               (and task-id title)
                               (cond
                                 (nil? task-by-id)
-                                {:content [{:type "text"
-                                            :text "Task ID not found"}
-                                           {:type "text"
-                                            :text (json/write-str
-                                                    {:error "Task ID not found"
-                                                     :metadata {:attempted-operation "complete-task"
-                                                                :task-id task-id
-                                                                :file tasks-file}})}]
-                                 :isError true}
+                                (build-tool-error-response
+                                  "Task ID not found"
+                                  "complete-task"
+                                  {:task-id task-id
+                                   :file tasks-file})
 
                                 (empty? tasks-by-title)
-                                {:content [{:type "text"
-                                            :text "No task found with exact title match"}
-                                           {:type "text"
-                                            :text (json/write-str
-                                                    {:error "No task found with exact title match"
-                                                     :metadata {:attempted-operation "complete-task"
-                                                                :title title
-                                                                :file tasks-file}})}]
-                                 :isError true}
+                                (build-tool-error-response
+                                  "No task found with exact title match"
+                                  "complete-task"
+                                  {:title title
+                                   :file tasks-file})
 
                                 (not (some #(= (:id %) task-id) tasks-by-title))
-                                {:content [{:type "text"
-                                            :text "Task ID and task text do not refer to the same task"}
-                                           {:type "text"
-                                            :text (json/write-str
-                                                    {:error "Task ID and task text do not refer to the same task"
-                                                     :metadata {:attempted-operation "complete-task"
-                                                                :task-id task-id
-                                                                :title title
-                                                                :task-by-id task-by-id
-                                                                :tasks-by-title (mapv :id tasks-by-title)
-                                                                :file tasks-file}})}]
-                                 :isError true}
+                                (build-tool-error-response
+                                  "Task ID and task text do not refer to the same task"
+                                  "complete-task"
+                                  {:task-id task-id
+                                   :title title
+                                   :task-by-id task-by-id
+                                   :tasks-by-title (mapv :id tasks-by-title)
+                                   :file tasks-file})
 
                                 :else task-by-id)
 
                               ;; Only ID provided
                               task-id
                               (or task-by-id
-                                  {:content [{:type "text"
-                                              :text "Task ID not found"}
-                                             {:type "text"
-                                              :text (json/write-str
-                                                      {:error "Task ID not found"
-                                                       :metadata {:attempted-operation "complete-task"
-                                                                  :task-id task-id
-                                                                  :file tasks-file}})}]
-                                   :isError true})
+                                  (build-tool-error-response
+                                    "Task ID not found"
+                                    "complete-task"
+                                    {:task-id task-id
+                                     :file tasks-file}))
 
                               ;; Only title provided
                               title
                               (cond
                                 (empty? tasks-by-title)
-                                {:content [{:type "text"
-                                            :text "No task found with exact title match"}
-                                           {:type "text"
-                                            :text (json/write-str
-                                                    {:error "No task found with exact title match"
-                                                     :metadata {:attempted-operation "complete-task"
-                                                                :title title
-                                                                :file tasks-file}})}]
-                                 :isError true}
+                                (build-tool-error-response
+                                  "No task found with exact title match"
+                                  "complete-task"
+                                  {:title title
+                                   :file tasks-file})
 
                                 (> (count tasks-by-title) 1)
-                                {:content [{:type "text"
-                                            :text "Multiple tasks found with same title - use task-id to disambiguate"}
-                                           {:type "text"
-                                            :text (json/write-str
-                                                    {:error "Multiple tasks found with same title - use task-id to disambiguate"
-                                                     :metadata {:attempted-operation "complete-task"
-                                                                :title title
-                                                                :matching-task-ids (mapv :id tasks-by-title)
-                                                                :matching-tasks tasks-by-title
-                                                                :file tasks-file}})}]
-                                 :isError true}
+                                (build-tool-error-response
+                                  "Multiple tasks found with same title - use task-id to disambiguate"
+                                  "complete-task"
+                                  {:title title
+                                   :matching-task-ids (mapv :id tasks-by-title)
+                                   :matching-tasks tasks-by-title
+                                   :file tasks-file})
 
                                 :else (first tasks-by-title)))]
 
@@ -325,30 +293,22 @@
               (let [task task-result]
                 ;; Verify category if provided (for backwards compatibility)
                 (if (and category (not= (:category task) category))
-                  {:content [{:type "text"
-                              :text "Task category does not match"}
-                             {:type "text"
-                              :text (json/write-str
-                                      {:error "Task category does not match"
-                                       :metadata {:attempted-operation "complete-task"
-                                                  :expected-category category
-                                                  :actual-category (:category task)
-                                                  :task-id (:id task)
-                                                  :file tasks-file}})}]
-                   :isError true}
+                  (build-tool-error-response
+                    "Task category does not match"
+                    "complete-task"
+                    {:expected-category category
+                     :actual-category (:category task)
+                     :task-id (:id task)
+                     :file tasks-file})
 
                   ;; Verify task is not already closed
                   (if (= (:status task) :closed)
-                    {:content [{:type "text"
-                                :text "Task is already closed"}
-                               {:type "text"
-                                :text (json/write-str
-                                        {:error "Task is already closed"
-                                         :metadata {:attempted-operation "complete-task"
-                                                    :task-id (:id task)
-                                                    :title (:title task)
-                                                    :file tasks-file}})}]
-                     :isError true}
+                    (build-tool-error-response
+                      "Task is already closed"
+                      "complete-task"
+                      {:task-id (:id task)
+                       :title (:title task)
+                       :file tasks-file})
 
                     ;; All validations passed - complete the task
                     (do
@@ -821,15 +781,11 @@
 
       ;; Validate at least one field provided
       (if (empty? updates)
-        {:content [{:type "text"
-                    :text "No fields to update"}
-                   {:type "text"
-                    :text (json/write-str
-                            {:error "No fields to update"
-                             :metadata {:attempted-operation "update-task"
-                                        :task-id task-id
-                                        :file tasks-file}})}]
-         :isError true}
+        (build-tool-error-response
+          "No fields to update"
+          "update-task"
+          {:task-id task-id
+           :file tasks-file})
 
         ;; Validate task exists
         (or (validate-task-exists task-id "update-task" tasks-file)
