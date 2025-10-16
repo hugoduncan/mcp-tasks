@@ -3,7 +3,6 @@
   (:gen-class)
   (:require
     [babashka.fs :as fs]
-    [clojure.java.io :as io]
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.core :as mcp-server]
