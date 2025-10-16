@@ -19,19 +19,25 @@
 (defn- commit-task-changes
   "Commits task file changes to .mcp-tasks git repository.
 
+  Parameters:
+  - base-dir: Base directory containing .mcp-tasks
+  - task-id: ID of the task being completed
+  - task-title: Title of the task being completed
+  - files-to-commit: Collection of relative file paths to add and commit
+
   Returns a map with:
   - :success - boolean indicating if commit succeeded
   - :commit-sha - commit SHA string (or nil if failed)
   - :error - error message string (or nil if successful)
 
   Never throws - all errors are caught and returned in the map."
-  [base-dir task-id task-title]
+  [base-dir task-id task-title files-to-commit]
   (try
     (let [git-dir (str base-dir "/.mcp-tasks")
           commit-msg (str "Complete task #" task-id ": " task-title)]
 
       ;; Stage modified files
-      (sh/sh "git" "-C" git-dir "add" "tasks.ednl" "complete.ednl")
+      (apply sh/sh "git" "-C" git-dir "add" files-to-commit)
 
       ;; Commit changes
       (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
@@ -311,25 +317,34 @@
                        :file tasks-file})
 
                     ;; All validations passed - complete the task
-                    (do
+                    (let [is-child? (some? (:parent-id task))]
                       ;; Mark task as complete in memory
                       (tasks/mark-complete (:id task) completion-comment)
 
-                      ;; Move task from tasks file to complete file
-                      (tasks/move-task! (:id task) tasks-file complete-file)
+                      ;; Story child: save to tasks.ednl, Regular: move to complete.ednl
+                      (if is-child?
+                        (tasks/save-tasks! tasks-file)
+                        (tasks/move-task! (:id task) tasks-file complete-file))
 
-                      ;; Commit changes if git mode is enabled
-                      (let [git-result (when use-git?
+                      ;; Prepare response based on task type
+                      (let [msg-text (if is-child?
+                                       (str "Task " (:id task) " completed")
+                                       (str "Task " (:id task) " completed and moved to " complete-file))
+                            modified-files (if is-child?
+                                             [tasks-rel-path]
+                                             [tasks-rel-path complete-rel-path])
+                            ;; Commit changes if git mode is enabled
+                            git-result (when use-git?
                                          (commit-task-changes (:base-dir config)
                                                               (:id task)
-                                                              (:title task)))]
+                                                              (:title task)
+                                                              modified-files))]
                         (if use-git?
                           ;; Git mode: return message + JSON with modified files + git status
                           {:content [{:type "text"
-                                      :text (str "Task " (:id task) " completed and moved to " complete-file)}
+                                      :text msg-text}
                                      {:type "text"
-                                      :text (json/write-str {:modified-files [tasks-rel-path
-                                                                              complete-rel-path]})}
+                                      :text (json/write-str {:modified-files modified-files})}
                                      {:type "text"
                                       :text (json/write-str
                                               (cond-> {:git-status (if (:success git-result)
@@ -341,7 +356,7 @@
                            :isError false}
                           ;; Non-git mode: return message only
                           {:content [{:type "text"
-                                      :text (str "Task " (:id task) " completed and moved to " complete-file)}]
+                                      :text msg-text}]
                            :isError false})))))))))))))
 
 (defn- description

@@ -227,6 +227,34 @@
         (is (true? (:isError result)))
         (is (str/includes? (get-in result [:content 0 :text]) "Must provide either"))))))
 
+(deftest completes-story-child-without-archiving
+  ;; Tests that completing a story child task keeps it in tasks.ednl with :status :closed
+  ;; and does NOT move it to complete.ednl
+  (testing "complete-task"
+    (testing "story child remains in tasks.ednl, closed, not archived"
+      ;; Prepare two tasks: one story, one child
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 10 :parent-id nil :title "Parent story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 11 :parent-id 10 :title "Child task" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+      ;; Invoke completion on the child
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 11})]
+        (is (false? (:isError result)))
+        ;; Verify message doesn't say "moved to"
+        (is (str/includes? (get-in result [:content 0 :text]) "Task 11 completed"))
+        (is (not (str/includes? (get-in result [:content 0 :text]) "moved to")))
+        ;; tasks.ednl: child turns :closed but stays in file
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 2 (count tasks)))
+          (is (= :open (:status (first tasks))))
+          (is (= :closed (:status (second tasks))))
+          (is (= 11 (:id (second tasks)))))
+        ;; complete.ednl remains empty
+        (is (empty? (read-ednl-test-file "complete.ednl")))))))
+
 ;; Integration Tests
 
 ;; add-task-impl tests
@@ -974,6 +1002,47 @@
         (is (string? sha))
         (is (= 40 (count sha)))
         (is (re-matches #"[0-9a-f]{40}" sha))))))
+
+(deftest ^:integration completes-story-child-with-git
+  ;; Tests that completing a story child with git only modifies tasks.ednl
+  (testing "complete-task with git"
+    (testing "only tasks.ednl is modified for story child"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 20 :parent-id nil :title "Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 21 :parent-id 20 :title "Child" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 21})]
+        (is (false? (:isError result)))
+        ;; Expect 3 content items
+        (is (= 3 (count (:content result))))
+
+        ;; First item: message doesn't say "moved to"
+        (is (str/includes? (get-in result [:content 0 :text]) "Task 21 completed"))
+        (is (not (str/includes? (get-in result [:content 0 :text]) "moved to")))
+
+        ;; Second item: modified-files contains only tasks.ednl
+        (let [files-data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (= ["tasks.ednl"] (:modified-files files-data))))
+
+        ;; Third item: has git-status and commit-sha
+        (let [git-data (json/read-str (get-in result [:content 2 :text]) :key-fn keyword)]
+          (is (= "success" (:git-status git-data)))
+          (is (string? (:git-commit-sha git-data))))
+
+        ;; Verify git commit was created
+        (is (git-commit-exists? *test-dir*))
+
+        ;; Verify task stayed in tasks.ednl with :status :closed
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 2 (count tasks)))
+          (is (= :closed (:status (second tasks)))))
+
+        ;; Verify complete.ednl is still empty
+        (is (empty? (read-ednl-test-file "complete.ednl")))))))
 
 ;; update-task-impl tests
 
