@@ -19,8 +19,9 @@
     ---
     Content here...
 
-  Returns a map with :metadata (parsed key-value pairs) and :content (remaining text).
-  If no valid frontmatter is found, returns {:metadata nil :content <original-text>}."
+  Returns a map with :metadata (parsed key-value pairs)
+  and :content (remaining text).  If no valid frontmatter is found,
+  returns {:metadata nil :content <original-text>}."
   [text]
   (if-not (str/starts-with? text "---\n")
     {:metadata nil :content text}
@@ -40,7 +41,9 @@
               ;; Parse "key: value" pairs
               metadata (reduce
                          (fn [acc line]
-                           (if-let [[_ k v] (re-matches #"([^:]+):\s*(.*)" line)]
+                           (if-let [[_ k v] (re-matches
+                                              #"([^:]+):\s*(.*)"
+                                              line)]
                              (assoc acc (str/trim k) (str/trim v))
                              acc))
                          {}
@@ -52,8 +55,8 @@
 (defn- discover-prompt-files
   "Discover .md prompt files in a directory.
 
-  Takes a File object and returns a sorted vector of filenames without .md extension.
-  Returns empty vector if directory doesn't exist."
+  Takes a File object and returns a sorted vector of filenames without
+  .md extension.  Returns empty vector if directory doesn't exist."
   [^File dir]
   (if (.exists dir)
     (->> (.listFiles dir)
@@ -65,11 +68,11 @@
     []))
 
 (defn discover-categories
-  "Discover task categories by reading filenames from .mcp-tasks/prompts subdirectory.
+  "Discover task categories by reading .mcp-tasks/prompts subdirectory.
 
-  Takes base-dir which should be the project directory (defaults to current dir).
-  Returns a sorted vector of category names (filenames without .md extension)
-  found in the prompts subdirectory."
+  Takes base-dir which should be the project directory (defaults to
+  current dir).  Returns a sorted vector of category names (filenames
+  without .md extension) found in the prompts subdirectory."
   ([]
    (discover-categories (System/getProperty "user.dir")))
   ([base-dir]
@@ -83,7 +86,9 @@
   "- Read the file .mcp-tasks/tasks.ednl
 
 - Find the first incomplete task (marked with `- [ ]`) You can use the
-  `select-tasks` tool with `:limit 1` to retrieve the next task without executing it.
+  `select-tasks` tool with `:limit 1` to retrieve the next task without
+  executing it.
+
 - Show the task description
 ")
 
@@ -94,10 +99,13 @@
 
 (defn- complete-task-prompt-text
   "Generate prompt text for completing and tracking a task.
-  Conditionally includes git commit instructions based on config :use-git? value."
+
+  Conditionally includes git commit instructions based on
+  config :use-git? value."
   [config _category]
-  (let [base-text "- Mark the completed task as complete using the `complete-task` tool.
-  This will update the task's status to :closed and move it from 
+  (let [base-text
+        "- Mark the completed task as complete using the `complete-task` tool.
+  This will update the task's status to :closed and move it from
   .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
 - Summarise any deviations in the execution of the task, compared to the task
@@ -109,25 +117,34 @@
       base-text)))
 
 (defn- read-prompt-instructions
-  "Read custom prompt instructions from .mcp-tasks/prompts/<category>.md if it exists.
+  "Read custom prompt instructions from .mcp-tasks/prompts/<category>.md.
 
   Takes base-dir (project directory) and category name.
-  Returns a map with :metadata and :content keys if the file exists, or nil if it doesn't.
-  The :metadata key contains parsed frontmatter (may be nil), and :content contains
-  the prompt text with frontmatter stripped."
+
+  Returns a map with :metadata and :content keys if the file exists, or
+  nil if it doesn't.
+
+  The :metadata key contains parsed frontmatter (may be nil),
+  and :content contains the prompt text with frontmatter stripped."
   [base-dir category]
-  (let [prompt-file (io/file base-dir ".mcp-tasks" "prompts" (str category ".md"))]
+  (let [prompt-file (io/file
+                      base-dir
+                      ".mcp-tasks"
+                      "prompts"
+                      (str category ".md"))]
     (when (.exists prompt-file)
       (parse-frontmatter (slurp prompt-file)))))
 
 (defn create-prompts
   "Generate MCP prompts for task categories.
 
-  Reads prompt instructions from .mcp-tasks/prompts/<category>.md files if they exist,
-  otherwise uses default prompt text. Each prompt provides complete workflow including
-  task lookup, execution instructions, and completion steps.
+  Reads prompt instructions from .mcp-tasks/prompts/<category>.md files
+  if they exist, otherwise uses default prompt text. Each prompt
+  provides complete workflow including task lookup, execution
+  instructions, and completion steps.
 
-  Returns a vector of prompt maps suitable for registration with the MCP server."
+  Returns a vector of prompt maps suitable for registration with the MCP
+  server."
   [config categories]
   (let [base-dir (:base-dir config)]
     (vec
@@ -136,12 +153,16 @@
               metadata (:metadata prompt-data)
               custom-content (:content prompt-data)
               execution-instructions (or custom-content (default-prompt-text))
-              prompt-text (str "Please complete the next " category " task following these steps:\n\n"
+              prompt-text (str "Please complete the next "
+                               category
+                               " task following these steps:\n\n"
                                (read-task-prompt-text config category)
                                execution-instructions
                                (complete-task-prompt-text config category))
               description (or (get metadata "description")
-                              (format "Execute the next %s task from .mcp-tasks/tasks.ednl" category))]
+                              (format
+                                "Execute the next %s task from .mcp-tasks/tasks.ednl"
+                                category))]
           (prompts/valid-prompt?
             {:name (str "next-" category)
              :description description
@@ -152,8 +173,9 @@
 (defn category-descriptions
   "Get descriptions for all discovered categories.
 
-  Returns a map of category name to description string. Categories without
-  custom prompts or without description metadata will have a default description."
+  Returns a map of category name to description string. Categories
+  without custom prompts or without description metadata will have a
+  default description."
   ([]
    (category-descriptions (System/getProperty "user.dir")))
   ([base-dir]
@@ -167,7 +189,7 @@
                [category description]))))))
 
 (defn prompts
-  "Generate all task prompts by discovering categories and creating prompts for them.
+  "Generate all task prompts by discovering categories.
 
   Accepts config parameter to conditionally include git instructions in prompts.
   Uses :base-dir from config to locate .mcp-tasks directory.
@@ -204,14 +226,19 @@
 
   Returns nil if prompt is not found in either location."
   [prompt-name]
-  (let [override-file (io/file ".mcp-tasks" "story" "prompts" (str prompt-name ".md"))]
+  (let [override-file (io/file
+                        ".mcp-tasks"
+                        "story"
+                        "prompts"
+                        (str prompt-name ".md"))]
     (if (.exists override-file)
       (let [file-content (slurp override-file)
             {:keys [metadata content]} (parse-frontmatter file-content)]
         {:name prompt-name
          :description (get metadata "description")
          :content content})
-      (when-let [resource-path (io/resource (str "story/prompts/" prompt-name ".md"))]
+      (when-let [resource-path (io/resource
+                                 (str "story/prompts/" prompt-name ".md"))]
         (let [file-content (slurp resource-path)
               {:keys [metadata content]} (parse-frontmatter file-content)]
           {:name prompt-name
@@ -233,9 +260,14 @@
         override-prompts (when (.exists story-dir)
                            (for [^File file (.listFiles story-dir)
                                  :when (and (.isFile file)
-                                            (str/ends-with? (.getName file) ".md"))]
-                             (let [name (str/replace (.getName file) #"\.md$" "")
-                                   {:keys [metadata]} (parse-frontmatter (slurp file))]
+                                            (str/ends-with?
+                                              (.getName file)
+                                              ".md"))]
+                             (let [name (str/replace
+                                          (.getName file)
+                                          #"\.md$" "")
+                                   {:keys [metadata]} (parse-frontmatter
+                                                        (slurp file))]
                                {:name name
                                 :description (get metadata "description")})))
         all-prompts (concat override-prompts builtin-prompts)
@@ -257,7 +289,8 @@
 
   Example: '<story-name> [additional-context...]'
 
-  Returns a vector of argument maps with :name, :description, and :required keys."
+  Returns a vector of argument maps with :name, :description,
+  and :required keys."
   [metadata]
   (when-let [hint (get metadata "argument-hint")]
     (vec
@@ -270,17 +303,24 @@
                                (str/replace arg-name #"\.\.\.$" "")
                                arg-name)
                   description (cond
-                                is-variadic (format "Optional additional %s (variadic)" clean-name)
-                                is-required (format "The %s (required)" (str/replace clean-name "-" " "))
-                                :else (format "Optional %s" (str/replace clean-name "-" " ")))]]
+                                is-variadic (format
+                                              "Optional additional %s (variadic)"
+                                              clean-name)
+                                is-required (format
+                                              "The %s (required)"
+                                              (str/replace clean-name "-" " "))
+                                :else (format
+                                        "Optional %s"
+                                        (str/replace clean-name "-" " ")))]]
         {:name clean-name
          :description description
          :required is-required}))))
 
 (defn story-prompts
-  "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts namespace.
+  "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts.
 
-  For execute-story-task prompt, tailors content based on config :story-branch-management?.
+  For execute-story-task prompt, tailors content based on
+  config :story-branch-management?.
 
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
@@ -338,12 +378,19 @@
           excluded-names (conj categories "default-prompt-text")
           task-prompts (remove excluded-names all-prompts)
           prompts-data (for [prompt-name task-prompts
-                             :let [resource-path (io/resource (str "prompts/" prompt-name ".md"))]
+                             :let [resource-path (io/resource
+                                                   (str
+                                                     "prompts/"
+                                                     prompt-name
+                                                     ".md"))]
                              :when resource-path]
                          (let [file-content (slurp resource-path)
-                               {:keys [metadata content]} (parse-frontmatter file-content)
+                               {:keys [metadata content]} (parse-frontmatter
+                                                            file-content)
                                description (or (get metadata "description")
-                                               (format "Task execution prompt: %s" prompt-name))
+                                               (format
+                                                 "Task execution prompt: %s"
+                                                 prompt-name))
                                arguments (parse-argument-hint metadata)]
                            [prompt-name
                             (prompts/valid-prompt?
@@ -352,7 +399,9 @@
                                        :messages [{:role "user"
                                                    :content {:type "text"
                                                              :text content}}]}
-                                (seq arguments) (assoc :arguments arguments)))]))]
+                                (seq arguments) (assoc
+                                                  :arguments
+                                                  arguments)))]))]
       (into {} prompts-data))))
 
 (defn category-prompt-resources
@@ -376,11 +425,15 @@
         categories (discover-categories base-dir)]
     (->> categories
          (keep (fn [category]
-                 (when-let [prompt-data (read-prompt-instructions base-dir category)]
+                 (when-let [prompt-data (read-prompt-instructions
+                                          base-dir
+                                          category)]
                    (let [metadata (:metadata prompt-data)
                          content (:content prompt-data)
                          description (or (get metadata "description")
-                                         (format "Execution instructions for %s category" category))
+                                         (format
+                                           "Execution instructions for %s category"
+                                           category))
                          ;; Reconstruct frontmatter if metadata exists
                          frontmatter (when metadata
                                        (let [lines (keep (fn [[k v]]

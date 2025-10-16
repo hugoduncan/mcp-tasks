@@ -74,8 +74,9 @@
 
 (defn resolve-config
   "Returns final config map with :use-git? and :base-dir resolved.
-  Uses explicit config value if present, otherwise auto-detects from git repo presence.
-  Base directory defaults to current working directory if project-dir not provided."
+  Uses explicit config value if present, otherwise auto-detects from git
+  repo presence.  Base directory defaults to current working directory
+  if project-dir not provided."
   [project-dir config]
   (let [base-dir (or project-dir (System/getProperty "user.dir"))]
     (assoc config

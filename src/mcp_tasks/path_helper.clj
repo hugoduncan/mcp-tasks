@@ -8,7 +8,9 @@
 
   Parameters:
   - config: Configuration map containing optional :base-dir
-  - path-segments: Vector of path segments (e.g., [\"story\" \"stories\" \"foo.md\"])
+
+  - path-segments: Vector of path segments
+                   (e.g., [\"story\" \"stories\" \"foo.md\"])
 
   Returns map with:
   - :absolute - Full filesystem path

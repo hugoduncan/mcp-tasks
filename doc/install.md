@@ -128,6 +128,37 @@ No additional setup required - just use the `.mcp-tasks/` directory without init
 - You're working solo and tasks are ephemeral
 - You want minimal overhead
 
+## Setup
+
+### Initialize .mcp-tasks as a Git Repository (Optional)
+
+The `.mcp-tasks` directory can optionally be its own separate git
+repository to track task history independently from your project code:
+
+**Note:** This step is optional. If you skip git initialization,
+mcp-tasks will operate in non-git mode, managing task files without
+version control.
+
+```bash
+# In your project root
+mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
+cd .mcp-tasks
+git init
+git add .
+git commit -m "Initialize mcp-tasks repository"
+cd ..
+
+# Add .mcp-tasks to your project's .gitignore
+echo ".mcp-tasks/" >> .gitignore
+```
+
+**Why a separate repository?**
+- Task tracking commits don't clutter your project history
+- Task files are version controlled and shareable
+- Completed task archive provides an audit trail
+- Each project can have its own task repository
+
+
 ## Command Line Options
 
 The mcp-tasks server supports command line flags for managing task prompts:
@@ -168,6 +199,8 @@ You can verify the installation by:
 
 ## Troubleshooting
 
-- **Server fails to start:** Verify that the `:git/sha` in `~/.clojure/deps.edn` is correct and accessible
-- **Dependencies missing:** Ensure you have Clojure 1.12.3 or compatible version installed
+- **Server fails to start:** Verify that the `:git/sha` in
+  `~/.clojure/deps.edn` is correct and accessible
+- **Dependencies missing:** Ensure you have Clojure 1.12.3 or compatible
+  version installed
 - **Git access issues:** Make sure you can access GitHub and clone repositories
