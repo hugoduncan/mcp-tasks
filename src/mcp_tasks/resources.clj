@@ -81,9 +81,10 @@
 (defn category-prompt-resources
   "Create resource definitions for category prompts.
 
-  Takes a vector of category prompt resource maps from tp/category-prompt-resources.
-  Returns a map of resource URIs to resource definitions.
-  Each category prompt is exposed as a resource with URI pattern: prompt://category-<category>"
+  Takes a vector of category prompt resource maps from
+  tp/category-prompt-resources.  Returns a map of resource URIs to
+  resource definitions.  Each category prompt is exposed as a resource
+  with URI pattern: prompt://category-<category>"
   [category-resources-vec]
   (into {}
         (for [resource category-resources-vec]

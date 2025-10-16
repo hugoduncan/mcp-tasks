@@ -4,7 +4,6 @@
     [clojure.data.json :as json]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
-    [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.response :as response]
     [mcp-tasks.schema :as schema]
@@ -60,8 +59,8 @@
   - Context map with :use-git?, :tasks-file, :complete-file, :tasks-rel-path, :complete-rel-path"
   [config]
   (let [use-git? (:use-git? config)
-        tasks-path (path-helper/task-path config ["tasks.ednl"])
-        complete-path (path-helper/task-path config ["complete.ednl"])
+        tasks-path (helpers/task-path config ["tasks.ednl"])
+        complete-path (helpers/task-path config ["complete.ednl"])
         tasks-file (:absolute tasks-path)
         complete-file (:absolute complete-path)
         tasks-rel-path (:relative tasks-path)
@@ -584,9 +583,9 @@
                           {:response response-data}))))
 
       (let [effective-limit (if unique 1 requested-limit)
-            tasks-path (path-helper/task-path config ["tasks.ednl"])
+            tasks-path (helpers/task-path config ["tasks.ednl"])
             tasks-file (:absolute tasks-path)
-            complete-path (path-helper/task-path config ["complete.ednl"])
+            complete-path (helpers/task-path config ["complete.ednl"])
             complete-file (:absolute complete-path)
             ;; Convert type string to keyword if provided
             type-keyword (when type (keyword type))
@@ -696,9 +695,9 @@
   Loads tasks from tasks.ednl into memory.
   Returns the absolute file path."
   [config]
-  (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
+  (let [tasks-path (helpers/task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
-        complete-path (path-helper/task-path config ["complete.ednl"])
+        complete-path (helpers/task-path config ["complete.ednl"])
         complete-file (:absolute complete-path)]
     ;; Load existing tasks into memory if file exists
     (when (helpers/file-exists? tasks-file)
@@ -742,7 +741,7 @@
               ;; Add task to in-memory state and get the complete task with ID
               created-task (tasks/add-task task-map :prepend? (boolean prepend))
               ;; Get path info for git operations
-              tasks-path (path-helper/task-path config ["tasks.ednl"])
+              tasks-path (helpers/task-path config ["tasks.ednl"])
               tasks-rel-path (:relative tasks-path)]
 
           ;; Save to EDNL file

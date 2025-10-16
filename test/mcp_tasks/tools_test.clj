@@ -14,7 +14,7 @@
 
 (defn- setup-test-dir
   [test-dir]
-  (.mkdirs (io/file test-dir ".mcp-tasks")))
+  (fs/create-dirs (io/file test-dir ".mcp-tasks")))
 
 (defn- write-ednl-test-file
   "Write tasks as EDNL format to test file."

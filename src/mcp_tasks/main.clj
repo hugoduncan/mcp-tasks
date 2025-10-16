@@ -2,7 +2,7 @@
   "Stdio-based MCP server main entry point for task management"
   (:gen-class)
   (:require
-    [clojure.java.io :as io]
+    [babashka.fs :as fs]
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.core :as mcp-server]
@@ -50,13 +50,14 @@
       (do
         (println (str "Warning: Prompt '" prompt-name "' not found"))
         1)
-      (let [target-file (io/file ".mcp-tasks" "prompts" (str prompt-name ".md"))]
-        (if (.exists target-file)
+      (let [target-file (str ".mcp-tasks/prompts/" prompt-name ".md")]
+        (if (fs/exists? target-file)
           (do
             (println (str "Skipping " prompt-name ": file already exists"))
             0)
           (try
-            (.mkdirs (.getParentFile target-file))
+            (when-let [parent (fs/parent target-file)]
+              (fs/create-dirs parent))
             (spit target-file @prompt-var)
             (println (str "Installed " prompt-name))
             0
@@ -103,7 +104,8 @@
 
   Parameters:
   - config: Resolved task configuration (from load-and-validate-config)
-  - transport: Transport configuration map (e.g., {:type :stdio} or {:type :in-memory :shared ...})
+  - transport: Transport configuration map (e.g., {:type :stdio} or
+    {:type :in-memory :shared ...})
 
   Returns server configuration map suitable for mcp-server/create-server"
   [config transport]
@@ -111,8 +113,10 @@
                            (tp/story-prompts config)
                            (tp/task-execution-prompts config))
         category-resources-vec (tp/category-prompt-resources config)
-        all-resources (merge (resources/prompt-resources all-prompts)
-                             (resources/category-prompt-resources category-resources-vec))]
+        all-resources (merge
+                        (resources/prompt-resources all-prompts)
+                        (resources/category-prompt-resources
+                          category-resources-vec))]
     {:transport transport
      :tools {"complete-task" (tools/complete-task-tool config)
              "delete-task" (tools/delete-task-tool config)
@@ -163,10 +167,14 @@
   "CLI entry point for MCP Tasks.
 
   Supports:
-  - --list-prompts: List available prompt names and descriptions
-  - --install-prompts [names]: Install prompts (comma-separated or all if omitted)
-  - --config-path <path>: Path to directory containing .mcp-tasks.edn (default: '.')
-  - No args: Start the MCP server"
+    --list-prompts: List available prompt names and descriptions
+
+    --install-prompts [names]: Install prompts (comma-separated or all
+                               if omitted)
+
+    --config-path <path>: Path to directory containing
+                          .mcp-tasks.edn (default: '.')
+  No args: Start the MCP server"
   [& args]
   (let [args-vec (vec args)
         config-path-idx (index-of args-vec "--config-path")
@@ -183,7 +191,8 @@
       (let [idx (index-of args-vec "--install-prompts")
             next-arg (when (< (inc idx) (count args-vec))
                        (nth args-vec (inc idx)))
-            prompt-names (if (and next-arg (not (str/starts-with? next-arg "--")))
+            prompt-names (if (and next-arg
+                                  (not (str/starts-with? next-arg "--")))
                            (str/split next-arg #",")
                            [])]
         (System/exit (install-prompts prompt-names)))

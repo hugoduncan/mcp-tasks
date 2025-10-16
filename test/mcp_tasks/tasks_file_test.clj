@@ -1,6 +1,6 @@
 (ns mcp-tasks.tasks-file-test
   (:require
-    [clojure.java.io :as io]
+    [babashka.fs :as fs]
     [clojure.string :as str]
     [clojure.test :refer [deftest testing is]]
     [mcp-tasks.tasks-file :as tasks-file]))
@@ -54,9 +54,9 @@
 (defn temp-file-in-subdir
   []
   (let [temp-dir (System/getProperty "java.io.tmpdir")
-        subdir (io/file temp-dir "test-subdir" (str (random-uuid)))
-        file (io/file subdir "tasks.ednl")]
-    (.getAbsolutePath file)))
+        subdir (str temp-dir "/test-subdir/" (random-uuid))
+        file (str subdir "/tasks.ednl")]
+    file))
 
 (deftest read-ednl-test
   (testing "read-ednl"
@@ -130,8 +130,8 @@
         (tasks-file/append-task file test-task-1)
         (is (= [test-task-1] (tasks-file/read-ednl file)))
         ;; Cleanup
-        (io/delete-file file true)
-        (io/delete-file (.getParentFile (io/file file)) true)))
+        (fs/delete file)
+        (fs/delete (fs/parent file))))
 
     (testing "throws on invalid task schema"
       (let [file (temp-file)
@@ -157,8 +157,8 @@
         (tasks-file/prepend-task file test-task-1)
         (is (= [test-task-1] (tasks-file/read-ednl file)))
         ;; Cleanup
-        (io/delete-file file true)
-        (io/delete-file (.getParentFile (io/file file)) true)))
+        (fs/delete file)
+        (fs/delete (fs/parent file))))
 
     (testing "throws on invalid task schema"
       (let [file (temp-file)
@@ -235,4 +235,4 @@
       (let [file (temp-file)]
         (tasks-file/append-task file test-task-1)
         ;; If write was not atomic, temp file would still exist
-        (is (not (.exists (io/file (str file ".tmp")))))))))
+        (is (not (fs/exists? (str file ".tmp"))))))))

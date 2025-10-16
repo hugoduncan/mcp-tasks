@@ -4,119 +4,16 @@ This document describes how to use mcp-tasks for agent-driven task execution.
 
 ## Overview
 
-mcp-tasks provides a structured workflow where you plan tasks for an agent to execute. Tasks are organized into categories, with each category having its own execution instructions and task tracking.
-
-## Configuration
-
-### Configuration File
-
-mcp-tasks supports an optional configuration file `.mcp-tasks.edn` in your project root (sibling to the `.mcp-tasks/` directory). This file allows you to explicitly control whether git integration is used for task tracking.
-
-**Configuration schema:**
-```clojure
-{:use-git? true}   ; Enable git mode
-{:use-git? false}  ; Disable git mode
-{:story-branch-management? false}  ; Disable story branch management (default)
-{:story-branch-management? true}   ; Enable story branch management
-```
-
-**File location:**
-```
-project-root/
-├── .mcp-tasks/       # Task files directory
-├── .mcp-tasks.edn    # Optional configuration file
-└── src/              # Your project code
-```
-
-### Auto-Detection Mechanism
-
-When no `.mcp-tasks.edn` file is present, mcp-tasks automatically detects whether to use git mode by checking for the presence of `.mcp-tasks/.git` directory:
-
-- **Git mode enabled**: If `.mcp-tasks/.git` exists, the system assumes you want git integration
-- **Non-git mode**: If `.mcp-tasks/.git` does not exist, the system operates without git
-
-**Precedence:** Explicit configuration in `.mcp-tasks.edn` always overrides auto-detection.
-
-### Startup Validation
-
-When the MCP server starts, it validates the configuration:
-
-1. **Config file parsing**: If `.mcp-tasks.edn` exists, it must be valid EDN with correct schema
-2. **Git repository validation**: If git mode is enabled (explicitly or auto-detected), the server verifies that `.mcp-tasks/.git` exists
-3. **Error reporting**: Invalid configurations or missing git repositories cause server startup to fail with clear error messages to stderr
-
-**Example error messages:**
-```
-Git mode enabled but .mcp-tasks/.git not found
-Invalid config: :use-git? must be a boolean
-Malformed EDN in .mcp-tasks.edn: ...
-```
-
-### Git Mode vs Non-Git Mode
-
-The configuration affects two main behaviors:
-
-#### Task Completion Output
-
-When using the `complete-task` tool:
-
-- **Git mode**: Returns completion message plus JSON with modified file paths for commit workflows
-  ```
-  Task completed: <task description>
-  {"modified-files": ["tasks.ednl", "complete.ednl"]}
-  ```
-
-- **Non-git mode**: Returns only the completion message
-  ```
-  Task completed: <task description>
-  ```
-
-#### Prompt Instructions
-
-Task execution prompts adapt based on git mode:
-
-- **Git mode**: Includes instructions to commit task file changes to `.mcp-tasks` repository
-- **Non-git mode**: Omits git instructions, focuses only on file operations
-
-### Important Notes
-
-**Main repository independence**: The git mode configuration only affects the `.mcp-tasks` directory. Your main project repository commits are completely independent:
-
-- Git mode ON: Commits are made to both `.mcp-tasks/.git` (for task tracking) and your main repo (for code changes)
-- Git mode OFF: Commits are made only to your main repo (for code changes), task files are updated without version control
-
-## Setup
-
-### Initialize .mcp-tasks as a Git Repository (Optional)
-
-The `.mcp-tasks` directory can optionally be its own separate git repository to track task history independently from your project code:
-
-**Note:** This step is optional. If you skip git initialization, mcp-tasks will operate in non-git mode, managing task files without version control.
-
-```bash
-# In your project root
-mkdir -p .mcp-tasks/tasks .mcp-tasks/complete .mcp-tasks/prompts
-cd .mcp-tasks
-git init
-git add .
-git commit -m "Initialize mcp-tasks repository"
-cd ..
-
-# Add .mcp-tasks to your project's .gitignore
-echo ".mcp-tasks/" >> .gitignore
-```
-
-**Why a separate repository?**
-- Task tracking commits don't clutter your project history
-- Task files are version controlled and shareable
-- Completed task archive provides an audit trail
-- Each project can have its own task repository
+mcp-tasks provides a structured workflow where you plan tasks for an
+agent to execute. Tasks are organized into categories, with each
+category having its own execution instructions and task tracking.
 
 ## Basic Workflow
 
 ### 1. Add Tasks
 
-Tasks are stored in EDN format in `.mcp-tasks/tasks.ednl`. Use the `add-task` tool to add tasks:
+Tasks are stored in EDN format in `.mcp-tasks/tasks.ednl`. Use the
+`add-task` tool to add tasks:
 
 ```bash
 # Add a task via MCP tool
@@ -124,15 +21,20 @@ Tasks are stored in EDN format in `.mcp-tasks/tasks.ednl`. Use the `add-task` to
 ```
 
 **Key points:**
-- Tasks are EDN maps with fields: `:id`, `:status`, `:title`, `:description`, `:category`, etc.
+- Tasks are EDN maps with fields: `:id`, `:status`, `:title`,
+  `:description`, `:category`, etc.
 - Tasks with matching `:category` are processed in order from top to bottom
 - You can include detailed specifications in the `:description` field
 
 ### 2. Order Tasks
 
-Tasks in `tasks.ednl` are processed in order from top to bottom. The agent will always process the first task with matching `:category` and `:status :open`.
+Tasks in `tasks.ednl` are processed in order from top to bottom. The
+agent will always process the first task with matching `:category` and
+`:status :open`.
 
-To reorder tasks, you can manually edit `tasks.ednl` or use the `add-task` tool with `prepend: true` to add high-priority tasks at the beginning.
+To reorder tasks, you can manually edit `tasks.ednl` or use the
+`add-task` tool with `prepend: true` to add high-priority tasks at the
+beginning.
 
 ### 3. Run Task Prompts
 
@@ -153,7 +55,7 @@ The agent will:
 3. Plan the implementation
 4. Execute the solution
 5. Commit changes to your repository
-6. Mark the task as complete (`:status :closed`) and move it to `.mcp-tasks/complete.ednl`
+6. Mark the task as complete (`:status :closed`)
 
 ### 4. Review and Iterate
 
@@ -165,11 +67,16 @@ After each task completion:
 
 ## Story-Based Workflow
 
-Stories provide a higher-level workflow for breaking down larger features or epics into executable tasks. A story represents a cohesive piece of work that gets refined, broken into tasks, and executed systematically.
+Stories provide a higher-level workflow for breaking down larger
+features or epics into executable tasks. A story represents a cohesive
+piece of work that gets refined, broken into tasks, and executed
+systematically.
 
 ### Story File Structure
 
-Stories are stored in `.mcp-tasks/tasks.ednl` as EDN records with `:type :story`. Story tasks are stored in the same file as regular Task records with `:parent-id` linking them to their parent story.
+Stories are stored in `.mcp-tasks/tasks.ednl` as EDN records with `:type
+:story`. Story tasks are stored in the same file as regular Task records
+with `:parent-id` linking them to their parent story.
 
 **Example story in tasks.ednl:**
 ```clojure
@@ -243,7 +150,7 @@ Refine a rough story idea into a detailed specification:
 ```
 User: /mcp-tasks:refine-task user-auth
 
-Agent: I've found your user-auth story in tasks.ednl. Let me ask some clarifying questions:
+Agent: I've found your user-auth story. Let me ask some clarifying questions:
 1. Which JWT library should we use?
 2. What's the token expiration policy?
 3. Should we support refresh tokens?
@@ -352,24 +259,21 @@ Agent: Found story: User Authentication Story (ID: 13)
 
 #### 4. Progress Tracking
 
-Check story progress at any time by querying the EDN files:
+Track story progress by asking the agent questions. The agent will query the task system and provide clear summaries.
 
-```bash
-# View all tasks for a story
-grep -A 10 ":parent-id 13" .mcp-tasks/tasks.ednl
+**Example queries:**
+- "Show me all tasks for story #13"
+- "How many incomplete tasks does story #13 have?"
+- "List completed tasks from the user-auth story"
 
-# Count incomplete story tasks
-grep -c ":parent-id 13" .mcp-tasks/tasks.ednl
+The agent uses the `select-tasks` tool with filters like `parent-id: 13` to find story child tasks, `status: "closed"` to filter completed tasks, and combines results into readable summaries.
 
-# View completed story tasks
-grep -A 10 ":parent-id 13" .mcp-tasks/complete.ednl
-```
-
-Completed tasks are moved to `complete.ednl` with `:status :closed`, preserving the full task context including `:parent-id`.
+This agent-first approach means you don't need to learn EDN query syntax or file locations.
 
 ### Story Branch Management
 
-When `:story-branch-management? true` is configured in `.mcp-tasks.edn`, the system automatically manages git branches for stories:
+When `:story-branch-management? true` is configured in `.mcp-tasks.edn`,
+the system automatically manages git branches for stories:
 
 **Automatic branch operations:**
 - Creates a `<story-name>` branch from the default branch when starting story work
@@ -431,7 +335,8 @@ git merge user-authentication
 
 ### Story Prompt Customization
 
-Override the default story prompts by creating files in `.mcp-tasks/story/prompts/`:
+Override the default story prompts by creating files in
+`.mcp-tasks/story/prompts/`:
 
 **Available prompts to override:**
 - `refine-task.md` - Task refinement instructions
@@ -512,7 +417,8 @@ For each task, use add-task with:
 - type: "task"
 ```
 
-This override enforces time-based categorization and explicit dependency tracking that may not be in the default prompt.
+This override enforces time-based categorization and explicit dependency
+tracking that may not be in the default prompt.
 
 #### Relationship to Category Prompts
 
@@ -535,7 +441,8 @@ When you run `/mcp-tasks:execute-story-task user-auth`:
 1. The `execute-story-task` **story prompt** finds the next story task
 2. It extracts the task's CATEGORY (e.g., "simple")
 3. It adds the task to that category's queue
-4. The task executes using the `simple` **category prompt** from `.mcp-tasks/prompts/simple.md`
+4. The task executes using the `simple` **category prompt** from
+   `.mcp-tasks/prompts/simple.md`
 5. After completion, the story task is marked as done
 
 **Customization strategy:**
@@ -572,16 +479,23 @@ When you run `/mcp-tasks:execute-story-task user-auth`:
 
 #### select-tasks
 
-The `select-tasks` tool supports optional filtering parameters that enable story task queries and returns multiple tasks:
+The `select-tasks` tool supports optional filtering parameters that
+enable story task queries and returns multiple tasks:
 
 **Parameters:**
 - `category` (string, optional) - Filter by task category
-- `parent-id` (integer, optional) - Filter by parent task ID (for finding story child tasks)
-- `title-pattern` (string, optional) - Filter by title pattern (regex or substring match)
-- `type` (string, optional) - Filter by task type (task, bug, feature, story, chore)
-- `status` (string, optional) - Filter by task status (open, closed, in-progress, blocked). When omitted, filters out closed tasks (default behavior)
+- `parent-id` (integer, optional) - Filter by parent task ID (for
+  finding story child tasks)
+- `title-pattern` (string, optional) - Filter by title pattern (regex or
+  substring match)
+- `type` (string, optional) - Filter by task type (task, bug, feature,
+  story, chore)
+- `status` (string, optional) - Filter by task status (open, closed,
+  in-progress, blocked). When omitted, filters out closed tasks (default
+  behavior)
 - `limit` (integer, optional, default: 5) - Maximum number of tasks to return
-- `unique` (boolean, optional, default: false) - Error if more than one task matches (implies `:limit 1`)
+- `unique` (boolean, optional, default: false) - Error if more than one
+  task matches (implies `:limit 1`)
 
 All filter parameters are optional and AND-ed together when provided.
 
@@ -623,24 +537,31 @@ tasks are returned. The task :id can be used with complete-task.
 
 #### complete-task
 
-Story tasks use the same `complete-task` tool as regular tasks. Tasks are stored in `.mcp-tasks/tasks.ednl` with parent-child relationships, where story tasks have a `:parent-id` field linking them to their parent story.
+Story tasks use the same `complete-task` tool as regular tasks. Tasks
+are stored in `.mcp-tasks/tasks.ednl` with parent-child relationships,
+where story tasks have a `:parent-id` field linking them to their parent
+story.
 
 **Parameters:**
 - `category` (string, required) - The task category
-- `title` (string, required) - Partial text from the beginning of the task to verify
-- `completion-comment` (string, optional) - Optional comment to append to the completed task
+- `title` (string, required) - Partial text from the beginning of the
+  task to verify
+- `completion-comment` (string, optional) - Optional comment to append
+  to the completed task
 
 **Returns:**
 
 Git mode enabled:
 - Text item 1: Completion status message
-- Text item 2: JSON-encoded map with `:modified-files` key containing `["tasks.ednl", "complete.ednl"]`
+- Text item 2: JSON-encoded map with `:modified-files` key containing
+  `["tasks.ednl", "complete.ednl"]`
 
 Git mode disabled:
 - Single text item: Completion status message
 
 **Behavior:**
-- Finds the first task with matching category and `:status :open` in `tasks.ednl`
+- Finds the first task with matching category and `:status :open` in
+  `tasks.ednl`
 - Verifies the task text matches the provided `title` parameter
 - Marks the task as `:status :closed`
 - Optionally appends the completion comment to the `:description` field
@@ -746,7 +667,8 @@ Break down a story into categorized, executable tasks.
 - `type`: "task", "bug", "feature", or "chore"
 
 **Key characteristics:**
-- Task descriptions are specific enough to be actionable without additional context
+- Task descriptions are specific enough to be actionable without
+  additional context
 - Tasks are stored in unified `.mcp-tasks/tasks.ednl` with `:parent-id` linking
 - Use `select-tasks` with `parent-id` filter to query story tasks
 - Multi-line descriptions are supported in the `:description` field
@@ -770,8 +692,10 @@ Execute the next task from a story.
 
 **Behavior:**
 1. Finds the story and its first incomplete child task:
-   - First, uses `select-tasks` with `title-pattern` and `unique: true` to find the story in tasks.ednl
-   - Then uses `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
+   - First, uses `select-tasks` with `title-pattern` and `unique: true`
+     to find the story in tasks.ednl
+   - Then uses `select-tasks` with `parent-id` filter and `:limit 1` to
+     get the first incomplete child
    - If no incomplete tasks found, informs the user and stops
    - If no category is found for the task, informs the user and stops
 2. Executes the task directly using the category workflow:
@@ -780,8 +704,10 @@ Execute the next task from a story.
    - Completes all implementation steps according to the category workflow
 3. After successful execution, marks the task as complete:
    - Uses the `complete-task` tool with category and title
-   - Parameters: category, title (partial match), and optionally completion-comment
-   - Task is marked as `:status :closed` and moved from tasks.ednl to complete.ednl
+   - Parameters: category, title (partial match), and optionally
+     completion-comment
+   - Task is marked as `:status :closed` and moved from tasks.ednl to
+     complete.ednl
    - Confirms completion to the user
 
 **Branch management (conditional):**
@@ -789,7 +715,8 @@ Execute the next task from a story.
 If configuration includes `:story-branch-management? true`:
 1. Before starting task execution:
    - Checks if currently on a branch named `<story-name>`
-   - If not, checks out the default branch, ensures it's up to date with origin, then creates the `<story-name>` branch
+   - If not, checks out the default branch, ensures it's up to date with
+     origin, then creates the `<story-name>` branch
 2. After task completion:
    - Remains on the `<story-name>` branch for the next task
    - Does not merge or push automatically
@@ -798,7 +725,8 @@ If `:story-branch-management?` is false (default):
 - Executes tasks on the current branch without any branch operations
 
 **Key characteristics:**
-- All data stored in `.mcp-tasks/tasks.ednl` with parent-child relationships via `:parent-id`
+- All data stored in `.mcp-tasks/tasks.ednl` with parent-child
+  relationships via `:parent-id`
 - Story tasks are EDN records with `:parent-id` pointing to the story's `:id`
 - The category workflow finds and executes the task by its position in the queue
 - If task execution fails, the task is not marked as complete
@@ -815,13 +743,15 @@ using the complete-task tool upon success.
 
 ## Task Categories
 
-Categories allow you to organize tasks by type and apply different execution strategies.
+Categories allow you to organize tasks by type and apply different
+execution strategies.
 
 ### Default Categories
 
 The system discovers categories automatically from:
 - Tasks in `tasks.ednl` - Each task's `:category` field defines its category
-- Prompts in `.mcp-tasks/prompts/` - Optional category-specific execution instructions (e.g., `simple.md`, `medium.md`)
+- Prompts in `.mcp-tasks/prompts/` - Optional category-specific
+  execution instructions (e.g., `simple.md`, `medium.md`)
 
 ### Custom Categories
 
@@ -832,7 +762,8 @@ Create a new category by adding a task with that category:
 # Example: {:category "my-category" :title "My first task" ...}
 ```
 
-The category will be automatically discovered from existing tasks, and you can run:
+The category will be automatically discovered from existing tasks, and
+you can run:
 
 ```
 /mcp-tasks:next-my-category
@@ -846,11 +777,13 @@ Override default task execution by adding a prompt file:
 .mcp-tasks/prompts/<category>.md
 ```
 
-This file should contain specific instructions for how tasks in this category should be executed.
+This file should contain specific instructions for how tasks in this
+category should be executed.
 
 ## Advanced Workflow: Git Worktrees
 
-For complex projects with multiple parallel task streams, you can use git worktrees to isolate work by category.
+For complex projects with multiple parallel task streams, you can use
+git worktrees to isolate work by category.
 
 ### Setup Worktrees
 
@@ -863,7 +796,8 @@ git worktree add ../project-refactor refactor-branch
 
 ### Workflow with Worktrees
 
-1. **Separate task streams** - Each worktree can have its own `.mcp-tasks/tasks.ednl` with relevant tasks
+1. **Separate task streams** - Each worktree can have its own
+   `.mcp-tasks/tasks.ednl` with relevant tasks
 
 2. **Process tasks independently** - Work in each worktree:
    ```bash
@@ -908,7 +842,8 @@ Check what has been accomplished:
 cat .mcp-tasks/complete.ednl
 ```
 
-Completed tasks have `:status :closed` and include the full task specification as an EDN map.
+Completed tasks have `:status :closed` and include the full task
+specification as an EDN map.
 
 ### Task Specifications
 
@@ -944,7 +879,8 @@ Write comprehensive tests"
  :relations []}
 ```
 
-The agent will read and consider all details in the `:title` and `:description` fields when implementing the task.
+The agent will read and consider all details in the `:title` and
+`:description` fields when implementing the task.
 
 ## Tips and Best Practices
 
