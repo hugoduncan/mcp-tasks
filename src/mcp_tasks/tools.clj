@@ -219,8 +219,13 @@
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
-  Finds a task by exact match (task-id or title) and moves it from
-  tasks.ednl to complete.ednl with optional completion comment.
+  Finds a task by exact match (task-id or title) and completes it with optional
+  completion comment. Behavior depends on task type:
+
+  - Regular tasks (no parent-id): Marked :status :closed and moved to complete.ednl
+  - Story children (has parent-id): Marked :status :closed but stay in tasks.ednl
+  - Stories (type :story): Validates all children :status :closed, then atomically
+    archives story and all children to complete.ednl
 
   At least one of task-id or title must be provided.
   If both are provided, they must refer to the same task.
