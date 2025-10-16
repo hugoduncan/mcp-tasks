@@ -2,197 +2,16 @@
   "Task management tools"
   (:require
     [clojure.data.json :as json]
-    [clojure.java.io :as io]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
     [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.response :as response]
     [mcp-tasks.schema :as schema]
-    [mcp-tasks.tasks :as tasks]))
-
-(defn- file-exists?
-  "Check if a file exists"
-  [file-path]
-  (.exists (io/file file-path)))
-
-(defn- perform-git-commit
-  "Performs git add and commit operations.
-
-  Parameters:
-  - git-dir: Path to the git repository
-  - files-to-commit: Collection of relative file paths to add and commit
-  - commit-msg: The commit message string
-
-  Returns a map with:
-  - :success - boolean indicating if commit succeeded
-  - :commit-sha - commit SHA string (or nil if failed)
-  - :error - error message string (or nil if successful)
-
-  Never throws - all errors are caught and returned in the map."
-  [git-dir files-to-commit commit-msg]
-  (try
-    ;; Stage modified files
-    (apply sh/sh "git" "-C" git-dir "add" files-to-commit)
-
-    ;; Commit changes
-    (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
-      (if (zero? (:exit commit-result))
-        ;; Success - get commit SHA
-        (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
-              sha (str/trim (:out sha-result))]
-          {:success true
-           :commit-sha sha
-           :error nil})
-
-        ;; Commit failed
-        {:success false
-         :commit-sha nil
-         :error (str/trim (:err commit-result))}))
-
-    (catch Exception e
-      {:success false
-       :commit-sha nil
-       :error (.getMessage e)})))
-
-(defn- commit-task-changes
-  "Commits task file changes to .mcp-tasks git repository.
-
-  Parameters:
-  - base-dir: Base directory containing .mcp-tasks
-  - task-id: ID of the task being operated on
-  - task-title: Title of the task being operated on
-  - files-to-commit: Collection of relative file paths to add and commit
-  - operation: Operation name (e.g., \"Complete\", \"Delete\") for commit message
-
-  Returns a map with:
-  - :success - boolean indicating if commit succeeded
-  - :commit-sha - commit SHA string (or nil if failed)
-  - :error - error message string (or nil if successful)
-
-  Never throws - all errors are caught and returned in the map."
-  [base-dir task-id task-title files-to-commit operation]
-  (let [git-dir (str base-dir "/.mcp-tasks")
-        commit-msg (str operation " task #" task-id ": " task-title)]
-    (perform-git-commit git-dir files-to-commit commit-msg)))
-
-;; Error response helpers
-
-(defn- build-tool-error-response
-  "Build standardized two-content-item error response.
-
-  Parameters:
-  - error-message: Human-readable error message (string)
-  - operation: Operation that failed (string)
-  - error-metadata: Additional metadata map to include
-
-  Returns error response map with :content and :isError keys."
-  [error-message operation error-metadata]
-  {:content [{:type "text"
-              :text error-message}
-             {:type "text"
-              :text (json/write-str
-                      {:error error-message
-                       :metadata (merge {:attempted-operation operation}
-                                        error-metadata)})}]
-   :isError true})
-
-(defn- build-completion-response
-  "Build standardized completion response with optional git integration.
-
-  Parameters:
-  - msg-text: Human-readable completion message (string)
-  - modified-files: Vector of relative file paths that were modified
-  - use-git?: Whether git integration is enabled (boolean)
-  - git-result: Optional map with :success, :commit-sha, :error keys
-
-  Returns response map with :content and :isError keys."
-  [msg-text modified-files use-git? git-result]
-  (if use-git?
-    {:content [{:type "text"
-                :text msg-text}
-               {:type "text"
-                :text (json/write-str {:modified-files modified-files})}
-               {:type "text"
-                :text (json/write-str
-                        (cond-> {:git-status (if (:success git-result)
-                                               "success"
-                                               "error")
-                                 :git-commit-sha (:commit-sha git-result)}
-                          (:error git-result)
-                          (assoc :git-error (:error git-result))))}]
-     :isError false}
-    {:content [{:type "text"
-                :text msg-text}]
-     :isError false}))
-
-;; Validation helpers
-
-(defn- format-path-element
-  "Format a single element from a Malli :in path.
-
-  Handles keywords, symbols, strings, and numeric indices."
-  [element]
-  (cond
-    (keyword? element) (name element)
-    (symbol? element) (name element)
-    (string? element) element
-    (number? element) (str "[" element "]")
-    :else (str element)))
-
-(defn- format-field-path
-  "Format a Malli :in path into a human-readable field name.
-
-  Returns a string like 'relations[0].as-type' for nested paths."
-  [in]
-  (if (seq in)
-    (str/join "." (map format-path-element in))
-    "field"))
-
-(defn- format-malli-error
-  "Format a Malli validation error into a human-readable message.
-
-  Extracts field path and error details from Malli's explain result.
-  Returns a string describing what field failed and why."
-  [error]
-  (let [in (:in error)
-        schema (:schema error)
-        value (:value error)
-        type (:type error)
-        field-name (format-field-path in)]
-    (cond
-      ;; Enum validation failure
-      (and (vector? schema) (= :enum (first schema)))
-      (let [allowed-values (rest schema)]
-        (format "%s has invalid value %s (expected one of: %s)"
-                field-name
-                (pr-str value)
-                (str/join ", " (map pr-str allowed-values))))
-
-      ;; Type mismatch
-      (= type :malli.core/invalid-type)
-      (format "%s has invalid type (got: %s, expected: %s)"
-              field-name
-              (pr-str value)
-              (pr-str schema))
-
-      ;; Missing required field
-      (= type :malli.core/missing-key)
-      (format "missing required field: %s" field-name)
-
-      ;; Generic fallback
-      :else
-      (format "%s failed validation: %s" field-name (pr-str error)))))
-
-(defn- format-validation-errors
-  "Format Malli validation result into human-readable error messages.
-
-  Takes the result from schema/explain-task and returns a formatted
-  string with specific field errors."
-  [validation-result]
-  (if-let [errors (:errors validation-result)]
-    (str/join "; " (map format-malli-error errors))
-    (pr-str validation-result)))
+    [mcp-tasks.tasks :as tasks]
+    [mcp-tasks.tools.git :as git]
+    [mcp-tasks.tools.helpers :as helpers]
+    [mcp-tasks.tools.validation :as validation]))
 
 (defn- validate-task-exists
   "Validate that a task exists.
@@ -200,7 +19,7 @@
   Returns error response map if validation fails, nil if successful."
   [task-id operation tasks-file & {:keys [additional-metadata]}]
   (when-not (tasks/get-task task-id)
-    (build-tool-error-response
+    (helpers/build-tool-error-response
       "Task not found"
       operation
       (merge {:task-id task-id :file tasks-file}
@@ -212,7 +31,7 @@
   Returns error response map if validation fails, nil if successful."
   [parent-id operation task-id tasks-file error-message & {:keys [additional-metadata]}]
   (when (and parent-id (not (tasks/get-task parent-id)))
-    (build-tool-error-response
+    (helpers/build-tool-error-response
       error-message
       operation
       (merge {:task-id task-id :parent-id parent-id :file tasks-file}
@@ -224,9 +43,9 @@
   Returns error response map if validation fails, nil if successful."
   [task operation task-id tasks-file]
   (when-let [validation-result (schema/explain-task task)]
-    (let [formatted-errors (format-validation-errors validation-result)
+    (let [formatted-errors (validation/format-validation-errors validation-result)
           error-message (str "Invalid task field values: " formatted-errors)]
-      (build-tool-error-response
+      (helpers/build-tool-error-response
         error-message
         operation
         {:task-id task-id
@@ -248,8 +67,8 @@
         tasks-rel-path (:relative tasks-path)
         complete-rel-path (:relative complete-path)]
 
-    (if-not (file-exists? tasks-file)
-      (build-tool-error-response
+    (if-not (helpers/file-exists? tasks-file)
+      (helpers/build-tool-error-response
         "Tasks file not found"
         "complete-task"
         {:file tasks-file})
@@ -280,7 +99,7 @@
   [task-id title operation tasks-file]
   ;; Validate at least one identifier provided
   (if (and (nil? task-id) (nil? title))
-    (build-tool-error-response
+    (helpers/build-tool-error-response
       "Must provide either task-id or title"
       operation
       {:task-id task-id
@@ -295,21 +114,21 @@
         (and task-id title)
         (cond
           (nil? task-by-id)
-          (build-tool-error-response
+          (helpers/build-tool-error-response
             "Task ID not found"
             operation
             {:task-id task-id
              :file tasks-file})
 
           (empty? tasks-by-title)
-          (build-tool-error-response
+          (helpers/build-tool-error-response
             "No task found with exact title match"
             operation
             {:title title
              :file tasks-file})
 
           (not (some #(= (:id %) task-id) tasks-by-title))
-          (build-tool-error-response
+          (helpers/build-tool-error-response
             "Task ID and title do not refer to the same task"
             operation
             {:task-id task-id
@@ -323,7 +142,7 @@
         ;; Only ID provided
         task-id
         (or task-by-id
-            (build-tool-error-response
+            (helpers/build-tool-error-response
               "Task ID not found"
               operation
               {:task-id task-id
@@ -333,14 +152,14 @@
         title
         (cond
           (empty? tasks-by-title)
-          (build-tool-error-response
+          (helpers/build-tool-error-response
             "No task found with exact title match"
             operation
             {:title title
              :file tasks-file})
 
           (> (count tasks-by-title) 1)
-          (build-tool-error-response
+          (helpers/build-tool-error-response
             "Multiple tasks found with same title - use task-id to disambiguate"
             operation
             {:title title
@@ -368,12 +187,12 @@
     (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
           modified-files [tasks-rel-path complete-rel-path]
           git-result (when use-git?
-                       (commit-task-changes (:base-dir config)
-                                            (:id task)
-                                            (:title task)
-                                            modified-files
-                                            "Complete"))]
-      (build-completion-response msg-text modified-files use-git? git-result))))
+                       (git/commit-task-changes (:base-dir config)
+                                                (:id task)
+                                                (:title task)
+                                                modified-files
+                                                "Complete"))]
+      (helpers/build-completion-response msg-text modified-files use-git? git-result))))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -392,7 +211,7 @@
         parent (tasks/get-task (:parent-id task))]
     (cond
       (not parent)
-      (build-tool-error-response
+      (helpers/build-tool-error-response
         "Parent task not found"
         "complete-task"
         {:task-id (:id task)
@@ -400,7 +219,7 @@
          :file tasks-file})
 
       (not= (:type parent) :story)
-      (build-tool-error-response
+      (helpers/build-tool-error-response
         "Parent task is not a story"
         "complete-task"
         {:task-id (:id task)
@@ -416,12 +235,12 @@
         (let [msg-text (str "Task " (:id task) " completed")
               modified-files [tasks-rel-path]
               git-result (when use-git?
-                           (commit-task-changes (:base-dir config)
-                                                (:id task)
-                                                (:title task)
-                                                modified-files
-                                                "Complete"))]
-          (build-completion-response msg-text modified-files use-git? git-result))))))
+                           (git/commit-task-changes (:base-dir config)
+                                                    (:id task)
+                                                    (:title task)
+                                                    modified-files
+                                                    "Complete"))]
+          (helpers/build-completion-response msg-text modified-files use-git? git-result))))))
 
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
@@ -442,7 +261,7 @@
         unclosed-children (filterv #(not= :closed (:status %)) children)]
     (if (seq unclosed-children)
       ;; Error: unclosed children exist
-      (build-tool-error-response
+      (helpers/build-tool-error-response
         (str "Cannot complete story: " (count unclosed-children)
              " child task" (when (> (count unclosed-children) 1) "s")
              " still " (if (= 1 (count unclosed-children)) "is" "are")
@@ -497,7 +316,7 @@
                                  {:success false
                                   :commit-sha nil
                                   :error (.getMessage e)})))]
-            (build-completion-response msg-text modified-files use-git? git-result)))))))
+            (helpers/build-completion-response msg-text modified-files use-git? git-result)))))))
 
 (defn- complete-task-impl
   "Implementation of complete-task tool.
@@ -535,7 +354,7 @@
             ;; Verify category if provided (for backwards compatibility)
             (cond
               (and category (not= (:category task) category))
-              (build-tool-error-response
+              (helpers/build-tool-error-response
                 "Task category does not match"
                 "complete-task"
                 {:expected-category category
@@ -545,7 +364,7 @@
 
               ;; Verify task is not already closed
               (= (:status task) :closed)
-              (build-tool-error-response
+              (helpers/build-tool-error-response
                 "Task is already closed"
                 "complete-task"
                 {:task-id (:id task)
@@ -641,7 +460,7 @@
             (cond
               ;; Verify task is not already deleted
               (= (:status task) :deleted)
-              (build-tool-error-response
+              (helpers/build-tool-error-response
                 "Task is already deleted"
                 "delete-task"
                 {:task-id (:id task)
@@ -654,7 +473,7 @@
                     non-closed-children (filterv #(not= :closed (:status %)) children)]
                 (if (seq non-closed-children)
                   ;; Error: non-closed children exist
-                  (build-tool-error-response
+                  (helpers/build-tool-error-response
                     "Cannot delete task with children. Delete or complete all child tasks first."
                     "delete-task"
                     {:task-id (:id task)
@@ -673,11 +492,11 @@
                         msg-text (str "Task " (:id task) " deleted successfully")
                         modified-files [tasks-rel-path complete-rel-path]
                         git-result (when use-git?
-                                     (commit-task-changes (:base-dir config)
-                                                          (:id task)
-                                                          (:title task)
-                                                          modified-files
-                                                          "Delete"))]
+                                     (git/commit-task-changes (:base-dir config)
+                                                              (:id task)
+                                                              (:title task)
+                                                              modified-files
+                                                              "Delete"))]
                     ;; Build response with deleted task data
                     (if use-git?
                       {:content [{:type "text"
@@ -775,7 +594,7 @@
             status-keyword (when status (keyword status))]
 
         ;; Load tasks from EDNL file
-        (when (file-exists? tasks-file)
+        (when (helpers/file-exists? tasks-file)
           (tasks/load-tasks! tasks-file :complete-file complete-file))
 
         ;; Get all matching incomplete tasks
@@ -882,7 +701,7 @@
         complete-path (path-helper/task-path config ["complete.ednl"])
         complete-file (:absolute complete-path)]
     ;; Load existing tasks into memory if file exists
-    (when (file-exists? tasks-file)
+    (when (helpers/file-exists? tasks-file)
       (tasks/load-tasks! tasks-file :complete-file complete-file))
     tasks-file))
 
@@ -932,12 +751,10 @@
           ;; Commit to git if enabled
           (let [use-git? (:use-git? config)
                 git-result (when use-git?
-                             (let [truncated-title (if (> (count title) 50)
-                                                     (str (subs title 0 47) "...")
-                                                     title)
+                             (let [truncated-title (helpers/truncate-title title)
                                    git-dir (str (:base-dir config) "/.mcp-tasks")
                                    commit-msg (str "Add task #" (:id created-task) ": " truncated-title)]
-                               (perform-git-commit git-dir [tasks-rel-path] commit-msg)))
+                               (git/perform-git-commit git-dir [tasks-rel-path] commit-msg)))
                 task-data-json (json/write-str
                                  {:task (select-keys
                                           created-task
@@ -1148,7 +965,7 @@
 
       ;; Validate at least one field provided
       (if (empty? updates)
-        (build-tool-error-response
+        (helpers/build-tool-error-response
           "No fields to update"
           "update-task"
           {:task-id task-id
