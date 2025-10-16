@@ -21,7 +21,7 @@
   [:map
    [:id :int]
    [:parent-id {:optional true} [:maybe :int]]
-   [:status [:enum :open :closed :in-progress :blocked]]
+   [:status [:enum :open :closed :in-progress :blocked :deleted]]
    [:title :string]
    [:description :string]
    [:design :string]
