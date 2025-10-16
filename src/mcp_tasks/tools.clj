@@ -262,6 +262,94 @@
          :tasks-rel-path tasks-rel-path
          :complete-rel-path complete-rel-path}))))
 
+(defn- find-task-by-identifiers
+  "Find a task by task-id and/or title using exact match.
+
+  At least one of task-id or title must be provided.
+  If both are provided, they must refer to the same task.
+
+  Parameters:
+  - task-id: Optional integer task ID
+  - title: Optional string for exact title match
+  - operation: String operation name for error messages (e.g., 'complete-task', 'delete-task')
+  - tasks-file: Path to tasks file for error metadata
+
+  Returns:
+  - Task map if found, OR
+  - Error response map with :isError true"
+  [task-id title operation tasks-file]
+  ;; Validate at least one identifier provided
+  (if (and (nil? task-id) (nil? title))
+    (build-tool-error-response
+      "Must provide either task-id or title"
+      operation
+      {:task-id task-id
+       :title title})
+
+    ;; Find task by ID or exact title match
+    (let [task-by-id (when task-id (tasks/get-task task-id))
+          tasks-by-title (when title (tasks/find-by-title title))]
+
+      (cond
+        ;; Both provided - verify they match
+        (and task-id title)
+        (cond
+          (nil? task-by-id)
+          (build-tool-error-response
+            "Task ID not found"
+            operation
+            {:task-id task-id
+             :file tasks-file})
+
+          (empty? tasks-by-title)
+          (build-tool-error-response
+            "No task found with exact title match"
+            operation
+            {:title title
+             :file tasks-file})
+
+          (not (some #(= (:id %) task-id) tasks-by-title))
+          (build-tool-error-response
+            "Task ID and title do not refer to the same task"
+            operation
+            {:task-id task-id
+             :title title
+             :task-by-id task-by-id
+             :tasks-by-title (mapv :id tasks-by-title)
+             :file tasks-file})
+
+          :else task-by-id)
+
+        ;; Only ID provided
+        task-id
+        (or task-by-id
+            (build-tool-error-response
+              "Task ID not found"
+              operation
+              {:task-id task-id
+               :file tasks-file}))
+
+        ;; Only title provided
+        title
+        (cond
+          (empty? tasks-by-title)
+          (build-tool-error-response
+            "No task found with exact title match"
+            operation
+            {:title title
+             :file tasks-file})
+
+          (> (count tasks-by-title) 1)
+          (build-tool-error-response
+            "Multiple tasks found with same title - use task-id to disambiguate"
+            operation
+            {:title title
+             :matching-task-ids (mapv :id tasks-by-title)
+             :matching-tasks tasks-by-title
+             :file tasks-file})
+
+          :else (first tasks-by-title))))))
+
 (defn- complete-regular-task-
   "Completes a regular task by marking it :status :closed and moving to complete.ednl.
   
@@ -429,120 +517,50 @@
   - Git mode enabled: Three text items (completion message + JSON with :modified-files + JSON with git status)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
-  ;; Validate at least one identifier provided
-  (if (and (nil? task-id) (nil? title))
-    (build-tool-error-response
-      "Must provide either task-id or title"
-      "complete-task"
-      {:task-id task-id
-       :title title})
+  ;; Setup common context and load tasks
+  (let [context (setup-completion-context config)]
+    (if (:isError context)
+      context
 
-    ;; Setup common context and load tasks
-    (let [context (setup-completion-context config)]
-      (if (:isError context)
-        context
+      (let [{:keys [tasks-file]} context
+            ;; Find task using shared helper
+            task-result (find-task-by-identifiers task-id title "complete-task" tasks-file)]
 
-        (let [{:keys [tasks-file]} context
-              ;; Find task by ID or exact title match
-              task-by-id (when task-id (tasks/get-task task-id))
-              tasks-by-title (when title (tasks/find-by-title title))
+        ;; Check if task-result is an error response
+        (if (:isError task-result)
+          task-result
 
-              ;; Determine which task to complete
-              task-result (cond
-                            ;; Both provided - verify they match
-                            (and task-id title)
-                            (cond
-                              (nil? task-by-id)
-                              (build-tool-error-response
-                                "Task ID not found"
-                                "complete-task"
-                                {:task-id task-id
-                                 :file tasks-file})
+          ;; task-result is the actual task - proceed with validations
+          (let [task task-result]
+            ;; Verify category if provided (for backwards compatibility)
+            (cond
+              (and category (not= (:category task) category))
+              (build-tool-error-response
+                "Task category does not match"
+                "complete-task"
+                {:expected-category category
+                 :actual-category (:category task)
+                 :task-id (:id task)
+                 :file tasks-file})
 
-                              (empty? tasks-by-title)
-                              (build-tool-error-response
-                                "No task found with exact title match"
-                                "complete-task"
-                                {:title title
-                                 :file tasks-file})
+              ;; Verify task is not already closed
+              (= (:status task) :closed)
+              (build-tool-error-response
+                "Task is already closed"
+                "complete-task"
+                {:task-id (:id task)
+                 :title (:title task)
+                 :file tasks-file})
 
-                              (not (some #(= (:id %) task-id) tasks-by-title))
-                              (build-tool-error-response
-                                "Task ID and task text do not refer to the same task"
-                                "complete-task"
-                                {:task-id task-id
-                                 :title title
-                                 :task-by-id task-by-id
-                                 :tasks-by-title (mapv :id tasks-by-title)
-                                 :file tasks-file})
+              ;; All validations passed - dispatch to appropriate completion function
+              (= (:type task) :story)
+              (complete-story-task- config context task completion-comment)
 
-                              :else task-by-id)
+              (some? (:parent-id task))
+              (complete-child-task- config context task completion-comment)
 
-                            ;; Only ID provided
-                            task-id
-                            (or task-by-id
-                                (build-tool-error-response
-                                  "Task ID not found"
-                                  "complete-task"
-                                  {:task-id task-id
-                                   :file tasks-file}))
-
-                            ;; Only title provided
-                            title
-                            (cond
-                              (empty? tasks-by-title)
-                              (build-tool-error-response
-                                "No task found with exact title match"
-                                "complete-task"
-                                {:title title
-                                 :file tasks-file})
-
-                              (> (count tasks-by-title) 1)
-                              (build-tool-error-response
-                                "Multiple tasks found with same title - use task-id to disambiguate"
-                                "complete-task"
-                                {:title title
-                                 :matching-task-ids (mapv :id tasks-by-title)
-                                 :matching-tasks tasks-by-title
-                                 :file tasks-file})
-
-                              :else (first tasks-by-title)))]
-
-          ;; Check if task-result is an error response
-          (if (:isError task-result)
-            task-result
-
-            ;; task-result is the actual task - proceed with validations
-            (let [task task-result]
-              ;; Verify category if provided (for backwards compatibility)
-              (cond
-                (and category (not= (:category task) category))
-                (build-tool-error-response
-                  "Task category does not match"
-                  "complete-task"
-                  {:expected-category category
-                   :actual-category (:category task)
-                   :task-id (:id task)
-                   :file tasks-file})
-
-                ;; Verify task is not already closed
-                (= (:status task) :closed)
-                (build-tool-error-response
-                  "Task is already closed"
-                  "complete-task"
-                  {:task-id (:id task)
-                   :title (:title task)
-                   :file tasks-file})
-
-                ;; All validations passed - dispatch to appropriate completion function
-                (= (:type task) :story)
-                (complete-story-task- config context task completion-comment)
-
-                (some? (:parent-id task))
-                (complete-child-task- config context task completion-comment)
-
-                :else
-                (complete-regular-task- config context task completion-comment)))))))))
+              :else
+              (complete-regular-task- config context task completion-comment))))))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
@@ -605,155 +623,85 @@
   - Git mode enabled: Three text items (deletion message + JSON with deleted task data + JSON with git status)
   - Git mode disabled: Two text items (deletion message + JSON with deleted task data)"
   [config _context {:keys [task-id title-pattern]}]
-  ;; Validate at least one identifier provided
-  (if (and (nil? task-id) (nil? title-pattern))
-    (build-tool-error-response
-      "Must provide either task-id or title-pattern"
-      "delete-task"
-      {:task-id task-id
-       :title-pattern title-pattern})
+  ;; Setup common context and load tasks
+  (let [context (setup-completion-context config)]
+    (if (:isError context)
+      context
 
-    ;; Setup common context and load tasks
-    (let [context (setup-completion-context config)]
-      (if (:isError context)
-        context
+      (let [{:keys [tasks-file complete-file]} context
+            ;; Find task using shared helper (title-pattern is used for exact match)
+            task-result (find-task-by-identifiers task-id title-pattern "delete-task" tasks-file)]
 
-        (let [{:keys [tasks-file complete-file]} context
-              ;; Find task by ID or exact title match
-              task-by-id (when task-id (tasks/get-task task-id))
-              tasks-by-title (when title-pattern (tasks/find-by-title title-pattern))
+        ;; Check if task-result is an error response
+        (if (:isError task-result)
+          task-result
 
-              ;; Determine which task to delete
-              task-result (cond
-                            ;; Both provided - verify they match
-                            (and task-id title-pattern)
-                            (cond
-                              (nil? task-by-id)
-                              (build-tool-error-response
-                                "Task ID not found"
-                                "delete-task"
-                                {:task-id task-id
-                                 :file tasks-file})
+          ;; task-result is the actual task - proceed with validations
+          (let [task task-result]
+            (cond
+              ;; Verify task is not already deleted
+              (= (:status task) :deleted)
+              (build-tool-error-response
+                "Task is already deleted"
+                "delete-task"
+                {:task-id (:id task)
+                 :title (:title task)
+                 :file tasks-file})
 
-                              (empty? tasks-by-title)
-                              (build-tool-error-response
-                                "No task found with exact title match"
-                                "delete-task"
-                                {:title-pattern title-pattern
-                                 :file tasks-file})
+              ;; Check for non-closed children
+              :else
+              (let [children (tasks/get-children (:id task))
+                    non-closed-children (filterv #(not= :closed (:status %)) children)]
+                (if (seq non-closed-children)
+                  ;; Error: non-closed children exist
+                  (build-tool-error-response
+                    "Cannot delete task with children. Delete or complete all child tasks first."
+                    "delete-task"
+                    {:task-id (:id task)
+                     :title (:title task)
+                     :child-count (count non-closed-children)
+                     :non-closed-children (mapv #(select-keys % [:id :title :status]) non-closed-children)
+                     :file tasks-file})
 
-                              (not (some #(= (:id %) task-id) tasks-by-title))
-                              (build-tool-error-response
-                                "Task ID and title pattern do not refer to the same task"
-                                "delete-task"
-                                {:task-id task-id
-                                 :title-pattern title-pattern
-                                 :task-by-id task-by-id
-                                 :tasks-by-title (mapv :id tasks-by-title)
-                                 :file tasks-file})
-
-                              :else task-by-id)
-
-                            ;; Only ID provided
-                            task-id
-                            (or task-by-id
-                                (build-tool-error-response
-                                  "Task not found"
-                                  "delete-task"
-                                  {:task-id task-id
-                                   :file tasks-file}))
-
-                            ;; Only title-pattern provided
-                            title-pattern
-                            (cond
-                              (empty? tasks-by-title)
-                              (build-tool-error-response
-                                "No task found with exact title match"
-                                "delete-task"
-                                {:title-pattern title-pattern
-                                 :file tasks-file})
-
-                              (> (count tasks-by-title) 1)
-                              (build-tool-error-response
-                                "Multiple tasks found - use task-id to disambiguate"
-                                "delete-task"
-                                {:title-pattern title-pattern
-                                 :matching-task-ids (mapv :id tasks-by-title)
-                                 :matching-tasks tasks-by-title
-                                 :file tasks-file})
-
-                              :else (first tasks-by-title)))]
-
-          ;; Check if task-result is an error response
-          (if (:isError task-result)
-            task-result
-
-            ;; task-result is the actual task - proceed with validations
-            (let [task task-result]
-              (cond
-                ;; Verify task is not already deleted
-                (= (:status task) :deleted)
-                (build-tool-error-response
-                  "Task is already deleted"
-                  "delete-task"
-                  {:task-id (:id task)
-                   :title (:title task)
-                   :file tasks-file})
-
-                ;; Check for non-closed children
-                :else
-                (let [children (tasks/get-children (:id task))
-                      non-closed-children (filterv #(not= :closed (:status %)) children)]
-                  (if (seq non-closed-children)
-                    ;; Error: non-closed children exist
-                    (build-tool-error-response
-                      "Cannot delete task with children. Delete or complete all child tasks first."
-                      "delete-task"
-                      {:task-id (:id task)
-                       :title (:title task)
-                       :child-count (count non-closed-children)
-                       :non-closed-children (mapv #(select-keys % [:id :title :status]) non-closed-children)
-                       :file tasks-file})
-
-                    ;; All validations passed - delete task
-                    (let [{:keys [use-git? tasks-rel-path complete-rel-path]} context
-                          ;; Update task status to :deleted
-                          updated-task (assoc task :status :deleted)
-                          _ (tasks/update-task (:id task) {:status :deleted})
-                          ;; Move to complete.ednl
-                          _ (tasks/move-task! (:id task) tasks-file complete-file)
-                          msg-text (str "Task " (:id task) " deleted successfully")
-                          modified-files [tasks-rel-path complete-rel-path]
-                          git-result (when use-git?
-                                       (commit-task-changes (:base-dir config)
-                                                            (:id task)
-                                                            (:title task)
-                                                            modified-files
-                                                            "Delete"))]
-                      ;; Build response with deleted task data
-                      (if use-git?
-                        {:content [{:type "text"
-                                    :text msg-text}
-                                   {:type "text"
-                                    :text (json/write-str {:deleted updated-task
-                                                           :metadata {:count 1
-                                                                      :status "deleted"}})}
-                                   {:type "text"
-                                    :text (json/write-str
-                                            (cond-> {:git-status (if (:success git-result)
-                                                                   "success"
-                                                                   "error")
-                                                     :git-commit-sha (:commit-sha git-result)}
-                                              (:error git-result)
-                                              (assoc :git-error (:error git-result))))}]
-                         :isError false}
-                        {:content [{:type "text"
-                                    :text msg-text}
-                                   {:type "text"
-                                    :text (json/write-str {:deleted updated-task
-                                                           :metadata {:count 1
-                                                                      :status "deleted"}})}]
-                         :isError false}))))))))))))
+                  ;; All validations passed - delete task
+                  (let [{:keys [use-git? tasks-rel-path complete-rel-path]} context
+                        ;; Update task status to :deleted
+                        updated-task (assoc task :status :deleted)
+                        _ (tasks/update-task (:id task) {:status :deleted})
+                        ;; Move to complete.ednl
+                        _ (tasks/move-task! (:id task) tasks-file complete-file)
+                        msg-text (str "Task " (:id task) " deleted successfully")
+                        modified-files [tasks-rel-path complete-rel-path]
+                        git-result (when use-git?
+                                     (commit-task-changes (:base-dir config)
+                                                          (:id task)
+                                                          (:title task)
+                                                          modified-files
+                                                          "Delete"))]
+                    ;; Build response with deleted task data
+                    (if use-git?
+                      {:content [{:type "text"
+                                  :text msg-text}
+                                 {:type "text"
+                                  :text (json/write-str {:deleted updated-task
+                                                         :metadata {:count 1
+                                                                    :status "deleted"}})}
+                                 {:type "text"
+                                  :text (json/write-str
+                                          (cond-> {:git-status (if (:success git-result)
+                                                                 "success"
+                                                                 "error")
+                                                   :git-commit-sha (:commit-sha git-result)}
+                                            (:error git-result)
+                                            (assoc :git-error (:error git-result))))}]
+                       :isError false}
+                      {:content [{:type "text"
+                                  :text msg-text}
+                                 {:type "text"
+                                  :text (json/write-str {:deleted updated-task
+                                                         :metadata {:count 1
+                                                                    :status "deleted"}})}]
+                       :isError false})))))))))))
 
 (defn delete-task-tool
   "Tool to delete a task by marking it :status :deleted and moving to complete.ednl.
