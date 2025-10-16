@@ -414,18 +414,37 @@
 
                         ;; Story child completion: keep in tasks.ednl
                         is-child?
-                        (do
-                          (tasks/mark-complete (:id task) completion-comment)
-                          (tasks/save-tasks! tasks-file)
+                        (let [parent (tasks/get-task (:parent-id task))]
+                          (if-not parent
+                            (build-tool-error-response
+                              "Parent task not found"
+                              "complete-task"
+                              {:task-id (:id task)
+                               :parent-id (:parent-id task)
+                               :file tasks-file})
 
-                          (let [msg-text (str "Task " (:id task) " completed")
-                                modified-files [tasks-rel-path]
-                                git-result (when use-git?
-                                             (commit-task-changes (:base-dir config)
-                                                                  (:id task)
-                                                                  (:title task)
-                                                                  modified-files))]
-                            (build-completion-response msg-text modified-files use-git? git-result)))
+                            (if (not= (:type parent) :story)
+                              (build-tool-error-response
+                                "Parent task is not a story"
+                                "complete-task"
+                                {:task-id (:id task)
+                                 :parent-id (:parent-id task)
+                                 :parent-type (:type parent)
+                                 :file tasks-file})
+
+                              ;; Validation passed - proceed with existing completion logic
+                              (do
+                                (tasks/mark-complete (:id task) completion-comment)
+                                (tasks/save-tasks! tasks-file)
+
+                                (let [msg-text (str "Task " (:id task) " completed")
+                                      modified-files [tasks-rel-path]
+                                      git-result (when use-git?
+                                                   (commit-task-changes (:base-dir config)
+                                                                        (:id task)
+                                                                        (:title task)
+                                                                        modified-files))]
+                                  (build-completion-response msg-text modified-files use-git? git-result))))))
 
                         ;; Regular task completion: move to complete.ednl
                         :else
