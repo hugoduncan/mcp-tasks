@@ -34,7 +34,8 @@
   (reset! tasks/task-ids [])
   (reset! tasks/tasks {})
   (reset! tasks/parent-children {})
-  (reset! tasks/child-parent {}))
+  (reset! tasks/child-parent {})
+  (vreset! tasks/next-id 1))
 
 (defn- test-config
   "Config that points to test fixtures directory."
@@ -226,6 +227,34 @@
                     {})]
         (is (true? (:isError result)))
         (is (str/includes? (get-in result [:content 0 :text]) "Must provide either"))))))
+
+(deftest completes-story-child-without-archiving
+  ;; Tests that completing a story child task keeps it in tasks.ednl with :status :closed
+  ;; and does NOT move it to complete.ednl
+  (testing "complete-task"
+    (testing "story child remains in tasks.ednl, closed, not archived"
+      ;; Prepare two tasks: one story, one child
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 10 :parent-id nil :title "Parent story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 11 :parent-id 10 :title "Child task" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+      ;; Invoke completion on the child
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 11})]
+        (is (false? (:isError result)))
+        ;; Verify message doesn't say "moved to"
+        (is (str/includes? (get-in result [:content 0 :text]) "Task 11 completed"))
+        (is (not (str/includes? (get-in result [:content 0 :text]) "moved to")))
+        ;; tasks.ednl: child turns :closed but stays in file
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 2 (count tasks)))
+          (is (= :open (:status (first tasks))))
+          (is (= :closed (:status (second tasks))))
+          (is (= 11 (:id (second tasks)))))
+        ;; complete.ednl remains empty
+        (is (empty? (read-ednl-test-file "complete.ednl")))))))
 
 ;; Integration Tests
 
@@ -975,6 +1004,201 @@
         (is (= 40 (count sha)))
         (is (re-matches #"[0-9a-f]{40}" sha))))))
 
+(deftest ^:integration completes-story-child-with-git
+  ;; Tests that completing a story child with git only modifies tasks.ednl
+  (testing "complete-task with git"
+    (testing "only tasks.ednl is modified for story child"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 20 :parent-id nil :title "Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 21 :parent-id 20 :title "Child" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 21})]
+        (is (false? (:isError result)))
+        ;; Expect 3 content items
+        (is (= 3 (count (:content result))))
+
+        ;; First item: message doesn't say "moved to"
+        (is (str/includes? (get-in result [:content 0 :text]) "Task 21 completed"))
+        (is (not (str/includes? (get-in result [:content 0 :text]) "moved to")))
+
+        ;; Second item: modified-files contains only tasks.ednl
+        (let [files-data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (= ["tasks.ednl"] (:modified-files files-data))))
+
+        ;; Third item: has git-status and commit-sha
+        (let [git-data (json/read-str (get-in result [:content 2 :text]) :key-fn keyword)]
+          (is (= "success" (:git-status git-data)))
+          (is (string? (:git-commit-sha git-data))))
+
+        ;; Verify git commit was created
+        (is (git-commit-exists? *test-dir*))
+
+        ;; Verify task stayed in tasks.ednl with :status :closed
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 2 (count tasks)))
+          (is (= :closed (:status (second tasks)))))
+
+        ;; Verify complete.ednl is still empty
+        (is (empty? (read-ednl-test-file "complete.ednl")))))))
+
+(deftest completes-story-with-unclosed-children-returns-error
+  ;; Tests that attempting to complete a story with unclosed children returns an error
+  (testing "complete-task"
+    (testing "returns error when story has unclosed children"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 30 :parent-id nil :title "My Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 31 :parent-id 30 :title "Child 1" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}
+         {:id 32 :parent-id 30 :title "Child 2" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}
+         {:id 33 :parent-id 30 :title "Child 3" :description "" :design "" :category "simple" :type :task :status :in-progress :meta {} :relations []}])
+
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 30})]
+        ;; Verify error response
+        (is (true? (:isError result)))
+        (is (= 2 (count (:content result))))
+
+        ;; First content: error message
+        (let [msg (get-in result [:content 0 :text])]
+          (is (str/includes? msg "Cannot complete story"))
+          (is (str/includes? msg "2 child tasks"))
+          (is (str/includes? msg "not closed")))
+
+        ;; Second content: error metadata with unclosed children
+        (let [error-data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (= "Cannot complete story: 2 child tasks still are not closed" (:error error-data)))
+          (is (= 30 (get-in error-data [:metadata :task-id])))
+          (is (= 2 (count (get-in error-data [:metadata :unclosed-children]))))
+          ;; Verify unclosed children details
+          (let [unclosed (get-in error-data [:metadata :unclosed-children])]
+            (is (some #(= 31 (:id %)) unclosed))
+            (is (some #(= 33 (:id %)) unclosed))
+            (is (every? #(not= :closed (:status %)) unclosed))))
+
+        ;; Verify nothing was moved to complete.ednl
+        (is (empty? (read-ednl-test-file "complete.ednl")))
+
+        ;; Verify all tasks remain in tasks.ednl unchanged
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 4 (count tasks)))
+          (is (= :open (:status (first tasks)))))))))
+
+(deftest completes-story-with-all-children-closed
+  ;; Tests that completing a story with all children closed archives everything atomically
+  (testing "complete-task"
+    (testing "archives story and all children atomically when all closed"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 40 :parent-id nil :title "Complete Story" :description "Story desc" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 41 :parent-id 40 :title "Child 1" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}
+         {:id 42 :parent-id 40 :title "Child 2" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}])
+
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 40})]
+        ;; Verify success response
+        (is (false? (:isError result)))
+        (is (= 1 (count (:content result))))
+
+        ;; Verify completion message
+        (let [msg (get-in result [:content 0 :text])]
+          (is (str/includes? msg "Story 40 completed and archived"))
+          (is (str/includes? msg "with 2 child tasks")))
+
+        ;; Verify all tasks moved to complete.ednl
+        (let [completed-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 3 (count completed-tasks)))
+          ;; Verify story is first
+          (is (= 40 (:id (first completed-tasks))))
+          (is (= :story (:type (first completed-tasks))))
+          (is (= :closed (:status (first completed-tasks))))
+          ;; Verify children follow
+          (is (= 41 (:id (second completed-tasks))))
+          (is (= 42 (:id (nth completed-tasks 2)))))
+
+        ;; Verify tasks.ednl is now empty
+        (is (empty? (read-ednl-test-file "tasks.ednl")))))))
+
+(deftest completes-story-with-no-children
+  ;; Tests that completing a story with no children archives it immediately
+  (testing "complete-task"
+    (testing "archives story immediately when it has no children"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 50 :parent-id nil :title "Empty Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}])
+
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 50})]
+        ;; Verify success response
+        (is (false? (:isError result)))
+
+        ;; Verify completion message doesn't mention children
+        (let [msg (get-in result [:content 0 :text])]
+          (is (str/includes? msg "Story 50 completed and archived"))
+          (is (not (str/includes? msg "child"))))
+
+        ;; Verify story moved to complete.ednl
+        (let [completed-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count completed-tasks)))
+          (is (= 50 (:id (first completed-tasks))))
+          (is (= :closed (:status (first completed-tasks)))))
+
+        ;; Verify tasks.ednl is now empty
+        (is (empty? (read-ednl-test-file "tasks.ednl")))))))
+
+(deftest ^:integration completes-story-with-git-creates-commit
+  ;; Tests that completing a story with git creates a commit with custom message
+  (testing "complete-task with git"
+    (testing "creates commit with story-specific message and child count"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 60 :parent-id nil :title "Git Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+         {:id 61 :parent-id 60 :title "Child A" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}
+         {:id 62 :parent-id 60 :title "Child B" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}
+         {:id 63 :parent-id 60 :title "Child C" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}])
+
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 60})]
+        (is (false? (:isError result)))
+        (is (= 3 (count (:content result))))
+
+        ;; Verify completion message
+        (let [msg (get-in result [:content 0 :text])]
+          (is (str/includes? msg "Story 60 completed and archived"))
+          (is (str/includes? msg "with 3 child tasks")))
+
+        ;; Verify modified files includes both tasks.ednl and complete.ednl
+        (let [files-data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (= ["tasks.ednl" "complete.ednl"] (:modified-files files-data))))
+
+        ;; Verify git status is success
+        (let [git-data (json/read-str (get-in result [:content 2 :text]) :key-fn keyword)]
+          (is (= "success" (:git-status git-data)))
+          (is (string? (:git-commit-sha git-data)))
+          (is (= 40 (count (:git-commit-sha git-data)))))
+
+        ;; Verify git commit was created with correct message
+        (is (git-commit-exists? *test-dir*))
+        (let [commit-msg (git-log-last-commit *test-dir*)]
+          (is (= "Complete story #60: Git Story (with 3 tasks)" commit-msg)))
+
+        ;; Verify all tasks archived
+        (let [completed-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 4 (count completed-tasks))))
+        (is (empty? (read-ednl-test-file "tasks.ednl")))))))
+
 ;; update-task-impl tests
 
 (deftest update-task-updates-title-field
@@ -1279,3 +1503,108 @@
           ;; Relations should be completely replaced, not appended
           (is (= 1 (count (:relations task))))
           (is (= [{:id 2 :relates-to 3 :as-type :blocked-by}] (:relations task))))))))
+
+(deftest ^:integration end-to-end-story-workflow-with-git
+  ;; Tests complete story workflow: add story, add children, complete children, complete story
+  ;; Verifies file states and git commits at each step
+  (testing "end-to-end story workflow"
+    (testing "complete workflow with git integration"
+      (init-git-repo *test-dir*)
+
+      ;; Step 1: Create a story
+      (let [result (#'sut/add-task-impl
+                    (git-test-config)
+                    nil
+                    {:category "story"
+                     :title "E2E Story"
+                     :description "End-to-end test story"
+                     :type "story"})]
+        (is (false? (:isError result)))
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= :story (:type (first tasks))))
+          (is (= "E2E Story" (:title (first tasks))))))
+
+      ;; Step 2: Add three child tasks
+      (doseq [title ["Task A" "Task B" "Task C"]]
+        (let [result (#'sut/add-task-impl
+                      (git-test-config)
+                      nil
+                      {:category "simple"
+                       :title title
+                       :parent-id 1})]
+          (is (false? (:isError result)))))
+
+      (let [tasks (read-ednl-test-file "tasks.ednl")]
+        (is (= 4 (count tasks)))
+        (is (every? #(= 1 (:parent-id %)) (rest tasks))))
+
+      ;; Step 3: Complete each child task and track commit SHAs
+      (let [child-commits (atom [])]
+        (doseq [child-id [2 3 4]]
+          (let [result (#'sut/complete-task-impl
+                        (git-test-config)
+                        nil
+                        {:task-id child-id})]
+            (is (false? (:isError result)))
+            (is (str/includes? (get-in result [:content 0 :text])
+                               (str "Task " child-id " completed")))
+            (is (not (str/includes? (get-in result [:content 0 :text])
+                                    "moved to")))
+            ;; Verify git commit was created for child completion
+            (let [git-data (json/read-str (get-in result [:content 2 :text])
+                                          :key-fn keyword)]
+              (is (= "success" (:git-status git-data)))
+              (is (string? (:git-commit-sha git-data)))
+              (swap! child-commits conj (:git-commit-sha git-data)))))
+
+        ;; Verify all children are closed but still in tasks.ednl
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 4 (count tasks)))
+          (is (= :open (:status (first tasks))))
+          (is (every? #(= :closed (:status %)) (rest tasks))))
+
+        ;; Verify complete.ednl is still empty
+        (is (empty? (read-ednl-test-file "complete.ednl")))
+
+        ;; Step 4: Complete the story
+        (let [result (#'sut/complete-task-impl
+                      (git-test-config)
+                      nil
+                      {:task-id 1})]
+          (is (false? (:isError result)))
+          (is (= 3 (count (:content result))))
+
+          ;; Verify completion message
+          (let [msg (get-in result [:content 0 :text])]
+            (is (str/includes? msg "Story 1 completed and archived"))
+            (is (str/includes? msg "with 3 child tasks")))
+
+          ;; Verify both files modified
+          (let [files-data (json/read-str (get-in result [:content 1 :text])
+                                          :key-fn keyword)]
+            (is (= ["tasks.ednl" "complete.ednl"] (:modified-files files-data))))
+
+          ;; Verify git commit for story completion
+          (let [git-data (json/read-str (get-in result [:content 2 :text])
+                                        :key-fn keyword)]
+            (is (= "success" (:git-status git-data)))
+            (is (string? (:git-commit-sha git-data)))
+            (is (= "Complete story #1: E2E Story (with 3 tasks)"
+                   (git-log-last-commit *test-dir*)))))
+
+        ;; Step 5: Verify final state
+        (let [completed (read-ednl-test-file "complete.ednl")]
+          (is (= 4 (count completed)))
+          (is (= 1 (:id (first completed))))
+          (is (= :story (:type (first completed))))
+          (is (every? #(= :closed (:status %)) completed))
+          (is (every? #(= 1 (:parent-id %)) (rest completed))))
+
+        (is (empty? (read-ednl-test-file "tasks.ednl")))
+
+        ;; Step 6: Verify git commits were created
+        ;; We have 3 child completion commits + 1 story completion commit + 1 initial commit
+        (is (= 3 (count @child-commits)))
+        (is (every? string? @child-commits))
+        (is (git-commit-exists? *test-dir*))))))
