@@ -387,11 +387,11 @@
 (defn- description
   "Generate description for complete-task tool based on config."
   [config]
-  (if (:use-git? config)
-    "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
-   When git mode is enabled, automatically commits the changes.
-
-   Identifies tasks by exact match using task-id or title (title).
+  (str
+    "Complete a task by changing :status to :closed.\n"
+    (when (:use-git? config)
+      "Automatically commits the tasj changes.\n")
+    "\nIdentifies tasks by exact match using task-id or title (title).
    At least one identifier must be provided.
 
    Parameters:
@@ -401,29 +401,7 @@
    - completion-comment: (optional) Comment appended to task description
 
    If both task-id and title are provided, they must refer to the same task.
-   If only title is provided and multiple tasks have the same title, an error is returned.
-
-   Returns three text items:
-   1. A completion status message
-   2. A JSON-encoded map with :modified-files key containing file paths
-      relative to .mcp-tasks for use in git commit workflows
-   3. A JSON-encoded map with :git-status (\"success\" or \"error\"),
-      :git-commit-sha (commit SHA or nil), and optionally :git-error (error message)"
-    "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
-
-   Identifies tasks by exact match using task-id or title (title).
-   At least one identifier must be provided.
-
-   Parameters:
-   - task-id: (optional) Exact task ID
-   - title: (optional) Exact task title match
-   - category: (optional) For backwards compatibility - verifies task category if provided
-   - completion-comment: (optional) Comment appended to task description
-
-   If both task-id and title are provided, they must refer to the same task.
-   If only title is provided and multiple tasks have the same title, an error is returned.
-
-   Returns a completion status message."))
+   If only title is provided and multiple tasks have the same title, an error is returned."))
 
 (defn complete-task-tool
   "Tool to complete a task and move it from tasks to complete directory.
@@ -715,7 +693,7 @@
     }
   }
 
-  Agent usage: On successful task creation, display the task-id and title to 
+  Agent usage: On successful task creation, display the task-id and title to
   the user to confirm the task was added.
 
   Accepts config parameter for future git-aware functionality."
