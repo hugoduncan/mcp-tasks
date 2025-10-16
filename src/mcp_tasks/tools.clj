@@ -799,7 +799,7 @@
                                                      (str (subs title 0 47) "...")
                                                      title)
                                    git-dir (str (:base-dir config) "/.mcp-tasks")
-                                   commit-msg (str "add task #" (:id created-task) ": " truncated-title)]
+                                   commit-msg (str "Add task #" (:id created-task) ": " truncated-title)]
                                (perform-git-commit git-dir [tasks-rel-path] commit-msg)))
                 task-data-json (json/write-str
                                  {:task (select-keys
