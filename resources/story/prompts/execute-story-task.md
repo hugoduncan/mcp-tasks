@@ -58,7 +58,6 @@ The story can be specified in multiple ways:
 
 ## Notes
 
-- Tasks are stored in `.mcp-tasks/tasks.ednl` with parent-child relationships
 - Story tasks are child tasks with :parent-id pointing to the story
 - The category workflow will find and execute the task by its position
   in the queue

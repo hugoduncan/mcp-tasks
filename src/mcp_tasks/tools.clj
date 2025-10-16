@@ -3,6 +3,7 @@
   (:require
     [clojure.data.json :as json]
     [clojure.java.io :as io]
+    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.prompts :as prompts]
@@ -14,6 +15,43 @@
   [file-path]
   (.exists (io/file file-path)))
 
+(defn- commit-task-changes
+  "Commits task file changes to .mcp-tasks git repository.
+
+  Returns a map with:
+  - :success - boolean indicating if commit succeeded
+  - :commit-sha - commit SHA string (or nil if failed)
+  - :error - error message string (or nil if successful)
+
+  Never throws - all errors are caught and returned in the map."
+  [base-dir task-id task-title]
+  (try
+    (let [git-dir (str base-dir "/.mcp-tasks")
+          commit-msg (str "Complete task #" task-id ": " task-title)]
+
+      ;; Stage modified files
+      (sh/sh "git" "-C" git-dir "add" "tasks.ednl" "complete.ednl")
+
+      ;; Commit changes
+      (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
+        (if (zero? (:exit commit-result))
+          ;; Success - get commit SHA
+          (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
+                sha (str/trim (:out sha-result))]
+            {:success true
+             :commit-sha sha
+             :error nil})
+
+          ;; Commit failed
+          {:success false
+           :commit-sha nil
+           :error (str/trim (:err commit-result))})))
+
+    (catch Exception e
+      {:success false
+       :commit-sha nil
+       :error (.getMessage e)})))
+
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
@@ -24,7 +62,7 @@
   If both are provided, they must refer to the same task.
 
   Returns:
-  - Git mode enabled: Two text items (completion message + JSON with :modified-files)
+  - Git mode enabled: Three text items (completion message + JSON with :modified-files + JSON with git status)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
   (try
@@ -114,18 +152,31 @@
         ;; Move task from tasks file to complete file
         (tasks/move-task! (:id task) tasks-file complete-file)
 
-        (if use-git?
-          ;; Git mode: return message + JSON with modified files
-          {:content [{:type "text"
-                      :text (str "Task " (:id task) " completed and moved to " complete-file)}
-                     {:type "text"
-                      :text (json/write-str {:modified-files [tasks-rel-path
-                                                              complete-rel-path]})}]
-           :isError false}
-          ;; Non-git mode: return message only
-          {:content [{:type "text"
-                      :text (str "Task " (:id task) " completed and moved to " complete-file)}]
-           :isError false})))
+        ;; Commit changes if git mode is enabled
+        (let [git-result (when use-git?
+                           (commit-task-changes (:base-dir config)
+                                                (:id task)
+                                                (:title task)))]
+          (if use-git?
+            ;; Git mode: return message + JSON with modified files + git status
+            {:content [{:type "text"
+                        :text (str "Task " (:id task) " completed and moved to " complete-file)}
+                       {:type "text"
+                        :text (json/write-str {:modified-files [tasks-rel-path
+                                                                complete-rel-path]})}
+                       {:type "text"
+                        :text (json/write-str
+                                (cond-> {:git-status (if (:success git-result)
+                                                       "success"
+                                                       "error")
+                                         :git-commit-sha (:commit-sha git-result)}
+                                  (:error git-result)
+                                  (assoc :git-error (:error git-result))))}]
+             :isError false}
+            ;; Non-git mode: return message only
+            {:content [{:type "text"
+                        :text (str "Task " (:id task) " completed and moved to " complete-file)}]
+             :isError false}))))
     (catch Exception e
       (response/error-response e))))
 
@@ -134,6 +185,7 @@
   [config]
   (if (:use-git? config)
     "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
+   When git mode is enabled, automatically commits the changes.
 
    Identifies tasks by exact match using task-id or title (title).
    At least one identifier must be provided.
@@ -147,10 +199,12 @@
    If both task-id and title are provided, they must refer to the same task.
    If only title is provided and multiple tasks have the same title, an error is returned.
 
-   Returns two text items:
+   Returns three text items:
    1. A completion status message
    2. A JSON-encoded map with :modified-files key containing file paths
-      relative to .mcp-tasks for use in git commit workflows."
+      relative to .mcp-tasks for use in git commit workflows
+   3. A JSON-encoded map with :git-status (\"success\" or \"error\"),
+      :git-commit-sha (commit SHA or nil), and optionally :git-error (error message)"
     "Complete a task by moving it from .mcp-tasks/tasks.ednl to .mcp-tasks/complete.ednl.
 
    Identifies tasks by exact match using task-id or title (title).
