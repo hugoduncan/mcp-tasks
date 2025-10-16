@@ -103,8 +103,7 @@
   Extracts field path and error details from Malli's explain result.
   Returns a string describing what field failed and why."
   [error]
-  (let [path (:path error)
-        in (:in error)
+  (let [in (:in error)
         schema (:schema error)
         value (:value error)
         type (:type error)
