@@ -2,37 +2,35 @@
 
  :deps
  {org.hugpduncan/mcp-clj-server
-  {:git/url   "https://github.com/hugoduncan/mcp-clj"
-   :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
+  {:git/url "https://github.com/hugoduncan/mcp-clj"
+   :git/sha "88d6047ce34d6619ed88780c736d25a5564454f6"
    :deps/root "projects/server"}
   org.clojure/clojure {:mvn/version "1.12.3"}
-  metosin/malli {:mvn/version "0.16.4"}}
+  metosin/malli {:mvn/version "0.16.4"}
+  babashka/fs {:mvn/version "0.5.22"}}
 
  :aliases
- {:dev    {:extra-deps
-           {babashka/fs {:mvn/version "0.5.22"}}
-           :override-deps
-           {org.hugpduncan/mcp-clj-server
-            {:git/url   "https://github.com/hugoduncan/mcp-clj"
-             :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
-             :deps/root "projects/test-dep"}}}
-  :test   {:extra-paths ["test"]
-           :extra-deps
-           {lambdaisland/kaocha {:mvn/version "1.91.1392"}
-            babashka/fs {:mvn/version "0.5.22"}}
-           :override-deps
-           {org.hugpduncan/mcp-clj-server
-            {:git/url   "https://github.com/hugoduncan/mcp-clj"
-             :git/sha   "88d6047ce34d6619ed88780c736d25a5564454f6"
-             :deps/root "projects/test-dep"}}
-           :main-opts   ["-m" "kaocha.runner"]}
-  :run    {:exec-fn   mcp-tasks.main/start
-           :main-opts ["-m" "mcp-tasks.main"]}
-  :nrepl  {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
-           :main-opts  ["-m" "nrepl.cmdline"]}
-  :build  {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
-           :paths      ["dev"]
-           :ns-default build}
+ {:dev {:override-deps
+        {org.hugpduncan/mcp-clj-server
+         {:git/url "https://github.com/hugoduncan/mcp-clj"
+          :git/sha "88d6047ce34d6619ed88780c736d25a5564454f6"
+          :deps/root "projects/test-dep"}}}
+  :test {:extra-paths ["test"]
+         :extra-deps
+         {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         :override-deps
+         {org.hugpduncan/mcp-clj-server
+          {:git/url "https://github.com/hugoduncan/mcp-clj"
+           :git/sha "88d6047ce34d6619ed88780c736d25a5564454f6"
+           :deps/root "projects/test-dep"}}
+         :main-opts ["-m" "kaocha.runner"]}
+  :run {:exec-fn mcp-tasks.main/start
+        :main-opts ["-m" "mcp-tasks.main"]}
+  :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
+          :main-opts ["-m" "nrepl.cmdline"]}
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+          :paths ["dev"]
+          :ns-default build}
   :deploy {:replace-deps {slipset/deps-deploy {:mvn/version "0.2.2"}}
-           :exec-fn      deps-deploy.deps-deploy/deploy
-           :exec-args    {:installer :remote}}}}
+           :exec-fn deps-deploy.deps-deploy/deploy
+           :exec-args {:installer :remote}}}}

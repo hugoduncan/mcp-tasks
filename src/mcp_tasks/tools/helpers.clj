@@ -1,14 +1,14 @@
 (ns mcp-tasks.tools.helpers
   "General helper functions for tool implementations"
   (:require
+    [babashka.fs :as fs]
     [clojure.data.json :as json]
-    [clojure.java.io :as io]
     [clojure.string :as str]))
 
 (defn file-exists?
   "Check if a file exists"
   [file-path]
-  (.exists (io/file file-path)))
+  (fs/exists? file-path))
 
 (defn task-path
   "Construct .mcp-tasks paths with base-dir handling.
