@@ -49,7 +49,7 @@ The task can be specified in multiple ways:
    - Show the description
    - Show the design notes (if any)
    - Present your analysis including:
-     - Project context findings
+     - Project context findings, includding files that will be effected.
      - Relevant design patterns or exemplars found
      - Any forgotten aspects identified
      - Potential scope concerns (if any)
