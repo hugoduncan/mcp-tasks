@@ -42,10 +42,10 @@ The story can be specified in multiple ways:
    - The tool returns :tasks (a vector) and :metadata
 
 2. Execute the task directly using the category workflow:
-   - Execute the `next-<category>` prompt from the `mcp-tasks` server
-   - For example, if category is "simple", execute the `next-simple` prompt
-   - Run `/mcp-tasks:next-<category>` or use the
-     `prompt://next-<category>` resource to access the prompt
+   - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
+   - For example, if category is "simple", execute the `category-simple` prompt
+   - Run `/mcp-tasks:category-<category>` or use the
+     `prompt://category-<category>` resource to access the prompt
    - The task is already in the tasks queue
    - Complete all implementation steps according to the category workflow
 
