@@ -162,8 +162,8 @@ For larger features that require multiple related tasks, use story workflows:
 # - Password hashing with bcrypt
 # - Password reset via email"
 
-# Refine the story interactively with agent
-/mcp-tasks:refine-story "User Authentication System"
+# Refine the task interactively with agent
+/mcp-tasks:refine-task "User Authentication System"
 
 # Break down into executable tasks
 /mcp-tasks:create-story-tasks user-auth
@@ -290,7 +290,7 @@ Examples:
 
 **Story prompts:**
 ```
-prompt://refine-story
+prompt://refine-task
 prompt://create-story-tasks
 prompt://execute-story-task
 ```
