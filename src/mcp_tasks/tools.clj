@@ -53,6 +53,60 @@
        :commit-sha nil
        :error (.getMessage e)})))
 
+;; Validation helpers
+
+(defn- validate-task-exists
+  "Validate that a task exists.
+
+  Returns error response map if validation fails, nil if successful."
+  [task-id operation tasks-file & {:keys [additional-metadata]}]
+  (when-not (tasks/get-task task-id)
+    {:content [{:type "text"
+                :text "Task not found"}
+               {:type "text"
+                :text (json/write-str
+                        (merge {:error "Task not found"
+                                :metadata {:attempted-operation operation
+                                           :task-id task-id
+                                           :file tasks-file}}
+                               additional-metadata))}]
+     :isError true}))
+
+(defn- validate-parent-id-exists
+  "Validate that a parent task exists if parent-id is provided and non-nil.
+
+  Returns error response map if validation fails, nil if successful."
+  [parent-id operation task-id tasks-file error-message & {:keys [additional-metadata]}]
+  (when (and parent-id (not (tasks/get-task parent-id)))
+    {:content [{:type "text"
+                :text error-message}
+               {:type "text"
+                :text (json/write-str
+                        {:error error-message
+                         :metadata (merge {:attempted-operation operation
+                                           :task-id task-id
+                                           :parent-id parent-id
+                                           :file tasks-file}
+                                          additional-metadata)})}]
+     :isError true}))
+
+(defn- validate-task-schema
+  "Validate that a task conforms to the schema.
+
+  Returns error response map if validation fails, nil if successful."
+  [task operation task-id tasks-file]
+  (when-let [validation-result (schema/explain-task task)]
+    {:content [{:type "text"
+                :text "Invalid task field values"}
+               {:type "text"
+                :text (json/write-str
+                        {:error "Invalid task field values"
+                         :metadata {:attempted-operation operation
+                                    :task-id task-id
+                                    :validation-errors (pr-str validation-result)
+                                    :file tasks-file}})}]
+     :isError true}))
+
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
@@ -66,11 +120,17 @@
   - Git mode enabled: Three text items (completion message + JSON with :modified-files + JSON with git status)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
-  (try
-    ;; Validate at least one identifier provided
-    (when (and (nil? task-id) (nil? title))
-      (throw (ex-info "Must provide either task-id or title"
-                      {:task-id task-id :title title})))
+  ;; Validate at least one identifier provided
+  (if (and (nil? task-id) (nil? title))
+    {:content [{:type "text"
+                :text "Must provide either task-id or title"}
+               {:type "text"
+                :text (json/write-str
+                        {:error "Must provide either task-id or title"
+                         :metadata {:attempted-operation "complete-task"
+                                    :task-id task-id
+                                    :title title}})}]
+     :isError true}
 
     (let [use-git? (:use-git? config)
           tasks-path (path-helper/task-path config ["tasks.ednl"])
@@ -80,106 +140,175 @@
           tasks-rel-path (:relative tasks-path)
           complete-rel-path (:relative complete-path)]
 
-      ;; Load tasks from EDNL file
-      (when-not (file-exists? tasks-file)
-        (throw (ex-info "Tasks file not found"
-                        {:file tasks-file})))
+      ;; Validate tasks file exists
+      (if-not (file-exists? tasks-file)
+        {:content [{:type "text"
+                    :text "Tasks file not found"}
+                   {:type "text"
+                    :text (json/write-str
+                            {:error "Tasks file not found"
+                             :metadata {:attempted-operation "complete-task"
+                                        :file tasks-file}})}]
+         :isError true}
 
-      (tasks/load-tasks! tasks-file :complete-file complete-file)
+        (do
+          (tasks/load-tasks! tasks-file :complete-file complete-file)
 
-      ;; Find task by ID or exact title match
-      (let [task-by-id (when task-id (tasks/get-task task-id))
-            tasks-by-title (when title (tasks/find-by-title title))
+          ;; Find task by ID or exact title match
+          (let [task-by-id (when task-id (tasks/get-task task-id))
+                tasks-by-title (when title (tasks/find-by-title title))
 
-            ;; Determine which task to complete
-            task (cond
-                   ;; Both provided - verify they match
-                   (and task-id title)
-                   (cond
-                     (nil? task-by-id)
-                     (throw (ex-info "Task ID not found"
-                                     {:task-id task-id}))
+                ;; Determine which task to complete
+                task-result (cond
+                              ;; Both provided - verify they match
+                              (and task-id title)
+                              (cond
+                                (nil? task-by-id)
+                                {:content [{:type "text"
+                                            :text "Task ID not found"}
+                                           {:type "text"
+                                            :text (json/write-str
+                                                    {:error "Task ID not found"
+                                                     :metadata {:attempted-operation "complete-task"
+                                                                :task-id task-id
+                                                                :file tasks-file}})}]
+                                 :isError true}
 
-                     (empty? tasks-by-title)
-                     (throw (ex-info "No task found with exact title match"
-                                     {:title title}))
+                                (empty? tasks-by-title)
+                                {:content [{:type "text"
+                                            :text "No task found with exact title match"}
+                                           {:type "text"
+                                            :text (json/write-str
+                                                    {:error "No task found with exact title match"
+                                                     :metadata {:attempted-operation "complete-task"
+                                                                :title title
+                                                                :file tasks-file}})}]
+                                 :isError true}
 
-                     (not (some #(= (:id %) task-id) tasks-by-title))
-                     (throw (ex-info "Task ID and task text do not refer to the same task"
-                                     {:task-id task-id
-                                      :title title
-                                      :task-by-id task-by-id
-                                      :tasks-by-title (mapv :id tasks-by-title)}))
+                                (not (some #(= (:id %) task-id) tasks-by-title))
+                                {:content [{:type "text"
+                                            :text "Task ID and task text do not refer to the same task"}
+                                           {:type "text"
+                                            :text (json/write-str
+                                                    {:error "Task ID and task text do not refer to the same task"
+                                                     :metadata {:attempted-operation "complete-task"
+                                                                :task-id task-id
+                                                                :title title
+                                                                :task-by-id task-by-id
+                                                                :tasks-by-title (mapv :id tasks-by-title)
+                                                                :file tasks-file}})}]
+                                 :isError true}
 
-                     :else task-by-id)
+                                :else task-by-id)
 
-                   ;; Only ID provided
-                   task-id
-                   (or task-by-id
-                       (throw (ex-info "Task ID not found"
-                                       {:task-id task-id})))
+                              ;; Only ID provided
+                              task-id
+                              (or task-by-id
+                                  {:content [{:type "text"
+                                              :text "Task ID not found"}
+                                             {:type "text"
+                                              :text (json/write-str
+                                                      {:error "Task ID not found"
+                                                       :metadata {:attempted-operation "complete-task"
+                                                                  :task-id task-id
+                                                                  :file tasks-file}})}]
+                                   :isError true})
 
-                   ;; Only title provided
-                   title
-                   (cond
-                     (empty? tasks-by-title)
-                     (throw (ex-info "No task found with exact title match"
-                                     {:title title}))
+                              ;; Only title provided
+                              title
+                              (cond
+                                (empty? tasks-by-title)
+                                {:content [{:type "text"
+                                            :text "No task found with exact title match"}
+                                           {:type "text"
+                                            :text (json/write-str
+                                                    {:error "No task found with exact title match"
+                                                     :metadata {:attempted-operation "complete-task"
+                                                                :title title
+                                                                :file tasks-file}})}]
+                                 :isError true}
 
-                     (> (count tasks-by-title) 1)
-                     (throw (ex-info "Multiple tasks found with same title - use task-id to disambiguate"
-                                     {:title title
-                                      :matching-task-ids (mapv :id tasks-by-title)
-                                      :matching-tasks tasks-by-title}))
+                                (> (count tasks-by-title) 1)
+                                {:content [{:type "text"
+                                            :text "Multiple tasks found with same title - use task-id to disambiguate"}
+                                           {:type "text"
+                                            :text (json/write-str
+                                                    {:error "Multiple tasks found with same title - use task-id to disambiguate"
+                                                     :metadata {:attempted-operation "complete-task"
+                                                                :title title
+                                                                :matching-task-ids (mapv :id tasks-by-title)
+                                                                :matching-tasks tasks-by-title
+                                                                :file tasks-file}})}]
+                                 :isError true}
 
-                     :else (first tasks-by-title)))]
+                                :else (first tasks-by-title)))]
 
-        ;; Verify category if provided (for backwards compatibility)
-        (when (and category (not= (:category task) category))
-          (throw (ex-info "Task category does not match"
-                          {:expected-category category
-                           :actual-category (:category task)
-                           :task-id (:id task)})))
+            ;; Check if task-result is an error response
+            (if (:isError task-result)
+              task-result
 
-        ;; Verify task is not already closed
-        (when (= (:status task) :closed)
-          (throw (ex-info "Task is already closed"
-                          {:task-id (:id task)
-                           :title (:title task)})))
+              ;; task-result is the actual task - proceed with validations
+              (let [task task-result]
+                ;; Verify category if provided (for backwards compatibility)
+                (if (and category (not= (:category task) category))
+                  {:content [{:type "text"
+                              :text "Task category does not match"}
+                             {:type "text"
+                              :text (json/write-str
+                                      {:error "Task category does not match"
+                                       :metadata {:attempted-operation "complete-task"
+                                                  :expected-category category
+                                                  :actual-category (:category task)
+                                                  :task-id (:id task)
+                                                  :file tasks-file}})}]
+                   :isError true}
 
-        ;; Mark task as complete in memory
-        (tasks/mark-complete (:id task) completion-comment)
+                  ;; Verify task is not already closed
+                  (if (= (:status task) :closed)
+                    {:content [{:type "text"
+                                :text "Task is already closed"}
+                               {:type "text"
+                                :text (json/write-str
+                                        {:error "Task is already closed"
+                                         :metadata {:attempted-operation "complete-task"
+                                                    :task-id (:id task)
+                                                    :title (:title task)
+                                                    :file tasks-file}})}]
+                     :isError true}
 
-        ;; Move task from tasks file to complete file
-        (tasks/move-task! (:id task) tasks-file complete-file)
+                    ;; All validations passed - complete the task
+                    (do
+                      ;; Mark task as complete in memory
+                      (tasks/mark-complete (:id task) completion-comment)
 
-        ;; Commit changes if git mode is enabled
-        (let [git-result (when use-git?
-                           (commit-task-changes (:base-dir config)
-                                                (:id task)
-                                                (:title task)))]
-          (if use-git?
-            ;; Git mode: return message + JSON with modified files + git status
-            {:content [{:type "text"
-                        :text (str "Task " (:id task) " completed and moved to " complete-file)}
-                       {:type "text"
-                        :text (json/write-str {:modified-files [tasks-rel-path
-                                                                complete-rel-path]})}
-                       {:type "text"
-                        :text (json/write-str
-                                (cond-> {:git-status (if (:success git-result)
-                                                       "success"
-                                                       "error")
-                                         :git-commit-sha (:commit-sha git-result)}
-                                  (:error git-result)
-                                  (assoc :git-error (:error git-result))))}]
-             :isError false}
-            ;; Non-git mode: return message only
-            {:content [{:type "text"
-                        :text (str "Task " (:id task) " completed and moved to " complete-file)}]
-             :isError false}))))
-    (catch Exception e
-      (response/error-response e))))
+                      ;; Move task from tasks file to complete file
+                      (tasks/move-task! (:id task) tasks-file complete-file)
+
+                      ;; Commit changes if git mode is enabled
+                      (let [git-result (when use-git?
+                                         (commit-task-changes (:base-dir config)
+                                                              (:id task)
+                                                              (:title task)))]
+                        (if use-git?
+                          ;; Git mode: return message + JSON with modified files + git status
+                          {:content [{:type "text"
+                                      :text (str "Task " (:id task) " completed and moved to " complete-file)}
+                                     {:type "text"
+                                      :text (json/write-str {:modified-files [tasks-rel-path
+                                                                              complete-rel-path]})}
+                                     {:type "text"
+                                      :text (json/write-str
+                                              (cond-> {:git-status (if (:success git-result)
+                                                                     "success"
+                                                                     "error")
+                                                       :git-commit-sha (:commit-sha git-result)}
+                                                (:error git-result)
+                                                (assoc :git-error (:error git-result))))}]
+                           :isError false}
+                          ;; Non-git mode: return message only
+                          {:content [{:type "text"
+                                      :text (str "Task " (:id task) " completed and moved to " complete-file)}]
+                           :isError false})))))))))))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
@@ -430,52 +559,41 @@
   [config _context
    {:keys [category title description prepend type parent-id]}]
   (let [tasks-file (prepare-task-file config)]
-    ;; Tool-level validation: Check parent-id exists if provided
-    (if (and parent-id (not (tasks/get-task parent-id)))
-      ;; Return validation error in tool-level format (not MCP format)
-      {:content [{:type "text"
-                  :text "Parent story not found"}
-                 {:type "text"
-                  :text (json/write-str
-                          {:error "Parent story not found"
-                           :metadata {:attempted-operation "add-task"
-                                      :parent-id parent-id
-                                      :title title
-                                      :category category
-                                      :file tasks-file}})}]
-       :isError true}
+    ;; Validate parent-id exists if provided
+    (or (when parent-id
+          (validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
+                                     :additional-metadata {:title title :category category}))
 
-      ;; Create task map with all required fields
-      (let [task-map (cond-> {:title title
-                              :description (or description "")
-                              :design ""
-                              :category category
-                              :status :open
-                              :type (keyword (or type "task"))
-                              :meta {}
-                              :relations []}
-                       parent-id (assoc :parent-id parent-id))
-            ;; Add task to in-memory state and get the complete task with ID
-            created-task (tasks/add-task task-map :prepend? (boolean prepend))]
-        ;; Save to EDNL file (unexpected errors like I/O will throw and be
-        ;; caught by MCP server handler)
-        (tasks/save-tasks! tasks-file)
-        ;; Return two content items: text message and structured data
-        {:content [{:type "text"
-                    :text (str "Task added to " tasks-file)}
-                   {:type "text"
-                    :text (json/write-str
-                            {:task (select-keys
-                                     created-task
-                                     [:id
-                                      :title
-                                      :category
-                                      :type
-                                      :status
-                                      :parent-id])
-                             :metadata {:file tasks-file
-                                        :operation "add-task"}})}]
-         :isError false}))))
+        ;; All validations passed - create task
+        (let [task-map (cond-> {:title title
+                                :description (or description "")
+                                :design ""
+                                :category category
+                                :status :open
+                                :type (keyword (or type "task"))
+                                :meta {}
+                                :relations []}
+                         parent-id (assoc :parent-id parent-id))
+              ;; Add task to in-memory state and get the complete task with ID
+              created-task (tasks/add-task task-map :prepend? (boolean prepend))]
+          ;; Save to EDNL file
+          (tasks/save-tasks! tasks-file)
+          ;; Return two content items: text message and structured data
+          {:content [{:type "text"
+                      :text (str "Task added to " tasks-file)}
+                     {:type "text"
+                      :text (json/write-str
+                              {:task (select-keys
+                                       created-task
+                                       [:id
+                                        :title
+                                        :category
+                                        :type
+                                        :status
+                                        :parent-id])
+                               :metadata {:file tasks-file
+                                          :operation "add-task"}})}]
+           :isError false}))))
 
 (defn- add-task-description
   "Build description for add-task tool with available categories and their descriptions."
@@ -624,77 +742,54 @@
   Updates specified fields of an existing task in tasks.ednl.
   Supports all mutable task fields with proper nil handling."
   [config _context arguments]
-  (try
-    (let [task-id (:task-id arguments)
-          tasks-file (prepare-task-file config)]
+  (let [task-id (:task-id arguments)
+        tasks-file (prepare-task-file config)]
 
-      ;; Load tasks
-      (tasks/load-tasks! tasks-file)
+    ;; Load tasks
+    (tasks/load-tasks! tasks-file)
 
-      (let [;; Extract provided fields with conversions applied
-            updates (extract-provided-updates arguments)]
+    (let [;; Extract provided fields with conversions applied
+          updates (extract-provided-updates arguments)]
 
-        ;; Validate at least one field provided
-        (when (empty? updates)
-          (throw (ex-info "No fields to update" {:task-id task-id})))
+      ;; Validate at least one field provided
+      (if (empty? updates)
+        {:content [{:type "text"
+                    :text "No fields to update"}
+                   {:type "text"
+                    :text (json/write-str
+                            {:error "No fields to update"
+                             :metadata {:attempted-operation "update-task"
+                                        :task-id task-id
+                                        :file tasks-file}})}]
+         :isError true}
 
-        ;; Tool-level validation: parent-id exists if provided and non-nil
-        (cond
-          ;; Check parent-id existence
-          (and (contains? updates :parent-id)
-               (:parent-id updates)
-               (not (tasks/get-task (:parent-id updates))))
-          {:content [{:type "text"
-                      :text "Parent task not found"}
-                     {:type "text"
-                      :text (json/write-str
-                              {:error "Parent task not found"
-                               :metadata {:attempted-operation "update-task"
-                                          :task-id task-id
-                                          :parent-id (:parent-id updates)
-                                          :file tasks-file}})}]
-           :isError true}
+        ;; Validate task exists
+        (or (validate-task-exists task-id "update-task" tasks-file)
 
-          ;; Check task exists
-          (not (tasks/get-task task-id))
-          (throw (ex-info "Task not found" {:task-id task-id}))
+            ;; Validate parent-id exists if provided and non-nil
+            (when (and (contains? updates :parent-id) (:parent-id updates))
+              (validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
 
-          ;; All validations passed
-          :else
-          (let [old-task (tasks/get-task task-id)
-                updated-task (merge old-task updates)
-                validation-result (schema/explain-task updated-task)]
+            ;; Validate schema after merging updates
+            (let [old-task (tasks/get-task task-id)
+                  updated-task (merge old-task updates)]
+              (validate-task-schema updated-task "update-task" task-id tasks-file))
 
-            (if validation-result
-              ;; Schema validation failed
-              {:content [{:type "text"
-                          :text "Invalid task field values"}
-                         {:type "text"
-                          :text (json/write-str
-                                  {:error "Invalid task field values"
-                                   :metadata {:attempted-operation "update-task"
-                                              :task-id task-id
-                                              :validation-errors (pr-str validation-result)
-                                              :file tasks-file}})}]
-               :isError true}
-
-              ;; All validations passed - apply update
-              (do
-                (tasks/update-task task-id updates)
-                (tasks/save-tasks! tasks-file)
-                (let [final-task (tasks/get-task task-id)]
-                  {:content [{:type "text"
-                              :text (str "Task " task-id " updated in " tasks-file)}
-                             {:type "text"
-                              :text (json/write-str
-                                      {:task (select-keys
-                                               final-task
-                                               [:id :title :category :type :status :parent-id])
-                                       :metadata {:file tasks-file
-                                                  :operation "update-task"}})}]
-                   :isError false})))))))
-    (catch Exception e
-      (response/error-response e))))
+            ;; All validations passed - apply update
+            (do
+              (tasks/update-task task-id updates)
+              (tasks/save-tasks! tasks-file)
+              (let [final-task (tasks/get-task task-id)]
+                {:content [{:type "text"
+                            :text (str "Task " task-id " updated in " tasks-file)}
+                           {:type "text"
+                            :text (json/write-str
+                                    {:task (select-keys
+                                             final-task
+                                             [:id :title :category :type :status :parent-id])
+                                     :metadata {:file tasks-file
+                                                :operation "update-task"}})}]
+                 :isError false})))))))
 
 (defn update-task-tool
   "Tool to update fields of an existing task.
