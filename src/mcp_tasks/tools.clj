@@ -16,6 +16,45 @@
   [file-path]
   (.exists (io/file file-path)))
 
+(defn- perform-git-commit
+  "Performs git add and commit operations.
+
+  Parameters:
+  - git-dir: Path to the git repository
+  - files-to-commit: Collection of relative file paths to add and commit
+  - commit-msg: The commit message string
+
+  Returns a map with:
+  - :success - boolean indicating if commit succeeded
+  - :commit-sha - commit SHA string (or nil if failed)
+  - :error - error message string (or nil if successful)
+
+  Never throws - all errors are caught and returned in the map."
+  [git-dir files-to-commit commit-msg]
+  (try
+    ;; Stage modified files
+    (apply sh/sh "git" "-C" git-dir "add" files-to-commit)
+
+    ;; Commit changes
+    (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
+      (if (zero? (:exit commit-result))
+        ;; Success - get commit SHA
+        (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
+              sha (str/trim (:out sha-result))]
+          {:success true
+           :commit-sha sha
+           :error nil})
+
+        ;; Commit failed
+        {:success false
+         :commit-sha nil
+         :error (str/trim (:err commit-result))}))
+
+    (catch Exception e
+      {:success false
+       :commit-sha nil
+       :error (.getMessage e)})))
+
 (defn- commit-task-changes
   "Commits task file changes to .mcp-tasks git repository.
 
@@ -32,32 +71,9 @@
 
   Never throws - all errors are caught and returned in the map."
   [base-dir task-id task-title files-to-commit]
-  (try
-    (let [git-dir (str base-dir "/.mcp-tasks")
-          commit-msg (str "Complete task #" task-id ": " task-title)]
-
-      ;; Stage modified files
-      (apply sh/sh "git" "-C" git-dir "add" files-to-commit)
-
-      ;; Commit changes
-      (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
-        (if (zero? (:exit commit-result))
-          ;; Success - get commit SHA
-          (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
-                sha (str/trim (:out sha-result))]
-            {:success true
-             :commit-sha sha
-             :error nil})
-
-          ;; Commit failed
-          {:success false
-           :commit-sha nil
-           :error (str/trim (:err commit-result))})))
-
-    (catch Exception e
-      {:success false
-       :commit-sha nil
-       :error (.getMessage e)})))
+  (let [git-dir (str base-dir "/.mcp-tasks")
+        commit-msg (str "Complete task #" task-id ": " task-title)]
+    (perform-git-commit git-dir files-to-commit commit-msg)))
 
 ;; Error response helpers
 
@@ -782,28 +798,9 @@
                              (let [truncated-title (if (> (count title) 50)
                                                      (str (subs title 0 47) "...")
                                                      title)
+                                   git-dir (str (:base-dir config) "/.mcp-tasks")
                                    commit-msg (str "add task #" (:id created-task) ": " truncated-title)]
-                               (try
-                                 (let [git-dir (str (:base-dir config) "/.mcp-tasks")]
-                                   ;; Stage modified files
-                                   (sh/sh "git" "-C" git-dir "add" tasks-rel-path)
-                                   ;; Commit changes
-                                   (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
-                                     (if (zero? (:exit commit-result))
-                                       ;; Success - get commit SHA
-                                       (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
-                                             sha (str/trim (:out sha-result))]
-                                         {:success true
-                                          :commit-sha sha
-                                          :error nil})
-                                       ;; Commit failed
-                                       {:success false
-                                        :commit-sha nil
-                                        :error (str/trim (:err commit-result))})))
-                                 (catch Exception e
-                                   {:success false
-                                    :commit-sha nil
-                                    :error (.getMessage e)}))))
+                               (perform-git-commit git-dir [tasks-rel-path] commit-msg)))
                 task-data-json (json/write-str
                                  {:task (select-keys
                                           created-task
