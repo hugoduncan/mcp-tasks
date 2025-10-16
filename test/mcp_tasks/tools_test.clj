@@ -955,7 +955,7 @@
 
           ;; Verify commit message format: "add task #<id>: <title>"
           (let [commit-msg (git-log-last-commit *test-dir*)]
-            (is (= (str "add task #" task-id ": implement feature Y") commit-msg)))
+            (is (= (str "Add task #" task-id ": implement feature Y") commit-msg)))
 
           ;; Verify git status in response
           (let [git-content (nth (:content result) 2)
@@ -986,7 +986,7 @@
 
           ;; Verify commit message has truncated title
           (let [commit-msg (git-log-last-commit *test-dir*)]
-            (is (str/starts-with? commit-msg (str "add task #" task-id ": ")))
+            (is (str/starts-with? commit-msg (str "Add task #" task-id ": ")))
             ;; Truncated title should be 50 chars (47 + "...")
             (is (str/includes? commit-msg "...")))
 
