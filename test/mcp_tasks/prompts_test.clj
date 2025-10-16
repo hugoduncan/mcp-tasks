@@ -216,34 +216,41 @@
             names (map :name prompts)]
         (is (= (count names) (count (set names))))))))
 
-(deftest refine-story-prompt-test
-  ;; Test that the refine-story built-in prompt is properly defined with
+(deftest refine-task-prompt-test
+  ;; Test that the refine-task task execution prompt is properly defined with
   ;; correct metadata and content structure.
-  (testing "refine-story prompt"
-    (testing "is available via get-story-prompt"
-      (let [prompt (sut/get-story-prompt "refine-story")]
+  (testing "refine-task prompt"
+    (testing "is available via task-execution-prompts"
+      (let [prompts (sut/task-execution-prompts {})
+            prompt (get prompts "refine-task")]
         (is (some? prompt))
-        (is (= "refine-story" (:name prompt)))))
+        (is (= "refine-task" (:name prompt)))))
 
     (testing "has description metadata"
-      (let [prompt (sut/get-story-prompt "refine-story")]
+      (let [prompts (sut/task-execution-prompts {})
+            prompt (get prompts "refine-task")]
         (is (some? (:description prompt)))
         (is (string? (:description prompt)))))
 
     (testing "has content with key instructions"
-      (let [prompt (sut/get-story-prompt "refine-story")
-            content (:content prompt)]
+      (let [prompts (sut/task-execution-prompts {})
+            prompt (get prompts "refine-task")
+            content (get-in prompt [:messages 0 :content :text])]
         (is (some? content))
         (is (string? content))
         (is (re-find #"select-tasks" content))
         (is (re-find #"update-task" content))
-        (is (re-find #"interactive" content))))
+        (is (re-find #"interactive" content))
+        (is (re-find #"project context" content))
+        (is (re-find #"design patterns" content))))
 
-    (testing "appears in list-story-prompts"
-      (let [prompts (sut/list-story-prompts)
-            refine-prompt (first (filter #(= "refine-story" (:name %)) prompts))]
-        (is (some? refine-prompt))
-        (is (some? (:description refine-prompt)))))))
+    (testing "works with all task types"
+      (let [prompts (sut/task-execution-prompts {})
+            prompt (get prompts "refine-task")
+            content (get-in prompt [:messages 0 :content :text])]
+        (is (some? content))
+        (is (not (re-find #"type: story" content)) "Should not restrict to story type")
+        (is (re-find #"task type" content) "Should mention task types")))))
 
 (deftest create-story-tasks-prompt-test
   ;; Test that the create-story-tasks built-in prompt is properly defined
@@ -350,12 +357,12 @@
   (testing "get-story-prompt override precedence"
     (testing "uses override file when it exists, even if built-in exists"
       (let [test-file (create-test-override-file
-                        "refine-story"
+                        "create-story-tasks"
                         "---\ndescription: Override description\n---\n\nOverride content")]
         (try
-          (let [result (sut/get-story-prompt "refine-story")]
+          (let [result (sut/get-story-prompt "create-story-tasks")]
             (is (some? result))
-            (is (= "refine-story" (:name result)))
+            (is (= "create-story-tasks" (:name result)))
             (is (= "Override description" (:description result)))
             (is (= "\nOverride content" (:content result))))
           (finally
@@ -442,13 +449,13 @@
 
     (testing "deduplicates when both override and built-in exist"
       (let [test-file (create-test-override-file
-                        "refine-story"
-                        "---\ndescription: Overridden refine-story\n---\n\nOverride content")]
+                        "execute-story-task"
+                        "---\ndescription: Overridden execute-story-task\n---\n\nOverride content")]
         (try
           (let [prompts (sut/list-story-prompts)
-                refine-prompts (filter #(= "refine-story" (:name %)) prompts)]
-            (is (= 1 (count refine-prompts)))
-            (is (= "Overridden refine-story" (:description (first refine-prompts)))))
+                execute-prompts (filter #(= "execute-story-task" (:name %)) prompts)]
+            (is (= 1 (count execute-prompts)))
+            (is (= "Overridden execute-story-task" (:description (first execute-prompts)))))
           (finally
             (delete-test-file test-file)))))
 
@@ -496,9 +503,9 @@
     (testing "does not affect other story prompts"
       (let [prompts-with-branch (sut/story-prompts {:story-branch-management? true})
             prompts-without-branch (sut/story-prompts {:story-branch-management? false})
-            refine-with (get prompts-with-branch "refine-story")
-            refine-without (get prompts-without-branch "refine-story")]
-        (is (= (:messages refine-with) (:messages refine-without)))))))
+            create-with (get prompts-with-branch "create-story-tasks")
+            create-without (get prompts-without-branch "create-story-tasks")]
+        (is (= (:messages create-with) (:messages create-without)))))))
 
 (deftest category-prompt-resources-test
   ;; Tests the generation of MCP resources for category prompt files.
