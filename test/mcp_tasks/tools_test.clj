@@ -1502,3 +1502,111 @@
           ;; Relations should be completely replaced, not appended
           (is (= 1 (count (:relations task))))
           (is (= [{:id 2 :relates-to 3 :as-type :blocked-by}] (:relations task))))))))
+
+(deftest ^:integration end-to-end-story-workflow-with-git
+  ;; Tests complete story workflow: add story, add children, complete children, complete story
+  ;; Verifies file states and git commits at each step
+  (testing "end-to-end story workflow"
+    (testing "complete workflow with git integration"
+      (init-git-repo *test-dir*)
+
+      ;; Step 1: Create a story
+      (let [result (#'sut/add-task-impl
+                    (git-test-config)
+                    nil
+                    {:category "story"
+                     :title "E2E Story"
+                     :description "End-to-end test story"
+                     :type "story"})]
+        (is (false? (:isError result)))
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= :story (:type (first tasks))))
+          (is (= "E2E Story" (:title (first tasks))))))
+
+      ;; Step 2: Add three child tasks
+      (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
+      (doseq [title ["Task A" "Task B" "Task C"]]
+        (let [result (#'sut/add-task-impl
+                      (git-test-config)
+                      nil
+                      {:category "simple"
+                       :title title
+                       :parent-id 1})]
+          (is (false? (:isError result)))))
+
+      (let [tasks (read-ednl-test-file "tasks.ednl")]
+        (is (= 4 (count tasks)))
+        (is (every? #(= 1 (:parent-id %)) (rest tasks))))
+
+      ;; Step 3: Complete each child task and track commit SHAs
+      (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
+      (let [child-commits (atom [])]
+        (doseq [child-id [2 3 4]]
+          (let [result (#'sut/complete-task-impl
+                        (git-test-config)
+                        nil
+                        {:task-id child-id})]
+            (is (false? (:isError result)))
+            (is (str/includes? (get-in result [:content 0 :text])
+                               (str "Task " child-id " completed")))
+            (is (not (str/includes? (get-in result [:content 0 :text])
+                                    "moved to")))
+            ;; Verify git commit was created for child completion
+            (let [git-data (json/read-str (get-in result [:content 2 :text])
+                                          :key-fn keyword)]
+              (is (= "success" (:git-status git-data)))
+              (is (string? (:git-commit-sha git-data)))
+              (swap! child-commits conj (:git-commit-sha git-data)))))
+
+        ;; Verify all children are closed but still in tasks.ednl
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 4 (count tasks)))
+          (is (= :open (:status (first tasks))))
+          (is (every? #(= :closed (:status %)) (rest tasks))))
+
+        ;; Verify complete.ednl is still empty
+        (is (empty? (read-ednl-test-file "complete.ednl")))
+
+        ;; Step 4: Complete the story
+        (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
+        (let [result (#'sut/complete-task-impl
+                      (git-test-config)
+                      nil
+                      {:task-id 1})]
+          (is (false? (:isError result)))
+          (is (= 3 (count (:content result))))
+
+          ;; Verify completion message
+          (let [msg (get-in result [:content 0 :text])]
+            (is (str/includes? msg "Story 1 completed and archived"))
+            (is (str/includes? msg "with 3 child tasks")))
+
+          ;; Verify both files modified
+          (let [files-data (json/read-str (get-in result [:content 1 :text])
+                                          :key-fn keyword)]
+            (is (= ["tasks.ednl" "complete.ednl"] (:modified-files files-data))))
+
+          ;; Verify git commit for story completion
+          (let [git-data (json/read-str (get-in result [:content 2 :text])
+                                        :key-fn keyword)]
+            (is (= "success" (:git-status git-data)))
+            (is (string? (:git-commit-sha git-data)))
+            (is (= "Complete story #1: E2E Story (with 3 tasks)"
+                   (git-log-last-commit *test-dir*)))))
+
+        ;; Step 5: Verify final state
+        (let [completed (read-ednl-test-file "complete.ednl")]
+          (is (= 4 (count completed)))
+          (is (= 1 (:id (first completed))))
+          (is (= :story (:type (first completed))))
+          (is (every? #(= :closed (:status %)) completed))
+          (is (every? #(= 1 (:parent-id %)) (rest completed))))
+
+        (is (empty? (read-ednl-test-file "tasks.ednl")))
+
+        ;; Step 6: Verify git commits were created
+        ;; We have 3 child completion commits + 1 story completion commit + 1 initial commit
+        (is (= 3 (count @child-commits)))
+        (is (every? string? @child-commits))
+        (is (git-commit-exists? *test-dir*))))))
