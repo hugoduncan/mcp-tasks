@@ -1,7 +1,7 @@
 ---
 title: Execute Story Task
 description: Execute the next task from a story's task list
-argument-hint: <story-specification> [additional-context...]
+argument-hint: [story-specification] [additional-context...]
 ---
 
 Execute the next incomplete task from the story.

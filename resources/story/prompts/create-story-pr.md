@@ -1,7 +1,7 @@
 ---
 title: Create Story PR
 description: Create a pull request for a completed story
-argument-hint: <story-specification> [additional-context...]
+argument-hint: [story-specification] [additional-context...]
 ---
 
 Create a pull request for the completed story.

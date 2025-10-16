@@ -1,7 +1,7 @@
 ---
 title: Complete Story
 description: Mark a story as complete and archive it
-argument-hint: <story-name> [completion-comment...]
+argument-hint: [story-specification] [completion-comment...]
 ---
 
 Mark a story as complete and move it to the archive.
