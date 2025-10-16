@@ -80,6 +80,35 @@
                                         error-metadata)})}]
    :isError true})
 
+(defn- build-completion-response
+  "Build standardized completion response with optional git integration.
+
+  Parameters:
+  - msg-text: Human-readable completion message (string)
+  - modified-files: Vector of relative file paths that were modified
+  - use-git?: Whether git integration is enabled (boolean)
+  - git-result: Optional map with :success, :commit-sha, :error keys
+
+  Returns response map with :content and :isError keys."
+  [msg-text modified-files use-git? git-result]
+  (if use-git?
+    {:content [{:type "text"
+                :text msg-text}
+               {:type "text"
+                :text (json/write-str {:modified-files modified-files})}
+               {:type "text"
+                :text (json/write-str
+                        (cond-> {:git-status (if (:success git-result)
+                                               "success"
+                                               "error")
+                                 :git-commit-sha (:commit-sha git-result)}
+                          (:error git-result)
+                          (assoc :git-error (:error git-result))))}]
+     :isError false}
+    {:content [{:type "text"
+                :text msg-text}]
+     :isError false}))
+
 ;; Validation helpers
 
 (defn- format-path-element
@@ -381,25 +410,7 @@
                                                        {:success false
                                                         :commit-sha nil
                                                         :error (.getMessage e)})))]
-                                  (if use-git?
-                                    ;; Git mode: return message + JSON with modified files + git status
-                                    {:content [{:type "text"
-                                                :text msg-text}
-                                               {:type "text"
-                                                :text (json/write-str {:modified-files modified-files})}
-                                               {:type "text"
-                                                :text (json/write-str
-                                                        (cond-> {:git-status (if (:success git-result)
-                                                                               "success"
-                                                                               "error")
-                                                                 :git-commit-sha (:commit-sha git-result)}
-                                                          (:error git-result)
-                                                          (assoc :git-error (:error git-result))))}]
-                                     :isError false}
-                                    ;; Non-git mode: return message only
-                                    {:content [{:type "text"
-                                                :text msg-text}]
-                                     :isError false}))))))
+                                  (build-completion-response msg-text modified-files use-git? git-result))))))
 
                         ;; Story child completion: keep in tasks.ednl
                         is-child?
@@ -414,23 +425,7 @@
                                                                   (:id task)
                                                                   (:title task)
                                                                   modified-files))]
-                            (if use-git?
-                              {:content [{:type "text"
-                                          :text msg-text}
-                                         {:type "text"
-                                          :text (json/write-str {:modified-files modified-files})}
-                                         {:type "text"
-                                          :text (json/write-str
-                                                  (cond-> {:git-status (if (:success git-result)
-                                                                         "success"
-                                                                         "error")
-                                                           :git-commit-sha (:commit-sha git-result)}
-                                                    (:error git-result)
-                                                    (assoc :git-error (:error git-result))))}]
-                               :isError false}
-                              {:content [{:type "text"
-                                          :text msg-text}]
-                               :isError false})))
+                            (build-completion-response msg-text modified-files use-git? git-result)))
 
                         ;; Regular task completion: move to complete.ednl
                         :else
@@ -445,23 +440,7 @@
                                                                   (:id task)
                                                                   (:title task)
                                                                   modified-files))]
-                            (if use-git?
-                              {:content [{:type "text"
-                                          :text msg-text}
-                                         {:type "text"
-                                          :text (json/write-str {:modified-files modified-files})}
-                                         {:type "text"
-                                          :text (json/write-str
-                                                  (cond-> {:git-status (if (:success git-result)
-                                                                         "success"
-                                                                         "error")
-                                                           :git-commit-sha (:commit-sha git-result)}
-                                                    (:error git-result)
-                                                    (assoc :git-error (:error git-result))))}]
-                               :isError false}
-                              {:content [{:type "text"
-                                          :text msg-text}]
-                               :isError false})))))))))))))))
+                            (build-completion-response msg-text modified-files use-git? git-result)))))))))))))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
