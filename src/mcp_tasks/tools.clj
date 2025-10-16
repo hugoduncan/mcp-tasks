@@ -8,6 +8,7 @@
     [mcp-tasks.path-helper :as path-helper]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.response :as response]
+    [mcp-tasks.schema :as schema]
     [mcp-tasks.tasks :as tasks]))
 
 (defn- file-exists?
@@ -558,26 +559,98 @@
 (defn- update-task-impl
   "Implementation of update-task tool.
 
-  Updates specified fields of an existing task in tasks.ednl."
-  [config _context {:keys [task-id title description design]}]
+  Updates specified fields of an existing task in tasks.ednl.
+  Supports all mutable task fields with proper nil handling."
+  [config _context arguments]
   (try
-    (let [tasks-file (prepare-task-file config)]
+    (let [{:keys [task-id title description design parent-id status category type meta relations]} arguments
+          tasks-file (prepare-task-file config)]
+
       ;; Load tasks
       (tasks/load-tasks! tasks-file)
-      ;; Build updates map from provided fields
-      (let [updates (cond-> {}
-                      title (assoc :title title)
-                      description (assoc :description description)
-                      design (assoc :design design))]
+
+      (let [provided-keys (set (keys arguments))
+
+            ;; Convert string enums to keywords
+            status-kw (when (contains? provided-keys :status) (keyword status))
+            type-kw (when (contains? provided-keys :type) (keyword type))
+
+            ;; Convert relations :as-type from string to keyword
+            relations-converted (when (contains? provided-keys :relations)
+                                  (when relations
+                                    (mapv #(update % :as-type keyword) relations)))
+
+            ;; Build updates map from provided fields only
+            updates (cond-> {}
+                      (contains? provided-keys :title) (assoc :title title)
+                      (contains? provided-keys :description) (assoc :description description)
+                      (contains? provided-keys :design) (assoc :design design)
+                      (contains? provided-keys :parent-id) (assoc :parent-id parent-id)
+                      (contains? provided-keys :status) (assoc :status status-kw)
+                      (contains? provided-keys :category) (assoc :category category)
+                      (contains? provided-keys :type) (assoc :type type-kw)
+                      (contains? provided-keys :meta) (assoc :meta meta)
+                      (contains? provided-keys :relations) (assoc :relations relations-converted))]
+
+        ;; Validate at least one field provided
         (when (empty? updates)
           (throw (ex-info "No fields to update" {:task-id task-id})))
-        ;; Update task in memory
-        (tasks/update-task task-id updates)
-        ;; Save to EDNL file
-        (tasks/save-tasks! tasks-file)
-        {:content [{:type "text"
-                    :text (str "Task " task-id " updated in " tasks-file)}]
-         :isError false}))
+
+        ;; Tool-level validation: parent-id exists if provided and non-nil
+        (cond
+          ;; Check parent-id existence
+          (and (contains? provided-keys :parent-id)
+               parent-id
+               (not (tasks/get-task parent-id)))
+          {:content [{:type "text"
+                      :text "Parent task not found"}
+                     {:type "text"
+                      :text (json/write-str
+                              {:error "Parent task not found"
+                               :metadata {:attempted-operation "update-task"
+                                          :task-id task-id
+                                          :parent-id parent-id
+                                          :file tasks-file}})}]
+           :isError true}
+
+          ;; Check task exists
+          (not (tasks/get-task task-id))
+          (throw (ex-info "Task not found" {:task-id task-id}))
+
+          ;; All validations passed
+          :else
+          (let [old-task (tasks/get-task task-id)
+                updated-task (merge old-task updates)
+                validation-result (schema/explain-task updated-task)]
+
+            (if validation-result
+              ;; Schema validation failed
+              {:content [{:type "text"
+                          :text "Invalid task field values"}
+                         {:type "text"
+                          :text (json/write-str
+                                  {:error "Invalid task field values"
+                                   :metadata {:attempted-operation "update-task"
+                                              :task-id task-id
+                                              :validation-errors validation-result
+                                              :file tasks-file}})}]
+               :isError true}
+
+              ;; All validations passed - apply update
+              (do
+                (tasks/update-task task-id updates)
+                (tasks/save-tasks! tasks-file)
+                (let [final-task (tasks/get-task task-id)]
+                  {:content [{:type "text"
+                              :text (str "Task " task-id " updated in " tasks-file)}
+                             {:type "text"
+                              :text (json/write-str
+                                      {:task (select-keys
+                                               final-task
+                                               [:id :title :category :type :status :parent-id])
+                                       :metadata {:file tasks-file
+                                                  :operation "update-task"}})}]
+                   :isError false})))))))
     (catch Exception e
       (response/error-response e))))
 
