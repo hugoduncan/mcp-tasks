@@ -587,7 +587,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "update-task"
-   :description "Update fields of an existing task by ID. Only provided fields will be updated."
+   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, and relations. Pass nil for optional fields (parent-id, meta, relations) to clear their values."
    :inputSchema
    {:type "object"
     :properties
@@ -602,6 +602,32 @@
       :description "New description for the task (optional)"}
      "design"
      {:type "string"
-      :description "New design notes for the task (optional)"}}
+      :description "New design notes for the task (optional)"}
+     "parent-id"
+     {:type ["integer" "null"]
+      :description "New parent task ID (optional). Pass null to remove parent relationship."}
+     "status"
+     {:type "string"
+      :enum ["open" "closed" "in-progress" "blocked"]
+      :description "New task status (optional)"}
+     "category"
+     {:type "string"
+      :description "New task category (optional)"}
+     "type"
+     {:type "string"
+      :enum ["task" "bug" "feature" "story" "chore"]
+      :description "New task type (optional)"}
+     "meta"
+     {:type ["object" "null"]
+      :description "New metadata map with string keys and values (optional). Pass null to clear. Replaces entire map, does not merge."}
+     "relations"
+     {:type ["array" "null"]
+      :items {:type "object"
+              :properties {"id" {:type "integer"}
+                           "relates-to" {:type "integer"}
+                           "as-type" {:type "string"
+                                      :enum ["blocked-by" "related" "discovered-during"]}}
+              :required ["id" "relates-to" "as-type"]}
+      :description "New relations vector (optional). Pass null to clear. Replaces entire vector, does not merge."}}
     :required ["task-id"]}
    :implementation (partial update-task-impl config)})
