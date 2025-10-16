@@ -26,3 +26,7 @@
 (def complete-story
   "Mark a story as complete and archive it."
   (slurp (io/resource "story/prompts/complete-story.md")))
+
+(def create-story-pr
+  "Create a pull request for a completed story."
+  (slurp (io/resource "story/prompts/create-story-pr.md")))
