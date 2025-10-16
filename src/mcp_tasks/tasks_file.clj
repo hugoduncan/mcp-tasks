@@ -4,8 +4,8 @@
   EDNL format stores one task per line as an EDN map. All write operations
   are atomic using temp files."
   (:require
+    [babashka.fs :as fs]
     [clojure.edn :as edn]
-    [clojure.java.io :as io]
     [clojure.string :as str]
     [mcp-tasks.schema :as schema]))
 
@@ -14,8 +14,8 @@
 (defn- ensure-parent-dir
   "Create parent directory if it doesn't exist."
   [file]
-  (when-let [parent (.getParentFile (io/file file))]
-    (.mkdirs parent)))
+  (when-let [parent (fs/parent file)]
+    (fs/create-dirs parent)))
 
 (defn- read-task-line
   "Parse a single line as EDN and validate against Task schema.
@@ -46,11 +46,10 @@
   Creates parent directories if needed."
   [file-path tasks]
   (ensure-parent-dir file-path)
-  (let [file (io/file file-path)
-        temp-file (io/file (str file-path ".tmp"))
+  (let [temp-file (str file-path ".tmp")
         content (str/join "\n" (map pr-str tasks))]
     (spit temp-file content)
-    (.renameTo temp-file file)))
+    (fs/move temp-file file-path {:replace-existing true})))
 
 ;; Public API
 
@@ -60,15 +59,14 @@
   Returns vector of task maps. Missing files return empty vector.
   Malformed or invalid lines are skipped with warnings."
   [file-path]
-  (let [file (io/file file-path)]
-    (if (.exists file)
-      (let [content (slurp file-path)
-            lines (str/split-lines content)]
-        (into []
-              (keep-indexed (fn [idx line]
-                              (read-task-line line (inc idx))))
-              lines))
-      [])))
+  (if (fs/exists? file-path)
+    (let [content (slurp file-path)
+          lines (str/split-lines content)]
+      (into []
+            (keep-indexed (fn [idx line]
+                            (read-task-line line (inc idx))))
+            lines))
+    []))
 
 (defn append-task
   "Append a task to the end of an EDNL file.

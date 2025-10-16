@@ -2,6 +2,7 @@
   "Stdio-based MCP server main entry point for task management"
   (:gen-class)
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [mcp-clj.log :as log]
@@ -50,13 +51,14 @@
       (do
         (println (str "Warning: Prompt '" prompt-name "' not found"))
         1)
-      (let [target-file (io/file ".mcp-tasks" "prompts" (str prompt-name ".md"))]
-        (if (.exists target-file)
+      (let [target-file (str ".mcp-tasks/prompts/" prompt-name ".md")]
+        (if (fs/exists? target-file)
           (do
             (println (str "Skipping " prompt-name ": file already exists"))
             0)
           (try
-            (.mkdirs (.getParentFile target-file))
+            (when-let [parent (fs/parent target-file)]
+              (fs/create-dirs parent))
             (spit target-file @prompt-var)
             (println (str "Installed " prompt-name))
             0

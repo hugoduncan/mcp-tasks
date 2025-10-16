@@ -1,12 +1,10 @@
 (ns mcp-tasks.prompts
   "Task management prompts"
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [mcp-clj.mcp-server.prompts :as prompts])
-  (:import
-    (java.io
-      File)))
+    [mcp-clj.mcp-server.prompts :as prompts]))
 
 (defn- parse-frontmatter
   "Parse simple 'field: value' frontmatter from markdown text.
@@ -57,12 +55,12 @@
 
   Takes a File object and returns a sorted vector of filenames without
   .md extension.  Returns empty vector if directory doesn't exist."
-  [^File dir]
-  (if (.exists dir)
-    (->> (.listFiles dir)
-         (filter #(and (.isFile ^File %)
-                       (str/ends-with? (.getName ^File %) ".md")))
-         (map #(str/replace (.getName ^File %) #"\.md$" ""))
+  [dir]
+  (if (fs/exists? dir)
+    (->> (fs/list-dir dir)
+         (filter #(and (fs/regular-file? %)
+                       (str/ends-with? (str (fs/file-name %)) ".md")))
+         (map #(str/replace (str (fs/file-name %)) #"\.md$" ""))
          sort
          vec)
     []))
@@ -76,7 +74,7 @@
   ([]
    (discover-categories (System/getProperty "user.dir")))
   ([base-dir]
-   (let [prompts-dir (io/file base-dir ".mcp-tasks" "prompts")]
+   (let [prompts-dir (str base-dir "/.mcp-tasks/prompts")]
      (discover-prompt-files prompts-dir))))
 
 (defn- read-task-prompt-text
@@ -127,12 +125,9 @@
   The :metadata key contains parsed frontmatter (may be nil),
   and :content contains the prompt text with frontmatter stripped."
   [base-dir category]
-  (let [prompt-file (io/file
-                      base-dir
-                      ".mcp-tasks"
-                      "prompts"
-                      (str category ".md"))]
-    (when (.exists prompt-file)
+  (let [base (or base-dir ".")
+        prompt-file (str base "/.mcp-tasks/prompts/" category ".md")]
+    (when (fs/exists? prompt-file)
       (parse-frontmatter (slurp prompt-file)))))
 
 (defn create-prompts
@@ -226,12 +221,8 @@
 
   Returns nil if prompt is not found in either location."
   [prompt-name]
-  (let [override-file (io/file
-                        ".mcp-tasks"
-                        "story"
-                        "prompts"
-                        (str prompt-name ".md"))]
-    (if (.exists override-file)
+  (let [override-file (str ".mcp-tasks/story/prompts/" prompt-name ".md")]
+    (if (fs/exists? override-file)
       (let [file-content (slurp override-file)
             {:keys [metadata content]} (parse-frontmatter file-content)]
         {:name prompt-name
@@ -256,18 +247,18 @@
                               :when prompt]
                           {:name (:name prompt)
                            :description (:description prompt)})
-        story-dir (io/file ".mcp-tasks" "story" "prompts")
-        override-prompts (when (.exists story-dir)
-                           (for [^File file (.listFiles story-dir)
-                                 :when (and (.isFile file)
+        story-dir ".mcp-tasks/story/prompts"
+        override-prompts (when (fs/exists? story-dir)
+                           (for [file (fs/list-dir story-dir)
+                                 :when (and (fs/regular-file? file)
                                             (str/ends-with?
-                                              (.getName file)
+                                              (str (fs/file-name file))
                                               ".md"))]
                              (let [name (str/replace
-                                          (.getName file)
+                                          (str (fs/file-name file))
                                           #"\.md$" "")
                                    {:keys [metadata]} (parse-frontmatter
-                                                        (slurp file))]
+                                                        (slurp (str file)))]
                                {:name name
                                 :description (get metadata "description")})))
         all-prompts (concat override-prompts builtin-prompts)

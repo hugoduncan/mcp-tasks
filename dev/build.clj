@@ -1,5 +1,6 @@
 (ns build
   (:require
+    [babashka.fs :as fs]
     [clojure.tools.build.api :as b]))
 
 (def lib 'org.hugoduncan/mcp-tasks)
@@ -56,10 +57,10 @@
     (println "POM file:" pom-file)
     ;; deps-deploy will be called via clojure -X:deploy from CI
     ;; This function just validates the files exist
-    (when-not (.exists (clojure.java.io/file jar-file))
+    (when-not (fs/exists? jar-file)
       (throw (ex-info "JAR file not found. Run 'clj -T:build jar' first."
                       {:jar-file jar-file})))
-    (when-not (.exists (clojure.java.io/file pom-file))
+    (when-not (fs/exists? pom-file)
       (throw (ex-info "POM file not found. Run 'clj -T:build jar' first."
                       {:pom-file pom-file})))
     (println "Files validated for deployment")))

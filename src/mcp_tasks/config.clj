@@ -1,8 +1,8 @@
 (ns mcp-tasks.config
   "Configuration management for mcp-tasks"
   (:require
-    [clojure.edn :as edn]
-    [clojure.java.io :as io]))
+    [babashka.fs :as fs]
+    [clojure.edn :as edn]))
 
 (defn validate-config
   "Validates config map structure.
@@ -34,8 +34,8 @@
   Returns validated config map if file exists and is valid.
   Throws ex-info with clear message for malformed EDN or invalid schema."
   [project-dir]
-  (let [config-file (io/file project-dir ".mcp-tasks.edn")]
-    (if (.exists config-file)
+  (let [config-file (str project-dir "/.mcp-tasks.edn")]
+    (if (fs/exists? config-file)
       (try
         (let [config (edn/read-string (slurp config-file))]
           (validate-config config))
@@ -46,7 +46,7 @@
           ;; Wrap EDN parsing errors with context
           (throw (ex-info (str "Failed to parse .mcp-tasks.edn: " (.getMessage e))
                           {:type :malformed-edn
-                           :file (.getPath config-file)
+                           :file config-file
                            :cause e}
                           e))))
       nil)))
@@ -57,8 +57,8 @@
   "Checks if .mcp-tasks/.git directory exists in the project directory.
   Returns true if the git repository exists, false otherwise."
   [project-dir]
-  (let [git-dir (io/file project-dir ".mcp-tasks" ".git")]
-    (.exists git-dir)))
+  (let [git-dir (str project-dir "/.mcp-tasks/.git")]
+    (fs/exists? git-dir)))
 
 (defn determine-git-mode
   "Determines whether to use git mode based on config and auto-detection.
