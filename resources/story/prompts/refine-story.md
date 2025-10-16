@@ -1,7 +1,7 @@
 ---
 title: Refine Story
 description: Interactively refine a story document with user feedback
-argument-hint: <story-specification> [additional-context...]
+argument-hint: [story-specification] [additional-context...]
 ---
 
 Refine the story through an interactive process.

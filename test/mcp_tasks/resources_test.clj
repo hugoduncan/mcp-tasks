@@ -208,4 +208,4 @@
               frontmatter-lines (take-while #(not= "---" %) (rest lines))
               arg-hint-line (first (filter #(str/starts-with? % "argument-hint:") frontmatter-lines))]
           (is (some? arg-hint-line))
-          (is (str/includes? arg-hint-line "<story-specification>")))))))
+          (is (str/includes? arg-hint-line "[story-specification]")))))))

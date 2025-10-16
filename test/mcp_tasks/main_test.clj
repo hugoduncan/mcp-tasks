@@ -344,7 +344,7 @@
             (is (= 2 (count (:arguments prompt))))
             (let [[story-name-arg context-arg] (:arguments prompt)]
               (is (= "story-specification" (:name story-name-arg)))
-              (is (true? (:required story-name-arg)))
+              (is (false? (:required story-name-arg)))
               (is (= "additional-context" (:name context-arg)))
               (is (false? (:required context-arg)))))
           (finally

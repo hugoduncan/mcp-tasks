@@ -1,7 +1,7 @@
 ---
 title: Create Story Tasks
 description: Break down a story into categorized, executable tasks
-argument-hint: <story-specification> [additional-context...]
+argument-hint: [story-specification] [additional-context...]
 ---
 
 Create a task breakdown for the story. Do not implement the story.

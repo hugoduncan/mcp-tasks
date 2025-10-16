@@ -1,7 +1,7 @@
 ---
 title: Review Story Implementation
 description: Review the implementation of a story
-argument-hint: <story-specification> [additional-context...]
+argument-hint: [story-specification] [additional-context...]
 ---
 
 Review the implementation of a story against its requirements and code quality standards.
