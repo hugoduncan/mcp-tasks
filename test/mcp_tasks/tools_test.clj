@@ -1848,7 +1848,7 @@
         (is (true? (:isError result)))
         (is (str/includes?
               (get-in result [:content 0 :text])
-              "Must provide either task-id or title-pattern"))))))
+              "Must provide either task-id or title"))))))
 
 (deftest delete-task-verifies-id-and-title-match
   ;; Tests that delete-task-impl verifies both identifiers refer to the same task
@@ -1881,7 +1881,7 @@
         (is (true? (:isError result)))
         (is (str/includes?
               (get-in result [:content 0 :text])
-              "Task not found"))))
+              "Task ID not found"))))
     (testing "returns error for non-existent title-pattern"
       (write-ednl-test-file
         "tasks.ednl"
