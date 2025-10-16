@@ -556,6 +556,36 @@
       :required ["category" "title"]}
      :implementation (partial add-task-impl config)}))
 
+;; Field conversion helpers
+
+(defn- convert-enum-field
+  "Convert string enum value to keyword.
+
+  Returns keyword version of the string value."
+  [value]
+  (keyword value))
+
+(defn- convert-meta-field
+  "Convert meta field value, treating nil as empty map.
+
+  Returns the value or {} if nil."
+  [value]
+  (or value {}))
+
+(defn- convert-relations-field
+  "Convert relations from JSON structure to Clojure keyword-based structure.
+
+  Transforms string keys to keywords for :as-type field.
+  Returns [] if relations is nil."
+  [relations]
+  (if relations
+    (mapv (fn [rel]
+            {:id (get rel "id")
+             :relates-to (get rel "relates-to")
+             :as-type (keyword (get rel "as-type"))})
+          relations)
+    []))
+
 (defn- extract-provided-updates
   "Extract and convert provided fields from arguments map.
 
@@ -568,18 +598,10 @@
   - :relations - nil becomes [], structure keys converted from strings to keywords"
   [arguments]
   (let [;; Define conversion functions for each field type
-        convert-relations (fn [relations]
-                            (if relations
-                              (mapv (fn [rel]
-                                      {:id (get rel "id")
-                                       :relates-to (get rel "relates-to")
-                                       :as-type (keyword (get rel "as-type"))})
-                                    relations)
-                              []))
-        conversions {:status keyword
-                     :type keyword
-                     :meta #(or % {})
-                     :relations convert-relations}
+        conversions {:status convert-enum-field
+                     :type convert-enum-field
+                     :meta convert-meta-field
+                     :relations convert-relations-field}
 
         ;; List of all updatable fields
         updatable-fields [:title :description :design :parent-id
