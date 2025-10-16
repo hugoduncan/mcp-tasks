@@ -53,6 +53,27 @@
        :commit-sha nil
        :error (.getMessage e)})))
 
+;; Error response helpers
+
+(defn- build-tool-error-response
+  "Build standardized two-content-item error response.
+
+  Parameters:
+  - error-message: Human-readable error message (string)
+  - operation: Operation that failed (string)
+  - error-metadata: Additional metadata map to include
+
+  Returns error response map with :content and :isError keys."
+  [error-message operation error-metadata]
+  {:content [{:type "text"
+              :text error-message}
+             {:type "text"
+              :text (json/write-str
+                      {:error error-message
+                       :metadata (merge {:attempted-operation operation}
+                                        error-metadata)})}]
+   :isError true})
+
 ;; Validation helpers
 
 (defn- validate-task-exists
@@ -61,16 +82,11 @@
   Returns error response map if validation fails, nil if successful."
   [task-id operation tasks-file & {:keys [additional-metadata]}]
   (when-not (tasks/get-task task-id)
-    {:content [{:type "text"
-                :text "Task not found"}
-               {:type "text"
-                :text (json/write-str
-                        (merge {:error "Task not found"
-                                :metadata {:attempted-operation operation
-                                           :task-id task-id
-                                           :file tasks-file}}
-                               additional-metadata))}]
-     :isError true}))
+    (build-tool-error-response
+      "Task not found"
+      operation
+      (merge {:task-id task-id :file tasks-file}
+             additional-metadata))))
 
 (defn- validate-parent-id-exists
   "Validate that a parent task exists if parent-id is provided and non-nil.
@@ -78,17 +94,11 @@
   Returns error response map if validation fails, nil if successful."
   [parent-id operation task-id tasks-file error-message & {:keys [additional-metadata]}]
   (when (and parent-id (not (tasks/get-task parent-id)))
-    {:content [{:type "text"
-                :text error-message}
-               {:type "text"
-                :text (json/write-str
-                        {:error error-message
-                         :metadata (merge {:attempted-operation operation
-                                           :task-id task-id
-                                           :parent-id parent-id
-                                           :file tasks-file}
-                                          additional-metadata)})}]
-     :isError true}))
+    (build-tool-error-response
+      error-message
+      operation
+      (merge {:task-id task-id :parent-id parent-id :file tasks-file}
+             additional-metadata))))
 
 (defn- validate-task-schema
   "Validate that a task conforms to the schema.
@@ -96,16 +106,12 @@
   Returns error response map if validation fails, nil if successful."
   [task operation task-id tasks-file]
   (when-let [validation-result (schema/explain-task task)]
-    {:content [{:type "text"
-                :text "Invalid task field values"}
-               {:type "text"
-                :text (json/write-str
-                        {:error "Invalid task field values"
-                         :metadata {:attempted-operation operation
-                                    :task-id task-id
-                                    :validation-errors (pr-str validation-result)
-                                    :file tasks-file}})}]
-     :isError true}))
+    (build-tool-error-response
+      "Invalid task field values"
+      operation
+      {:task-id task-id
+       :validation-errors (pr-str validation-result)
+       :file tasks-file})))
 
 (defn- complete-task-impl
   "Implementation of complete-task tool.
