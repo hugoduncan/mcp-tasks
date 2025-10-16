@@ -1756,3 +1756,246 @@
         (is (= 3 (count @child-commits)))
         (is (every? string? @child-commits))
         (is (git-commit-exists? *test-dir*))))))
+
+;; Delete task tests
+
+(deftest delete-task-by-id
+  ;; Tests that delete-task-impl can find and delete a task by exact ID
+  (testing "delete-task"
+    (testing "deletes task by exact task-id"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "first task" :description "detail" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "other" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 2})]
+        (is (false? (:isError result)))
+        ;; Verify response structure (2 items)
+        (is (= 2 (count (:content result))))
+        (is (= "Task 2 deleted successfully" (get-in result [:content 0 :text])))
+        ;; Verify deleted task data
+        (let [data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (= 2 (get-in data [:deleted :id])))
+          (is (= "deleted" (get-in data [:deleted :status])))
+          (is (= 1 (get-in data [:metadata :count]))))
+        ;; Verify task 2 is in complete.ednl with :status :deleted
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "second task" (:title (first complete-tasks))))
+          (is (= :deleted (:status (first complete-tasks)))))
+        ;; Verify task 1 remains in tasks.ednl
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= "first task" (:title (first tasks)))))))))
+
+(deftest delete-task-by-title-pattern
+  ;; Tests that delete-task-impl can find and delete a task by exact title match
+  (testing "delete-task"
+    (testing "deletes task by exact title-pattern match"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "unique task" :description "detail" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+                             {:id 2 :parent-id nil :title "other task" :description "" :design "" :category "other" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:title-pattern "unique task"})]
+        (is (false? (:isError result)))
+        ;; Verify task with title "unique task" is deleted
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "unique task" (:title (first complete-tasks))))
+          (is (= :deleted (:status (first complete-tasks)))))
+        ;; Verify other task remains
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= "other task" (:title (first tasks)))))))))
+
+(deftest delete-task-rejects-ambiguous-title
+  ;; Tests that delete-task-impl rejects when multiple tasks have the same title
+  (testing "delete-task"
+    (testing "rejects multiple tasks with same title"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "duplicate" :description "first" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+         {:id 2 :parent-id nil :title "duplicate" :description "second" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:title-pattern "duplicate"})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "Multiple tasks found"))
+        ;; Verify no tasks were deleted
+        (is (empty? (read-ednl-test-file "complete.ednl")))
+        (is (= 2 (count (read-ednl-test-file "tasks.ednl"))))))))
+
+(deftest delete-task-requires-identifier
+  ;; Tests that delete-task-impl requires at least one identifier
+  (testing "delete-task"
+    (testing "requires at least one of task-id or title-pattern"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "Must provide either task-id or title-pattern"))))))
+
+(deftest delete-task-verifies-id-and-title-match
+  ;; Tests that delete-task-impl verifies both identifiers refer to the same task
+  (testing "delete-task"
+    (testing "verifies task-id and title-pattern match same task"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "first" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+         {:id 2 :parent-id nil :title "second" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1 :title-pattern "second"})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "do not refer to the same task"))))))
+
+(deftest delete-task-rejects-nonexistent-task
+  ;; Tests that delete-task-impl returns error for non-existent task
+  (testing "delete-task"
+    (testing "returns error for non-existent task ID"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 999})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "Task not found"))))
+    (testing "returns error for non-existent title-pattern"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:title-pattern "nonexistent"})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "No task found with exact title match"))))))
+
+(deftest delete-task-prevents-deletion-with-non-closed-children
+  ;; Tests that delete-task-impl prevents deletion of parent with non-closed children
+  (testing "delete-task"
+    (testing "prevents deletion of parent with non-closed children"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "parent" :description "" :design "" :category "test" :type :story :status :open :meta {} :relations []}
+         {:id 2 :parent-id 1 :title "child 1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+         {:id 3 :parent-id 1 :title "child 2" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "Cannot delete task with children"))
+        ;; Verify error metadata includes child info
+        (let [data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
+          (is (= 1 (get-in data [:metadata :child-count])))
+          (is (= 1 (count (get-in data [:metadata :non-closed-children])))))
+        ;; Verify no deletion occurred
+        (is (empty? (read-ednl-test-file "complete.ednl")))
+        (is (= 3 (count (read-ednl-test-file "tasks.ednl"))))))))
+
+(deftest delete-task-allows-deletion-with-all-closed-children
+  ;; Tests that delete-task-impl allows deletion of parent when all children are closed
+  (testing "delete-task"
+    (testing "allows deletion of parent with all closed children"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "parent" :description "" :design "" :category "test" :type :story :status :open :meta {} :relations []}
+         {:id 2 :parent-id 1 :title "child 1" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}
+         {:id 3 :parent-id 1 :title "child 2" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1})]
+        (is (false? (:isError result)))
+        ;; Verify parent was deleted
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= 1 (:id (first complete-tasks))))
+          (is (= :deleted (:status (first complete-tasks)))))
+        ;; Verify children remain in tasks.ednl
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 2 (count tasks)))
+          (is (every? #(= 1 (:parent-id %)) tasks)))))))
+
+(deftest delete-task-allows-deletion-with-no-children
+  ;; Tests that delete-task-impl allows deletion of task with no children
+  (testing "delete-task"
+    (testing "allows deletion of task with no children"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "parent" :description "" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1})]
+        (is (false? (:isError result)))
+        ;; Verify task was deleted
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= :deleted (:status (first complete-tasks)))))
+        (is (empty? (read-ednl-test-file "tasks.ednl")))))))
+
+(deftest delete-task-allows-deletion-of-child-task
+  ;; Tests that delete-task-impl allows deletion of child tasks
+  (testing "delete-task"
+    (testing "allows deletion of child task"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "parent" :description "" :design "" :category "test" :type :story :status :open :meta {} :relations []}
+         {:id 2 :parent-id 1 :title "child" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 2})]
+        (is (false? (:isError result)))
+        ;; Verify child was deleted
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= 2 (:id (first complete-tasks))))
+          (is (= :deleted (:status (first complete-tasks)))))
+        ;; Verify parent remains
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= 1 (:id (first tasks)))))))))
+
+(deftest delete-task-rejects-already-deleted
+  ;; Tests that delete-task-impl rejects tasks that are already deleted
+  (testing "delete-task"
+    (testing "rejects task that is already deleted"
+      (write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :deleted :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1})]
+        (is (true? (:isError result)))
+        (is (str/includes?
+              (get-in result [:content 0 :text])
+              "already deleted"))
+        ;; Verify no change in complete.ednl
+        (is (empty? (read-ednl-test-file "complete.ednl")))))))
