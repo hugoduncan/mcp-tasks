@@ -3,6 +3,7 @@
     [babashka.fs :as fs]
     [clojure.data.json :as json]
     [clojure.java.io :as io]
+    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.tasks :as tasks]
@@ -814,3 +815,162 @@
           (is (= 1 (count (:tasks response))))
           (is (= task2-id (get-in response [:tasks 0 :id])))
           (is (= "Task Two" (get-in response [:tasks 0 :title]))))))))
+
+;; Git Integration Tests
+
+(defn- git-test-config
+  "Config with git enabled for testing."
+  []
+  {:base-dir *test-dir* :use-git? true})
+
+(defn- init-git-repo
+  "Initialize a git repository in the test .mcp-tasks directory."
+  [test-dir]
+  (let [git-dir (str test-dir "/.mcp-tasks")]
+    (sh/sh "git" "init" :dir git-dir)
+    (sh/sh "git" "config" "user.email" "test@test.com" :dir git-dir)
+    (sh/sh "git" "config" "user.name" "Test User" :dir git-dir)))
+
+(defn- git-log-last-commit
+  "Get the last commit message from the git repo."
+  [test-dir]
+  (let [git-dir (str test-dir "/.mcp-tasks")
+        result (sh/sh "git" "log" "-1" "--pretty=%B" :dir git-dir)]
+    (str/trim (:out result))))
+
+(defn- git-commit-exists?
+  "Check if there are any commits in the git repo."
+  [test-dir]
+  (let [git-dir (str test-dir "/.mcp-tasks")
+        result (sh/sh "git" "rev-parse" "HEAD" :dir git-dir)]
+    (zero? (:exit result))))
+
+(deftest complete-task-returns-three-content-items-with-git
+  ;; Tests that complete-task returns 3 content items when git is enabled
+  (testing "complete-task with git enabled"
+    (testing "returns three content items"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 1})]
+        (is (false? (:isError result)))
+        (is (= 3 (count (:content result))))
+
+        ;; First content item: completion message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (str/includes? (:text text-content) "Task 1 completed")))
+
+        ;; Second content item: modified files
+        (let [files-content (second (:content result))
+              files-data (json/read-str (:text files-content) :key-fn keyword)]
+          (is (= "text" (:type files-content)))
+          (is (contains? files-data :modified-files))
+          (is (= 2 (count (:modified-files files-data)))))
+
+        ;; Third content item: git status
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "text" (:type git-content)))
+          (is (contains? git-data :git-status))
+          (is (contains? git-data :git-commit-sha)))))))
+
+(deftest complete-task-returns-one-content-item-without-git
+  ;; Tests that complete-task returns 1 content item when git is disabled
+  (testing "complete-task with git disabled"
+    (testing "returns one content item"
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/complete-task-impl
+                    (test-config)
+                    nil
+                    {:task-id 1})]
+        (is (false? (:isError result)))
+        (is (= 1 (count (:content result))))
+
+        ;; Only content item: completion message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (str/includes? (:text text-content) "Task 1 completed")))))))
+
+(deftest ^:integration complete-task-creates-git-commit
+  ;; Integration test verifying git commit is actually created
+  (testing "complete-task with git enabled"
+    (testing "creates git commit with correct message"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 42 :parent-id nil :title "implement feature X" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+      ;; Complete the task
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 42})]
+        (is (false? (:isError result)))
+
+        ;; Verify git commit was created
+        (is (git-commit-exists? *test-dir*))
+
+        ;; Verify commit message format
+        (let [commit-msg (git-log-last-commit *test-dir*)]
+          (is (= "Complete task #42: implement feature X" commit-msg)))
+
+        ;; Verify git status in response
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "success" (:git-status git-data)))
+          (is (string? (:git-commit-sha git-data)))
+          (is (= 40 (count (:git-commit-sha git-data)))) ; SHA is 40 chars
+          (is (nil? (:git-error git-data))))))))
+
+(deftest ^:integration complete-task-succeeds-despite-git-failure
+  ;; Tests that task completion succeeds even when git operations fail
+  (testing "complete-task with git enabled but no git repo"
+    (testing "task completes successfully despite git error"
+      ;; Do not initialize git repo - this will cause git operations to fail
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 1})]
+        ;; Task completion should succeed
+        (is (false? (:isError result)))
+
+        ;; Verify task was actually completed
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "test task" (:title (first complete-tasks)))))
+
+        ;; Verify git error is reported in response
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "error" (:git-status git-data)))
+          (is (nil? (:git-commit-sha git-data)))
+          (is (string? (:git-error git-data)))
+          (is (not (str/blank? (:git-error git-data)))))))))
+
+(deftest ^:integration complete-task-git-commit-sha-format
+  ;; Tests that git commit SHA is returned in correct format
+  (testing "complete-task with git enabled"
+    (testing "returns valid git commit SHA"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 99 :parent-id nil :title "task title" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+      (let [result (#'sut/complete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 99})
+            git-content (nth (:content result) 2)
+            git-data (json/read-str (:text git-content) :key-fn keyword)
+            sha (:git-commit-sha git-data)]
+
+        ;; Verify SHA format
+        (is (string? sha))
+        (is (= 40 (count sha)))
+        (is (re-matches #"[0-9a-f]{40}" sha))))))
