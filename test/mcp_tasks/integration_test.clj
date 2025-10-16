@@ -609,369 +609,572 @@
               ((:stop server)))))))))
 
 (deftest ^:integ update-task-tool-test
-  ;; Tests that update-task tool can update task fields and persist changes to tasks.ednl.
+  ;; Tests update-task tool functionality including field updates, validation,
+  ;; nil handling, and replacement semantics.
   (testing "update-task tool"
-    (testing "updates task fields and persists to tasks.ednl"
-      (write-config-file "{:use-git? false}")
+    (testing "field updates"
+      (testing "updates multiple fields and persists to tasks.ednl"
+        (write-config-file "{:use-git? false}")
 
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create an initial task in tasks.ednl
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                initial-task {:id 1
-                              :title "Original title"
-                              :description "Original desc"
-                              :design "Original design"
-                              :category "simple"
-                              :status :open
-                              :type :task
-                              :meta {}
-                              :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
-
-          ;; Update the task using the tool
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :title "Updated title"
-                                               :description "Updated desc"
-                                               :design "Updated design"})]
-            (is (not (:isError result)))
-            (is (re-find #"Task 1 updated"
-                         (-> result :content first :text)))
-
-            ;; Verify task was updated in tasks.ednl
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create an initial task in tasks.ednl
             (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
-                  updated-task (first tasks)]
-              (is (= 1 (count tasks)))
-              (is (= "Updated title" (:title updated-task)))
-              (is (= "Updated desc" (:description updated-task)))
-              (is (= "Updated design" (:design updated-task)))
-              ;; Other fields should remain unchanged
-              (is (= :open (:status updated-task)))
-              (is (= "simple" (:category updated-task)))
-              (is (= :task (:type updated-task)))))
+                  initial-task {:id 1
+                                :title "Original title"
+                                :description "Original desc"
+                                :design "Original design"
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
 
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))
-
-    (testing "updates only specified fields"
-      (write-config-file "{:use-git? false}")
-
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create an initial task
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                initial-task {:id 2
-                              :title "Keep title"
-                              :description "Change desc"
-                              :design "Keep design"
-                              :category "medium"
-                              :status :open
-                              :type :task
-                              :meta {}
-                              :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
-
-          ;; Update only description field
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 2
-                                               :description "New desc"})]
-            (is (not (:isError result)))
-
-            ;; Verify only description changed
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                  tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
-                  updated-task (first tasks)]
-              (is (= "Keep title" (:title updated-task)))
-              (is (= "New desc" (:description updated-task)))
-              (is (= "Keep design" (:design updated-task)))))
-
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))
-
-    (testing "returns error for non-existent task ID"
-      (write-config-file "{:use-git? false}")
-
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 999
-                                               :title "New title"})]
-            (is (:isError result))
-            (is (re-find #"Task not found"
-                         (-> result :content first :text))))
-
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))))
-
-(deftest ^:integ update-task-validation-test
-  ;; Tests validation for all updateable task fields
-  (testing "update-task field validation"
-    (testing "validates status field"
-      (write-config-file "{:use-git? false}")
-
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create initial task
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                initial-task {:id 1
-                              :title "Test task"
-                              :description "Desc"
-                              :design ""
-                              :category "simple"
-                              :status :open
-                              :type :task
-                              :meta {}
-                              :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
-
-          ;; Test valid status values
-          (doseq [valid-status ["open" "closed" "in-progress" "blocked"]]
+            ;; Update the task using the tool
             (let [result @(mcp-client/call-tool client
                                                 "update-task"
                                                 {:task-id 1
-                                                 :status valid-status})]
-              (is (not (:isError result))
-                  (str "Should accept valid status: " valid-status))))
+                                                 :title "Updated title"
+                                                 :description "Updated desc"
+                                                 :design "Updated design"})]
+              (is (not (:isError result)))
+              (is (re-find #"Task 1 updated"
+                           (-> result :content first :text)))
 
-          ;; Test invalid status value
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :status "invalid-status"})]
-            (is (:isError result))
-            (is (re-find #"Invalid task field values"
-                         (-> result :content first :text))))
+              ;; Verify task was updated in tasks.ednl
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first tasks)]
+                (is (= 1 (count tasks)))
+                (is (= "Updated title" (:title updated-task)))
+                (is (= "Updated desc" (:description updated-task)))
+                (is (= "Updated design" (:design updated-task)))
+                ;; Other fields should remain unchanged
+                (is (= :open (:status updated-task)))
+                (is (= "simple" (:category updated-task)))
+                (is (= :task (:type updated-task)))))
 
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
 
-    (testing "validates type field"
-      (write-config-file "{:use-git? false}")
+      (testing "updates only specified fields"
+        (write-config-file "{:use-git? false}")
 
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create initial task
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                initial-task {:id 1
-                              :title "Test task"
-                              :description "Desc"
-                              :design ""
-                              :category "simple"
-                              :status :open
-                              :type :task
-                              :meta {}
-                              :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create an initial task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  initial-task {:id 2
+                                :title "Keep title"
+                                :description "Change desc"
+                                :design "Keep design"
+                                :category "medium"
+                                :status :open
+                                :type :task
+                                :meta {}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
 
-          ;; Test valid type values
-          (doseq [valid-type ["task" "bug" "feature" "story" "chore"]]
+            ;; Update only description field
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 2
+                                                 :description "New desc"})]
+              (is (not (:isError result)))
+
+              ;; Verify only description changed
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first tasks)]
+                (is (= "Keep title" (:title updated-task)))
+                (is (= "New desc" (:description updated-task)))
+                (is (= "Keep design" (:design updated-task)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "returns error for non-existent task ID"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 999
+                                                 :title "New title"})]
+              (is (:isError result))
+              (is (re-find #"Task not found"
+                           (-> result :content first :text))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))
+
+    (testing "validation"
+      (testing "validates status field"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create initial task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  initial-task {:id 1
+                                :title "Test task"
+                                :description "Desc"
+                                :design ""
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+            ;; Test valid status values
+            (doseq [valid-status ["open" "closed" "in-progress" "blocked"]]
+              (let [result @(mcp-client/call-tool client
+                                                  "update-task"
+                                                  {:task-id 1
+                                                   :status valid-status})]
+                (is (not (:isError result))
+                    (str "Should accept valid status: " valid-status))))
+
+            ;; Test invalid status value
             (let [result @(mcp-client/call-tool client
                                                 "update-task"
                                                 {:task-id 1
-                                                 :type valid-type})]
-              (is (not (:isError result))
-                  (str "Should accept valid type: " valid-type))))
+                                                 :status "invalid-status"})]
+              (is (:isError result))
+              (is (re-find #"Invalid task field values"
+                           (-> result :content first :text))))
 
-          ;; Test invalid type value
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :type "invalid-type"})]
-            (is (:isError result))
-            (is (re-find #"Invalid task field values"
-                         (-> result :content first :text))))
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
 
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))
+      (testing "validates type field"
+        (write-config-file "{:use-git? false}")
 
-    (testing "validates parent-id field"
-      (write-config-file "{:use-git? false}")
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create initial task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  initial-task {:id 1
+                                :title "Test task"
+                                :description "Desc"
+                                :design ""
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
 
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create parent and child tasks
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                parent-task {:id 1
-                             :title "Parent"
-                             :description ""
-                             :design ""
-                             :category "large"
-                             :status :open
-                             :type :story
-                             :meta {}
-                             :relations []}
-                child-task {:id 2
-                            :title "Child"
-                            :description ""
-                            :design ""
-                            :category "simple"
-                            :status :open
-                            :type :task
-                            :meta {}
-                            :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [parent-task child-task]))
+            ;; Test valid type values
+            (doseq [valid-type ["task" "bug" "feature" "story" "chore"]]
+              (let [result @(mcp-client/call-tool client
+                                                  "update-task"
+                                                  {:task-id 1
+                                                   :type valid-type})]
+                (is (not (:isError result))
+                    (str "Should accept valid type: " valid-type))))
 
-          ;; Test valid parent-id
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 2
-                                               :parent-id 1})]
-            (is (not (:isError result))))
+            ;; Test invalid type value
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :type "invalid-type"})]
+              (is (:isError result))
+              (is (re-find #"Invalid task field values"
+                           (-> result :content first :text))))
 
-          ;; Test clearing parent-id with null
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 2
-                                               :parent-id nil})]
-            (is (not (:isError result))))
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
 
-          ;; Test non-existent parent-id
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 2
-                                               :parent-id 9999})]
-            (is (:isError result))
-            (is (re-find #"Parent task not found"
-                         (-> result :content first :text))))
+      (testing "validates parent-id field"
+        (write-config-file "{:use-git? false}")
 
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))
-
-    (testing "validates meta field"
-      (write-config-file "{:use-git? false}")
-
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create initial task
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                initial-task {:id 1
-                              :title "Test task"
-                              :description "Desc"
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create parent and child tasks
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  parent-task {:id 1
+                               :title "Parent"
+                               :description ""
+                               :design ""
+                               :category "large"
+                               :status :open
+                               :type :story
+                               :meta {}
+                               :relations []}
+                  child-task {:id 2
+                              :title "Child"
+                              :description ""
                               :design ""
                               :category "simple"
                               :status :open
                               :type :task
                               :meta {}
                               :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [parent-task child-task]))
 
-          ;; Test valid meta with string keys and values
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :meta {"priority" "high"
-                                                      "assigned-to" "alice"}})]
-            (is (not (:isError result))))
+            ;; Test valid parent-id
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 2
+                                                 :parent-id 1})]
+              (is (not (:isError result))))
 
-          ;; Test clearing meta with null
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :meta nil})]
-            (is (not (:isError result))))
+            ;; Test non-existent parent-id
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 2
+                                                 :parent-id 9999})]
+              (is (:isError result))
+              (is (re-find #"Parent task not found"
+                           (-> result :content first :text))))
 
-          ;; Test invalid meta with non-string value
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :meta {"priority" 123}})]
-            (is (:isError result))
-            (is (re-find #"Invalid task field values"
-                         (-> result :content first :text))))
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
 
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))
+      (testing "validates meta field"
+        (write-config-file "{:use-git? false}")
 
-    (testing "validates relations field"
-      (write-config-file "{:use-git? false}")
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create initial task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  initial-task {:id 1
+                                :title "Test task"
+                                :description "Desc"
+                                :design ""
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
 
-      (let [{:keys [server client]} (create-test-server-and-client)]
-        (try
-          ;; Create initial tasks
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
-                task-1 {:id 1
-                        :title "Task 1"
-                        :description ""
-                        :design ""
-                        :category "simple"
-                        :status :open
-                        :type :task
-                        :meta {}
-                        :relations []}
-                task-2 {:id 2
-                        :title "Task 2"
-                        :description ""
-                        :design ""
-                        :category "simple"
-                        :status :open
-                        :type :task
-                        :meta {}
-                        :relations []}]
-            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task-1 task-2]))
+            ;; Test valid meta with string keys and values
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :meta {"priority" "high"
+                                                        "assigned-to" "alice"}})]
+              (is (not (:isError result))))
 
-          ;; Test valid relations with proper structure
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :relations [{"id" 1
-                                                            "relates-to" 2
-                                                            "as-type" "blocked-by"}]})]
-            (is (not (:isError result))))
+            ;; Test invalid meta with non-string value
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :meta {"priority" 123}})]
+              (is (:isError result))
+              (is (re-find #"Invalid task field values"
+                           (-> result :content first :text))))
 
-          ;; Test multiple valid relation types
-          (doseq [relation-type ["blocked-by" "related" "discovered-during"]]
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "validates relations field"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create initial tasks
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  task-1 {:id 1
+                          :title "Task 1"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations []}
+                  task-2 {:id 2
+                          :title "Task 2"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task-1 task-2]))
+
+            ;; Test valid relations with proper structure
             (let [result @(mcp-client/call-tool client
                                                 "update-task"
                                                 {:task-id 1
                                                  :relations [{"id" 1
                                                               "relates-to" 2
-                                                              "as-type" relation-type}]})]
-              (is (not (:isError result))
-                  (str "Should accept valid relation type: " relation-type))))
+                                                              "as-type" "blocked-by"}]})]
+              (is (not (:isError result))))
 
-          ;; Test clearing relations with null
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :relations nil})]
-            (is (not (:isError result))))
+            ;; Test multiple valid relation types
+            (doseq [relation-type ["blocked-by" "related" "discovered-during"]]
+              (let [result @(mcp-client/call-tool client
+                                                  "update-task"
+                                                  {:task-id 1
+                                                   :relations [{"id" 1
+                                                                "relates-to" 2
+                                                                "as-type" relation-type}]})]
+                (is (not (:isError result))
+                    (str "Should accept valid relation type: " relation-type))))
 
-          ;; Test invalid relation - wrong as-type enum
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :relations [{"id" 1
-                                                            "relates-to" 2
-                                                            "as-type" "invalid-type"}]})]
-            (is (:isError result))
-            (is (re-find #"Invalid task field values"
-                         (-> result :content first :text))))
+            ;; Test invalid relation - wrong as-type enum
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :relations [{"id" 1
+                                                              "relates-to" 2
+                                                              "as-type" "invalid-type"}]})]
+              (is (:isError result))
+              (is (re-find #"Invalid task field values"
+                           (-> result :content first :text))))
 
-          ;; Test invalid relation - missing required field
-          (let [result @(mcp-client/call-tool client
-                                              "update-task"
-                                              {:task-id 1
-                                               :relations [{"id" 1
-                                                            "relates-to" 2}]})]
-            (is (:isError result))
-            (is (re-find #"Invalid task field values"
-                         (-> result :content first :text))))
+            ;; Test invalid relation - missing required field
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :relations [{"id" 1
+                                                              "relates-to" 2}]})]
+              (is (:isError result))
+              (is (re-find #"Invalid task field values"
+                           (-> result :content first :text))))
 
-          (finally
-            (mcp-client/close! client)
-            ((:stop server))))))))
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))
+
+    (testing "nil handling"
+      (testing "clears parent-id with nil"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create parent and child tasks
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  parent-task {:id 1
+                               :title "Parent"
+                               :description ""
+                               :design ""
+                               :category "large"
+                               :status :open
+                               :type :story
+                               :meta {}
+                               :relations []}
+                  child-task {:id 2
+                              :title "Child"
+                              :description ""
+                              :design ""
+                              :category "simple"
+                              :status :open
+                              :type :task
+                              :parent-id 1
+                              :meta {}
+                              :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [parent-task child-task]))
+
+            ;; Clear parent-id with nil
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 2
+                                                 :parent-id nil})]
+              (is (not (:isError result)))
+
+              ;; Verify parent-id was cleared
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first (filter #(= (:id %) 2) tasks))]
+                (is (nil? (:parent-id updated-task)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "clears meta with nil"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create task with meta
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  initial-task {:id 1
+                                :title "Test task"
+                                :description "Desc"
+                                :design ""
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {"priority" "high"}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+            ;; Clear meta with nil
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :meta nil})]
+              (is (not (:isError result)))
+
+              ;; Verify meta was cleared to empty map
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first tasks)]
+                (is (= {} (:meta updated-task)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "clears relations with nil"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create task with relations
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  task-1 {:id 1
+                          :title "Task 1"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]}
+                  task-2 {:id 2
+                          :title "Task 2"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task-1 task-2]))
+
+            ;; Clear relations with nil
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :relations nil})]
+              (is (not (:isError result)))
+
+              ;; Verify relations were cleared to empty vector
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first (filter #(= (:id %) 1) tasks))]
+                (is (= [] (:relations updated-task)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))
+
+    (testing "replacement semantics"
+      (testing "replaces entire meta map"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create task with initial meta
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  initial-task {:id 1
+                                :title "Test task"
+                                :description "Desc"
+                                :design ""
+                                :category "simple"
+                                :status :open
+                                :type :task
+                                :meta {"old-key" "old-value"
+                                       "keep-key" "keep-value"}
+                                :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+            ;; Replace meta entirely (not merge)
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :meta {"new-key" "new-value"}})]
+              (is (not (:isError result)))
+
+              ;; Verify old keys are gone and only new keys exist
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first tasks)]
+                (is (= {"new-key" "new-value"} (:meta updated-task)))
+                (is (not (contains? (:meta updated-task) "old-key")))
+                (is (not (contains? (:meta updated-task) "keep-key")))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "replaces entire relations vector"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create tasks with initial relations
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  task-1 {:id 1
+                          :title "Task 1"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations [{:id 1 :relates-to 2 :as-type :blocked-by}
+                                      {:id 2 :relates-to 3 :as-type :related}]}
+                  task-2 {:id 2
+                          :title "Task 2"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations []}
+                  task-3 {:id 3
+                          :title "Task 3"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :type :task
+                          :meta {}
+                          :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task-1 task-2 task-3]))
+
+            ;; Replace relations entirely (not append)
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :relations [{"id" 3
+                                                              "relates-to" 3
+                                                              "as-type" "discovered-during"}]})]
+              (is (not (:isError result)))
+
+              ;; Verify old relations are gone and only new relation exists
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first (filter #(= (:id %) 1) tasks))]
+                (is (= 1 (count (:relations updated-task))))
+                (let [relation (first (:relations updated-task))]
+                  (is (= 3 (:id relation)))
+                  (is (= 3 (:relates-to relation)))
+                  (is (= :discovered-during (:as-type relation))))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))))
 
 (deftest ^:integ category-prompt-resources-integration-test
   ;; Test comprehensive validation of category prompt resources through MCP protocol.
