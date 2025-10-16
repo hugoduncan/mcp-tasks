@@ -874,6 +874,154 @@
         result (sh/sh "git" "rev-parse" "HEAD" :dir git-dir)]
     (zero? (:exit result))))
 
+(deftest add-task-returns-two-items-without-git
+  ;; Tests that add-task returns 2 content items when git is disabled
+  (testing "add-task with git disabled"
+    (testing "returns two content items"
+      (let [result (#'sut/add-task-impl
+                    (test-config)
+                    nil
+                    {:category "test"
+                     :title "test task"
+                     :description "description"})]
+        (is (false? (:isError result)))
+        (is (= 2 (count (:content result))))
+
+        ;; First content item: text message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (str/includes? (:text text-content) "Task added to")))
+
+        ;; Second content item: task data
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)]
+          (is (= "text" (:type data-content)))
+          (is (contains? data :task))
+          (is (contains? data :metadata)))))))
+
+(deftest add-task-returns-three-items-with-git
+  ;; Tests that add-task returns 3 content items when git is enabled
+  (testing "add-task with git enabled"
+    (testing "returns three content items"
+      (init-git-repo *test-dir*)
+      (let [result (#'sut/add-task-impl
+                    (git-test-config)
+                    nil
+                    {:category "test"
+                     :title "test task"
+                     :description "description"})]
+        (is (false? (:isError result)))
+        (is (= 3 (count (:content result))))
+
+        ;; First content item: text message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (str/includes? (:text text-content) "Task added to")))
+
+        ;; Second content item: task data
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)]
+          (is (= "text" (:type data-content)))
+          (is (contains? data :task))
+          (is (contains? data :metadata)))
+
+        ;; Third content item: git status
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "text" (:type git-content)))
+          (is (contains? git-data :git-status))
+          (is (contains? git-data :git-commit-sha)))))))
+
+(deftest ^:integration add-task-creates-git-commit
+  ;; Integration test verifying git commit is actually created with correct message
+  (testing "add-task with git enabled"
+    (testing "creates git commit with correct message format"
+      (init-git-repo *test-dir*)
+      (let [result (#'sut/add-task-impl
+                    (git-test-config)
+                    nil
+                    {:category "test"
+                     :title "implement feature Y"
+                     :description "Feature description"})]
+        (is (false? (:isError result)))
+
+        ;; Extract task ID from response
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)
+              task-id (get-in data [:task :id])]
+
+          ;; Verify git commit was created
+          (is (git-commit-exists? *test-dir*))
+
+          ;; Verify commit message format: "add task #<id>: <title>"
+          (let [commit-msg (git-log-last-commit *test-dir*)]
+            (is (= (str "add task #" task-id ": implement feature Y") commit-msg)))
+
+          ;; Verify git status in response
+          (let [git-content (nth (:content result) 2)
+                git-data (json/read-str (:text git-content) :key-fn keyword)]
+            (is (= "success" (:git-status git-data)))
+            (is (string? (:git-commit-sha git-data)))
+            (is (= 40 (count (:git-commit-sha git-data)))) ; SHA is 40 chars
+            (is (nil? (:git-error git-data)))))))))
+
+(deftest ^:integration add-task-truncates-long-titles
+  ;; Tests that long titles are truncated in commit messages
+  (testing "add-task with git enabled"
+    (testing "truncates titles longer than 50 chars in commit message"
+      (init-git-repo *test-dir*)
+      (let [long-title "This is a very long title that exceeds fifty characters in length"
+            result (#'sut/add-task-impl
+                    (git-test-config)
+                    nil
+                    {:category "test"
+                     :title long-title
+                     :description "Description"})]
+        (is (false? (:isError result)))
+
+        ;; Extract task ID from response
+        (let [data-content (second (:content result))
+              data (json/read-str (:text data-content) :key-fn keyword)
+              task-id (get-in data [:task :id])]
+
+          ;; Verify commit message has truncated title
+          (let [commit-msg (git-log-last-commit *test-dir*)]
+            (is (str/starts-with? commit-msg (str "add task #" task-id ": ")))
+            ;; Truncated title should be 50 chars (47 + "...")
+            (is (str/includes? commit-msg "...")))
+
+          ;; But task data should have full title
+          (let [tasks (read-ednl-test-file "tasks.ednl")]
+            (is (= long-title (:title (first tasks))))))))))
+
+(deftest ^:integration add-task-succeeds-despite-git-failure
+  ;; Tests that task addition succeeds even when git operations fail
+  (testing "add-task with git enabled but no git repo"
+    (testing "task added successfully despite git error"
+      ;; Do not initialize git repo - this will cause git operations to fail
+      (let [result (#'sut/add-task-impl
+                    (git-test-config)
+                    nil
+                    {:category "test"
+                     :title "test task"
+                     :description "description"})]
+        ;; Task addition should succeed
+        (is (false? (:isError result)))
+        (is (= 3 (count (:content result))))
+
+        ;; Verify task was actually added
+        (let [tasks (read-ednl-test-file "tasks.ednl")]
+          (is (= 1 (count tasks)))
+          (is (= "test task" (:title (first tasks)))))
+
+        ;; Verify git error is reported in response
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "error" (:git-status git-data)))
+          (is (nil? (:git-commit-sha git-data)))
+          (is (string? (:git-error git-data)))
+          (is (not (str/blank? (:git-error git-data)))))))))
+
 (deftest complete-task-returns-three-content-items-with-git
   ;; Tests that complete-task returns 3 content items when git is enabled
   (testing "complete-task with git enabled"

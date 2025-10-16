@@ -746,9 +746,9 @@
   - Unexpected errors (e.g., file I/O) are allowed to throw and are caught
     by the MCP server layer, which converts them to MCP error format
 
-  Returns two content items:
-  1. Text message for human readability
-  2. Structured data map with 'task' and 'metadata' keys"
+  Returns:
+  - Git disabled: Two content items (text message + task data JSON)
+  - Git enabled: Three content items (text message + task data JSON + git-status JSON)"
   [config _context
    {:keys [category title description prepend type parent-id]}]
   (let [tasks-file (prepare-task-file config)]
@@ -768,25 +768,77 @@
                                 :relations []}
                          parent-id (assoc :parent-id parent-id))
               ;; Add task to in-memory state and get the complete task with ID
-              created-task (tasks/add-task task-map :prepend? (boolean prepend))]
+              created-task (tasks/add-task task-map :prepend? (boolean prepend))
+              ;; Get path info for git operations
+              tasks-path (path-helper/task-path config ["tasks.ednl"])
+              tasks-rel-path (:relative tasks-path)]
+
           ;; Save to EDNL file
           (tasks/save-tasks! tasks-file)
-          ;; Return two content items: text message and structured data
-          {:content [{:type "text"
-                      :text (str "Task added to " tasks-file)}
-                     {:type "text"
-                      :text (json/write-str
-                              {:task (select-keys
-                                       created-task
-                                       [:id
-                                        :title
-                                        :category
-                                        :type
-                                        :status
-                                        :parent-id])
-                               :metadata {:file tasks-file
-                                          :operation "add-task"}})}]
-           :isError false}))))
+
+          ;; Commit to git if enabled
+          (let [use-git? (:use-git? config)
+                git-result (when use-git?
+                             (let [truncated-title (if (> (count title) 50)
+                                                     (str (subs title 0 47) "...")
+                                                     title)
+                                   commit-msg (str "add task #" (:id created-task) ": " truncated-title)]
+                               (try
+                                 (let [git-dir (str (:base-dir config) "/.mcp-tasks")]
+                                   ;; Stage modified files
+                                   (sh/sh "git" "-C" git-dir "add" tasks-rel-path)
+                                   ;; Commit changes
+                                   (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
+                                     (if (zero? (:exit commit-result))
+                                       ;; Success - get commit SHA
+                                       (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
+                                             sha (str/trim (:out sha-result))]
+                                         {:success true
+                                          :commit-sha sha
+                                          :error nil})
+                                       ;; Commit failed
+                                       {:success false
+                                        :commit-sha nil
+                                        :error (str/trim (:err commit-result))})))
+                                 (catch Exception e
+                                   {:success false
+                                    :commit-sha nil
+                                    :error (.getMessage e)}))))
+                task-data-json (json/write-str
+                                 {:task (select-keys
+                                          created-task
+                                          [:id
+                                           :title
+                                           :category
+                                           :type
+                                           :status
+                                           :parent-id])
+                                  :metadata {:file tasks-file
+                                             :operation "add-task"}})]
+
+            ;; Build response based on git mode
+            (if use-git?
+              ;; Git enabled: 3 content items
+              {:content [{:type "text"
+                          :text (str "Task added to " tasks-file)}
+                         {:type "text"
+                          :text task-data-json}
+                         {:type "text"
+                          :text (json/write-str
+                                  (cond-> {:git-status (if (:success git-result)
+                                                         "success"
+                                                         "error")
+                                           :git-commit-sha (:commit-sha git-result)}
+                                    (:error git-result)
+                                    (assoc :git-error (:error git-result))))}]
+               :isError false}
+
+              ;; Git disabled: 2 content items (existing behavior)
+              {:content [{:type "text"
+                          :text (str "Task added to " tasks-file)}
+                         {:type "text"
+                          :text task-data-json}]
+               :isError false}))))))
 
 (defn- add-task-description
   "Build description for add-task tool with available categories and their descriptions."
