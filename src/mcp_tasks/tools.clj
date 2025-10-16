@@ -46,7 +46,7 @@
         (throw (ex-info "Tasks file not found"
                         {:file tasks-file})))
 
-      (tasks/load-tasks! tasks-file)
+      (tasks/load-tasks! tasks-file :complete-file complete-file)
 
       ;; Find task by ID or exact title match
       (let [task-by-id (when task-id (tasks/get-task task-id))
@@ -237,6 +237,8 @@
       (let [effective-limit (if unique 1 requested-limit)
             tasks-path (path-helper/task-path config ["tasks.ednl"])
             tasks-file (:absolute tasks-path)
+            complete-path (path-helper/task-path config ["complete.ednl"])
+            complete-file (:absolute complete-path)
             ;; Convert type string to keyword if provided
             type-keyword (when type (keyword type))
             ;; Convert status string to keyword if provided
@@ -244,7 +246,7 @@
 
         ;; Load tasks from EDNL file
         (when (file-exists? tasks-file)
-          (tasks/load-tasks! tasks-file))
+          (tasks/load-tasks! tasks-file :complete-file complete-file))
 
         ;; Get all matching incomplete tasks
         (let [all-tasks (tasks/get-tasks
@@ -346,10 +348,12 @@
   Returns the absolute file path."
   [config]
   (let [tasks-path (path-helper/task-path config ["tasks.ednl"])
-        tasks-file (:absolute tasks-path)]
+        tasks-file (:absolute tasks-path)
+        complete-path (path-helper/task-path config ["complete.ednl"])
+        complete-file (:absolute complete-path)]
     ;; Load existing tasks into memory if file exists
     (when (file-exists? tasks-file)
-      (tasks/load-tasks! tasks-file))
+      (tasks/load-tasks! tasks-file :complete-file complete-file))
     tasks-file))
 
 (defn add-task-impl
