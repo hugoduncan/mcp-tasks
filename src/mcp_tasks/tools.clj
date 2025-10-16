@@ -575,12 +575,17 @@
             status-kw (when (contains? provided-keys :status) (keyword status))
             type-kw (when (contains? provided-keys :type) (keyword type))
 
-            ;; Convert relations :as-type from string to keyword
+            ;; Convert relations: string keys to keyword keys and :as-type to keyword
             relations-converted (when (contains? provided-keys :relations)
                                   (when relations
-                                    (mapv #(update % :as-type keyword) relations)))
+                                    (mapv (fn [rel]
+                                            {:id (get rel "id")
+                                             :relates-to (get rel "relates-to")
+                                             :as-type (keyword (get rel "as-type"))})
+                                          relations)))
 
             ;; Build updates map from provided fields only
+            ;; For meta and relations, nil means "clear" (set to empty collection)
             updates (cond-> {}
                       (contains? provided-keys :title) (assoc :title title)
                       (contains? provided-keys :description) (assoc :description description)
@@ -589,8 +594,8 @@
                       (contains? provided-keys :status) (assoc :status status-kw)
                       (contains? provided-keys :category) (assoc :category category)
                       (contains? provided-keys :type) (assoc :type type-kw)
-                      (contains? provided-keys :meta) (assoc :meta meta)
-                      (contains? provided-keys :relations) (assoc :relations relations-converted))]
+                      (contains? provided-keys :meta) (assoc :meta (or meta {}))
+                      (contains? provided-keys :relations) (assoc :relations (or relations-converted [])))]
 
         ;; Validate at least one field provided
         (when (empty? updates)
@@ -632,7 +637,7 @@
                                   {:error "Invalid task field values"
                                    :metadata {:attempted-operation "update-task"
                                               :task-id task-id
-                                              :validation-errors validation-result
+                                              :validation-errors (pr-str validation-result)
                                               :file tasks-file}})}]
                :isError true}
 

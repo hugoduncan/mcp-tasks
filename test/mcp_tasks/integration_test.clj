@@ -711,6 +711,268 @@
             (mcp-client/close! client)
             ((:stop server))))))))
 
+(deftest ^:integ update-task-validation-test
+  ;; Tests validation for all updateable task fields
+  (testing "update-task field validation"
+    (testing "validates status field"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create initial task
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 1
+                              :title "Test task"
+                              :description "Desc"
+                              :design ""
+                              :category "simple"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Test valid status values
+          (doseq [valid-status ["open" "closed" "in-progress" "blocked"]]
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :status valid-status})]
+              (is (not (:isError result))
+                  (str "Should accept valid status: " valid-status))))
+
+          ;; Test invalid status value
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :status "invalid-status"})]
+            (is (:isError result))
+            (is (re-find #"Invalid task field values"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "validates type field"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create initial task
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 1
+                              :title "Test task"
+                              :description "Desc"
+                              :design ""
+                              :category "simple"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Test valid type values
+          (doseq [valid-type ["task" "bug" "feature" "story" "chore"]]
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :type valid-type})]
+              (is (not (:isError result))
+                  (str "Should accept valid type: " valid-type))))
+
+          ;; Test invalid type value
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :type "invalid-type"})]
+            (is (:isError result))
+            (is (re-find #"Invalid task field values"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "validates parent-id field"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create parent and child tasks
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                parent-task {:id 1
+                             :title "Parent"
+                             :description ""
+                             :design ""
+                             :category "large"
+                             :status :open
+                             :type :story
+                             :meta {}
+                             :relations []}
+                child-task {:id 2
+                            :title "Child"
+                            :description ""
+                            :design ""
+                            :category "simple"
+                            :status :open
+                            :type :task
+                            :meta {}
+                            :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [parent-task child-task]))
+
+          ;; Test valid parent-id
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 2
+                                               :parent-id 1})]
+            (is (not (:isError result))))
+
+          ;; Test clearing parent-id with null
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 2
+                                               :parent-id nil})]
+            (is (not (:isError result))))
+
+          ;; Test non-existent parent-id
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 2
+                                               :parent-id 9999})]
+            (is (:isError result))
+            (is (re-find #"Parent task not found"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "validates meta field"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create initial task
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                initial-task {:id 1
+                              :title "Test task"
+                              :description "Desc"
+                              :design ""
+                              :category "simple"
+                              :status :open
+                              :type :task
+                              :meta {}
+                              :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [initial-task]))
+
+          ;; Test valid meta with string keys and values
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :meta {"priority" "high"
+                                                      "assigned-to" "alice"}})]
+            (is (not (:isError result))))
+
+          ;; Test clearing meta with null
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :meta nil})]
+            (is (not (:isError result))))
+
+          ;; Test invalid meta with non-string value
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :meta {"priority" 123}})]
+            (is (:isError result))
+            (is (re-find #"Invalid task field values"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "validates relations field"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create initial tasks
+          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                task-1 {:id 1
+                        :title "Task 1"
+                        :description ""
+                        :design ""
+                        :category "simple"
+                        :status :open
+                        :type :task
+                        :meta {}
+                        :relations []}
+                task-2 {:id 2
+                        :title "Task 2"
+                        :description ""
+                        :design ""
+                        :category "simple"
+                        :status :open
+                        :type :task
+                        :meta {}
+                        :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task-1 task-2]))
+
+          ;; Test valid relations with proper structure
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :relations [{"id" 1
+                                                            "relates-to" 2
+                                                            "as-type" "blocked-by"}]})]
+            (is (not (:isError result))))
+
+          ;; Test multiple valid relation types
+          (doseq [relation-type ["blocked-by" "related" "discovered-during"]]
+            (let [result @(mcp-client/call-tool client
+                                                "update-task"
+                                                {:task-id 1
+                                                 :relations [{"id" 1
+                                                              "relates-to" 2
+                                                              "as-type" relation-type}]})]
+              (is (not (:isError result))
+                  (str "Should accept valid relation type: " relation-type))))
+
+          ;; Test clearing relations with null
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :relations nil})]
+            (is (not (:isError result))))
+
+          ;; Test invalid relation - wrong as-type enum
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :relations [{"id" 1
+                                                            "relates-to" 2
+                                                            "as-type" "invalid-type"}]})]
+            (is (:isError result))
+            (is (re-find #"Invalid task field values"
+                         (-> result :content first :text))))
+
+          ;; Test invalid relation - missing required field
+          (let [result @(mcp-client/call-tool client
+                                              "update-task"
+                                              {:task-id 1
+                                               :relations [{"id" 1
+                                                            "relates-to" 2}]})]
+            (is (:isError result))
+            (is (re-find #"Invalid task field values"
+                         (-> result :content first :text))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
 (deftest ^:integ category-prompt-resources-integration-test
   ;; Test comprehensive validation of category prompt resources through MCP protocol.
   ;; Validates that category instructions are accessible as standalone resources
