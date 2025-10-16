@@ -372,3 +372,34 @@
     ;; Remove from in-memory state since it's no longer in tasks.ednl
     (delete-task id)
     task))
+
+(defn move-tasks!
+  "Move multiple tasks from one file to another atomically.
+
+  Removes all tasks from source file and appends to destination file.
+  Updates in-memory state by removing all tasks (since in-memory state represents
+  only tasks.ednl, not complete.ednl).
+  Throws ex-info if any task not found."
+  [ids from-file to-file]
+  ;; Validate all tasks exist first
+  (doseq [id ids]
+    (when-not (get-task id)
+      (throw (ex-info "Task not found" {:id id}))))
+
+  ;; Get all tasks
+  (let [tasks-to-move (mapv get-task ids)]
+    ;; Delete all from source file atomically
+    (let [remaining-tasks (remove #(contains? (set ids) (:id %))
+                                  (tasks-file/read-ednl from-file))]
+      (tasks-file/write-tasks from-file remaining-tasks))
+
+    ;; Append all to destination file atomically
+    (let [existing-tasks (tasks-file/read-ednl to-file)
+          all-tasks (into existing-tasks tasks-to-move)]
+      (tasks-file/write-tasks to-file all-tasks))
+
+    ;; Remove all from in-memory state
+    (doseq [id ids]
+      (delete-task id))
+
+    tasks-to-move))

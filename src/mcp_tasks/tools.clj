@@ -317,47 +317,151 @@
                        :file tasks-file})
 
                     ;; All validations passed - complete the task
-                    (let [is-child? (some? (:parent-id task))]
-                      ;; Mark task as complete in memory
-                      (tasks/mark-complete (:id task) completion-comment)
+                    (let [is-child? (some? (:parent-id task))
+                          is-story? (= (:type task) :story)]
+                      (cond
+                        ;; Story completion: validate children and archive atomically
+                        is-story?
+                        (let [children (tasks/get-children (:id task))
+                              unclosed-children (filterv #(not= :closed (:status %)) children)]
+                          (if (seq unclosed-children)
+                            ;; Error: unclosed children exist
+                            (build-tool-error-response
+                              (str "Cannot complete story: " (count unclosed-children)
+                                   " child task" (when (> (count unclosed-children) 1) "s")
+                                   " still " (if (= 1 (count unclosed-children)) "is" "are")
+                                   " not closed")
+                              "complete-task"
+                              {:task-id (:id task)
+                               :title (:title task)
+                               :unclosed-children (mapv #(select-keys % [:id :title :status]) unclosed-children)
+                               :file tasks-file})
 
-                      ;; Story child: save to tasks.ednl, Regular: move to complete.ednl
-                      (if is-child?
-                        (tasks/save-tasks! tasks-file)
-                        (tasks/move-task! (:id task) tasks-file complete-file))
+                            ;; All children closed - proceed with atomic archival
+                            (do
+                              ;; Mark story as complete in memory
+                              (tasks/mark-complete (:id task) completion-comment)
 
-                      ;; Prepare response based on task type
-                      (let [msg-text (if is-child?
-                                       (str "Task " (:id task) " completed")
-                                       (str "Task " (:id task) " completed and moved to " complete-file))
-                            modified-files (if is-child?
-                                             [tasks-rel-path]
-                                             [tasks-rel-path complete-rel-path])
-                            ;; Commit changes if git mode is enabled
-                            git-result (when use-git?
-                                         (commit-task-changes (:base-dir config)
-                                                              (:id task)
-                                                              (:title task)
-                                                              modified-files))]
-                        (if use-git?
-                          ;; Git mode: return message + JSON with modified files + git status
-                          {:content [{:type "text"
-                                      :text msg-text}
-                                     {:type "text"
-                                      :text (json/write-str {:modified-files modified-files})}
-                                     {:type "text"
-                                      :text (json/write-str
-                                              (cond-> {:git-status (if (:success git-result)
-                                                                     "success"
-                                                                     "error")
-                                                       :git-commit-sha (:commit-sha git-result)}
-                                                (:error git-result)
-                                                (assoc :git-error (:error git-result))))}]
-                           :isError false}
-                          ;; Non-git mode: return message only
-                          {:content [{:type "text"
-                                      :text msg-text}]
-                           :isError false})))))))))))))
+                              ;; Move story and all children to complete.ednl atomically
+                              (let [all-ids (cons (:id task) (mapv :id children))
+                                    child-count (count children)]
+                                (tasks/move-tasks! all-ids tasks-file complete-file)
+
+                                ;; Prepare response
+                                (let [msg-text (str "Story " (:id task) " completed and archived"
+                                                    (when (pos? child-count)
+                                                      (str " with " child-count " child task"
+                                                           (when (> child-count 1) "s"))))
+                                      modified-files [tasks-rel-path complete-rel-path]
+                                      ;; Commit changes if git mode is enabled
+                                      commit-msg (str "Complete story #" (:id task) ": " (:title task)
+                                                      (when (pos? child-count)
+                                                        (str " (with " child-count " task"
+                                                             (when (> child-count 1) "s") ")")))
+                                      git-result (when use-git?
+                                                   ;; Use custom commit message for stories
+                                                   (try
+                                                     (let [git-dir (str (:base-dir config) "/.mcp-tasks")]
+                                                       ;; Stage modified files
+                                                       (apply sh/sh "git" "-C" git-dir "add" modified-files)
+                                                       ;; Commit changes
+                                                       (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
+                                                         (if (zero? (:exit commit-result))
+                                                           ;; Success - get commit SHA
+                                                           (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
+                                                                 sha (str/trim (:out sha-result))]
+                                                             {:success true
+                                                              :commit-sha sha
+                                                              :error nil})
+                                                           ;; Commit failed
+                                                           {:success false
+                                                            :commit-sha nil
+                                                            :error (str/trim (:err commit-result))})))
+                                                     (catch Exception e
+                                                       {:success false
+                                                        :commit-sha nil
+                                                        :error (.getMessage e)})))]
+                                  (if use-git?
+                                    ;; Git mode: return message + JSON with modified files + git status
+                                    {:content [{:type "text"
+                                                :text msg-text}
+                                               {:type "text"
+                                                :text (json/write-str {:modified-files modified-files})}
+                                               {:type "text"
+                                                :text (json/write-str
+                                                        (cond-> {:git-status (if (:success git-result)
+                                                                               "success"
+                                                                               "error")
+                                                                 :git-commit-sha (:commit-sha git-result)}
+                                                          (:error git-result)
+                                                          (assoc :git-error (:error git-result))))}]
+                                     :isError false}
+                                    ;; Non-git mode: return message only
+                                    {:content [{:type "text"
+                                                :text msg-text}]
+                                     :isError false}))))))
+
+                        ;; Story child completion: keep in tasks.ednl
+                        is-child?
+                        (do
+                          (tasks/mark-complete (:id task) completion-comment)
+                          (tasks/save-tasks! tasks-file)
+
+                          (let [msg-text (str "Task " (:id task) " completed")
+                                modified-files [tasks-rel-path]
+                                git-result (when use-git?
+                                             (commit-task-changes (:base-dir config)
+                                                                  (:id task)
+                                                                  (:title task)
+                                                                  modified-files))]
+                            (if use-git?
+                              {:content [{:type "text"
+                                          :text msg-text}
+                                         {:type "text"
+                                          :text (json/write-str {:modified-files modified-files})}
+                                         {:type "text"
+                                          :text (json/write-str
+                                                  (cond-> {:git-status (if (:success git-result)
+                                                                         "success"
+                                                                         "error")
+                                                           :git-commit-sha (:commit-sha git-result)}
+                                                    (:error git-result)
+                                                    (assoc :git-error (:error git-result))))}]
+                               :isError false}
+                              {:content [{:type "text"
+                                          :text msg-text}]
+                               :isError false})))
+
+                        ;; Regular task completion: move to complete.ednl
+                        :else
+                        (do
+                          (tasks/mark-complete (:id task) completion-comment)
+                          (tasks/move-task! (:id task) tasks-file complete-file)
+
+                          (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
+                                modified-files [tasks-rel-path complete-rel-path]
+                                git-result (when use-git?
+                                             (commit-task-changes (:base-dir config)
+                                                                  (:id task)
+                                                                  (:title task)
+                                                                  modified-files))]
+                            (if use-git?
+                              {:content [{:type "text"
+                                          :text msg-text}
+                                         {:type "text"
+                                          :text (json/write-str {:modified-files modified-files})}
+                                         {:type "text"
+                                          :text (json/write-str
+                                                  (cond-> {:git-status (if (:success git-result)
+                                                                         "success"
+                                                                         "error")
+                                                           :git-commit-sha (:commit-sha git-result)}
+                                                    (:error git-result)
+                                                    (assoc :git-error (:error git-result))))}]
+                               :isError false}
+                              {:content [{:type "text"
+                                          :text msg-text}]
+                               :isError false})))))))))))))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
