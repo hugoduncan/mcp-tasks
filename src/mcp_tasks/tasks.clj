@@ -41,9 +41,16 @@
   (reset! child-parent {}))
 
 (defn- update-next-id!
-  "Update next-id to be greater than all existing task IDs."
-  []
-  (let [max-id (apply max 0 @task-ids)]
+  "Update next-id to be greater than all existing task IDs.
+
+  Optionally accepts :additional-ids (e.g., IDs from complete.ednl) to ensure
+  monotonicity across both active and completed tasks."
+  [& {:keys [additional-ids]}]
+  (let [active-max (apply max 0 @task-ids)
+        complete-max (if additional-ids
+                       (apply max 0 additional-ids)
+                       0)
+        max-id (max active-max complete-max)]
     (vreset! next-id (inc max-id))))
 
 (defn- build-parent-child-maps
@@ -313,18 +320,25 @@
   "Load tasks from EDNL file into memory.
 
   Resets current state and populates from file.
+
+  Options:
+  - :complete-file - Path to complete.ednl for monotonic ID generation
+
   Returns number of tasks loaded."
-  [file-path]
+  [file-path & {:keys [complete-file]}]
   (reset-state!)
   (let [task-coll (tasks-file/read-ednl file-path)
-        [pc-map cp-map] (build-parent-child-maps task-coll)]
+        [pc-map cp-map] (build-parent-child-maps task-coll)
+        ;; Read IDs from complete file if provided
+        complete-ids (when complete-file
+                       (mapv :id (tasks-file/read-ednl complete-file)))]
     ;; Populate state
     (reset! task-ids (mapv :id task-coll))
     (reset! tasks (into {} (map (fn [t] [(:id t) t])) task-coll))
     (reset! parent-children pc-map)
     (reset! child-parent cp-map)
-    ;; Update next-id
-    (update-next-id!)
+    ;; Update next-id considering both active and completed tasks
+    (update-next-id! :additional-ids complete-ids)
     (count task-coll)))
 
 (defn save-tasks!

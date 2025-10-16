@@ -560,6 +560,58 @@
         (is (thrown-with-msg? Exception #"Task not found"
               (tasks/move-task! 999 from-file to-file)))))))
 
+(deftest load-tasks-with-complete-file-test
+  ;; Test load-tasks! considers both active and completed tasks for ID generation
+  (testing "load-tasks! with complete-file"
+    (testing "sets next-id from active tasks when no complete-file"
+      (let [file (temp-file)]
+        (tasks-file/append-task file test-task-1)
+        (tasks-file/append-task file test-task-2)
+        (tasks/load-tasks! file)
+        (is (= 3 @tasks/next-id))))
+
+    (testing "sets next-id from complete-file when it has higher IDs"
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)
+            high-id-task (assoc test-task-1 :id 100)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks-file/append-task tasks-file-path test-task-2)
+        (tasks-file/append-task complete-file-path high-id-task)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= 101 @tasks/next-id))))
+
+    (testing "uses max ID across both files"
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)
+            high-id-active (assoc test-task-1 :id 50)
+            high-id-complete (assoc test-task-2 :id 100)]
+        (tasks-file/append-task tasks-file-path high-id-active)
+        (tasks-file/append-task complete-file-path high-id-complete)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= 101 @tasks/next-id))))
+
+    (testing "handles empty complete-file"
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= 2 @tasks/next-id))))
+
+    (testing "handles missing complete-file"
+      (let [tasks-file-path (temp-file)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks/load-tasks! tasks-file-path :complete-file "/nonexistent.ednl")
+        (is (= 2 @tasks/next-id))))
+
+    (testing "handles empty active tasks with completed tasks"
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)]
+        (tasks-file/append-task complete-file-path test-task-1)
+        (tasks-file/append-task complete-file-path test-task-2)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= 3 @tasks/next-id))
+        (is (= [] @tasks/task-ids))))))
+
 ;; Integration Tests
 
 (deftest workflow-integration-test
@@ -583,3 +635,60 @@
       (let [loaded (tasks-file/read-ednl file)]
         (is (= 3 (count loaded)))
         (is (= :closed (:status (first loaded))))))))
+
+(deftest id-monotonicity-integration-test
+  ;; Test that task IDs remain monotonic after completing tasks
+  (testing "task IDs are always monotonically increasing"
+    (let [tasks-file-path (temp-file)
+          complete-file-path (temp-file)]
+      ;; Add initial tasks
+      (tasks-file/append-task tasks-file-path test-task-1)
+      (tasks-file/append-task tasks-file-path test-task-2)
+
+      ;; Load tasks
+      (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+      (is (= 3 @tasks/next-id))
+
+      ;; Complete task 1 (simulate move to complete file)
+      (tasks/move-task! 1 tasks-file-path complete-file-path)
+
+      ;; Reload tasks (simulating a new session)
+      (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+
+      ;; Verify next-id considers the completed task
+      (is (= 3 @tasks/next-id))
+
+      ;; Add a new task
+      (let [new-task (tasks/add-task (dissoc test-task-3 :id))]
+        ;; New task ID should be 3, not reusing ID 1
+        (is (= 3 (:id new-task)))
+        (is (= 4 @tasks/next-id)))))
+
+  (testing "no ID collision after multiple completions"
+    (let [tasks-file-path (temp-file)
+          complete-file-path (temp-file)]
+      ;; Create tasks with IDs 1-5
+      (doseq [id (range 1 6)]
+        (tasks-file/append-task tasks-file-path (assoc test-task-1 :id id)))
+
+      ;; Load tasks
+      (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+      (is (= 6 @tasks/next-id))
+
+      ;; Complete tasks 1-3
+      (doseq [id (range 1 4)]
+        (tasks/move-task! id tasks-file-path complete-file-path))
+
+      ;; Reload
+      (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+
+      ;; Verify next-id still considers all completed tasks
+      (is (= 6 @tasks/next-id))
+
+      ;; Add new tasks
+      (let [task-6 (tasks/add-task (dissoc test-task-1 :id))
+            task-7 (tasks/add-task (dissoc test-task-1 :id))]
+        ;; New tasks should have IDs 6 and 7, not 1 and 2
+        (is (= 6 (:id task-6)))
+        (is (= 7 (:id task-7)))
+        (is (= 8 @tasks/next-id))))))
