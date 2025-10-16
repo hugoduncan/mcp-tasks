@@ -296,7 +296,7 @@
             (is (not (:isError read-response)))
             (is (str/starts-with? text "---\n"))
             (is (str/includes? text "argument-hint:"))
-            (is (str/includes? text "<story-specification>"))
+            (is (str/includes? text "[story-specification]"))
             (is (str/includes? text "Execute the next incomplete task"))))
 
         (testing "multiple prompts return distinct content"
