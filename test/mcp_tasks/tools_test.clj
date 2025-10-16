@@ -34,7 +34,8 @@
   (reset! tasks/task-ids [])
   (reset! tasks/tasks {})
   (reset! tasks/parent-children {})
-  (reset! tasks/child-parent {}))
+  (reset! tasks/child-parent {})
+  (vreset! tasks/next-id 1))
 
 (defn- test-config
   "Config that points to test fixtures directory."
@@ -1525,7 +1526,6 @@
           (is (= "E2E Story" (:title (first tasks))))))
 
       ;; Step 2: Add three child tasks
-      (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
       (doseq [title ["Task A" "Task B" "Task C"]]
         (let [result (#'sut/add-task-impl
                       (git-test-config)
@@ -1540,7 +1540,6 @@
         (is (every? #(= 1 (:parent-id %)) (rest tasks))))
 
       ;; Step 3: Complete each child task and track commit SHAs
-      (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
       (let [child-commits (atom [])]
         (doseq [child-id [2 3 4]]
           (let [result (#'sut/complete-task-impl
@@ -1569,7 +1568,6 @@
         (is (empty? (read-ednl-test-file "complete.ednl")))
 
         ;; Step 4: Complete the story
-        (tasks/load-tasks! (str *test-dir* "/.mcp-tasks/tasks.ednl"))
         (let [result (#'sut/complete-task-impl
                       (git-test-config)
                       nil
