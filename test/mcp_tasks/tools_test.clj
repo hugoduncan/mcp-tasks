@@ -2062,6 +2062,17 @@
         (let [commit-msg (git-log-last-commit *test-dir*)]
           (is (= "Delete task #42: implement feature X" commit-msg)))
 
+        ;; Verify deleted task data in second content item
+        (let [deleted-content (second (:content result))
+              deleted-data (json/read-str (:text deleted-content) :key-fn keyword)]
+          (is (= "text" (:type deleted-content)))
+          (is (contains? deleted-data :deleted))
+          (is (= 42 (:id (:deleted deleted-data))))
+          (is (= "deleted" (:status (:deleted deleted-data))))
+          (is (contains? deleted-data :metadata))
+          (is (= 1 (get-in deleted-data [:metadata :count])))
+          (is (= "deleted" (get-in deleted-data [:metadata :status]))))
+
         ;; Verify git status in response
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
@@ -2091,6 +2102,17 @@
           (is (= "test task" (:title (first complete-tasks))))
           (is (= :deleted (:status (first complete-tasks)))))
 
+        ;; Verify deleted task data in second content item
+        (let [deleted-content (second (:content result))
+              deleted-data (json/read-str (:text deleted-content) :key-fn keyword)]
+          (is (= "text" (:type deleted-content)))
+          (is (contains? deleted-data :deleted))
+          (is (= 1 (:id (:deleted deleted-data))))
+          (is (= "deleted" (:status (:deleted deleted-data))))
+          (is (contains? deleted-data :metadata))
+          (is (= 1 (get-in deleted-data [:metadata :count])))
+          (is (= "deleted" (get-in deleted-data [:metadata :status]))))
+
         ;; Verify git error is reported in response
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
@@ -2110,12 +2132,23 @@
       (let [result (#'sut/delete-task-impl
                     (git-test-config)
                     nil
-                    {:task-id 99})
-            git-content (nth (:content result) 2)
-            git-data (json/read-str (:text git-content) :key-fn keyword)
-            sha (:git-commit-sha git-data)]
+                    {:task-id 99})]
+
+        ;; Verify deleted task data in second content item
+        (let [deleted-content (second (:content result))
+              deleted-data (json/read-str (:text deleted-content) :key-fn keyword)]
+          (is (= "text" (:type deleted-content)))
+          (is (contains? deleted-data :deleted))
+          (is (= 99 (:id (:deleted deleted-data))))
+          (is (= "deleted" (:status (:deleted deleted-data))))
+          (is (contains? deleted-data :metadata))
+          (is (= 1 (get-in deleted-data [:metadata :count])))
+          (is (= "deleted" (get-in deleted-data [:metadata :status]))))
 
         ;; Verify SHA format
-        (is (string? sha))
-        (is (= 40 (count sha)))
-        (is (re-matches #"[0-9a-f]{40}" sha))))))
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)
+              sha (:git-commit-sha git-data)]
+          (is (string? sha))
+          (is (= 40 (count sha)))
+          (is (re-matches #"[0-9a-f]{40}" sha)))))))
