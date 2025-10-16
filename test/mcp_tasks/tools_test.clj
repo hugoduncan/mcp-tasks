@@ -1771,14 +1771,9 @@
                     nil
                     {:task-id 2})]
         (is (false? (:isError result)))
-        ;; Verify response structure (2 items)
-        (is (= 2 (count (:content result))))
+        ;; Verify response structure (1 item without git)
+        (is (= 1 (count (:content result))))
         (is (= "Task 2 deleted successfully" (get-in result [:content 0 :text])))
-        ;; Verify deleted task data
-        (let [data (json/read-str (get-in result [:content 1 :text]) :key-fn keyword)]
-          (is (= 2 (get-in data [:deleted :id])))
-          (is (= "deleted" (get-in data [:deleted :status])))
-          (is (= 1 (get-in data [:metadata :count]))))
         ;; Verify task 2 is in complete.ednl with :status :deleted
         (let [complete-tasks (read-ednl-test-file "complete.ednl")]
           (is (= 1 (count complete-tasks)))
@@ -1999,3 +1994,116 @@
               "already deleted"))
         ;; Verify no change in complete.ednl
         (is (empty? (read-ednl-test-file "complete.ednl")))))))
+
+(deftest delete-task-returns-three-content-items-with-git
+  ;; Tests that delete-task returns 3 content items when git is enabled
+  (testing "delete-task with git enabled"
+    (testing "returns three content items"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/delete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 1})]
+        (is (false? (:isError result)))
+        (is (= 3 (count (:content result))))
+
+        ;; First content item: deletion message
+        (let [text-content (first (:content result))]
+          (is (= "text" (:type text-content)))
+          (is (str/includes? (:text text-content) "Task 1 deleted")))
+
+        ;; Second content item: modified files
+        (let [files-content (second (:content result))
+              files-data (json/read-str (:text files-content) :key-fn keyword)]
+          (is (= "text" (:type files-content)))
+          (is (contains? files-data :modified-files))
+          (is (= 2 (count (:modified-files files-data)))))
+
+        ;; Third content item: git status
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "text" (:type git-content)))
+          (is (contains? git-data :git-status))
+          (is (contains? git-data :git-commit-sha)))))))
+
+(deftest ^:integration delete-task-creates-git-commit
+  ;; Integration test verifying git commit is actually created
+  (testing "delete-task with git enabled"
+    (testing "creates git commit with correct message"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 42 :parent-id nil :title "implement feature X" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+      ;; Delete the task
+      (let [result (#'sut/delete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 42})]
+        (is (false? (:isError result)))
+
+        ;; Verify git commit was created
+        (is (git-commit-exists? *test-dir*))
+
+        ;; Verify commit message format
+        (let [commit-msg (git-log-last-commit *test-dir*)]
+          (is (= "Delete task #42: implement feature X" commit-msg)))
+
+        ;; Verify git status in response
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "success" (:git-status git-data)))
+          (is (string? (:git-commit-sha git-data)))
+          (is (= 40 (count (:git-commit-sha git-data)))) ; SHA is 40 chars
+          (is (nil? (:git-error git-data))))))))
+
+(deftest ^:integration delete-task-succeeds-despite-git-failure
+  ;; Tests that task deletion succeeds even when git operations fail
+  (testing "delete-task with git enabled but no git repo"
+    (testing "task deletes successfully despite git error"
+      ;; Do not initialize git repo - this will cause git operations to fail
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+      (let [result (#'sut/delete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 1})]
+        ;; Task deletion should succeed
+        (is (false? (:isError result)))
+
+        ;; Verify task was actually deleted
+        (let [complete-tasks (read-ednl-test-file "complete.ednl")]
+          (is (= 1 (count complete-tasks)))
+          (is (= "test task" (:title (first complete-tasks))))
+          (is (= :deleted (:status (first complete-tasks)))))
+
+        ;; Verify git error is reported in response
+        (let [git-content (nth (:content result) 2)
+              git-data (json/read-str (:text git-content) :key-fn keyword)]
+          (is (= "error" (:git-status git-data)))
+          (is (nil? (:git-commit-sha git-data)))
+          (is (string? (:git-error git-data)))
+          (is (not (str/blank? (:git-error git-data)))))))))
+
+(deftest ^:integration delete-task-git-commit-sha-format
+  ;; Tests that git commit SHA is returned in correct format
+  (testing "delete-task with git enabled"
+    (testing "returns valid git commit SHA"
+      (init-git-repo *test-dir*)
+      (write-ednl-test-file "tasks.ednl"
+                            [{:id 99 :parent-id nil :title "task title" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+      (let [result (#'sut/delete-task-impl
+                    (git-test-config)
+                    nil
+                    {:task-id 99})
+            git-content (nth (:content result) 2)
+            git-data (json/read-str (:text git-content) :key-fn keyword)
+            sha (:git-commit-sha git-data)]
+
+        ;; Verify SHA format
+        (is (string? sha))
+        (is (= 40 (count sha)))
+        (is (re-matches #"[0-9a-f]{40}" sha))))))

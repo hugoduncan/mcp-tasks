@@ -60,9 +60,10 @@
 
   Parameters:
   - base-dir: Base directory containing .mcp-tasks
-  - task-id: ID of the task being completed
-  - task-title: Title of the task being completed
+  - task-id: ID of the task being operated on
+  - task-title: Title of the task being operated on
   - files-to-commit: Collection of relative file paths to add and commit
+  - operation: Operation name (e.g., \"Complete\", \"Delete\") for commit message
 
   Returns a map with:
   - :success - boolean indicating if commit succeeded
@@ -70,9 +71,9 @@
   - :error - error message string (or nil if successful)
 
   Never throws - all errors are caught and returned in the map."
-  [base-dir task-id task-title files-to-commit]
+  [base-dir task-id task-title files-to-commit operation]
   (let [git-dir (str base-dir "/.mcp-tasks")
-        commit-msg (str "Complete task #" task-id ": " task-title)]
+        commit-msg (str operation " task #" task-id ": " task-title)]
     (perform-git-commit git-dir files-to-commit commit-msg)))
 
 ;; Error response helpers
@@ -282,7 +283,8 @@
                        (commit-task-changes (:base-dir config)
                                             (:id task)
                                             (:title task)
-                                            modified-files))]
+                                            modified-files
+                                            "Complete"))]
       (build-completion-response msg-text modified-files use-git? git-result))))
 
 (defn- complete-child-task-
@@ -329,7 +331,8 @@
                            (commit-task-changes (:base-dir config)
                                                 (:id task)
                                                 (:title task)
-                                                modified-files))]
+                                                modified-files
+                                                "Complete"))]
           (build-completion-response msg-text modified-files use-git? git-result))))))
 
 (defn- complete-story-task-
@@ -599,7 +602,8 @@
   If both are provided, they must refer to the same task.
 
   Returns:
-  - Two content items: message + deleted task JSON (no git support currently)"
+  - Git mode enabled: Three text items (deletion message + JSON with :modified-files + JSON with git status)
+  - Git mode disabled: Single text item (deletion message only)"
   [config _context {:keys [task-id title-pattern]}]
   ;; Validate at least one identifier provided
   (if (and (nil? task-id) (nil? title-pattern))
@@ -712,21 +716,22 @@
                        :file tasks-file})
 
                     ;; All validations passed - delete task
-                    (let [;; Update task status to :deleted
+                    (let [{:keys [use-git? tasks-rel-path complete-rel-path]} context
+                          ;; Update task status to :deleted
                           updated-task (assoc task :status :deleted)
                           _ (tasks/update-task (:id task) {:status :deleted})
                           ;; Move to complete.ednl
                           _ (tasks/move-task! (:id task) tasks-file complete-file)
-                          msg-text (str "Task " (:id task) " deleted successfully")]
-                      ;; Return 2-item response (message + deleted task JSON)
-                      {:content [{:type "text"
-                                  :text msg-text}
-                                 {:type "text"
-                                  :text (json/write-str
-                                          {:deleted updated-task
-                                           :metadata {:count 1
-                                                      :status "deleted"}})}]
-                       :isError false})))))))))))
+                          msg-text (str "Task " (:id task) " deleted successfully")
+                          modified-files [tasks-rel-path complete-rel-path]
+                          git-result (when use-git?
+                                       (commit-task-changes (:base-dir config)
+                                                            (:id task)
+                                                            (:title task)
+                                                            modified-files
+                                                            "Delete"))]
+                      ;; Build response with git integration
+                      (build-completion-response msg-text modified-files use-git? git-result))))))))))))
 
 (defn delete-task-tool
   "Tool to delete a task by marking it :status :deleted and moving to complete.ednl.
