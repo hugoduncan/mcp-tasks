@@ -761,7 +761,13 @@
 (defn- convert-meta-field
   "Convert meta field value, treating nil as empty map.
 
-  Returns the value or {} if nil."
+  Returns the value or {} if nil.
+
+  Note: When updating a task's :meta field, the entire map is replaced,
+  not merged. This design decision ensures predictable behavior - users
+  provide the complete desired state rather than incremental updates.
+  This matches the story requirements and simplifies the mental model
+  for task updates."
   [value]
   (or value {}))
 
@@ -769,7 +775,13 @@
   "Convert relations from JSON structure to Clojure keyword-based structure.
 
   Transforms string keys to keywords for :as-type field.
-  Returns [] if relations is nil."
+  Returns [] if relations is nil.
+
+  Note: When updating a task's :relations field, the entire vector is
+  replaced, not appended or merged. This design decision ensures
+  predictable behavior - users provide the complete desired state rather
+  than incremental updates. This matches the story requirements and
+  simplifies the mental model for task updates."
   [relations]
   (if relations
     (mapv (fn [rel]
@@ -787,8 +799,12 @@
 
   Type conversions:
   - :status, :type - string to keyword
-  - :meta - nil becomes {}
-  - :relations - nil becomes [], structure keys converted from strings to keywords"
+  - :meta - nil becomes {}, replaces entire map (does not merge)
+  - :relations - nil becomes [], replaces entire vector (does not append)
+
+  Note: The :meta and :relations fields use replacement semantics rather
+  than merge/append. This design ensures predictable behavior where users
+  specify the complete desired state in a single update operation."
   [arguments]
   (let [;; Define conversion functions for each field type
         conversions {:status convert-enum-field
