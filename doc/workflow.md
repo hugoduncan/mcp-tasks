@@ -259,18 +259,16 @@ Agent: Found story: User Authentication Story (ID: 13)
 
 #### 4. Progress Tracking
 
-Check story progress at any time by querying the EDN files:
+Track story progress by asking the agent questions. The agent will query the task system and provide clear summaries.
 
-```bash
-# View all tasks for a story
-grep -A 10 ":parent-id 13" .mcp-tasks/tasks.ednl
+**Example queries:**
+- "Show me all tasks for story #13"
+- "How many incomplete tasks does story #13 have?"
+- "List completed tasks from the user-auth story"
 
-# Count incomplete story tasks
-grep -c ":parent-id 13" .mcp-tasks/tasks.ednl
+The agent uses the `select-tasks` tool with filters like `parent-id: 13` to find story child tasks, `status: "closed"` to filter completed tasks, and combines results into readable summaries.
 
-# View completed story tasks
-grep -A 10 ":parent-id 13" .mcp-tasks/complete.ednl
-```
+This agent-first approach means you don't need to learn EDN query syntax or file locations.
 
 ### Story Branch Management
 
