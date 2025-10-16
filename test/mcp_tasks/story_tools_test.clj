@@ -13,7 +13,7 @@
 (defn- setup-test-dir
   "Create test fixtures directory"
   [test-dir]
-  (.mkdirs (io/file test-dir ".mcp-tasks")))
+  (fs/create-dirs (io/file test-dir ".mcp-tasks")))
 
 (defn test-fixture
   [f]
@@ -31,7 +31,7 @@
   "Write tasks to tasks.ednl file"
   [tasks]
   (let [file (io/file *test-dir* ".mcp-tasks" "tasks.ednl")]
-    (.mkdirs (.getParentFile file))
+    (fs/create-dirs (.getParentFile file))
     (tasks-file/write-tasks (.getPath file) tasks)))
 
 ;; select-tasks with parent-id filter Tests

@@ -1,5 +1,6 @@
 (ns mcp-tasks.main-test
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -73,7 +74,7 @@
   (testing "load-and-validate-config"
     (testing "loads and resolves config with no config file"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)]
         (try
           (let [config (#'sut/load-and-validate-config (.getPath temp-dir))]
@@ -81,11 +82,11 @@
             (is (contains? config :use-git?))
             (is (boolean? (:use-git? config))))
           (finally
-            (.delete temp-dir)))))
+            (fs/delete temp-dir)))))
 
     (testing "loads and resolves config with valid config file"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             config-file (io/file temp-dir ".mcp-tasks.edn")]
         (try
@@ -94,12 +95,12 @@
             (is (map? config))
             (is (false? (:use-git? config))))
           (finally
-            (.delete config-file)
-            (.delete temp-dir)))))
+            (fs/delete config-file)
+            (fs/delete temp-dir)))))
 
     (testing "throws on invalid config"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             config-file (io/file temp-dir ".mcp-tasks.edn")]
         (try
@@ -107,12 +108,12 @@
           (is (thrown? Exception
                 (#'sut/load-and-validate-config (.getPath temp-dir))))
           (finally
-            (.delete config-file)
-            (.delete temp-dir)))))
+            (fs/delete config-file)
+            (fs/delete temp-dir)))))
 
     (testing "throws on malformed EDN"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             config-file (io/file temp-dir ".mcp-tasks.edn")]
         (try
@@ -120,12 +121,12 @@
           (is (thrown? Exception
                 (#'sut/load-and-validate-config (.getPath temp-dir))))
           (finally
-            (.delete config-file)
-            (.delete temp-dir)))))
+            (fs/delete config-file)
+            (fs/delete temp-dir)))))
 
     (testing "validates git repo when use-git is true"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             git-dir (io/file mcp-tasks-dir ".git")
@@ -137,10 +138,10 @@
             (is (map? config))
             (is (true? (:use-git? config))))
           (finally
-            (.delete config-file)
-            (.delete git-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))))
+            (fs/delete config-file)
+            (fs/delete git-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))))
 
 (deftest start-test
   ;; Testing start function is complex due to stdio transport blocking on stdin.
@@ -183,7 +184,7 @@
 
     (testing "prompts receive config and generate correctly with git mode enabled"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -200,14 +201,14 @@
               (is (string? message-text))
               (is (re-find #"Commit the task tracking changes" message-text))))
           (finally
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))
 
     (testing "prompts receive config and generate correctly with git mode disabled"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -225,14 +226,14 @@
               (is (not
                     (re-find #"Commit the task tracking changes" message-text)))))
           (finally
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))
 
     (testing "config flows from load-and-validate-config through to components"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -258,11 +259,11 @@
                       #"Commit the task tracking changes"
                       message-text)))))
           (finally
-            (.delete config-file)
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))))
+            (fs/delete config-file)
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))))
 
 (deftest create-server-config-test
   ;; Test that create-server-config properly includes all tools and prompts,
@@ -281,7 +282,7 @@
 
     (testing "includes story prompts"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -299,14 +300,14 @@
           (is (map? (get (:prompts server-config) "create-story-tasks")))
           (is (= "create-story-tasks" (:name (get (:prompts server-config) "create-story-tasks"))))
           (finally
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))
 
     (testing "merges task prompts and story prompts"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -320,14 +321,14 @@
           (is (contains? (:prompts server-config) "next-simple"))
           (is (contains? (:prompts server-config) "create-story-tasks"))
           (finally
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))
 
     (testing "review-story-implementation prompt has correct arguments"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -348,14 +349,14 @@
               (is (= "additional-context" (:name context-arg)))
               (is (false? (:required context-arg)))))
           (finally
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))
 
     (testing "create-story-pr prompt has correct arguments"
       (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-            _ (.delete temp-dir)
+            _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
@@ -376,7 +377,7 @@
               (is (= "additional-context" (:name context-arg)))
               (is (false? (:required context-arg)))))
           (finally
-            (.delete (io/file prompts-dir "simple.md"))
-            (.delete prompts-dir)
-            (.delete mcp-tasks-dir)
-            (.delete temp-dir)))))))
+            (fs/delete (io/file prompts-dir "simple.md"))
+            (fs/delete prompts-dir)
+            (fs/delete mcp-tasks-dir)
+            (fs/delete temp-dir)))))))

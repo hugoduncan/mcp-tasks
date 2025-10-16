@@ -1,5 +1,6 @@
 (ns mcp-tasks.prompts-test
   (:require
+    [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -348,8 +349,8 @@
 (defn- delete-test-file
   "Delete a test file if it exists."
   [file]
-  (when (.exists file)
-    (.delete file)))
+  (when (fs/exists? file)
+    (fs/delete file)))
 
 (deftest get-story-prompt-override-precedence-test
   ;; Test that get-story-prompt correctly prioritizes override files over
