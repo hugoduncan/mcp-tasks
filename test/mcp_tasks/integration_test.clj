@@ -1270,3 +1270,81 @@
         (finally
           (mcp-client/close! client)
           ((:stop server)))))))
+
+(deftest ^:integ story-prompts-arguments-test
+  ;; Test that all story prompts properly document their arguments as optional.
+  ;; Validates argument parsing, MCP schema, markdown documentation, and consistency.
+  (testing "story prompts arguments validation"
+    (write-config-file "{:use-git? true}")
+    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+    (let [{:keys [server client]} (create-test-server-and-client)
+          story-prompt-names ["execute-story-task"
+                              "create-story-tasks"
+                              "review-story-implementation"
+                              "complete-story"
+                              "create-story-pr"]]
+      (try
+        (testing "all story prompts are registered"
+          (let [prompts-response @(mcp-client/list-prompts client)
+                prompts (:prompts prompts-response)
+                prompt-names (set (map :name prompts))]
+            (doseq [story-prompt story-prompt-names]
+              (is (contains? prompt-names story-prompt)
+                  (str "Should have prompt: " story-prompt)))))
+
+        (testing "all story prompts have arguments with :required false"
+          (let [prompts-response @(mcp-client/list-prompts client)
+                prompts (:prompts prompts-response)]
+            (doseq [story-prompt-name story-prompt-names]
+              (let [prompt (first (filter #(= (:name %) story-prompt-name) prompts))]
+                (testing (str story-prompt-name " has arguments field")
+                  (is (contains? prompt :arguments)
+                      (str story-prompt-name " should have :arguments field"))
+                  (when (contains? prompt :arguments)
+                    (let [arguments (:arguments prompt)]
+                      (is (seq arguments)
+                          (str story-prompt-name " should have at least one argument"))
+                      (testing (str story-prompt-name " arguments are all optional")
+                        (doseq [arg arguments]
+                          (is (false? (:required arg))
+                              (str story-prompt-name " argument " (:name arg)
+                                   " should have :required false")))))))))))
+
+        (testing "prompt resources include frontmatter with argument-hint"
+          (doseq [story-prompt-name story-prompt-names]
+            (let [uri (str "prompt://" story-prompt-name)
+                  read-response @(mcp-client/read-resource client uri)
+                  text (-> read-response :contents first :text)]
+              (testing (str story-prompt-name " resource has frontmatter")
+                (is (not (:isError read-response)))
+                (is (str/starts-with? text "---\n")
+                    (str story-prompt-name " should start with frontmatter"))
+                (is (str/includes? text "\n---\n")
+                    (str story-prompt-name " should have complete frontmatter")))
+
+              (testing (str story-prompt-name " has argument-hint in frontmatter")
+                (let [frontmatter-end (str/index-of text "\n---\n")
+                      frontmatter (subs text 0 frontmatter-end)]
+                  (is (str/includes? frontmatter "argument-hint:")
+                      (str story-prompt-name " should have argument-hint in frontmatter"))
+
+                  (testing (str story-prompt-name " argument-hint uses square brackets")
+                    (when (str/includes? frontmatter "argument-hint:")
+                      (is (str/includes? frontmatter "[")
+                          (str story-prompt-name " argument-hint should use square brackets for optional args")))))))))
+
+        (testing "prompt content describes argument flexibility"
+          (doseq [story-prompt-name story-prompt-names]
+            (let [uri (str "prompt://" story-prompt-name)
+                  read-response @(mcp-client/read-resource client uri)
+                  text (-> read-response :contents first :text)]
+              (testing (str story-prompt-name " documents parsing logic or argument flexibility")
+                (is (or (str/includes? text "Parsing Logic")
+                        (str/includes? text "Parse the arguments")
+                        (str/includes? text "optional"))
+                    (str story-prompt-name " should document argument parsing or flexibility"))))))
+
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
