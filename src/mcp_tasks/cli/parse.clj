@@ -7,6 +7,163 @@
     [clojure.data.json :as json]
     [clojure.string :as str]))
 
+;; Help Text
+
+(def help-text
+  "Help text for the CLI."
+  "mcp-tasks - Task management from the command line
+
+USAGE:
+  clojure -M:cli <command> [options]
+
+COMMANDS:
+  list      List tasks with optional filters
+  show      Display a single task by ID
+  add       Create a new task
+  complete  Mark a task as complete
+  update    Update task fields
+  delete    Delete a task
+
+GLOBAL OPTIONS:
+  --config-path <path>  Path to directory containing .mcp-tasks.edn (default: .)
+  --format <format>     Output format: edn, json, human (default: edn)
+  --help                Show this help message
+
+Run 'clojure -M:cli <command> --help' for command-specific options.
+
+EXAMPLES:
+  clojure -M:cli list --status open --format human
+  clojure -M:cli show --task-id 42
+  clojure -M:cli add --category simple --title \"Fix bug\"
+  clojure -M:cli complete --task-id 42 --comment \"Fixed\"
+  clojure -M:cli update --task-id 42 --status in-progress
+  clojure -M:cli delete --task-id 42")
+
+(def list-help
+  "Help text for the list command."
+  "List tasks with optional filters
+
+USAGE:
+  clojure -M:cli list [options]
+
+OPTIONS:
+  --status, -s <status>         Filter by status (open, closed, in-progress, blocked)
+  --category, -c <name>         Filter by category name
+  --type, -t <type>             Filter by type (task, bug, feature, story, chore)
+  --parent-id, -p <id>          Filter by parent task ID
+  --task-id <id>                Filter by specific task ID
+  --title-pattern, --title <pattern>  Filter by title pattern (regex or substring)
+  --limit <n>                   Maximum tasks to return (default: 5)
+  --unique                      Enforce 0 or 1 match (error if >1)
+  --format <format>             Output format: edn, json, human (default: edn)
+
+EXAMPLES:
+  clojure -M:cli list --status open --format human
+  clojure -M:cli list --category simple --limit 10
+  clojure -M:cli list --parent-id 31 --status open")
+
+(def show-help
+  "Help text for the show command."
+  "Display a single task by ID
+
+USAGE:
+  clojure -M:cli show --task-id <id> [options]
+
+OPTIONS:
+  --task-id, --id <id>  Task ID to display (required)
+  --format <format>     Output format: edn, json, human (default: edn)
+
+EXAMPLES:
+  clojure -M:cli show --task-id 42
+  clojure -M:cli show --id 42 --format human")
+
+(def add-help
+  "Help text for the add command."
+  "Create a new task
+
+USAGE:
+  clojure -M:cli add --category <name> --title <title> [options]
+
+OPTIONS:
+  --category, -c <name>     Task category (required, e.g., simple, medium, large)
+  --title, -t <title>       Task title (required)
+  --description, -d <text>  Task description
+  --type <type>             Task type (default: task)
+                            Options: task, bug, feature, story, chore
+  --parent-id, -p <id>      Parent task ID (for child tasks)
+  --prepend                 Add task at beginning instead of end
+  --format <format>         Output format: edn, json, human (default: edn)
+
+EXAMPLES:
+  clojure -M:cli add --category simple --title \"Fix parser bug\"
+  clojure -M:cli add -c medium -t \"Add auth\" -d \"Implement JWT auth\"
+  clojure -M:cli add --category simple --title \"Subtask\" --parent-id 31")
+
+(def complete-help
+  "Help text for the complete command."
+  "Mark a task as complete
+
+USAGE:
+  clojure -M:cli complete (--task-id <id> | --title <pattern>) [options]
+
+OPTIONS:
+  --task-id, --id <id>          Task ID to complete
+  --title, -t <pattern>         Task title pattern (alternative to task-id)
+  --category, -c <name>         Task category (for verification)
+  --completion-comment, --comment <text>  Optional completion comment
+  --format <format>             Output format: edn, json, human (default: edn)
+
+NOTE: At least one of --task-id or --title must be provided.
+
+EXAMPLES:
+  clojure -M:cli complete --task-id 42
+  clojure -M:cli complete --title \"Fix bug\" --comment \"Fixed via PR #123\"
+  clojure -M:cli complete --id 42 --category simple")
+
+(def update-help
+  "Help text for the update command."
+  "Update task fields
+
+USAGE:
+  clojure -M:cli update --task-id <id> [options]
+
+OPTIONS:
+  --task-id, --id <id>      Task ID to update (required)
+  --title, -t <title>       New task title
+  --description, -d <text>  New task description
+  --design <text>           New task design notes
+  --status, -s <status>     New status (open, closed, in-progress, blocked)
+  --category, -c <name>     New task category
+  --type <type>             New task type (task, bug, feature, story, chore)
+  --parent-id, -p <id>      New parent task ID (pass empty string to remove)
+  --meta <json>             New metadata as JSON object
+  --relations <json>        New relations as JSON array
+  --format <format>         Output format: edn, json, human (default: edn)
+
+EXAMPLES:
+  clojure -M:cli update --task-id 42 --status in-progress
+  clojure -M:cli update --id 42 --title \"New title\" --description \"New desc\"
+  clojure -M:cli update --task-id 42 --meta '{\"priority\":\"high\"}'")
+
+(def delete-help
+  "Help text for the delete command."
+  "Delete a task
+
+USAGE:
+  clojure -M:cli delete (--task-id <id> | --title-pattern <pattern>) [options]
+
+OPTIONS:
+  --task-id, --id <id>          Task ID to delete
+  --title-pattern, --title <pattern>  Title pattern to match (alternative to task-id)
+  --format <format>             Output format: edn, json, human (default: edn)
+
+NOTE: At least one of --task-id or --title-pattern must be provided.
+
+EXAMPLES:
+  clojure -M:cli delete --task-id 42
+  clojure -M:cli delete --title-pattern \"old-task\"
+  clojure -M:cli delete --id 42 --format human")
+
 ;; Type Coercion Functions
 
 (defn coerce-json-map
