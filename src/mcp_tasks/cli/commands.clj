@@ -9,13 +9,21 @@
 (defn- parse-tool-response
   "Parse JSON response from tool *-impl functions.
   
+  Different tools return different numbers of content items:
+  - select-tasks: 1 content item with JSON
+  - add-task/update-task: 2 content items (message + JSON)
+  
+  This function looks for the last content item that contains JSON.
   Returns the parsed data map, or throws if the response indicates an error."
   [response]
-  (let [content (get-in response [:content 0 :text])
-        is-error (:isError response)]
+  (let [is-error (:isError response)]
     (if is-error
-      (throw (ex-info content {:type :tool-error}))
-      (json/read-str content :key-fn keyword))))
+      (let [content (get-in response [:content 0 :text])]
+        (throw (ex-info content {:type :tool-error})))
+      ;; Find the last content item (which contains JSON for add/update commands)
+      (let [content-items (:content response)
+            last-content (get-in content-items [(dec (count content-items)) :text])]
+        (json/read-str last-content :key-fn keyword)))))
 
 (defn list-command
   "Execute the list command.

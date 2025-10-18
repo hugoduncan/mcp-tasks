@@ -355,3 +355,134 @@
       (let [result (sut/show-command (test-config) {:task-id 1 :format :json})]
         (is (= 1 (count (:tasks result))))
         (is (= "Task One" (:title (first (:tasks result)))))))))
+
+;; add-command tests
+
+(deftest add-command-creates-task-with-required-fields
+  (testing "add-command"
+    (testing "creates task with required fields only"
+      (write-test-tasks [])
+
+      (let [result (sut/add-command
+                     (test-config)
+                     {:category "simple"
+                      :title "New task"})]
+        (is (= "New task" (:title (:task result))))
+        (is (= "simple" (:category (:task result))))
+        (is (= "task" (:type (:task result))))
+        (is (= "open" (:status (:task result))))))))
+
+(deftest add-command-creates-child-task
+  (testing "add-command"
+    (testing "creates child task with parent-id"
+      (write-test-tasks
+        [{:id 50 :status :open :title "Parent Task" :description "" :design ""
+          :category "large" :type :story :meta {} :relations []}])
+
+      (let [result (sut/add-command
+                     (test-config)
+                     {:category "simple"
+                      :title "Child task"
+                      :parent-id 50})]
+        (is (= "Child task" (:title (:task result))))
+        (is (= 50 (:parent-id (:task result))))))))
+
+(deftest add-command-strips-format-option
+  (testing "add-command"
+    (testing "strips format option"
+      (write-test-tasks [])
+
+      (let [result (sut/add-command
+                     (test-config)
+                     {:category "simple"
+                      :title "New task"
+                      :format :json})]
+        (is (= "New task" (:title (:task result))))))))
+
+(deftest add-command-persists-to-file
+  (testing "add-command"
+    (testing "persists task to tasks.ednl"
+      (write-test-tasks [])
+
+      (sut/add-command
+        (test-config)
+        {:category "simple"
+         :title "Persisted Task"
+         :description "Should be in file"})
+
+      (let [tasks-file-path (str *test-dir* "/.mcp-tasks/tasks.ednl")
+            tasks (tasks-file/read-ednl tasks-file-path)]
+        (is (= 1 (count tasks)))
+        (is (= "Persisted Task" (:title (first tasks))))))))
+
+;; update-command tests
+
+(deftest update-command-updates-title
+  (testing "update-command"
+    (testing "updates task title"
+      (write-test-tasks
+        [{:id 1 :status :open :title "Old Title" :description "" :design ""
+          :category "simple" :type :task :meta {} :relations []}])
+
+      (let [result (sut/update-command
+                     (test-config)
+                     {:task-id 1
+                      :title "New Title"})]
+        (is (= "New Title" (:title (:task result))))
+        (is (= 1 (:id (:task result))))))))
+
+(deftest update-command-updates-multiple-fields
+  (testing "update-command"
+    (testing "updates multiple fields at once"
+      (write-test-tasks
+        [{:id 1 :status :open :title "Old Title" :description "Old desc" :design ""
+          :category "simple" :type :task :meta {} :relations []}])
+
+      (let [result (sut/update-command
+                     (test-config)
+                     {:task-id 1
+                      :title "New Title"
+                      :status :in-progress
+                      :category "medium"
+                      :type :bug})]
+        (let [task (:task result)]
+          (is (= "New Title" (:title task)))
+          (is (= "in-progress" (:status task)))
+          (is (= "medium" (:category task)))
+          (is (= "bug" (:type task))))))))
+
+(deftest update-command-strips-format-option
+  (testing "update-command"
+    (testing "strips format option"
+      (write-test-tasks
+        [{:id 1 :status :open :title "Task" :description "" :design ""
+          :category "simple" :type :task :meta {} :relations []}])
+
+      (let [result (sut/update-command
+                     (test-config)
+                     {:task-id 1
+                      :title "Updated"
+                      :format :json})]
+        (is (= "Updated" (:title (:task result))))))))
+
+(deftest update-command-persists-to-file
+  (testing "update-command"
+    (testing "persists changes to tasks.ednl"
+      (write-test-tasks
+        [{:id 1 :status :open :title "Original" :description "Original desc" :design ""
+          :category "simple" :type :task :meta {} :relations []}])
+
+      (sut/update-command
+        (test-config)
+        {:task-id 1
+         :title "Updated Title"
+         :description "Updated description"
+         :status :in-progress})
+
+      (let [tasks-file-path (str *test-dir* "/.mcp-tasks/tasks.ednl")
+            tasks (tasks-file/read-ednl tasks-file-path)]
+        (is (= 1 (count tasks)))
+        (let [task (first tasks)]
+          (is (= "Updated Title" (:title task)))
+          (is (= "Updated description" (:description task)))
+          (is (= :in-progress (:status task))))))))
