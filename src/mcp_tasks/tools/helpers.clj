@@ -82,23 +82,26 @@
   - modified-files: Vector of relative file paths that were modified
   - use-git?: Whether git integration is enabled (boolean)
   - git-result: Optional map with :success, :commit-sha, :error keys
+  - task-data: Optional map with completed task data (for complete/delete operations)
 
   Returns response map with :content and :isError keys."
-  [msg-text modified-files use-git? git-result]
-  (if use-git?
-    {:content [{:type "text"
-                :text msg-text}
-               {:type "text"
-                :text (json/write-str {:modified-files modified-files})}
-               {:type "text"
-                :text (json/write-str
-                        (cond-> {:git-status (if (:success git-result)
-                                               "success"
-                                               "error")
-                                 :git-commit-sha (:commit-sha git-result)}
-                          (:error git-result)
-                          (assoc :git-error (:error git-result))))}]
-     :isError false}
-    {:content [{:type "text"
-                :text msg-text}]
-     :isError false}))
+  ([msg-text modified-files use-git? git-result]
+   (build-completion-response msg-text modified-files use-git? git-result nil))
+  ([msg-text modified-files use-git? git-result task-data]
+   (let [base-content [{:type "text" :text msg-text}]
+         with-task-data (if task-data
+                          (conj base-content {:type "text" :text (json/write-str task-data)})
+                          base-content)
+         final-content (if use-git?
+                         (conj with-task-data
+                               {:type "text"
+                                :text (json/write-str
+                                        (cond-> {:git-status (if (:success git-result)
+                                                               "success"
+                                                               "error")
+                                                 :git-commit-sha (:commit-sha git-result)}
+                                          (:error git-result)
+                                          (assoc :git-error (:error git-result))))})
+                         with-task-data)]
+     {:content final-content
+      :isError false})))

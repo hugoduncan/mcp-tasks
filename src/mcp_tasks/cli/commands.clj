@@ -12,18 +12,17 @@
   Different tools return different numbers of content items:
   - select-tasks: 1 content item with JSON
   - add-task/update-task: 2 content items (message + JSON)
+  - complete-task/delete-task: 2 content items when no git (message + JSON)
+  - errors: 2 content items (message + JSON with :error key)
   
   This function looks for the last content item that contains JSON.
-  Returns the parsed data map, or throws if the response indicates an error."
+  Returns the parsed data map (including error responses)."
   [response]
-  (let [is-error (:isError response)]
-    (if is-error
-      (let [content (get-in response [:content 0 :text])]
-        (throw (ex-info content {:type :tool-error})))
-      ;; Find the last content item (which contains JSON for add/update commands)
-      (let [content-items (:content response)
-            last-content (get-in content-items [(dec (count content-items)) :text])]
-        (json/read-str last-content :key-fn keyword)))))
+  (let [is-error (:isError response)
+        content-items (:content response)
+        ;; For both errors and success, the JSON is in the last content item
+        last-content (get-in content-items [(dec (count content-items)) :text])]
+    (json/read-str last-content :key-fn keyword)))
 
 (defn list-command
   "Execute the list command.

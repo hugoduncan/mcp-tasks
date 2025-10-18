@@ -181,17 +181,22 @@
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context]
     (tasks/mark-complete (:id task) completion-comment)
-    (tasks/move-task! (:id task) tasks-file complete-file)
+    ;; Get the updated task after marking complete
+    (let [updated-task (tasks/get-task (:id task))]
+      (tasks/move-task! (:id task) tasks-file complete-file)
 
-    (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
-          modified-files [tasks-rel-path complete-rel-path]
-          git-result (when use-git?
-                       (git/commit-task-changes (:base-dir config)
-                                                (:id task)
-                                                (:title task)
-                                                modified-files
-                                                "Complete"))]
-      (helpers/build-completion-response msg-text modified-files use-git? git-result))))
+      (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
+            modified-files [tasks-rel-path complete-rel-path]
+            git-result (when use-git?
+                         (git/commit-task-changes (:base-dir config)
+                                                  (:id task)
+                                                  (:title task)
+                                                  modified-files
+                                                  "Complete"))
+            task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
+                       :metadata {:file complete-file
+                                  :operation "complete-task"}}]
+        (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -229,17 +234,22 @@
       :else
       (do
         (tasks/mark-complete (:id task) completion-comment)
-        (tasks/save-tasks! tasks-file)
+        ;; Get the updated task after marking complete
+        (let [updated-task (tasks/get-task (:id task))]
+          (tasks/save-tasks! tasks-file)
 
-        (let [msg-text (str "Task " (:id task) " completed")
-              modified-files [tasks-rel-path]
-              git-result (when use-git?
-                           (git/commit-task-changes (:base-dir config)
-                                                    (:id task)
-                                                    (:title task)
-                                                    modified-files
-                                                    "Complete"))]
-          (helpers/build-completion-response msg-text modified-files use-git? git-result))))))
+          (let [msg-text (str "Task " (:id task) " completed")
+                modified-files [tasks-rel-path]
+                git-result (when use-git?
+                             (git/commit-task-changes (:base-dir config)
+                                                      (:id task)
+                                                      (:title task)
+                                                      modified-files
+                                                      "Complete"))
+                task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
+                           :metadata {:file tasks-file
+                                      :operation "complete-task"}}]
+            (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))))
 
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
@@ -315,7 +325,12 @@
                                  {:success false
                                   :commit-sha nil
                                   :error (.getMessage e)})))]
-            (helpers/build-completion-response msg-text modified-files use-git? git-result)))))))
+            (let [updated-story (tasks/get-task (:id task))
+                  task-data {:task (select-keys updated-story [:id :title :description :category :type :status :parent-id])
+                             :metadata {:file complete-file
+                                        :operation "complete-task"
+                                        :archived-children child-count}}]
+              (helpers/build-completion-response msg-text modified-files use-git? git-result task-data))))))))
 
 (defn- complete-task-impl
   "Implementation of complete-task tool.
