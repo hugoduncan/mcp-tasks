@@ -251,17 +251,13 @@
                 "add"
                 "--category" "simple"
                 "--title" "Test task")
-      ;; NOTE: There's a bug where this returns exit code 0 instead of 1
-      ;; See task #142 - just verify error is communicated
       (let [result (call-cli "--config-path" *test-dir*
                              "--format" "edn"
                              "show"
-                             "--task-id" "999")
-            output (str (:out result) (:err result))]
-        (is (not (str/blank? output)))
-        (is (or (str/includes? output "No task found")
-                (str/includes? output "error")
-                (str/includes? output ":tasks []")))))
+                             "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "No task found"))))
 
     (testing "invalid command returns error"
       (let [result (call-cli "--config-path" *test-dir*
@@ -282,11 +278,11 @@
       (let [result (call-cli "--config-path" *test-dir*
                              "--format" "edn"
                              "complete"
-                             "--task-id" "999")
-            output (str (:out result) (:err result))]
-        (is (not (str/blank? output)))
-        (is (or (str/includes? output "No task found")
-                (str/includes? output "error")))))
+                             "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (or (str/includes? (:err result) "Task ID not found")
+                (str/includes? (:err result) "not found")))))
 
     (testing "invalid JSON in --meta"
       (testing "malformed JSON returns error"
