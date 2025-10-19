@@ -66,10 +66,10 @@
           ;; Commit to git if enabled
           (let [use-git? (:use-git? config)
                 git-result (when use-git?
-                             (let [truncated-title (helpers/truncate-title title)
-                                   git-dir (str (:base-dir config) "/.mcp-tasks")
-                                   commit-msg (str "Add task #" (:id created-task) ": " truncated-title)]
-                               (git/perform-git-commit git-dir [tasks-rel-path] commit-msg)))
+                             (let [truncated-title (helpers/truncate-title title)]
+                               (git/commit-task-changes (:base-dir config)
+                                                        [tasks-rel-path]
+                                                        (str "Add task #" (:id created-task) ": " truncated-title))))
                 task-data-json (json/write-str
                                  {:task (select-keys
                                           created-task

@@ -17,7 +17,6 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
-    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
@@ -45,10 +44,8 @@
             modified-files [tasks-rel-path complete-rel-path]
             git-result (when use-git?
                          (git/commit-task-changes (:base-dir config)
-                                                  (:id task)
-                                                  (:title task)
                                                   modified-files
-                                                  "Complete"))
+                                                  (str "Complete task #" (:id task) ": " (:title task))))
             task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
                        :metadata {:file complete-file
                                   :operation "complete-task"}}]
@@ -98,10 +95,8 @@
                 modified-files [tasks-rel-path]
                 git-result (when use-git?
                              (git/commit-task-changes (:base-dir config)
-                                                      (:id task)
-                                                      (:title task)
                                                       modified-files
-                                                      "Complete"))
+                                                      (str "Complete task #" (:id task) ": " (:title task))))
                 task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
                            :metadata {:file tasks-file
                                       :operation "complete-task"}}]
@@ -161,28 +156,9 @@
                                   (str " (with " child-count " task"
                                        (when (> child-count 1) "s") ")")))
                 git-result (when use-git?
-                             ;; Use custom commit message for stories
-                             (try
-                               (let [git-dir (str (:base-dir config) "/.mcp-tasks")]
-                                 ;; Stage modified files
-                                 (apply sh/sh "git" "-C" git-dir "add" modified-files)
-                                 ;; Commit changes
-                                 (let [commit-result (sh/sh "git" "-C" git-dir "commit" "-m" commit-msg)]
-                                   (if (zero? (:exit commit-result))
-                                     ;; Success - get commit SHA
-                                     (let [sha-result (sh/sh "git" "-C" git-dir "rev-parse" "HEAD")
-                                           sha (str/trim (:out sha-result))]
-                                       {:success true
-                                        :commit-sha sha
-                                        :error nil})
-                                     ;; Commit failed
-                                     {:success false
-                                      :commit-sha nil
-                                      :error (str/trim (:err commit-result))})))
-                               (catch Exception e
-                                 {:success false
-                                  :commit-sha nil
-                                  :error (.getMessage e)})))]
+                             (git/commit-task-changes (:base-dir config)
+                                                      modified-files
+                                                      commit-msg))]
             (helpers/build-completion-response
               msg-text
               modified-files

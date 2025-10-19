@@ -123,10 +123,10 @@
                     tasks-path (helpers/task-path config ["tasks.ednl"])
                     tasks-rel-path (:relative tasks-path)
                     git-result (when use-git?
-                                 (let [truncated-title (helpers/truncate-title (:title final-task))
-                                       git-dir (str (:base-dir config) "/.mcp-tasks")
-                                       commit-msg (str "Update task #" task-id ": " truncated-title)]
-                                   (git/perform-git-commit git-dir [tasks-rel-path] commit-msg)))
+                                 (let [truncated-title (helpers/truncate-title (:title final-task))]
+                                   (git/commit-task-changes (:base-dir config)
+                                                            [tasks-rel-path]
+                                                            (str "Update task #" task-id ": " truncated-title))))
                     task-data-json (json/write-str
                                      {:task (select-keys
                                               final-task

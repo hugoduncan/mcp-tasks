@@ -84,10 +84,8 @@
                         modified-files [tasks-rel-path complete-rel-path]
                         git-result (when use-git?
                                      (git/commit-task-changes base-dir
-                                                              (:id task)
-                                                              (:title task)
                                                               modified-files
-                                                              "Delete"))]
+                                                              (str "Delete task #" (:id task) ": " (:title task))))]
                     ;; Build response with deleted task data
                     (if use-git?
                       {:content [{:type "text"
