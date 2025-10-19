@@ -235,7 +235,6 @@ EXAMPLES:
    :unique {:coerce :boolean
             :desc "Enforce that 0 or 1 task matches (error if >1)"}
    :format {:coerce :keyword
-            :default :edn
             :desc "Output format (edn, json, human)"}})
 
 (def show-spec
@@ -244,7 +243,6 @@ EXAMPLES:
              :alias :id
              :desc "Task ID to display"}
    :format {:coerce :keyword
-            :default :edn
             :desc "Output format (edn, json, human)"}})
 
 (def add-spec
@@ -264,7 +262,6 @@ EXAMPLES:
    :prepend {:coerce :boolean
              :desc "Add task at beginning instead of end"}
    :format {:coerce :keyword
-            :default :edn
             :desc "Output format (edn, json, human)"}})
 
 (def complete-spec
@@ -279,7 +276,6 @@ EXAMPLES:
    :completion-comment {:alias :comment
                         :desc "Optional completion comment"}
    :format {:coerce :keyword
-            :default :edn
             :desc "Output format (edn, json, human)"}})
 
 (def update-spec
@@ -305,7 +301,6 @@ EXAMPLES:
    :meta {:desc "New metadata as JSON object"}
    :relations {:desc "New relations as JSON array"}
    :format {:coerce :keyword
-            :default :edn
             :desc "Output format (edn, json, human)"}})
 
 (def delete-spec
@@ -316,7 +311,6 @@ EXAMPLES:
    :title-pattern {:alias :title
                    :desc "Title pattern to match (alternative to task-id)"}
    :format {:coerce :keyword
-            :default :edn
             :desc "Output format (edn, json, human)"}})
 
 ;; Parse Functions

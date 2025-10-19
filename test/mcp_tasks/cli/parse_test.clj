@@ -55,7 +55,7 @@
 (deftest parse-list-test
   (testing "parse-list"
     (testing "parses basic arguments"
-      (is (= {:format :edn :limit 5}
+      (is (= {:limit 5}
              (sut/parse-list []))))
 
     (testing "parses all filter options"
@@ -79,11 +79,11 @@
                               "--format" "json"]))))
 
     (testing "uses aliases"
-      (is (= {:status :closed :category "large" :type :bug :parent-id 5 :format :edn :limit 5}
+      (is (= {:status :closed :category "large" :type :bug :parent-id 5 :limit 5}
              (sut/parse-list ["-s" "closed" "-c" "large" "-t" "bug" "-p" "5"]))))
 
     (testing "uses defaults"
-      (is (= {:format :edn :limit 5}
+      (is (= {:limit 5}
              (sut/parse-list []))))
 
     (testing "coerces types correctly"
@@ -97,11 +97,11 @@
 (deftest parse-show-test
   (testing "parse-show"
     (testing "parses required task-id"
-      (is (= {:task-id 42 :format :edn}
+      (is (= {:task-id 42}
              (sut/parse-show ["--task-id" "42"]))))
 
     (testing "uses alias for task-id"
-      (is (= {:task-id 99 :format :edn}
+      (is (= {:task-id 99}
              (sut/parse-show ["--id" "99"]))))
 
     (testing "supports format option"
@@ -113,8 +113,7 @@
     (testing "parses required category and title"
       (is (= {:category "simple"
               :title "Test task"
-              :type :task
-              :format :edn}
+              :type :task}
              (sut/parse-add ["--category" "simple" "--title" "Test task"]))))
 
     (testing "parses all optional fields"
@@ -134,7 +133,7 @@
                              "--format" "json"]))))
 
     (testing "uses aliases"
-      (is (= {:category "simple" :title "Task" :description "Desc" :parent-id 5 :type :task :format :edn}
+      (is (= {:category "simple" :title "Task" :description "Desc" :parent-id 5 :type :task}
              (sut/parse-add ["-c" "simple" "-t" "Task" "-d" "Desc" "-p" "5"]))))
 
     (testing "uses default type"
@@ -144,23 +143,23 @@
 (deftest parse-complete-test
   (testing "parse-complete"
     (testing "accepts task-id"
-      (is (= {:task-id 42 :format :edn}
+      (is (= {:task-id 42}
              (sut/parse-complete ["--task-id" "42"]))))
 
     (testing "accepts title"
-      (is (= {:title "My task" :format :edn}
+      (is (= {:title "My task"}
              (sut/parse-complete ["--title" "My task"]))))
 
     (testing "accepts both task-id and title"
-      (is (= {:task-id 42 :title "My task" :format :edn}
+      (is (= {:task-id 42 :title "My task"}
              (sut/parse-complete ["--task-id" "42" "--title" "My task"]))))
 
     (testing "accepts category and completion-comment"
-      (is (= {:task-id 42 :category "simple" :completion-comment "Done!" :format :edn}
+      (is (= {:task-id 42 :category "simple" :completion-comment "Done!"}
              (sut/parse-complete ["--task-id" "42" "--category" "simple" "--completion-comment" "Done!"]))))
 
     (testing "uses aliases"
-      (is (= {:task-id 42 :category "simple" :completion-comment "Done" :format :edn}
+      (is (= {:task-id 42 :category "simple" :completion-comment "Done"}
              (sut/parse-complete ["--id" "42" "-c" "simple" "--comment" "Done"]))))
 
     (testing "requires at least one of task-id or title"
@@ -171,7 +170,7 @@
 (deftest parse-update-test
   (testing "parse-update"
     (testing "parses required task-id"
-      (is (= {:task-id 42 :format :edn}
+      (is (= {:task-id 42}
              (sut/parse-update ["--task-id" "42"]))))
 
     (testing "parses all optional string fields"
@@ -179,8 +178,7 @@
               :title "New title"
               :description "New desc"
               :design "New design"
-              :category "medium"
-              :format :edn}
+              :category "medium"}
              (sut/parse-update ["--task-id" "42"
                                 "--title" "New title"
                                 "--description" "New desc"
@@ -188,11 +186,11 @@
                                 "--category" "medium"]))))
 
     (testing "parses enum fields"
-      (is (= {:task-id 42 :status :closed :type :bug :format :edn}
+      (is (= {:task-id 42 :status :closed :type :bug}
              (sut/parse-update ["--task-id" "42" "--status" "closed" "--type" "bug"]))))
 
     (testing "parses parent-id"
-      (is (= {:task-id 42 :parent-id 10 :format :edn}
+      (is (= {:task-id 42 :parent-id 10}
              (sut/parse-update ["--task-id" "42" "--parent-id" "10"]))))
 
     (testing "parses meta as JSON"
@@ -236,25 +234,25 @@
         (is (= "Expected JSON array for --relations" (:error result)))))
 
     (testing "uses aliases"
-      (is (= {:task-id 99 :title "New" :description "Desc" :status :open :category "simple" :parent-id 5 :format :edn}
+      (is (= {:task-id 99 :title "New" :description "Desc" :status :open :category "simple" :parent-id 5}
              (sut/parse-update ["--id" "99" "-t" "New" "-d" "Desc" "-s" "open" "-c" "simple" "-p" "5"]))))))
 
 (deftest parse-delete-test
   (testing "parse-delete"
     (testing "accepts task-id"
-      (is (= {:task-id 42 :format :edn}
+      (is (= {:task-id 42}
              (sut/parse-delete ["--task-id" "42"]))))
 
     (testing "accepts title-pattern"
-      (is (= {:title-pattern "my.*task" :format :edn}
+      (is (= {:title-pattern "my.*task"}
              (sut/parse-delete ["--title-pattern" "my.*task"]))))
 
     (testing "accepts both task-id and title-pattern"
-      (is (= {:task-id 42 :title-pattern "task" :format :edn}
+      (is (= {:task-id 42 :title-pattern "task"}
              (sut/parse-delete ["--task-id" "42" "--title-pattern" "task"]))))
 
     (testing "uses aliases"
-      (is (= {:task-id 99 :title-pattern "foo" :format :edn}
+      (is (= {:task-id 99 :title-pattern "foo"}
              (sut/parse-delete ["--id" "99" "--title" "foo"]))))
 
     (testing "requires at least one of task-id or title-pattern"
