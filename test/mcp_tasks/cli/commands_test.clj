@@ -340,8 +340,9 @@
           :category "simple" :type :task :meta {} :relations []}])
 
       (let [result (sut/show-command (test-config) {:task-id 999})]
-        (is (= 0 (count (:tasks result))))
-        (is (= 0 (get-in result [:metadata :total-matches])))))))
+        (is (contains? result :error))
+        (is (= "No task found with the specified task-id" (:error result)))
+        (is (= 999 (get-in result [:metadata :task-id])))))))
 
 (deftest show-command-strips-format-option
   ;; Test show-command removes :format from tool args

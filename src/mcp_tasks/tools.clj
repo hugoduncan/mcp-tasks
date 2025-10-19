@@ -624,6 +624,15 @@
               result-count (count limited-tasks)]
 
           ;; Check unique? constraint
+          ;; When unique is true and a specific task-id was requested, 0 matches is an error
+          (when (and unique (zero? total-matches) task-id)
+            (let [response-data {:error "No task found with the specified task-id"
+                                 :metadata {:task-id task-id
+                                            :file tasks-file}}]
+              (throw (ex-info "Task not found"
+                              {:response response-data}))))
+
+          ;; Multiple matches with unique is also an error
           (when (and unique (> total-matches 1))
             (let [response-data {:error "Multiple tasks matched but :unique was specified"
                                  :metadata {:count result-count
