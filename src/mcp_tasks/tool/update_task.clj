@@ -1,5 +1,20 @@
 (ns mcp-tasks.tool.update-task
-  "update-task tool implementation"
+  "MCP tool for modifying existing task fields.
+
+  This namespace implements the update-task tool, which allows selective
+  field updates on existing tasks. Supports updating any combination of:
+  - title, description, design: Text content
+  - category, type, status: Enumerated fields
+  - parent-id: Task hierarchy (can be set to nil to remove parent)
+  - meta: Key-value metadata map (replaces entire map)
+  - relations: Task relationships vector (replaces entire vector)
+
+  The tool validates all field values and handles type conversions from
+  JSON to EDN formats. Only provided fields are updated; others remain
+  unchanged.
+
+  Part of the refactored tool architecture where each tool lives in its own
+  namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [clojure.data.json :as json]
     [mcp-tasks.tasks :as tasks]

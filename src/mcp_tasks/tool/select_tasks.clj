@@ -1,5 +1,21 @@
 (ns mcp-tasks.tool.select-tasks
-  "select-tasks tool implementation"
+  "MCP tool for querying and retrieving tasks from the task queue.
+
+  This namespace implements the select-tasks tool, which provides flexible
+  task filtering and retrieval capabilities. Tasks can be filtered by:
+  - task-id: Exact ID match
+  - category: Task execution category
+  - parent-id: Child tasks of a specific parent
+  - title-pattern: Regex or substring matching
+  - type: Task type (:task, :bug, :feature, :story, :chore)
+  - status: Task status (:open, :closed, :in-progress, :blocked)
+
+  Results are returned with metadata including count and pagination info.
+  Supports both single-task lookup (unique: true) and multi-task queries
+  with configurable limits.
+
+  Part of the refactored tool architecture where each tool lives in its own
+  namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [clojure.data.json :as json]
     [mcp-tasks.response :as response]

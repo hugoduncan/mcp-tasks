@@ -1,5 +1,21 @@
 (ns mcp-tasks.tool.complete-task
-  "complete-task tool implementation"
+  "MCP tool for marking tasks as complete and archiving them.
+
+  This namespace implements the complete-task tool, which handles the full
+  lifecycle of task completion including:
+  - Finding tasks by ID or title match
+  - Appending optional completion comments
+  - Moving tasks from tasks.ednl to complete.ednl with :status :closed
+  - Handling special cases for story tasks and child tasks
+  - Committing changes to git
+
+  The tool supports three completion modes:
+  - Regular tasks: Simple completion and archive
+  - Child tasks: Completion with parent relationship preservation
+  - Story tasks: Completion with archival of all child tasks
+
+  Part of the refactored tool architecture where each tool lives in its own
+  namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [clojure.java.shell :as sh]
     [clojure.string :as str]

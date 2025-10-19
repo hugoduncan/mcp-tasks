@@ -1,5 +1,16 @@
 (ns mcp-tasks.tool.delete-task
-  "delete-task tool implementation"
+  "MCP tool for deleting tasks from the task queue.
+
+  This namespace implements the delete-task tool, which removes tasks by
+  marking them with :status :deleted and moving them to complete.ednl.
+  This provides a soft-delete mechanism that maintains an audit trail.
+
+  The tool enforces referential integrity by preventing deletion of tasks
+  that have non-closed child tasks. Tasks can be identified either by exact
+  task-id or by fuzzy title-pattern matching.
+
+  Part of the refactored tool architecture where each tool lives in its own
+  namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [clojure.data.json :as json]
     [mcp-tasks.tasks :as tasks]

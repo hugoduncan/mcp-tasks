@@ -1,5 +1,16 @@
 (ns mcp-tasks.tool.add-task
-  "add-task tool implementation"
+  "MCP tool for adding new tasks to the task queue.
+
+  This namespace implements the add-task tool, which creates new task records
+  and appends them to the tasks.ednl file. Tasks can be added to the end of
+  the queue (default) or prepended to the beginning for higher priority.
+
+  The tool integrates with the category system, validating that the specified
+  category exists and has corresponding prompt resources. It also supports
+  task hierarchies through optional parent-id references.
+
+  Part of the refactored tool architecture where each tool lives in its own
+  namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [clojure.data.json :as json]
     [clojure.string :as str]
