@@ -20,11 +20,24 @@
   "Main entry point for the CLI."
   [& args]
   (try
-    (let [;; Find the first known command in args
-          ;; Split args into global options (before command) and command + its args
-          commands #{"list" "show" "add" "complete" "update" "delete"}
-          command-idx (or (first (keep-indexed #(when (commands %2) %1) args))
-                          (count args))
+    (let [;; Find the first argument that looks like a command (not an option or option value)
+          ;; Valid commands are known strings that don't start with --
+          valid-commands #{"list" "show" "add" "complete" "update" "delete"}
+          ;; Find command by looking for first valid command OR first non-option after options
+          command-idx (loop [idx 0
+                             prev-was-option? false]
+                        (if (>= idx (count args))
+                          idx
+                          (let [arg (nth args idx)]
+                            (cond
+                              ;; Found a valid command
+                              (valid-commands arg) idx
+                              ;; This is an option flag, skip it and mark that next might be its value
+                              (str/starts-with? arg "--") (recur (inc idx) true)
+                              ;; Previous was option, this is its value, skip it
+                              prev-was-option? (recur (inc idx) false)
+                              ;; Not an option and not preceded by option flag - must be command
+                              :else idx))))
           global-args (take command-idx args)
           command-and-args (drop command-idx args)
 
@@ -58,61 +71,65 @@
 
         ;; Execute command
         :else
-        (let [path (str config-path)]
-          ;; Validate config path exists
-          (if-not (.exists (java.io.File. path))
+        (let [path (str config-path)
+              valid-commands #{"list" "show" "add" "complete" "update" "delete"}]
+          ;; Validate command is known
+          (if-not (contains? valid-commands command)
             (do
               (binding [*out* *err*]
-                (println (format/format-error
-                           {:error "Config path does not exist"
-                            :path path})))
+                (println (str "Unknown command: " command))
+                (println)
+                (println parse/help-text))
               (exit 1))
 
-            (let [;; Load config
-                  raw-config (config/read-config path)
-                  resolved-config (config/resolve-config path (or raw-config {}))
-                  _ (config/validate-startup path resolved-config)
+            ;; Validate config path exists
+            (if-not (.exists (java.io.File. path))
+              (do
+                (binding [*out* *err*]
+                  (println (format/format-error
+                             {:error "Config path does not exist"
+                              :path path})))
+                (exit 1))
 
-                  ;; Parse command-specific args
-                  parsed-args (case command
-                                "list" (parse/parse-list command-args)
-                                "show" (parse/parse-show command-args)
-                                "add" (parse/parse-add command-args)
-                                "complete" (parse/parse-complete command-args)
-                                "update" (parse/parse-update command-args)
-                                "delete" (parse/parse-delete command-args)
-                                (do
-                                  (binding [*out* *err*]
-                                    (println (str "Unknown command: " command))
-                                    (println)
-                                    (println parse/help-text))
-                                  (exit 1)))]
+              (let [;; Load config
+                    raw-config (config/read-config path)
+                    resolved-config (config/resolve-config path (or raw-config {}))
+                    _ (config/validate-startup path resolved-config)
 
-              ;; Check for parsing errors
-              (if (:error parsed-args)
-                (do
-                  (binding [*out* *err*]
-                    (println (format/format-error parsed-args)))
-                  (exit 1))
+                    ;; Parse command-specific args
+                    parsed-args (case command
+                                  "list" (parse/parse-list command-args)
+                                  "show" (parse/parse-show command-args)
+                                  "add" (parse/parse-add command-args)
+                                  "complete" (parse/parse-complete command-args)
+                                  "update" (parse/parse-update command-args)
+                                  "delete" (parse/parse-delete command-args))]
 
-                ;; Execute command
-                (let [result (case command
-                               "list" (commands/list-command resolved-config parsed-args)
-                               "show" (commands/show-command resolved-config parsed-args)
-                               "add" (commands/add-command resolved-config parsed-args)
-                               "complete" (commands/complete-command resolved-config parsed-args)
-                               "update" (commands/update-command resolved-config parsed-args)
-                               "delete" (commands/delete-command resolved-config parsed-args))
-                      output-format (or (:format parsed-args) format)
-                      formatted-output (format/render output-format result)]
-                  (if (:error result)
-                    (do
-                      (binding [*out* *err*]
-                        (println formatted-output))
-                      (exit 1))
-                    (do
-                      (println formatted-output)
-                      (exit 0))))))))))
+                ;; Check for parsing errors
+                (if (:error parsed-args)
+                  (do
+                    (binding [*out* *err*]
+                      (println (format/format-error parsed-args)))
+                    (exit 1))
+
+                  ;; Execute command
+                  (let [result (case command
+                                 "list" (commands/list-command resolved-config parsed-args)
+                                 "show" (commands/show-command resolved-config parsed-args)
+                                 "add" (commands/add-command resolved-config parsed-args)
+                                 "complete" (commands/complete-command resolved-config parsed-args)
+                                 "update" (commands/update-command resolved-config parsed-args)
+                                 "delete" (commands/delete-command resolved-config parsed-args))
+                        output-format (or (:format parsed-args) format)
+                        formatted-output (format/render output-format result)]
+                    (if (:error result)
+                      (do
+                        (binding [*out* *err*]
+                          (println formatted-output))
+                        (exit 1))
+                      (do
+                        (println formatted-output)
+                        (exit 0)))))))))))
 
     (catch clojure.lang.ExceptionInfo e
       (let [data (ex-data e)]
