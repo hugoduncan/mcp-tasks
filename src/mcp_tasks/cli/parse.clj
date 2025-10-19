@@ -219,6 +219,20 @@ EXAMPLES:
        :error (str "At least one of " (str/join ", " field-names) " must be provided")
        :metadata {:required-one-of required-keys}})))
 
+(defn validate-format
+  "Validate that the format is one of the allowed values.
+  
+  Returns {:valid? true} or {:valid? false :error \"...\" :details {...}}"
+  [parsed-map]
+  (if-let [fmt (:format parsed-map)]
+    (if (#{:edn :json :human} fmt)
+      {:valid? true}
+      {:valid? false
+       :error (str "Invalid format: " (name fmt) ". Must be one of: edn, json, human")
+       :metadata {:provided fmt
+                  :allowed #{:edn :json :human}}})
+    {:valid? true}))
+
 ;; Command Spec Maps
 
 (def list-spec
@@ -337,8 +351,11 @@ EXAMPLES:
                      (cond-> (:c raw-parsed) (assoc :category (:c raw-parsed)))
                      (cond-> (:t raw-parsed) (assoc :type (:t raw-parsed)))
                      (cond-> (contains? raw-parsed :p) (assoc :parent-id (:p raw-parsed)))
-                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))]
-      parsed)
+                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
+          format-validation (validate-format parsed)]
+      (if (:valid? format-validation)
+        parsed
+        (dissoc format-validation :valid?)))
     (catch Exception e
       {:error (str "Failed to parse list arguments: " (.getMessage e))
        :metadata {:args args}})))
@@ -351,12 +368,19 @@ EXAMPLES:
   (try
     (let [parsed (cli/parse-opts args {:spec show-spec})
           task-id (resolve-alias parsed :task-id :id)]
-      (if-not task-id
+      (cond
+        (not task-id)
         {:error "Required option: --task-id (or --id)"
          :metadata {:args args}}
-        (-> parsed
-            (dissoc :id)
-            (assoc :task-id task-id))))
+
+        :else
+        (let [result (-> parsed
+                         (dissoc :id)
+                         (assoc :task-id task-id))
+              format-validation (validate-format result)]
+          (if (:valid? format-validation)
+            result
+            (dissoc format-validation :valid?)))))
     (catch Exception e
       {:error (str "Failed to parse show arguments: " (.getMessage e))
        :metadata {:args args}})))
@@ -386,7 +410,10 @@ EXAMPLES:
          :metadata {:args args}}
 
         :else
-        parsed))
+        (let [format-validation (validate-format parsed)]
+          (if (:valid? format-validation)
+            parsed
+            (dissoc format-validation :valid?)))))
     (catch Exception e
       {:error (str "Failed to parse add arguments: " (.getMessage e))
        :metadata {:args args}})))
@@ -406,10 +433,13 @@ EXAMPLES:
                      (cond-> (:t raw-parsed) (assoc :title (:t raw-parsed)))
                      (cond-> (:c raw-parsed) (assoc :category (:c raw-parsed)))
                      (cond-> (:comment raw-parsed) (assoc :completion-comment (:comment raw-parsed))))
-          validation (validate-at-least-one parsed [:task-id :title] ["--task-id" "--title"])]
-      (if (:valid? validation)
-        parsed
-        (dissoc validation :valid?)))
+          at-least-one-validation (validate-at-least-one parsed [:task-id :title] ["--task-id" "--title"])]
+      (if-not (:valid? at-least-one-validation)
+        (dissoc at-least-one-validation :valid?)
+        (let [format-validation (validate-format parsed)]
+          (if (:valid? format-validation)
+            parsed
+            (dissoc format-validation :valid?)))))
     (catch Exception e
       {:error (str "Failed to parse complete arguments: " (.getMessage e))
        :metadata {:args args}})))
@@ -445,15 +475,29 @@ EXAMPLES:
                   (let [relations-result (coerce-json-array relations-str)]
                     (if (:error relations-result)
                       relations-result
-                      (assoc parsed-with-meta :relations relations-result)))
-                  parsed-with-meta))))
+                      (let [final-parsed (assoc parsed-with-meta :relations relations-result)
+                            format-validation (validate-format final-parsed)]
+                        (if (:valid? format-validation)
+                          final-parsed
+                          (dissoc format-validation :valid?)))))
+                  (let [format-validation (validate-format parsed-with-meta)]
+                    (if (:valid? format-validation)
+                      parsed-with-meta
+                      (dissoc format-validation :valid?)))))))
           ;; No :meta, check :relations
           (if-let [relations-str (:relations parsed)]
             (let [relations-result (coerce-json-array relations-str)]
               (if (:error relations-result)
                 relations-result
-                (assoc parsed :relations relations-result)))
-            parsed))))
+                (let [final-parsed (assoc parsed :relations relations-result)
+                      format-validation (validate-format final-parsed)]
+                  (if (:valid? format-validation)
+                    final-parsed
+                    (dissoc format-validation :valid?)))))
+            (let [format-validation (validate-format parsed)]
+              (if (:valid? format-validation)
+                parsed
+                (dissoc format-validation :valid?)))))))
     (catch Exception e
       {:error (str "Failed to parse update arguments: " (.getMessage e))
        :metadata {:args args}})))
@@ -471,10 +515,13 @@ EXAMPLES:
                      (dissoc :id :title)
                      (cond-> task-id (assoc :task-id task-id))
                      (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
-          validation (validate-at-least-one parsed [:task-id :title-pattern] ["--task-id" "--title-pattern"])]
-      (if (:valid? validation)
-        parsed
-        (dissoc validation :valid?)))
+          at-least-one-validation (validate-at-least-one parsed [:task-id :title-pattern] ["--task-id" "--title-pattern"])]
+      (if-not (:valid? at-least-one-validation)
+        (dissoc at-least-one-validation :valid?)
+        (let [format-validation (validate-format parsed)]
+          (if (:valid? format-validation)
+            parsed
+            (dissoc format-validation :valid?)))))
     (catch Exception e
       {:error (str "Failed to parse delete arguments: " (.getMessage e))
        :metadata {:args args}})))

@@ -52,6 +52,30 @@
         (is (= "At least one of --task-id, --title must be provided" (:error result)))
         (is (= {:required-one-of [:task-id :title]} (:metadata result)))))))
 
+(deftest validate-format-test
+  (testing "validate-format"
+    (testing "returns valid for allowed formats"
+      (is (= {:valid? true}
+             (sut/validate-format {:format :edn})))
+      (is (= {:valid? true}
+             (sut/validate-format {:format :json})))
+      (is (= {:valid? true}
+             (sut/validate-format {:format :human}))))
+
+    (testing "returns valid when format is not present"
+      (is (= {:valid? true}
+             (sut/validate-format {:other "data"}))))
+
+    (testing "returns error for invalid formats"
+      (let [result (sut/validate-format {:format :xyz})]
+        (is (false? (:valid? result)))
+        (is (= "Invalid format: xyz. Must be one of: edn, json, human" (:error result)))
+        (is (= {:provided :xyz :allowed #{:edn :json :human}} (:metadata result))))
+
+      (let [result (sut/validate-format {:format :csv})]
+        (is (false? (:valid? result)))
+        (is (= "Invalid format: csv. Must be one of: edn, json, human" (:error result)))))))
+
 (deftest parse-list-test
   (testing "parse-list"
     (testing "parses basic arguments"
@@ -92,7 +116,12 @@
         (is (= :in-progress (:status result)))
         (is (number? (:limit result)))
         (is (= 20 (:limit result)))
-        (is (true? (:unique result)))))))
+        (is (true? (:unique result)))))
+
+    (testing "returns error for invalid format"
+      (let [result (sut/parse-list ["--format" "xyz"])]
+        (is (contains? result :error))
+        (is (= "Invalid format: xyz. Must be one of: edn, json, human" (:error result)))))))
 
 (deftest parse-show-test
   (testing "parse-show"
@@ -106,7 +135,12 @@
 
     (testing "supports format option"
       (is (= {:task-id 42 :format :human}
-             (sut/parse-show ["--task-id" "42" "--format" "human"]))))))
+             (sut/parse-show ["--task-id" "42" "--format" "human"]))))
+
+    (testing "returns error for invalid format"
+      (let [result (sut/parse-show ["--task-id" "42" "--format" "csv"])]
+        (is (contains? result :error))
+        (is (= "Invalid format: csv. Must be one of: edn, json, human" (:error result)))))))
 
 (deftest parse-add-test
   (testing "parse-add"
@@ -138,7 +172,12 @@
 
     (testing "uses default type"
       (let [result (sut/parse-add ["--category" "simple" "--title" "Task"])]
-        (is (= :task (:type result)))))))
+        (is (= :task (:type result)))))
+
+    (testing "returns error for invalid format"
+      (let [result (sut/parse-add ["--category" "simple" "--title" "Task" "--format" "xml"])]
+        (is (contains? result :error))
+        (is (= "Invalid format: xml. Must be one of: edn, json, human" (:error result)))))))
 
 (deftest parse-complete-test
   (testing "parse-complete"
