@@ -84,24 +84,32 @@
   - git-result: Optional map with :success, :commit-sha, :error keys
   - task-data: Optional map with completed task data (for complete/delete operations)
 
-  Returns response map with :content and :isError keys."
+  Returns response map with :content and :isError keys.
+  
+  Response structure:
+  - Git disabled, no task-data: 1 item (message)
+  - Git disabled, with task-data: 1 item (message)
+  - Git enabled, no task-data: 3 items (message, modified-files data, git status)
+  - Git enabled, with task-data: 3 items (message, task-data + modified-files, git status)"
   ([msg-text modified-files use-git? git-result]
    (build-completion-response msg-text modified-files use-git? git-result nil))
   ([msg-text modified-files use-git? git-result task-data]
-   (let [base-content [{:type "text" :text msg-text}]
-         with-task-data (if task-data
-                          (conj base-content {:type "text" :text (json/write-str task-data)})
-                          base-content)
-         final-content (if use-git?
-                         (conj with-task-data
-                               {:type "text"
-                                :text (json/write-str
-                                        (cond-> {:git-status (if (:success git-result)
-                                                               "success"
-                                                               "error")
-                                                 :git-commit-sha (:commit-sha git-result)}
-                                          (:error git-result)
-                                          (assoc :git-error (:error git-result))))})
-                         with-task-data)]
-     {:content final-content
+   (if use-git?
+     ;; Git enabled: always 3 items
+     (let [task-data-with-files (if task-data
+                                  (assoc task-data :modified-files modified-files)
+                                  {:modified-files modified-files})]
+       {:content [{:type "text" :text msg-text}
+                  {:type "text" :text (json/write-str task-data-with-files)}
+                  {:type "text"
+                   :text (json/write-str
+                           (cond-> {:git-status (if (:success git-result)
+                                                  "success"
+                                                  "error")
+                                    :git-commit (:commit-sha git-result)}
+                             (:error git-result)
+                             (assoc :git-error (:error git-result))))}]
+        :isError false})
+     ;; Git disabled: 1 item (just message)
+     {:content [{:type "text" :text msg-text}]
       :isError false})))

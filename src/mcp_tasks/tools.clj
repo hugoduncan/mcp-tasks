@@ -524,7 +524,7 @@
                                           (cond-> {:git-status (if (:success git-result)
                                                                  "success"
                                                                  "error")
-                                                   :git-commit-sha (:commit-sha git-result)}
+                                                   :git-commit (:commit-sha git-result)}
                                             (:error git-result)
                                             (assoc :git-error (:error git-result))))}]
                        :isError false}
@@ -802,7 +802,7 @@
                                   (cond-> {:git-status (if (:success git-result)
                                                          "success"
                                                          "error")
-                                           :git-commit-sha (:commit-sha git-result)}
+                                           :git-commit (:commit-sha git-result)}
                                     (:error git-result)
                                     (assoc :git-error (:error git-result))))}]
                :isError false}
@@ -1010,17 +1010,40 @@
             (do
               (tasks/update-task task-id updates)
               (tasks/save-tasks! tasks-file)
-              (let [final-task (tasks/get-task task-id)]
-                {:content [{:type "text"
-                            :text (str "Task " task-id " updated in " tasks-file)}
-                           {:type "text"
-                            :text (json/write-str
-                                    {:task (select-keys
-                                             final-task
-                                             [:id :title :category :type :status :parent-id])
-                                     :metadata {:file tasks-file
-                                                :operation "update-task"}})}]
-                 :isError false})))))))
+              (let [final-task (tasks/get-task task-id)
+                    use-git? (:use-git? config)
+                    tasks-path (helpers/task-path config ["tasks.ednl"])
+                    tasks-rel-path (:relative tasks-path)
+                    git-result (when use-git?
+                                 (let [truncated-title (helpers/truncate-title (:title final-task))
+                                       git-dir (str (:base-dir config) "/.mcp-tasks")
+                                       commit-msg (str "Update task #" task-id ": " truncated-title)]
+                                   (git/perform-git-commit git-dir [tasks-rel-path] commit-msg)))
+                    task-data-json (json/write-str
+                                     {:task (select-keys
+                                              final-task
+                                              [:id :title :category :type :status :parent-id])
+                                      :metadata {:file tasks-file
+                                                 :operation "update-task"}})]
+                (if use-git?
+                  {:content [{:type "text"
+                              :text (str "Task " task-id " updated in " tasks-file)}
+                             {:type "text"
+                              :text task-data-json}
+                             {:type "text"
+                              :text (json/write-str
+                                      (cond-> {:git-status (if (:success git-result)
+                                                             "success"
+                                                             "error")
+                                               :git-commit (:commit-sha git-result)}
+                                        (:error git-result)
+                                        (assoc :git-error (:error git-result))))}]
+                   :isError false}
+                  {:content [{:type "text"
+                              :text (str "Task " task-id " updated in " tasks-file)}
+                             {:type "text"
+                              :text task-data-json}]
+                   :isError false}))))))))
 
 (defn update-task-tool
   "Tool to update fields of an existing task.

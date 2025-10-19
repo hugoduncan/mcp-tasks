@@ -163,7 +163,7 @@
   [git-data]
   (when git-data
     (let [status (:git-status git-data)
-          sha (:git-commit-sha git-data)
+          sha (:git-commit git-data)
           error (:git-error git-data)
           lines (cond-> []
                   status

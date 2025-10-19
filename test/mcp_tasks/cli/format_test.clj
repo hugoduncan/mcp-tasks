@@ -62,7 +62,7 @@
   {:tasks [sample-task]
    :metadata {:count 1 :total-matches 1}
    :git-status "success"
-   :git-commit-sha "abc123def456"})
+   :git-commit "abc123def456"})
 
 (def git-error-response
   {:tasks [sample-task]
