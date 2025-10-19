@@ -7,11 +7,9 @@
     [babashka.fs :as fs]
     [clojure.data.json :as json]
     [clojure.java.io :as io]
-    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.cli :as cli]
-    [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tasks-file :as tasks-file]
     [mcp-tasks.test-helpers :as h]))
 

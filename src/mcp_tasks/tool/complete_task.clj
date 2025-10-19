@@ -17,7 +17,6 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
-    [clojure.string :as str]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]

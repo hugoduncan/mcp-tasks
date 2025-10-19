@@ -3,7 +3,6 @@
     [clojure.data.json :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
-    [mcp-tasks.tasks :as tasks]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.delete-task :as sut]))
 
