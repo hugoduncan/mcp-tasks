@@ -4,6 +4,7 @@
   Thin wrappers around mcp-tasks.tools functions."
   (:require
     [clojure.data.json :as json]
+    [mcp-tasks.tool.update-task :as update-task]
     [mcp-tasks.tools :as tools]))
 
 (defn- parse-tool-response
@@ -36,7 +37,7 @@
    :show tools/select-tasks-tool
    :add tools/add-task-tool
    :complete tools/complete-task-tool
-   :update tools/update-task-tool
+   :update update-task/update-task-tool
    :delete tools/delete-task-tool})
 
 (defn- execute-command
