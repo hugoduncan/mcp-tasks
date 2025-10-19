@@ -50,43 +50,58 @@
 
         ;; Execute command
         :else
-        (let [;; Load config
-              path (str config-path)
-              raw-config (config/read-config path)
-              resolved-config (config/resolve-config path (or raw-config {}))
-              _ (config/validate-startup path resolved-config)
-
-              ;; Parse command-specific args
-              parsed-args (case command
-                            "list" (parse/parse-list command-args)
-                            "show" (parse/parse-show command-args)
-                            "add" (parse/parse-add command-args)
-                            "complete" (parse/parse-complete command-args)
-                            "update" (parse/parse-update command-args)
-                            "delete" (parse/parse-delete command-args)
-                            {:error (str "Unknown command: " command)
-                             :details {:command command
-                                       :available ["list" "show" "add" "complete" "update" "delete"]}})]
-
-          ;; Check for parsing errors
-          (if (:error parsed-args)
+        (let [path (str config-path)]
+          ;; Validate config path exists
+          (if-not (.exists (java.io.File. path))
             (do
               (binding [*out* *err*]
-                (println (format/format-error parsed-args)))
+                (println (format/format-error
+                           {:error "Config path does not exist"
+                            :path path})))
               (exit 1))
 
-            ;; Execute command
-            (let [result (case command
-                           "list" (commands/list-command resolved-config parsed-args)
-                           "show" (commands/show-command resolved-config parsed-args)
-                           "add" (commands/add-command resolved-config parsed-args)
-                           "complete" (commands/complete-command resolved-config parsed-args)
-                           "update" (commands/update-command resolved-config parsed-args)
-                           "delete" (commands/delete-command resolved-config parsed-args))
-                  output-format (or (:format parsed-args) format)
-                  formatted-output (format/render output-format result)]
-              (println formatted-output)
-              (exit 0))))))
+            (let [;; Load config
+                  raw-config (config/read-config path)
+                  resolved-config (config/resolve-config path (or raw-config {}))
+                  _ (config/validate-startup path resolved-config)
+
+                  ;; Parse command-specific args
+                  parsed-args (case command
+                                "list" (parse/parse-list command-args)
+                                "show" (parse/parse-show command-args)
+                                "add" (parse/parse-add command-args)
+                                "complete" (parse/parse-complete command-args)
+                                "update" (parse/parse-update command-args)
+                                "delete" (parse/parse-delete command-args)
+                                {:error (str "Unknown command: " command)
+                                 :details {:command command
+                                           :available ["list" "show" "add" "complete" "update" "delete"]}})]
+
+              ;; Check for parsing errors
+              (if (:error parsed-args)
+                (do
+                  (binding [*out* *err*]
+                    (println (format/format-error parsed-args)))
+                  (exit 1))
+
+                ;; Execute command
+                (let [result (case command
+                               "list" (commands/list-command resolved-config parsed-args)
+                               "show" (commands/show-command resolved-config parsed-args)
+                               "add" (commands/add-command resolved-config parsed-args)
+                               "complete" (commands/complete-command resolved-config parsed-args)
+                               "update" (commands/update-command resolved-config parsed-args)
+                               "delete" (commands/delete-command resolved-config parsed-args))
+                      output-format (or (:format parsed-args) format)
+                      formatted-output (format/render output-format result)]
+                  (if (:error result)
+                    (do
+                      (binding [*out* *err*]
+                        (println formatted-output))
+                      (exit 1))
+                    (do
+                      (println formatted-output)
+                      (exit 0))))))))))
 
     (catch clojure.lang.ExceptionInfo e
       (let [data (ex-data e)]
