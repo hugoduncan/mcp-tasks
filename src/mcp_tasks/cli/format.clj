@@ -45,9 +45,10 @@
 (defn truncate-text
   "Truncate text to max-length characters, adding ellipsis if truncated."
   [text max-length]
-  (if (<= (count text) max-length)
-    text
-    (str (subs text 0 (- max-length 3)) "...")))
+  (let [text (or text "")]
+    (if (<= (count text) max-length)
+      text
+      (str (subs text 0 (- max-length 3)) "..."))))
 
 (defn format-relations
   "Format relations vector to human-readable string.
@@ -72,6 +73,7 @@
     :in-progress "◐ in-progress"
     :blocked "✗ blocked"
     :deleted "⊗ deleted"
+    nil "○ open"
     (name status)))
 
 ;; Table formatting
@@ -79,8 +81,8 @@
 (defn format-table-row
   "Format a single row of the table with proper column widths."
   [id status category title max-title-width]
-  (format "%4d  %-12s  %-10s  %s"
-          id
+  (format "%4s  %-12s  %-10s  %s"
+          (or id "")
           (truncate-text status 12)
           (truncate-text category 10)
           (truncate-text title max-title-width)))
@@ -110,10 +112,10 @@
 (defn format-single-task
   "Format a single task with all details in multi-line format."
   [task]
-  (let [lines [(str "Task #" (:id task) ": " (:title task))
-               (str "Status: " (name (:status task)))
-               (str "Category: " (:category task))
-               (str "Type: " (name (:type task)))]]
+  (let [lines [(str "Task #" (or (:id task) "?") ": " (or (:title task) "Untitled"))
+               (str "Status: " (name (or (:status task) :open)))
+               (str "Category: " (or (:category task) "unknown"))
+               (str "Type: " (name (or (:type task) :task)))]]
     (str/join "\n"
               (cond-> lines
                 ;; Add parent-id if present

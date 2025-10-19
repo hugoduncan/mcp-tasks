@@ -111,7 +111,10 @@
       (is (= "this is..." (sut/truncate-text "this is a long text" 10))))
 
     (testing "handles exact length"
-      (is (= "exactly10!" (sut/truncate-text "exactly10!" 10))))))
+      (is (= "exactly10!" (sut/truncate-text "exactly10!" 10))))
+
+    (testing "handles nil by converting to empty string"
+      (is (= "" (sut/truncate-text nil 10))))))
 
 (deftest format-relations-test
   (testing "format-relations"
@@ -138,7 +141,10 @@
       (is (= "⊗ deleted" (sut/format-status :deleted))))
 
     (testing "formats unknown status as name"
-      (is (= "custom" (sut/format-status :custom))))))
+      (is (= "custom" (sut/format-status :custom))))
+
+    (testing "handles nil by defaulting to open"
+      (is (= "○ open" (sut/format-status nil))))))
 
 ;; EDN format tests
 
@@ -247,7 +253,28 @@
             lines (str/split-lines output)
             task-line (nth lines 2)]
         (is (str/includes? task-line "..."))
-        (is (< (count task-line) 100))))))
+        (is (< (count task-line) 100))))
+
+    (testing "handles tasks with nil fields in table"
+      (let [nil-task {:id nil
+                      :status nil
+                      :title nil
+                      :category nil
+                      :type :task
+                      :meta {}
+                      :relations []}
+            good-task {:id 1
+                       :status :open
+                       :title "Good task"
+                       :category "simple"
+                       :type :task
+                       :meta {}
+                       :relations []}
+            response {:tasks [nil-task good-task] :metadata {:count 2 :total-matches 2}}
+            output (sut/render :human response)]
+        (is (string? output))
+        (is (str/includes? output "ID"))
+        (is (str/includes? output "○ open"))))))
 
 (deftest human-format-single-task-test
   (testing "render :human for single task"
@@ -279,7 +306,22 @@
             output (sut/render :human response)]
         (is (str/includes? output "  Line 1"))
         (is (str/includes? output "  Line 2"))
-        (is (str/includes? output "  Line 3"))))))
+        (is (str/includes? output "  Line 3"))))
+
+    (testing "handles task with nil fields"
+      (let [nil-task {:id nil
+                      :status nil
+                      :title nil
+                      :category nil
+                      :type nil
+                      :meta {}
+                      :relations []}
+            response {:tasks [nil-task] :metadata {:count 1 :total-matches 1}}
+            output (sut/render :human response)]
+        (is (str/includes? output "Task #?: Untitled"))
+        (is (str/includes? output "Status: open"))
+        (is (str/includes? output "Category: unknown"))
+        (is (str/includes? output "Type: task"))))))
 
 (deftest human-format-add-task-test
   (testing "render :human for add-task response"
