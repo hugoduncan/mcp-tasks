@@ -48,10 +48,8 @@
 
   Parameters:
   - base-dir: Base directory containing .mcp-tasks
-  - task-id: ID of the task being operated on
-  - task-title: Title of the task being operated on
   - files-to-commit: Collection of relative file paths to add and commit
-  - operation: Operation name (e.g., \"Complete\", \"Delete\") for commit message
+  - commit-msg: The commit message string
 
   Returns a map with:
   - :success - boolean indicating if commit succeeded
@@ -59,7 +57,6 @@
   - :error - error message string (or nil if successful)
 
   Never throws - all errors are caught and returned in the map."
-  [base-dir task-id task-title files-to-commit operation]
-  (let [git-dir (str base-dir "/.mcp-tasks")
-        commit-msg (str operation " task #" task-id ": " task-title)]
+  [base-dir files-to-commit commit-msg]
+  (let [git-dir (str base-dir "/.mcp-tasks")]
     (perform-git-commit git-dir files-to-commit commit-msg)))

@@ -3,7 +3,8 @@
   (:require
     [babashka.fs :as fs]
     [clojure.data.json :as json]
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [mcp-tasks.tasks :as tasks]))
 
 (defn file-exists?
   "Check if a file exists"
@@ -40,6 +41,20 @@
     {:absolute absolute-path
      :relative relative-path}))
 
+(defn prepare-task-file
+  "Prepare task file for adding a task.
+
+  Loads tasks from tasks.ednl into memory.
+  Returns the absolute file path."
+  [config]
+  (let [tasks-path (task-path config ["tasks.ednl"])
+        tasks-file (:absolute tasks-path)
+        complete-path (task-path config ["complete.ednl"])
+        complete-file (:absolute complete-path)]
+    (when (file-exists? tasks-file)
+      (tasks/load-tasks! tasks-file :complete-file complete-file))
+    tasks-file))
+
 (defn truncate-title
   "Truncate a title to a maximum length, adding ellipsis if needed.
 
@@ -73,6 +88,46 @@
                        :metadata (merge {:attempted-operation operation}
                                         error-metadata)})}]
    :isError true})
+
+(defn setup-completion-context
+  "Prepares common context for task completion and deletion operations.
+
+  Parameters:
+  - config: Configuration map with :use-git?, :base-dir
+  - tool-name: Name of the calling tool (for error messages)
+
+  Returns either:
+  - Error response map (with :isError true) if tasks file not found
+  - Context map with:
+    - :use-git? - Whether git integration is enabled
+    - :tasks-file - Absolute path to tasks.ednl
+    - :complete-file - Absolute path to complete.ednl
+    - :tasks-rel-path - Relative path to tasks.ednl
+    - :complete-rel-path - Relative path to complete.ednl
+    - :base-dir - Base directory (may be nil)"
+  [config tool-name]
+  (let [use-git? (:use-git? config)
+        tasks-path (task-path config ["tasks.ednl"])
+        complete-path (task-path config ["complete.ednl"])
+        tasks-file (:absolute tasks-path)
+        complete-file (:absolute complete-path)
+        tasks-rel-path (:relative tasks-path)
+        complete-rel-path (:relative complete-path)]
+
+    (if-not (file-exists? tasks-file)
+      (build-tool-error-response
+        "Tasks file not found"
+        tool-name
+        {:file tasks-file})
+
+      (do
+        (tasks/load-tasks! tasks-file :complete-file complete-file)
+        {:use-git? use-git?
+         :tasks-file tasks-file
+         :complete-file complete-file
+         :tasks-rel-path tasks-rel-path
+         :complete-rel-path complete-rel-path
+         :base-dir (:base-dir config)}))))
 
 (defn build-completion-response
   "Build standardized completion response with optional git integration.
