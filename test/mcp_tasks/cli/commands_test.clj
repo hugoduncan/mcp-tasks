@@ -4,8 +4,7 @@
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.cli.commands :as sut]
-    [mcp-tasks.tasks-file :as tasks-file]
-    [mcp-tasks.tools :as tools]))
+    [mcp-tasks.tasks-file :as tasks-file]))
 
 (def ^:dynamic *test-dir* nil)
 
@@ -445,12 +444,12 @@
                       :title "New Title"
                       :status :in-progress
                       :category "medium"
-                      :type :bug})]
-        (let [task (:task result)]
-          (is (= "New Title" (:title task)))
-          (is (= "in-progress" (:status task)))
-          (is (= "medium" (:category task)))
-          (is (= "bug" (:type task))))))))
+                      :type :bug})
+            task (:task result)]
+        (is (= "New Title" (:title task)))
+        (is (= "in-progress" (:status task)))
+        (is (= "medium" (:category task)))
+        (is (= "bug" (:type task)))))))
 
 (deftest update-command-strips-format-option
   (testing "update-command"

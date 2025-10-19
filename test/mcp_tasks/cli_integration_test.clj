@@ -24,14 +24,6 @@
   (spit (io/file test-dir ".mcp-tasks/prompts/simple.md")
         "---\ndescription: Simple tasks\n---\nSimple task execution"))
 
-(defn- test-config
-  []
-  {:base-dir *test-dir* :use-git? false})
-
-(defn- git-test-config
-  []
-  {:base-dir *test-dir* :use-git? true})
-
 (defn- init-git-repo
   [test-dir]
   (let [mcp-tasks-dir (io/file test-dir ".mcp-tasks")]
