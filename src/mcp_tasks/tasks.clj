@@ -153,8 +153,12 @@
   Returns vector of task maps in the order they appear in tasks.ednl.
   Returns empty vector if no matching tasks found."
   [& {:keys [task-id category parent-id title-pattern type status]}]
-  (let [ids @task-ids
-        task-map @tasks
+  (let [task-map @tasks
+        ;; When status is specified (including :closed), search all tasks in @tasks
+        ;; Otherwise, only search active tasks in @task-ids
+        task-seq (if (some? status)
+                   (vals task-map)
+                   (keep #(get task-map %) @task-ids))
         ;; Build regex if possible, otherwise use substring match
         title-matcher (when title-pattern
                         (try
@@ -170,8 +174,7 @@
         status-match? (if (nil? status)
                         #(not= (:status %) :closed)
                         #(= (:status %) status))]
-    (->> ids
-         (map #(get task-map %))
+    (->> task-seq
          (filter status-match?)
          (filter #(or (nil? task-id) (= (:id %) task-id)))
          (filter #(or (nil? category) (= (:category %) category)))
@@ -337,9 +340,9 @@
         ;; Extract IDs from complete tasks
         complete-ids (when complete-coll
                        (mapv :id complete-coll))]
-    ;; Populate state with tasks from both files
-    ;; task-ids includes IDs from both files to ensure get-tasks can find them
-    (reset! task-ids (vec (concat (mapv :id task-coll) complete-ids)))
+    ;; Populate state with active tasks only in task-ids
+    (reset! task-ids (mapv :id task-coll))
+    ;; But include both active and completed tasks in the tasks map
     (reset! tasks (into {}
                         (concat
                           (map (fn [t] [(:id t) t]) task-coll)

@@ -88,7 +88,7 @@
   
   Response structure:
   - Git disabled, no task-data: 1 item (message)
-  - Git disabled, with task-data: 1 item (message)
+  - Git disabled, with task-data: 2 items (message, task-data JSON)
   - Git enabled, no task-data: 3 items (message, modified-files data, git status)
   - Git enabled, with task-data: 3 items (message, task-data + modified-files, git status)"
   ([msg-text modified-files use-git? git-result]
@@ -110,6 +110,10 @@
                              (:error git-result)
                              (assoc :git-error (:error git-result))))}]
         :isError false})
-     ;; Git disabled: 1 item (just message)
-     {:content [{:type "text" :text msg-text}]
-      :isError false})))
+     ;; Git disabled: 1 or 2 items depending on task-data
+     (if task-data
+       {:content [{:type "text" :text msg-text}
+                  {:type "text" :text (json/write-str task-data)}]
+        :isError false}
+       {:content [{:type "text" :text msg-text}]
+        :isError false}))))

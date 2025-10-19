@@ -286,9 +286,11 @@
         ;; Mark story as complete in memory
         (tasks/mark-complete (:id task) completion-comment)
 
-        ;; Move story and all children to complete.ednl atomically
-        (let [all-ids (cons (:id task) (mapv :id children))
+        ;; Get updated story BEFORE moving (since move-tasks! removes from memory)
+        (let [updated-story (tasks/get-task (:id task))
+              all-ids (cons (:id task) (mapv :id children))
               child-count (count children)]
+          ;; Move story and all children to complete.ednl atomically
           (tasks/move-tasks! all-ids tasks-file complete-file)
 
           ;; Prepare response
@@ -325,12 +327,15 @@
                                  {:success false
                                   :commit-sha nil
                                   :error (.getMessage e)})))]
-            (let [updated-story (tasks/get-task (:id task))
-                  task-data {:task (select-keys updated-story [:id :title :description :category :type :status :parent-id])
-                             :metadata {:file complete-file
-                                        :operation "complete-task"
-                                        :archived-children child-count}}]
-              (helpers/build-completion-response msg-text modified-files use-git? git-result task-data))))))))
+            (helpers/build-completion-response
+              msg-text
+              modified-files
+              use-git?
+              git-result
+              {:task (select-keys updated-story [:id :title :description :category :type :status :parent-id])
+               :metadata {:file complete-file
+                          :operation "complete-task"
+                          :archived-children child-count}})))))))
 
 (defn- complete-task-impl
   "Implementation of complete-task tool.

@@ -1056,9 +1056,9 @@
           (is (contains? git-data :git-commit)))))))
 
 (deftest complete-task-returns-one-content-item-without-git
-  ;; Tests that complete-task returns 1 content item when git is disabled
+  ;; Tests that complete-task returns 2 content items when git is disabled
   (testing "complete-task with git disabled"
-    (testing "returns one content item"
+    (testing "returns two content items (message and task data)"
       (write-ednl-test-file "tasks.ednl"
                             [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
       (let [result (#'sut/complete-task-impl
@@ -1066,12 +1066,20 @@
                     nil
                     {:task-id 1})]
         (is (false? (:isError result)))
-        (is (= 1 (count (:content result))))
+        (is (= 2 (count (:content result))))
 
-        ;; Only content item: completion message
+        ;; First content item: completion message
         (let [text-content (first (:content result))]
           (is (= "text" (:type text-content)))
-          (is (str/includes? (:text text-content) "Task 1 completed")))))))
+          (is (str/includes? (:text text-content) "Task 1 completed")))
+
+        ;; Second content item: task data as JSON
+        (let [json-content (second (:content result))
+              data (json/read-str (:text json-content) :key-fn keyword)]
+          (is (= "text" (:type json-content)))
+          (is (map? (:task data)))
+          (is (= 1 (get-in data [:task :id])))
+          (is (= "closed" (get-in data [:task :status]))))))))
 
 (deftest ^:integration complete-task-creates-git-commit
   ;; Integration test verifying git commit is actually created
@@ -1253,12 +1261,20 @@
                     {:task-id 40})]
         ;; Verify success response
         (is (false? (:isError result)))
-        (is (= 1 (count (:content result))))
+        (is (= 2 (count (:content result))))
 
-        ;; Verify completion message
+        ;; First content item: completion message
         (let [msg (get-in result [:content 0 :text])]
           (is (str/includes? msg "Story 40 completed and archived"))
           (is (str/includes? msg "with 2 child tasks")))
+
+        ;; Second content item: task data as JSON
+        (let [json-content (second (:content result))
+              data (json/read-str (:text json-content) :key-fn keyword)]
+          (is (= "text" (:type json-content)))
+          (is (map? (:task data)))
+          (is (= 40 (get-in data [:task :id])))
+          (is (= "closed" (get-in data [:task :status]))))
 
         ;; Verify all tasks moved to complete.ednl
         (let [completed-tasks (read-ednl-test-file "complete.ednl")]
