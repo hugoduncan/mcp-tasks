@@ -236,7 +236,21 @@ EXAMPLES:
 ;; Command Spec Maps
 
 (def list-spec
-  "Spec for the list command."
+  "Spec for the list command.
+  
+  Validates and coerces arguments for querying tasks with filters.
+  
+  Coercion rules:
+  - :status -> keyword (open, closed, in-progress, blocked)
+  - :type -> keyword (task, bug, feature, story, chore)
+  - :parent-id -> long integer
+  - :task-id -> long integer
+  - :limit -> long integer (default: 5)
+  - :unique -> boolean
+  - :format -> keyword (edn, json, human)
+  
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)"
   {:status {:coerce :keyword
             :alias :s
             :desc "Filter by status (open, closed, in-progress, blocked)"}
@@ -261,7 +275,17 @@ EXAMPLES:
             :desc "Output format (edn, json, human)"}})
 
 (def show-spec
-  "Spec for the show command."
+  "Spec for the show command.
+  
+  Validates and coerces arguments for displaying a single task.
+  
+  Coercion rules:
+  - :task-id -> long integer
+  - :format -> keyword (edn, json, human)
+  
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires :task-id to be present"
   {:task-id {:coerce :long
              :alias :id
              :desc "Task ID to display"}
@@ -269,7 +293,19 @@ EXAMPLES:
             :desc "Output format (edn, json, human)"}})
 
 (def add-spec
-  "Spec for the add command."
+  "Spec for the add command.
+  
+  Validates and coerces arguments for creating new tasks.
+  
+  Coercion rules:
+  - :type -> keyword (task, bug, feature, story, chore), default: :task
+  - :parent-id -> long integer
+  - :prepend -> boolean
+  - :format -> keyword (edn, json, human)
+  
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires both :category and :title to be present"
   {:category {:alias :c
               :desc "Task category (e.g., simple, medium, large)"}
    :title {:alias :t
@@ -288,7 +324,21 @@ EXAMPLES:
             :desc "Output format (edn, json, human)"}})
 
 (def complete-spec
-  "Spec for the complete command."
+  "Spec for the complete command.
+  
+  Validates and coerces arguments for marking tasks complete.
+  
+  Coercion rules:
+  - :task-id -> long integer
+  - :format -> keyword (edn, json, human)
+  
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires at least one of :task-id or :title
+  - Resolves :id alias to :task-id
+  - Resolves :t alias to :title
+  - Resolves :c alias to :category
+  - Resolves :comment alias to :completion-comment"
   {:task-id {:coerce :long
              :alias :id
              :desc "Task ID to complete"}
@@ -302,7 +352,22 @@ EXAMPLES:
             :desc "Output format (edn, json, human)"}})
 
 (def update-spec
-  "Spec for the update command."
+  "Spec for the update command.
+  
+  Validates and coerces arguments for updating task fields.
+  
+  Coercion rules:
+  - :task-id -> long integer
+  - :status -> keyword (open, closed, in-progress, blocked)
+  - :type -> keyword (task, bug, feature, story, chore)
+  - :parent-id -> long integer
+  - :meta -> parsed from JSON string to Clojure map
+  - :relations -> parsed from JSON array to Clojure vector
+  - :format -> keyword (edn, json, human)
+  
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires :task-id to be present"
   {:task-id {:coerce :long
              :alias :id
              :desc "Task ID to update"}
@@ -327,7 +392,17 @@ EXAMPLES:
             :desc "Output format (edn, json, human)"}})
 
 (def delete-spec
-  "Spec for the delete command."
+  "Spec for the delete command.
+  
+  Validates and coerces arguments for deleting tasks.
+  
+  Coercion rules:
+  - :task-id -> long integer
+  - :format -> keyword (edn, json, human)
+  
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires at least one of :task-id or :title-pattern"
   {:task-id {:coerce :long
              :alias :id
              :desc "Task ID to delete"}
