@@ -322,19 +322,28 @@
   Resets current state and populates from file.
 
   Options:
-  - :complete-file - Path to complete.ednl for monotonic ID generation
+  - :complete-file - Path to complete.ednl to also load completed tasks
 
-  Returns number of tasks loaded."
+  Returns number of tasks loaded from primary file."
   [file-path & {:keys [complete-file]}]
   (reset-state!)
   (let [task-coll (tasks-file/read-ednl file-path)
-        [pc-map cp-map] (build-parent-child-maps task-coll)
-        ;; Read IDs from complete file if provided
-        complete-ids (when complete-file
-                       (mapv :id (tasks-file/read-ednl complete-file)))]
-    ;; Populate state
-    (reset! task-ids (mapv :id task-coll))
-    (reset! tasks (into {} (map (fn [t] [(:id t) t])) task-coll))
+        ;; Also load completed tasks if complete-file is provided
+        complete-coll (when complete-file
+                        (tasks-file/read-ednl complete-file))
+        ;; Combine both collections for parent-child map building
+        all-tasks (concat task-coll complete-coll)
+        [pc-map cp-map] (build-parent-child-maps all-tasks)
+        ;; Extract IDs from complete tasks
+        complete-ids (when complete-coll
+                       (mapv :id complete-coll))]
+    ;; Populate state with tasks from both files
+    ;; task-ids includes IDs from both files to ensure get-tasks can find them
+    (reset! task-ids (vec (concat (mapv :id task-coll) complete-ids)))
+    (reset! tasks (into {}
+                        (concat
+                          (map (fn [t] [(:id t) t]) task-coll)
+                          (map (fn [t] [(:id t) t]) complete-coll))))
     (reset! parent-children pc-map)
     (reset! child-parent cp-map)
     ;; Update next-id considering both active and completed tasks
