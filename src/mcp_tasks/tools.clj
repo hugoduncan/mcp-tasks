@@ -12,45 +12,6 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
 
-(defn- validate-task-exists
-  "Validate that a task exists.
-
-  Returns error response map if validation fails, nil if successful."
-  [task-id operation tasks-file & {:keys [additional-metadata]}]
-  (when-not (tasks/get-task task-id)
-    (helpers/build-tool-error-response
-      "Task not found"
-      operation
-      (merge {:task-id task-id :file tasks-file}
-             additional-metadata))))
-
-(defn- validate-parent-id-exists
-  "Validate that a parent task exists if parent-id is provided and non-nil.
-
-  Returns error response map if validation fails, nil if successful."
-  [parent-id operation task-id tasks-file error-message & {:keys [additional-metadata]}]
-  (when (and parent-id (not (tasks/get-task parent-id)))
-    (helpers/build-tool-error-response
-      error-message
-      operation
-      (merge {:task-id task-id :parent-id parent-id :file tasks-file}
-             additional-metadata))))
-
-(defn- validate-task-schema
-  "Validate that a task conforms to the schema.
-
-  Returns error response map if validation fails, nil if successful."
-  [task operation task-id tasks-file]
-  (when-let [validation-result (schema/explain-task task)]
-    (let [formatted-errors (validation/format-validation-errors validation-result)
-          error-message (str "Invalid task field values: " formatted-errors)]
-      (helpers/build-tool-error-response
-        error-message
-        operation
-        {:task-id task-id
-         :validation-errors (pr-str validation-result)
-         :file tasks-file}))))
-
 (defn- setup-completion-context
   "Prepares common context for task completion operations.
   
@@ -79,94 +40,6 @@
          :complete-file complete-file
          :tasks-rel-path tasks-rel-path
          :complete-rel-path complete-rel-path}))))
-
-(defn- find-task-by-identifiers
-  "Find a task by task-id and/or title using exact match.
-
-  At least one of task-id or title must be provided.
-  If both are provided, they must refer to the same task.
-
-  Parameters:
-  - task-id: Optional integer task ID
-  - title: Optional string for exact title match
-  - operation: String operation name for error messages (e.g., 'complete-task', 'delete-task')
-  - tasks-file: Path to tasks file for error metadata
-
-  Returns:
-  - Task map if found, OR
-  - Error response map with :isError true"
-  [task-id title operation tasks-file]
-  ;; Validate at least one identifier provided
-  (if (and (nil? task-id) (nil? title))
-    (helpers/build-tool-error-response
-      "Must provide either task-id or title"
-      operation
-      {:task-id task-id
-       :title title})
-
-    ;; Find task by ID or exact title match
-    (let [task-by-id (when task-id (tasks/get-task task-id))
-          tasks-by-title (when title (tasks/find-by-title title))]
-
-      (cond
-        ;; Both provided - verify they match
-        (and task-id title)
-        (cond
-          (nil? task-by-id)
-          (helpers/build-tool-error-response
-            "Task ID not found"
-            operation
-            {:task-id task-id
-             :file tasks-file})
-
-          (empty? tasks-by-title)
-          (helpers/build-tool-error-response
-            "No task found with exact title match"
-            operation
-            {:title title
-             :file tasks-file})
-
-          (not (some #(= (:id %) task-id) tasks-by-title))
-          (helpers/build-tool-error-response
-            "Task ID and title do not refer to the same task"
-            operation
-            {:task-id task-id
-             :title title
-             :task-by-id task-by-id
-             :tasks-by-title (mapv :id tasks-by-title)
-             :file tasks-file})
-
-          :else task-by-id)
-
-        ;; Only ID provided
-        task-id
-        (or task-by-id
-            (helpers/build-tool-error-response
-              "Task ID not found"
-              operation
-              {:task-id task-id
-               :file tasks-file}))
-
-        ;; Only title provided
-        title
-        (cond
-          (empty? tasks-by-title)
-          (helpers/build-tool-error-response
-            "No task found with exact title match"
-            operation
-            {:title title
-             :file tasks-file})
-
-          (> (count tasks-by-title) 1)
-          (helpers/build-tool-error-response
-            "Multiple tasks found with same title - use task-id to disambiguate"
-            operation
-            {:title title
-             :matching-task-ids (mapv :id tasks-by-title)
-             :matching-tasks tasks-by-title
-             :file tasks-file})
-
-          :else (first tasks-by-title))))))
 
 (defn- complete-regular-task-
   "Completes a regular task by marking it :status :closed and moving to complete.ednl.
@@ -362,7 +235,7 @@
 
       (let [{:keys [tasks-file]} context
             ;; Find task using shared helper
-            task-result (find-task-by-identifiers task-id title "complete-task" tasks-file)]
+            task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
 
         ;; Check if task-result is an error response
         (if (:isError task-result)
@@ -468,7 +341,7 @@
 
       (let [{:keys [tasks-file complete-file]} context
             ;; Find task using shared helper (title-pattern is used for exact match)
-            task-result (find-task-by-identifiers task-id title-pattern "delete-task" tasks-file)]
+            task-result (validation/find-task-by-identifiers task-id title-pattern "delete-task" tasks-file)]
 
         ;; Check if task-result is an error response
         (if (:isError task-result)
@@ -754,8 +627,8 @@
   (let [tasks-file (prepare-task-file config)]
     ;; Validate parent-id exists if provided
     (or (when parent-id
-          (validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
-                                     :additional-metadata {:title title :category category}))
+          (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
+                                                :additional-metadata {:title title :category category}))
 
         ;; All validations passed - create task
         (let [task-map (cond-> {:title title
@@ -1000,16 +873,16 @@
            :file tasks-file})
 
         ;; Validate task exists
-        (or (validate-task-exists task-id "update-task" tasks-file)
+        (or (validation/validate-task-exists task-id "update-task" tasks-file)
 
             ;; Validate parent-id exists if provided and non-nil
             (when (and (contains? updates :parent-id) (:parent-id updates))
-              (validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
+              (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
 
             ;; Validate schema after merging updates
             (let [old-task (tasks/get-task task-id)
                   updated-task (merge old-task updates)]
-              (validate-task-schema updated-task "update-task" task-id tasks-file))
+              (validation/validate-task-schema updated-task "update-task" task-id tasks-file))
 
             ;; All validations passed - apply update
             (do
