@@ -18,36 +18,6 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
 
-(defn- setup-completion-context
-  "Prepares common context for task completion operations.
-  
-  Returns either:
-  - Error response map (with :isError true) if setup fails
-  - Context map with :use-git?, :tasks-file, :complete-file, :tasks-rel-path, :complete-rel-path"
-  [config]
-  (let [use-git? (:use-git? config)
-        tasks-path (helpers/task-path config ["tasks.ednl"])
-        complete-path (helpers/task-path config ["complete.ednl"])
-        tasks-file (:absolute tasks-path)
-        complete-file (:absolute complete-path)
-        tasks-rel-path (:relative tasks-path)
-        complete-rel-path (:relative complete-path)]
-
-    (if-not (helpers/file-exists? tasks-file)
-      (helpers/build-tool-error-response
-        "Tasks file not found"
-        "delete-task"
-        {:file tasks-file})
-
-      (do
-        (tasks/load-tasks! tasks-file :complete-file complete-file)
-        {:use-git? use-git?
-         :tasks-file tasks-file
-         :complete-file complete-file
-         :tasks-rel-path tasks-rel-path
-         :complete-rel-path complete-rel-path
-         :base-dir (:base-dir config)}))))
-
 (defn- delete-task-impl
   "Implementation of delete-task tool.
 
@@ -64,7 +34,7 @@
   - Git mode disabled: Two text items (deletion message + JSON with deleted task data)"
   [config _context {:keys [task-id title-pattern]}]
   ;; Setup common context and load tasks
-  (let [context (setup-completion-context config)]
+  (let [context (helpers/setup-completion-context config "delete-task")]
     (if (:isError context)
       context
 
