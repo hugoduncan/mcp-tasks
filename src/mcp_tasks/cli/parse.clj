@@ -196,6 +196,15 @@ EXAMPLES:
       {:error (str "Invalid JSON for --relations: " (.getMessage e))
        :provided s})))
 
+(defn resolve-alias
+  "Resolve an aliased key from parsed map.
+  
+  Returns the value of primary-key if present, otherwise tries alias-key.
+  If both are absent, returns nil."
+  [parsed-map primary-key alias-key]
+  (or (get parsed-map primary-key)
+      (get parsed-map alias-key)))
+
 ;; Validation Functions
 
 (defn validate-at-least-one
@@ -208,7 +217,7 @@ EXAMPLES:
       {:valid? true}
       {:valid? false
        :error (str "At least one of " (str/join ", " field-names) " must be provided")
-       :details {:required-one-of required-keys}})))
+       :metadata {:required-one-of required-keys}})))
 
 ;; Command Spec Maps
 
@@ -332,7 +341,7 @@ EXAMPLES:
       parsed)
     (catch Exception e
       {:error (str "Failed to parse list arguments: " (.getMessage e))
-       :details {:args args}})))
+       :metadata {:args args}})))
 
 (defn parse-show
   "Parse arguments for the show command.
@@ -341,16 +350,16 @@ EXAMPLES:
   [args]
   (try
     (let [parsed (cli/parse-opts args {:spec show-spec})
-          task-id (or (:task-id parsed) (:id parsed))]
+          task-id (resolve-alias parsed :task-id :id)]
       (if-not task-id
         {:error "Required option: --task-id (or --id)"
-         :details {:args args}}
+         :metadata {:args args}}
         (-> parsed
             (dissoc :id)
             (assoc :task-id task-id))))
     (catch Exception e
       {:error (str "Failed to parse show arguments: " (.getMessage e))
-       :details {:args args}})))
+       :metadata {:args args}})))
 
 (defn parse-add
   "Parse arguments for the add command.
@@ -359,8 +368,8 @@ EXAMPLES:
   [args]
   (try
     (let [raw-parsed (cli/parse-opts args {:spec add-spec})
-          category (or (:category raw-parsed) (:c raw-parsed))
-          title (or (:title raw-parsed) (:t raw-parsed))
+          category (resolve-alias raw-parsed :category :c)
+          title (resolve-alias raw-parsed :title :t)
           parsed (-> raw-parsed
                      (dissoc :c :t :d :p)
                      (cond-> category (assoc :category category))
@@ -370,17 +379,17 @@ EXAMPLES:
       (cond
         (not category)
         {:error "Required option: --category (or -c)"
-         :details {:args args}}
+         :metadata {:args args}}
 
         (not title)
         {:error "Required option: --title (or -t)"
-         :details {:args args}}
+         :metadata {:args args}}
 
         :else
         parsed))
     (catch Exception e
       {:error (str "Failed to parse add arguments: " (.getMessage e))
-       :details {:args args}})))
+       :metadata {:args args}})))
 
 (defn parse-complete
   "Parse arguments for the complete command.
@@ -403,7 +412,7 @@ EXAMPLES:
         (dissoc validation :valid?)))
     (catch Exception e
       {:error (str "Failed to parse complete arguments: " (.getMessage e))
-       :details {:args args}})))
+       :metadata {:args args}})))
 
 (defn parse-update
   "Parse arguments for the update command.
@@ -424,7 +433,7 @@ EXAMPLES:
                      (cond-> (contains? raw-parsed :p) (assoc :parent-id (:p raw-parsed))))]
       (if-not task-id
         {:error "Required option: --task-id (or --id)"
-         :details {:args args}}
+         :metadata {:args args}}
         ;; Parse :meta if provided
         (if-let [meta-str (:meta parsed)]
           (let [meta-result (coerce-json-map meta-str)]
@@ -447,7 +456,7 @@ EXAMPLES:
             parsed))))
     (catch Exception e
       {:error (str "Failed to parse update arguments: " (.getMessage e))
-       :details {:args args}})))
+       :metadata {:args args}})))
 
 (defn parse-delete
   "Parse arguments for the delete command.
@@ -468,4 +477,4 @@ EXAMPLES:
         (dissoc validation :valid?)))
     (catch Exception e
       {:error (str "Failed to parse delete arguments: " (.getMessage e))
-       :details {:args args}})))
+       :metadata {:args args}})))

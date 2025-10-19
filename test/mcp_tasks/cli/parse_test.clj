@@ -50,7 +50,7 @@
       (let [result (sut/validate-at-least-one {:other "data"} [:task-id :title] ["--task-id" "--title"])]
         (is (false? (:valid? result)))
         (is (= "At least one of --task-id, --title must be provided" (:error result)))
-        (is (= {:required-one-of [:task-id :title]} (:details result)))))))
+        (is (= {:required-one-of [:task-id :title]} (:metadata result)))))))
 
 (deftest parse-list-test
   (testing "parse-list"
