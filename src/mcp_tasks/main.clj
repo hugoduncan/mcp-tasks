@@ -9,7 +9,6 @@
     [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
     [mcp-tasks.resources :as resources]
-    [mcp-tasks.tool.update-task :as update-task]
     [mcp-tasks.tools :as tools]))
 
 (defn- get-prompt-vars
@@ -119,11 +118,7 @@
                         (resources/category-prompt-resources
                           category-resources-vec))]
     {:transport transport
-     :tools {"complete-task" (tools/complete-task-tool config)
-             "delete-task" (tools/delete-task-tool config)
-             "select-tasks" (tools/select-tasks-tool config)
-             "add-task" (tools/add-task-tool config)
-             "update-task" (update-task/update-task-tool config)}
+     :tools (tools/tools config)
      :prompts all-prompts
      :resources all-resources}))
 

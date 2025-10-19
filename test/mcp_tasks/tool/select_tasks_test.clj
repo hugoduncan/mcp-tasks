@@ -3,11 +3,10 @@
     [clojure.data.json :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
-    [mcp-tasks.tasks :as tasks]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.add-task :as add-task]
-    [mcp-tasks.tool.select-tasks :as sut]
-    [mcp-tasks.tools :as tools]))
+    [mcp-tasks.tool.complete-task :as complete-task]
+    [mcp-tasks.tool.select-tasks :as sut]))
 
 (use-fixtures :each h/test-fixture)
 
@@ -208,7 +207,7 @@
       (#'add-task/add-task-impl (h/test-config) nil {:category "test" :title "Open task 2"})
       (#'add-task/add-task-impl (h/test-config) nil {:category "test" :title "To be closed"})
       ;; Complete one task
-      (#'tools/complete-task-impl (h/test-config) nil {:title "To be closed"})
+      (#'complete-task/complete-task-impl (h/test-config) nil {:title "To be closed"})
 
       ;; Without status filter, should only return open tasks
       (let [result (#'sut/select-tasks-impl (h/test-config) nil {:category "test"})
@@ -224,7 +223,7 @@
     (testing "explicitly filters by status open"
       (#'add-task/add-task-impl (h/test-config) nil {:category "test" :title "Open task"})
       (#'add-task/add-task-impl (h/test-config) nil {:category "test" :title "To close"})
-      (#'tools/complete-task-impl (h/test-config) nil {:title "To close"})
+      (#'complete-task/complete-task-impl (h/test-config) nil {:title "To close"})
 
       ;; Explicitly filter by open status
       (let [result (#'sut/select-tasks-impl (h/test-config) nil {:status "open"})
@@ -261,7 +260,7 @@
       (#'add-task/add-task-impl (h/test-config) nil {:category "test" :title "Test open"})
       (#'add-task/add-task-impl (h/test-config) nil {:category "other" :title "Other open"})
       (#'add-task/add-task-impl (h/test-config) nil {:category "test" :title "Test to close"})
-      (#'tools/complete-task-impl (h/test-config) nil {:title "Test to close"})
+      (#'complete-task/complete-task-impl (h/test-config) nil {:title "Test to close"})
 
       ;; Filter by category test and status open
       (let [result (#'sut/select-tasks-impl (h/test-config) nil {:category "test" :status "open"})

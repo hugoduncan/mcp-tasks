@@ -4,8 +4,11 @@
   Thin wrappers around mcp-tasks.tools functions."
   (:require
     [clojure.data.json :as json]
-    [mcp-tasks.tool.update-task :as update-task]
-    [mcp-tasks.tools :as tools]))
+    [mcp-tasks.tool.add-task :as add-task]
+    [mcp-tasks.tool.complete-task :as complete-task]
+    [mcp-tasks.tool.delete-task :as delete-task]
+    [mcp-tasks.tool.select-tasks :as select-tasks]
+    [mcp-tasks.tool.update-task :as update-task]))
 
 (defn- parse-tool-response
   "Parse JSON response from tool *-impl functions.
@@ -33,12 +36,12 @@
 
 (def ^:private tool-map
   "Map of command names to their corresponding tool functions."
-  {:list tools/select-tasks-tool
-   :show tools/select-tasks-tool
-   :add tools/add-task-tool
-   :complete tools/complete-task-tool
+  {:list select-tasks/select-tasks-tool
+   :show select-tasks/select-tasks-tool
+   :add add-task/add-task-tool
+   :complete complete-task/complete-task-tool
    :update update-task/update-task-tool
-   :delete tools/delete-task-tool})
+   :delete delete-task/delete-task-tool})
 
 (defn- execute-command
   "Execute a command by calling its corresponding tool implementation.

@@ -158,9 +158,10 @@
   (testing "config threading integration"
     (testing "tools receive config with git mode enabled"
       (let [config {:use-git? true}
-            complete-tool (tools/complete-task-tool config)
-            next-tool (tools/select-tasks-tool config)
-            add-tool (tools/add-task-tool config)]
+            tools-map (tools/tools config)
+            complete-tool (get tools-map "complete-task")
+            next-tool (get tools-map "select-tasks")
+            add-tool (get tools-map "add-task")]
         (is (map? complete-tool))
         (is (= "complete-task" (:name complete-tool)))
         (is (fn? (:implementation complete-tool)))
@@ -171,9 +172,10 @@
 
     (testing "tools receive config with git mode disabled"
       (let [config {:use-git? false}
-            complete-tool (tools/complete-task-tool config)
-            next-tool (tools/select-tasks-tool config)
-            add-tool (tools/add-task-tool config)]
+            tools-map (tools/tools config)
+            complete-tool (get tools-map "complete-task")
+            next-tool (get tools-map "select-tasks")
+            add-tool (get tools-map "add-task")]
         (is (map? complete-tool))
         (is (= "complete-task" (:name complete-tool)))
         (is (fn? (:implementation complete-tool)))
@@ -244,7 +246,8 @@
           (spit config-file "{:use-git? false}")
           (let [config (#'sut/load-and-validate-config
                         (.getPath temp-dir))
-                complete-tool (tools/complete-task-tool config)
+                tools-map (tools/tools config)
+                complete-tool (get tools-map "complete-task")
                 prompt-map (prompts/prompts config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (false? (:use-git? config)))
