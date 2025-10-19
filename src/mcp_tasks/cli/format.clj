@@ -220,14 +220,23 @@
                                 (when (:limited? metadata)
                                   (str " (showing " (:count metadata) ")"))))])))
 
-    ;; Single task response (for add/update operations)
+    ;; Single task response (for add/update/complete operations)
     (:task data)
-    (let [task-output (format-single-task (:task data))
+    (let [task (:task data)
           metadata (:metadata data)
+          operation (:operation metadata)
+          ;; Add operation-specific success message
+          success-msg (case operation
+                        "complete-task" (str "Task #" (:id task) " completed")
+                        "add-task" (str "Added task #" (:id task))
+                        "update-task" (str "Updated task #" (:id task))
+                        nil)
+          task-output (format-single-task task)
           git-output (format-git-metadata data)]
       (str/join "\n\n"
                 (filter some?
-                        [task-output
+                        [success-msg
+                         task-output
                          (when metadata
                            (str "File: " (:file metadata)))
                          git-output])))

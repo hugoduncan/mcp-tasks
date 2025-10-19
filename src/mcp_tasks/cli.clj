@@ -4,6 +4,7 @@
   Entry point for the CLI that routes commands to their implementations."
   (:require
     [babashka.cli :as cli]
+    [clojure.string :as str]
     [mcp-tasks.cli.commands :as commands]
     [mcp-tasks.cli.format :as format]
     [mcp-tasks.cli.parse :as parse]
@@ -19,14 +20,21 @@
   "Main entry point for the CLI."
   [& args]
   (try
-    (let [;; Parse global args and extract command
-          parsed (cli/parse-args args {:coerce {:format :keyword}})
+    (let [;; Find the first known command in args
+          ;; Split args into global options (before command) and command + its args
+          commands #{"list" "show" "add" "complete" "update" "delete"}
+          command-idx (or (first (keep-indexed #(when (commands %2) %1) args))
+                          (count args))
+          global-args (take command-idx args)
+          command-and-args (drop command-idx args)
+
+          ;; Parse only global args that appear before the command
+          parsed (cli/parse-args global-args {:coerce {:format :keyword}})
           {:keys [config-path format help]} (:opts parsed)
           config-path (or config-path ".")
           format (or format :edn)
-          remaining-args (:args parsed)
-          command (first remaining-args)
-          command-args (rest remaining-args)]
+          command (first command-and-args)
+          command-args (rest command-and-args)]
 
       ;; Handle global help or no command
       (cond
