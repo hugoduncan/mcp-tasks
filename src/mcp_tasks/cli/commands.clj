@@ -18,76 +18,80 @@
   This function looks for the last content item that contains JSON.
   Returns the parsed data map (including error responses)."
   [response]
-  (let [is-error (:isError response)
-        content-items (:content response)
+  (let [content-items (:content response)
         ;; For both errors and success, the JSON is in the last content item
         last-content (get-in content-items [(dec (count content-items)) :text])]
     (json/read-str last-content :key-fn keyword)))
+
+(def ^:private tool-map
+  "Map of command names to their corresponding tool functions."
+  {:list tools/select-tasks-tool
+   :show tools/select-tasks-tool
+   :add tools/add-task-tool
+   :complete tools/complete-task-tool
+   :update tools/update-task-tool
+   :delete tools/delete-task-tool})
+
+(defn- execute-command
+  "Execute a command by calling its corresponding tool implementation.
+  
+  Parameters:
+  - config: The loaded configuration map
+  - command-key: Keyword identifying the command (:list, :show, etc.)
+  - parsed-args: Parsed command-line arguments
+  - arg-transform-fn: Optional function to transform args before passing to tool (default identity)
+  
+  Returns the parsed response data from the tool."
+  ([config command-key parsed-args]
+   (execute-command config command-key parsed-args identity))
+  ([config command-key parsed-args arg-transform-fn]
+   (let [tool-args (-> parsed-args
+                       (dissoc :format)
+                       arg-transform-fn)
+         tool-fn (get tool-map command-key)
+         tool (tool-fn config)
+         impl-fn (:implementation tool)
+         response (impl-fn nil tool-args)]
+     (parse-tool-response response))))
 
 (defn list-command
   "Execute the list command.
   
   Calls tools/select-tasks-tool implementation and returns the parsed response data."
   [config parsed-args]
-  (let [tool-args (dissoc parsed-args :format)
-        tool (tools/select-tasks-tool config)
-        impl-fn (:implementation tool)
-        response (impl-fn nil tool-args)]
-    (parse-tool-response response)))
+  (execute-command config :list parsed-args))
 
 (defn show-command
   "Execute the show command.
   
   Calls tools/select-tasks-tool with unique: true and returns the parsed response data."
   [config parsed-args]
-  (let [tool-args (-> parsed-args
-                      (dissoc :format)
-                      (assoc :unique true))
-        tool (tools/select-tasks-tool config)
-        impl-fn (:implementation tool)
-        response (impl-fn nil tool-args)]
-    (parse-tool-response response)))
+  (execute-command config :show parsed-args #(assoc % :unique true)))
 
 (defn add-command
   "Execute the add command.
   
   Calls tools/add-task-tool and returns the parsed response data."
   [config parsed-args]
-  (let [tool-args (dissoc parsed-args :format)
-        tool (tools/add-task-tool config)
-        impl-fn (:implementation tool)
-        response (impl-fn nil tool-args)]
-    (parse-tool-response response)))
+  (execute-command config :add parsed-args))
 
 (defn complete-command
   "Execute the complete command.
   
   Calls tools/complete-task-tool and returns the parsed response data."
   [config parsed-args]
-  (let [tool-args (dissoc parsed-args :format)
-        tool (tools/complete-task-tool config)
-        impl-fn (:implementation tool)
-        response (impl-fn nil tool-args)]
-    (parse-tool-response response)))
+  (execute-command config :complete parsed-args))
 
 (defn update-command
   "Execute the update command.
   
   Calls tools/update-task-tool and returns the parsed response data."
   [config parsed-args]
-  (let [tool-args (dissoc parsed-args :format)
-        tool (tools/update-task-tool config)
-        impl-fn (:implementation tool)
-        response (impl-fn nil tool-args)]
-    (parse-tool-response response)))
+  (execute-command config :update parsed-args))
 
 (defn delete-command
   "Execute the delete command.
   
   Calls tools/delete-task-tool and returns the parsed response data."
   [config parsed-args]
-  (let [tool-args (dissoc parsed-args :format)
-        tool (tools/delete-task-tool config)
-        impl-fn (:implementation tool)
-        response (impl-fn nil tool-args)]
-    (parse-tool-response response)))
+  (execute-command config :delete parsed-args))
