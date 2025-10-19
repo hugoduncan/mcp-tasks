@@ -196,6 +196,23 @@ EXAMPLES:
       {:error (str "Invalid JSON for --relations: " (.getMessage e))
        :provided s})))
 
+(defn coerce-parent-id
+  "Coerce parent-id value, handling 'null' string as nil.
+  
+  Accepts:
+  - String \"null\" -> nil
+  - Numeric string -> parsed long
+  - Number -> long
+  
+  Returns the coerced value or throws exception on invalid input."
+  [v]
+  (cond
+    (nil? v) nil
+    (= "null" v) nil
+    (string? v) (Long/parseLong v)
+    (number? v) (long v)
+    :else (throw (ex-info "Invalid parent-id value" {:value v}))))
+
 (defn resolve-alias
   "Resolve an aliased key from parsed map.
   
@@ -360,7 +377,7 @@ EXAMPLES:
   - :task-id -> long integer
   - :status -> keyword (open, closed, in-progress, blocked)
   - :type -> keyword (task, bug, feature, story, chore)
-  - :parent-id -> long integer
+  - :parent-id -> long integer or nil (via coerce-parent-id)
   - :meta -> parsed from JSON string to Clojure map
   - :relations -> parsed from JSON array to Clojure vector
   - :format -> keyword (edn, json, human)
@@ -383,9 +400,9 @@ EXAMPLES:
               :desc "New task category"}
    :type {:coerce :keyword
           :desc "New task type (task, bug, feature, story, chore)"}
-   :parent-id {:coerce :long
+   :parent-id {:coerce coerce-parent-id
                :alias :p
-               :desc "New parent task ID (or nil to remove)"}
+               :desc "New parent task ID (or 'null' to remove)"}
    :meta {:desc "New metadata as JSON object"}
    :relations {:desc "New relations as JSON array"}
    :format {:coerce :keyword
