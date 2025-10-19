@@ -73,9 +73,12 @@
                                 "complete" (parse/parse-complete command-args)
                                 "update" (parse/parse-update command-args)
                                 "delete" (parse/parse-delete command-args)
-                                {:error (str "Unknown command: " command)
-                                 :details {:command command
-                                           :available ["list" "show" "add" "complete" "update" "delete"]}})]
+                                (do
+                                  (binding [*out* *err*]
+                                    (println (str "Unknown command: " command))
+                                    (println)
+                                    (println parse/help-text))
+                                  (exit 1)))]
 
               ;; Check for parsing errors
               (if (:error parsed-args)
