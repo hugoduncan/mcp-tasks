@@ -3,7 +3,8 @@
   (:require
     [babashka.fs :as fs]
     [clojure.data.json :as json]
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [mcp-tasks.tasks :as tasks]))
 
 (defn file-exists?
   "Check if a file exists"
@@ -39,6 +40,20 @@
                         (str ".mcp-tasks/" relative-path))]
     {:absolute absolute-path
      :relative relative-path}))
+
+(defn prepare-task-file
+  "Prepare task file for adding a task.
+
+  Loads tasks from tasks.ednl into memory.
+  Returns the absolute file path."
+  [config]
+  (let [tasks-path (task-path config ["tasks.ednl"])
+        tasks-file (:absolute tasks-path)
+        complete-path (task-path config ["complete.ednl"])
+        complete-file (:absolute complete-path)]
+    (when (file-exists? tasks-file)
+      (tasks/load-tasks! tasks-file :complete-file complete-file))
+    tasks-file))
 
 (defn truncate-title
   "Truncate a title to a maximum length, adding ellipsis if needed.

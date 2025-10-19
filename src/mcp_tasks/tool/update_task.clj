@@ -7,20 +7,6 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
 
-(defn- prepare-task-file
-  "Prepare task file for adding a task.
-
-  Loads tasks from tasks.ednl into memory.
-  Returns the absolute file path."
-  [config]
-  (let [tasks-path (helpers/task-path config ["tasks.ednl"])
-        tasks-file (:absolute tasks-path)
-        complete-path (helpers/task-path config ["complete.ednl"])
-        complete-file (:absolute complete-path)]
-    (when (helpers/file-exists? tasks-file)
-      (tasks/load-tasks! tasks-file :complete-file complete-file))
-    tasks-file))
-
 (defn- convert-enum-field
   "Convert string enum value to keyword.
 
@@ -99,7 +85,7 @@
   Supports all mutable task fields with proper nil handling."
   [config _context arguments]
   (let [task-id (:task-id arguments)
-        tasks-file (prepare-task-file config)]
+        tasks-file (helpers/prepare-task-file config)]
     (tasks/load-tasks! tasks-file)
     (let [updates (extract-provided-updates arguments)]
       (if (empty? updates)

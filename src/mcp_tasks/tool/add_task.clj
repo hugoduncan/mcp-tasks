@@ -9,21 +9,6 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
 
-(defn- prepare-task-file
-  "Prepare task file for adding a task.
-
-  Loads tasks from tasks.ednl into memory.
-  Returns the absolute file path."
-  [config]
-  (let [tasks-path (helpers/task-path config ["tasks.ednl"])
-        tasks-file (:absolute tasks-path)
-        complete-path (helpers/task-path config ["complete.ednl"])
-        complete-file (:absolute complete-path)]
-    ;; Load existing tasks into memory if file exists
-    (when (helpers/file-exists? tasks-file)
-      (tasks/load-tasks! tasks-file :complete-file complete-file))
-    tasks-file))
-
 (defn- add-task-impl
   "Implementation of add-task tool.
 
@@ -42,7 +27,7 @@
   - Git enabled: Three content items (text message + task data JSON + git-status JSON)"
   [config _context
    {:keys [category title description prepend type parent-id]}]
-  (let [tasks-file (prepare-task-file config)]
+  (let [tasks-file (helpers/prepare-task-file config)]
     ;; Validate parent-id exists if provided
     (or (when parent-id
           (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
