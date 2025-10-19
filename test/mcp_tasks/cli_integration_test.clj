@@ -40,7 +40,12 @@
     (sh/sh "git" "config" "user.name" "Test User" :dir (.getPath mcp-tasks-dir))))
 
 (defn- reset-tasks-state!
+  "Reset all task state including atoms and ID generator."
   []
+  (reset! tasks/task-ids [])
+  (reset! tasks/tasks {})
+  (reset! tasks/parent-children {})
+  (reset! tasks/child-parent {})
   (vreset! tasks/next-id 1))
 
 (defn- test-fixture
