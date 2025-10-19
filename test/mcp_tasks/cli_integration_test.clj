@@ -12,7 +12,8 @@
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.cli :as cli]
     [mcp-tasks.tasks :as tasks]
-    [mcp-tasks.tasks-file :as tasks-file]))
+    [mcp-tasks.tasks-file :as tasks-file]
+    [mcp-tasks.test-helpers :as h]))
 
 (def ^:dynamic *test-dir* nil)
 
@@ -24,34 +25,20 @@
   (spit (io/file test-dir ".mcp-tasks/prompts/simple.md")
         "---\ndescription: Simple tasks\n---\nSimple task execution"))
 
-(defn- init-git-repo
-  [test-dir]
-  (let [mcp-tasks-dir (io/file test-dir ".mcp-tasks")]
-    (sh/sh "git" "init" :dir (.getPath mcp-tasks-dir))
-    (sh/sh "git" "config" "user.email" "test@example.com" :dir (.getPath mcp-tasks-dir))
-    (sh/sh "git" "config" "user.name" "Test User" :dir (.getPath mcp-tasks-dir))))
-
-(defn- reset-tasks-state!
-  "Reset all task state including atoms and ID generator."
-  []
-  (reset! tasks/task-ids [])
-  (reset! tasks/tasks {})
-  (reset! tasks/parent-children {})
-  (reset! tasks/child-parent {})
-  (vreset! tasks/next-id 1))
-
-(defn- test-fixture
+(defn- cli-test-fixture
+  "CLI-specific test fixture that also sets up prompts directory."
   [f]
   (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-cli-integration-"}))]
     (try
       (setup-test-dir test-dir)
-      (binding [*test-dir* test-dir]
-        (reset-tasks-state!)
+      (binding [h/*test-dir* test-dir
+                *test-dir* test-dir]
+        (h/reset-tasks-state!)
         (f))
       (finally
         (fs/delete-tree test-dir)))))
 
-(use-fixtures :each test-fixture)
+(use-fixtures :each cli-test-fixture)
 
 (defn- call-cli
   "Call CLI main function capturing stdout and exit code.
@@ -430,7 +417,7 @@
   ;; Test workflow with git enabled
   (testing "git-enabled-workflow"
     (testing "setup git repository"
-      (init-git-repo *test-dir*)
+      (h/init-git-repo *test-dir*)
       (is (.exists (io/file *test-dir* ".mcp-tasks/.git"))))
 
     (testing "add task creates git commit"
