@@ -83,7 +83,7 @@
                            "complete" (commands/complete-command resolved-config parsed-args)
                            "update" (commands/update-command resolved-config parsed-args)
                            "delete" (commands/delete-command resolved-config parsed-args))
-                  output-format (or (:format parsed-args) format :edn)
+                  output-format (or (:format parsed-args) format)
                   formatted-output (format/render output-format result)]
               (println formatted-output)
               (exit 0))))))
