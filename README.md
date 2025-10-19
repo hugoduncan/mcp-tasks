@@ -388,6 +388,26 @@ clojure -M:cli show --task-id 999 --format human
 echo $?  # 1
 ```
 
+### Exit Codes
+
+The CLI follows standard Unix exit code conventions:
+
+- **0** - Success: Command completed without errors
+- **1** - Error: Command failed (e.g., task not found, validation error, file I/O error)
+
+This makes the CLI suitable for use in shell scripts where exit codes determine control flow:
+
+```bash
+# Example: Only proceed if task exists
+if clojure -M:cli show --task-id 42 --format edn > /dev/null 2>&1; then
+  echo "Task 42 exists"
+  # Perform additional operations
+else
+  echo "Task 42 not found"
+  exit 1
+fi
+```
+
 ### Configuration
 
 The CLI loads configuration from `.mcp-tasks.edn` in the current directory by default. Override with:
