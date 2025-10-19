@@ -80,9 +80,10 @@
 
 (defn format-table-row
   "Format a single row of the table with proper column widths."
-  [id status category title max-title-width]
-  (format "%4s  %-12s  %-10s  %s"
+  [id parent-id status category title max-title-width]
+  (format "%4s  %-8s  %-12s  %-10s  %s"
           (or id "")
+          (if parent-id (str parent-id) "")
           (truncate-text status 12)
           (truncate-text category 10)
           (truncate-text title max-title-width)))
@@ -90,16 +91,17 @@
 (defn format-table
   "Format a vector of tasks as an ASCII table.
   
-  Columns: ID, Status, Category, Title (truncated)"
+  Columns: ID, Parent, Status, Category, Title (truncated)"
   [tasks]
   (if (empty? tasks)
     "No tasks found"
     (let [max-title-width 50
-          header (format "%4s  %-12s  %-10s  %s" "ID" "Status" "Category" "Title")
-          separator (str/join (repeat (+ 4 2 12 2 10 2 max-title-width) "-"))
+          header (format "%4s  %-8s  %-12s  %-10s  %s" "ID" "Parent" "Status" "Category" "Title")
+          separator (str/join (repeat (+ 4 2 8 2 12 2 10 2 max-title-width) "-"))
           rows (map (fn [task]
                       (format-table-row
                         (:id task)
+                        (:parent-id task)
                         (format-status (:status task))
                         (:category task)
                         (:title task)
