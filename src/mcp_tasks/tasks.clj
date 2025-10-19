@@ -153,8 +153,12 @@
   Returns vector of task maps in the order they appear in tasks.ednl.
   Returns empty vector if no matching tasks found."
   [& {:keys [task-id category parent-id title-pattern type status]}]
-  (let [ids @task-ids
-        task-map @tasks
+  (let [task-map @tasks
+        ;; When status is specified (including :closed), search all tasks in @tasks
+        ;; Otherwise, only search active tasks in @task-ids
+        task-seq (if (some? status)
+                   (vals task-map)
+                   (keep #(get task-map %) @task-ids))
         ;; Build regex if possible, otherwise use substring match
         title-matcher (when title-pattern
                         (try
@@ -170,8 +174,7 @@
         status-match? (if (nil? status)
                         #(not= (:status %) :closed)
                         #(= (:status %) status))]
-    (->> ids
-         (map #(get task-map %))
+    (->> task-seq
          (filter status-match?)
          (filter #(or (nil? task-id) (= (:id %) task-id)))
          (filter #(or (nil? category) (= (:category %) category)))
@@ -322,19 +325,28 @@
   Resets current state and populates from file.
 
   Options:
-  - :complete-file - Path to complete.ednl for monotonic ID generation
+  - :complete-file - Path to complete.ednl to also load completed tasks
 
-  Returns number of tasks loaded."
+  Returns number of tasks loaded from primary file."
   [file-path & {:keys [complete-file]}]
   (reset-state!)
   (let [task-coll (tasks-file/read-ednl file-path)
-        [pc-map cp-map] (build-parent-child-maps task-coll)
-        ;; Read IDs from complete file if provided
-        complete-ids (when complete-file
-                       (mapv :id (tasks-file/read-ednl complete-file)))]
-    ;; Populate state
+        ;; Also load completed tasks if complete-file is provided
+        complete-coll (when complete-file
+                        (tasks-file/read-ednl complete-file))
+        ;; Combine both collections for parent-child map building
+        all-tasks (concat task-coll complete-coll)
+        [pc-map cp-map] (build-parent-child-maps all-tasks)
+        ;; Extract IDs from complete tasks
+        complete-ids (when complete-coll
+                       (mapv :id complete-coll))]
+    ;; Populate state with active tasks only in task-ids
     (reset! task-ids (mapv :id task-coll))
-    (reset! tasks (into {} (map (fn [t] [(:id t) t])) task-coll))
+    ;; But include both active and completed tasks in the tasks map
+    (reset! tasks (into {}
+                        (concat
+                          (map (fn [t] [(:id t) t]) task-coll)
+                          (map (fn [t] [(:id t) t]) complete-coll))))
     (reset! parent-children pc-map)
     (reset! child-parent cp-map)
     ;; Update next-id considering both active and completed tasks

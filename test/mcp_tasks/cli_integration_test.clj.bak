@@ -1,0 +1,494 @@
+(ns mcp-tasks.cli-integration-test
+  "End-to-end integration tests for the CLI.
+  
+  Tests complete workflows chaining multiple commands together and verifies
+  that the CLI correctly calls underlying tool functions."
+  (:require
+   [babashka.fs :as fs]
+   [clojure.data.json :as json]
+   [clojure.java.io :as io]
+   [clojure.java.shell :as sh]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [mcp-tasks.cli :as cli]
+   [mcp-tasks.tasks :as tasks]
+   [mcp-tasks.tasks-file :as tasks-file]))
+
+(def ^:dynamic *test-dir* nil)
+
+(defn- setup-test-dir
+  [test-dir]
+  (fs/create-dirs (io/file test-dir ".mcp-tasks"))
+  (fs/create-dirs (io/file test-dir ".mcp-tasks/prompts"))
+  ;; Create a simple category prompt for testing
+  (spit (io/file test-dir ".mcp-tasks/prompts/simple.md")
+        "---\ndescription: Simple tasks\n---\nSimple task execution"))
+
+(defn- test-config
+  []
+  {:base-dir *test-dir* :use-git? false})
+
+(defn- git-test-config
+  []
+  {:base-dir *test-dir* :use-git? true})
+
+(defn- init-git-repo
+  [test-dir]
+  (let [mcp-tasks-dir (io/file test-dir ".mcp-tasks")]
+    (sh/sh "git" "init" :dir (.getPath mcp-tasks-dir))
+    (sh/sh "git" "config" "user.email" "test@example.com" :dir (.getPath mcp-tasks-dir))
+    (sh/sh "git" "config" "user.name" "Test User" :dir (.getPath mcp-tasks-dir))))
+
+(defn- reset-tasks-state!
+  []
+  (vreset! tasks/next-id 1))
+
+(defn- test-fixture
+  [f]
+  (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-cli-integration-"}))]
+    (try
+      (setup-test-dir test-dir)
+      (binding [*test-dir* test-dir]
+        (reset-tasks-state!)
+        (f))
+      (finally
+        (fs/delete-tree test-dir)))))
+
+(use-fixtures :each test-fixture)
+
+(defn- call-cli
+  "Call CLI main function capturing stdout and exit code.
+  Returns {:exit exit-code :out output-string :err error-string}"
+  [& args]
+  (let [out (java.io.StringWriter.)
+        err (java.io.StringWriter.)
+        exit-code (atom nil)]
+    (binding [*out* out
+              *err* err]
+      (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
+        (apply cli/-main args)))
+    {:exit @exit-code
+     :out (str out)
+     :err (str err)}))
+
+(defn- read-tasks-file
+  []
+  (let [tasks-file (io/file *test-dir* ".mcp-tasks/tasks.ednl")]
+    (when (.exists tasks-file)
+      (tasks-file/read-ednl (.getPath tasks-file)))))
+
+(defn- read-complete-file
+  []
+  (let [complete-file (io/file *test-dir* ".mcp-tasks/complete.ednl")]
+    (when (.exists complete-file)
+      (tasks-file/read-ednl (.getPath complete-file)))))
+
+(deftest complete-workflow-edn-format-test
+  ;; Test a complete workflow: add task → show task → update task → complete task → list completed
+  ;; Uses EDN format throughout
+  (testing "complete-workflow-edn-format"
+    (testing "can add a task and get EDN response"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "add"
+                             "--category" "simple"
+                             "--title" "Test task"
+                             "--description" "A test task")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) ":id 1"))
+        (is (str/includes? (:out result) ":title \"Test task\""))
+        (let [parsed (read-string (:out result))]
+          (is (map? parsed))
+          (is (= 1 (-> parsed :task :id))))))
+
+    (testing "can show the task by ID"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "show"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 1 (-> parsed :tasks first :id)))
+          (is (= "Test task" (-> parsed :tasks first :title))))))
+
+    (testing "can update the task status"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "update"
+                             "--task-id" "1"
+                             "--status" "in-progress")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= :in-progress (-> parsed :tasks first :status))))))
+
+    (testing "can complete the task"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "complete"
+                             "--task-id" "1"
+                             "--completion-comment" "All done")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= :closed (-> parsed :tasks first :status)))
+          (is (str/includes? (-> parsed :tasks first :description) "All done")))))
+
+    (testing "task moved to complete file"
+      (let [tasks (read-tasks-file)
+            completed (read-complete-file)]
+        (is (empty? tasks))
+        (is (= 1 (count completed)))
+        (is (= "Test task" (:title (first completed))))
+        (is (= :closed (:status (first completed))))))
+
+    (testing "can list completed tasks"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "list"
+                             "--status" "closed")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 1 (-> parsed :metadata :count)))
+          (is (= "Test task" (-> parsed :tasks first :title))))))))
+
+(deftest complete-workflow-json-format-test
+  ;; Test the same workflow using JSON format
+  (testing "complete-workflow-json-format"
+    (testing "can add a task and get JSON response"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "json"
+                             "add"
+                             "--category" "simple"
+                             "--title" "JSON test"
+                             "--description" "Test with JSON")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/read-str (:out result) :key-fn keyword)]
+          (is (map? parsed))
+          (is (= 1 (-> parsed :tasks first :id))))))
+
+    (testing "can show task in JSON format"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "json"
+                             "show"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/read-str (:out result) :key-fn keyword)]
+          (is (= 1 (-> parsed :tasks first :id)))
+          (is (= "JSON test" (-> parsed :tasks first :title))))))
+
+    (testing "can update in JSON format"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "json"
+                             "update"
+                             "--task-id" "1"
+                             "--title" "Updated JSON test")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/read-str (:out result) :key-fn keyword)]
+          (is (= "Updated JSON test" (-> parsed :tasks first :title))))))
+
+    (testing "can complete in JSON format"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "json"
+                             "complete"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/read-str (:out result) :key-fn keyword)]
+          (is (= "closed" (-> parsed :tasks first :status))))))))
+
+(deftest complete-workflow-human-format-test
+  ;; Test workflow with human-readable format
+  (testing "complete-workflow-human-format"
+    (testing "can add a task with human output"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "human"
+                             "add"
+                             "--category" "simple"
+                             "--title" "Human test")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Task #1"))
+        (is (str/includes? (:out result) "Human test"))))
+
+    (testing "can list tasks in human format"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "human"
+                             "list")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "1"))
+        (is (str/includes? (:out result) "Human test"))))
+
+    (testing "can show task in human format"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "human"
+                             "show"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Task #1"))
+        (is (str/includes? (:out result) "Human test"))))
+
+    (testing "can complete task with human output"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "human"
+                             "complete"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "completed"))))))
+
+(deftest error-scenarios-test
+  (testing "error-scenarios"
+    (testing "missing config directory returns error"
+      (let [result (call-cli "--config-path" "/nonexistent/path"
+                             "list")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))))
+
+    (testing "invalid task ID returns error with exit code 1"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "show"
+                             "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (let [parsed (read-string (:err result))]
+          (is (:error parsed)))))
+
+    (testing "invalid command returns error"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "nonexistent-command")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))))
+
+    (testing "validation error for invalid status"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "add"
+                             "--category" "simple"
+                             "--title" "Test"
+                             "--type" "invalid-type")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))))
+
+    (testing "completing non-existent task returns error"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "complete"
+                             "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (let [parsed (read-string (:err result))]
+          (is (:error parsed)))))))
+
+(deftest multi-task-workflow-test
+  ;; Test workflows with multiple tasks
+  (testing "multi-task-workflow"
+    (testing "can add multiple tasks"
+      (call-cli "--config-path" *test-dir*
+                "add" "--category" "simple" "--title" "Task 1")
+      (call-cli "--config-path" *test-dir*
+                "add" "--category" "simple" "--title" "Task 2")
+      (let [result (call-cli "--config-path" *test-dir*
+                             "add" "--category" "simple" "--title" "Task 3")]
+        (is (= 0 (:exit result)))))
+
+    (testing "list shows all three tasks"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "list")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 3 (-> parsed :metadata :count))))))
+
+    (testing "can filter by title pattern"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "list"
+                             "--title-pattern" "Task 2")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 1 (-> parsed :metadata :count)))
+          (is (= "Task 2" (-> parsed :tasks first :title))))))
+
+    (testing "can complete specific task by title"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "complete"
+                             "--title" "Task 2")]
+        (is (= 0 (:exit result)))))
+
+    (testing "list shows remaining two tasks"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "list"
+                             "--status" "open")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 2 (-> parsed :metadata :count))))))))
+
+(deftest git-enabled-workflow-test
+  ;; Test workflow with git enabled
+  (testing "git-enabled-workflow"
+    (testing "setup git repository"
+      (init-git-repo *test-dir*)
+      (is (.exists (io/file *test-dir* ".mcp-tasks/.git"))))
+
+    (testing "add task creates git commit"
+      (spit (io/file *test-dir* ".mcp-tasks.edn") "{:use-git? true}")
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "add"
+                             "--category" "simple"
+                             "--title" "Git task")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          ;; Should have git commit info in response
+          (is (contains? parsed :git-commit)))))
+
+    (testing "complete task creates git commit"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "complete"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (contains? parsed :git-commit)))))
+
+    (testing "update task creates git commit"
+      (call-cli "--config-path" *test-dir*
+                "add" "--category" "simple" "--title" "Another task")
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "update"
+                             "--task-id" "2"
+                             "--title" "Updated title")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (contains? parsed :git-commit)))))
+
+    (testing "delete task creates git commit"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "delete"
+                             "--task-id" "2")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (contains? parsed :git-commit)))))))
+
+(deftest non-git-workflow-test
+  ;; Test workflow without git
+  (testing "non-git-workflow"
+    (testing "add task without git works"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "add"
+                             "--category" "simple"
+                             "--title" "Non-git task")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          ;; Should not have git commit info
+          (is (not (contains? parsed :git-commit))))))
+
+    (testing "complete task without git works"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "complete"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (not (contains? parsed :git-commit))))))))
+
+(deftest parent-child-task-workflow-test
+  ;; Test workflow with parent-child relationships
+  (testing "parent-child-task-workflow"
+    (testing "add parent story task"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "add"
+                             "--category" "simple"
+                             "--title" "Parent story"
+                             "--type" "story")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= :story (-> parsed :tasks first :type))))))
+
+    (testing "add child task with parent-id"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "add"
+                             "--category" "simple"
+                             "--title" "Child task"
+                             "--parent-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 1 (-> parsed :tasks first :parent-id))))))
+
+    (testing "list child tasks by parent-id"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "list"
+                             "--parent-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 1 (-> parsed :metadata :count)))
+          (is (= "Child task" (-> parsed :tasks first :title))))))
+
+    (testing "can update child task parent-id to nil"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "update"
+                             "--task-id" "2"
+                             "--parent-id" "null")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (nil? (-> parsed :tasks first :parent-id))))))))
+
+(deftest delete-workflow-test
+  ;; Test delete command in workflow
+  (testing "delete-workflow"
+    (testing "add tasks to delete"
+      (call-cli "--config-path" *test-dir*
+                "add" "--category" "simple" "--title" "To delete 1")
+      (call-cli "--config-path" *test-dir*
+                "add" "--category" "simple" "--title" "To delete 2"))
+
+    (testing "can delete by task-id"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "delete"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= :deleted (-> parsed :tasks first :status))))))
+
+    (testing "deleted task moved to complete file"
+      (let [tasks (read-tasks-file)
+            completed (read-complete-file)]
+        (is (= 1 (count tasks)))
+        (is (= 1 (count completed)))
+        (is (= :deleted (:status (first completed))))))
+
+    (testing "can delete by title pattern"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "--format" "edn"
+                             "delete"
+                             "--title-pattern" "To delete 2")]
+        (is (= 0 (:exit result)))))
+
+    (testing "both tasks deleted"
+      (let [tasks (read-tasks-file)
+            completed (read-complete-file)]
+        (is (empty? tasks))
+        (is (= 2 (count completed)))))))
+
+(deftest help-text-workflow-test
+  ;; Test help functionality
+  (testing "help-text-workflow"
+    (testing "global help works"
+      (let [result (call-cli "--help")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "mcp-tasks"))))
+
+    (testing "command-specific help works"
+      (let [result (call-cli "list" "--help")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "list"))))
+
+    (testing "help for each command"
+      (doseq [cmd ["add" "show" "update" "complete" "delete"]]
+        (let [result (call-cli cmd "--help")]
+          (is (= 0 (:exit result)))
+          (is (str/includes? (:out result) cmd)))))))

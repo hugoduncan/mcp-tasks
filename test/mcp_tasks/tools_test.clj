@@ -930,7 +930,7 @@
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "text" (:type git-content)))
           (is (contains? git-data :git-status))
-          (is (contains? git-data :git-commit-sha)))))))
+          (is (contains? git-data :git-commit)))))))
 
 (deftest ^:integration add-task-creates-git-commit
   ;; Integration test verifying git commit is actually created with correct message
@@ -961,8 +961,8 @@
           (let [git-content (nth (:content result) 2)
                 git-data (json/read-str (:text git-content) :key-fn keyword)]
             (is (= "success" (:git-status git-data)))
-            (is (string? (:git-commit-sha git-data)))
-            (is (= 40 (count (:git-commit-sha git-data)))) ; SHA is 40 chars
+            (is (string? (:git-commit git-data)))
+            (is (= 40 (count (:git-commit git-data)))) ; SHA is 40 chars
             (is (nil? (:git-error git-data)))))))))
 
 (deftest ^:integration add-task-truncates-long-titles
@@ -1018,7 +1018,7 @@
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "error" (:git-status git-data)))
-          (is (nil? (:git-commit-sha git-data)))
+          (is (nil? (:git-commit git-data)))
           (is (string? (:git-error git-data)))
           (is (not (str/blank? (:git-error git-data)))))))))
 
@@ -1053,12 +1053,12 @@
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "text" (:type git-content)))
           (is (contains? git-data :git-status))
-          (is (contains? git-data :git-commit-sha)))))))
+          (is (contains? git-data :git-commit)))))))
 
 (deftest complete-task-returns-one-content-item-without-git
-  ;; Tests that complete-task returns 1 content item when git is disabled
+  ;; Tests that complete-task returns 2 content items when git is disabled
   (testing "complete-task with git disabled"
-    (testing "returns one content item"
+    (testing "returns two content items (message and task data)"
       (write-ednl-test-file "tasks.ednl"
                             [{:id 1 :parent-id nil :title "test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
       (let [result (#'sut/complete-task-impl
@@ -1066,12 +1066,20 @@
                     nil
                     {:task-id 1})]
         (is (false? (:isError result)))
-        (is (= 1 (count (:content result))))
+        (is (= 2 (count (:content result))))
 
-        ;; Only content item: completion message
+        ;; First content item: completion message
         (let [text-content (first (:content result))]
           (is (= "text" (:type text-content)))
-          (is (str/includes? (:text text-content) "Task 1 completed")))))))
+          (is (str/includes? (:text text-content) "Task 1 completed")))
+
+        ;; Second content item: task data as JSON
+        (let [json-content (second (:content result))
+              data (json/read-str (:text json-content) :key-fn keyword)]
+          (is (= "text" (:type json-content)))
+          (is (map? (:task data)))
+          (is (= 1 (get-in data [:task :id])))
+          (is (= "closed" (get-in data [:task :status]))))))))
 
 (deftest ^:integration complete-task-creates-git-commit
   ;; Integration test verifying git commit is actually created
@@ -1099,8 +1107,8 @@
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "success" (:git-status git-data)))
-          (is (string? (:git-commit-sha git-data)))
-          (is (= 40 (count (:git-commit-sha git-data)))) ; SHA is 40 chars
+          (is (string? (:git-commit git-data)))
+          (is (= 40 (count (:git-commit git-data)))) ; SHA is 40 chars
           (is (nil? (:git-error git-data))))))))
 
 (deftest ^:integration complete-task-succeeds-despite-git-failure
@@ -1127,7 +1135,7 @@
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "error" (:git-status git-data)))
-          (is (nil? (:git-commit-sha git-data)))
+          (is (nil? (:git-commit git-data)))
           (is (string? (:git-error git-data)))
           (is (not (str/blank? (:git-error git-data)))))))))
 
@@ -1145,7 +1153,7 @@
                     {:task-id 99})
             git-content (nth (:content result) 2)
             git-data (json/read-str (:text git-content) :key-fn keyword)
-            sha (:git-commit-sha git-data)]
+            sha (:git-commit git-data)]
 
         ;; Verify SHA format
         (is (string? sha))
@@ -1180,7 +1188,7 @@
         ;; Third item: has git-status and commit-sha
         (let [git-data (json/read-str (get-in result [:content 2 :text]) :key-fn keyword)]
           (is (= "success" (:git-status git-data)))
-          (is (string? (:git-commit-sha git-data))))
+          (is (string? (:git-commit git-data))))
 
         ;; Verify git commit was created
         (is (git-commit-exists? *test-dir*))
@@ -1253,12 +1261,20 @@
                     {:task-id 40})]
         ;; Verify success response
         (is (false? (:isError result)))
-        (is (= 1 (count (:content result))))
+        (is (= 2 (count (:content result))))
 
-        ;; Verify completion message
+        ;; First content item: completion message
         (let [msg (get-in result [:content 0 :text])]
           (is (str/includes? msg "Story 40 completed and archived"))
           (is (str/includes? msg "with 2 child tasks")))
+
+        ;; Second content item: task data as JSON
+        (let [json-content (second (:content result))
+              data (json/read-str (:text json-content) :key-fn keyword)]
+          (is (= "text" (:type json-content)))
+          (is (map? (:task data)))
+          (is (= 40 (get-in data [:task :id])))
+          (is (= "closed" (get-in data [:task :status]))))
 
         ;; Verify all tasks moved to complete.ednl
         (let [completed-tasks (read-ednl-test-file "complete.ednl")]
@@ -1334,8 +1350,8 @@
         ;; Verify git status is success
         (let [git-data (json/read-str (get-in result [:content 2 :text]) :key-fn keyword)]
           (is (= "success" (:git-status git-data)))
-          (is (string? (:git-commit-sha git-data)))
-          (is (= 40 (count (:git-commit-sha git-data)))))
+          (is (string? (:git-commit git-data)))
+          (is (= 40 (count (:git-commit git-data)))))
 
         ;; Verify git commit was created with correct message
         (is (git-commit-exists? *test-dir*))
@@ -1703,8 +1719,8 @@
             (let [git-data (json/read-str (get-in result [:content 2 :text])
                                           :key-fn keyword)]
               (is (= "success" (:git-status git-data)))
-              (is (string? (:git-commit-sha git-data)))
-              (swap! child-commits conj (:git-commit-sha git-data)))))
+              (is (string? (:git-commit git-data)))
+              (swap! child-commits conj (:git-commit git-data)))))
 
         ;; Verify all children are closed but still in tasks.ednl
         (let [tasks (read-ednl-test-file "tasks.ednl")]
@@ -1737,7 +1753,7 @@
           (let [git-data (json/read-str (get-in result [:content 2 :text])
                                         :key-fn keyword)]
             (is (= "success" (:git-status git-data)))
-            (is (string? (:git-commit-sha git-data)))
+            (is (string? (:git-commit git-data)))
             (is (= "Complete story #1: E2E Story (with 3 tasks)"
                    (git-log-last-commit *test-dir*)))))
 
@@ -2038,7 +2054,7 @@
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "text" (:type git-content)))
           (is (contains? git-data :git-status))
-          (is (contains? git-data :git-commit-sha)))))))
+          (is (contains? git-data :git-commit)))))))
 
 (deftest ^:integration delete-task-creates-git-commit
   ;; Integration test verifying git commit is actually created
@@ -2077,8 +2093,8 @@
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "success" (:git-status git-data)))
-          (is (string? (:git-commit-sha git-data)))
-          (is (= 40 (count (:git-commit-sha git-data)))) ; SHA is 40 chars
+          (is (string? (:git-commit git-data)))
+          (is (= 40 (count (:git-commit git-data)))) ; SHA is 40 chars
           (is (nil? (:git-error git-data))))))))
 
 (deftest ^:integration delete-task-succeeds-despite-git-failure
@@ -2117,7 +2133,7 @@
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)]
           (is (= "error" (:git-status git-data)))
-          (is (nil? (:git-commit-sha git-data)))
+          (is (nil? (:git-commit git-data)))
           (is (string? (:git-error git-data)))
           (is (not (str/blank? (:git-error git-data)))))))))
 
@@ -2148,7 +2164,7 @@
         ;; Verify SHA format
         (let [git-content (nth (:content result) 2)
               git-data (json/read-str (:text git-content) :key-fn keyword)
-              sha (:git-commit-sha git-data)]
+              sha (:git-commit git-data)]
           (is (string? sha))
           (is (= 40 (count sha)))
           (is (re-matches #"[0-9a-f]{40}" sha)))))))

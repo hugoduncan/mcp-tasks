@@ -181,17 +181,22 @@
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context]
     (tasks/mark-complete (:id task) completion-comment)
-    (tasks/move-task! (:id task) tasks-file complete-file)
+    ;; Get the updated task after marking complete
+    (let [updated-task (tasks/get-task (:id task))]
+      (tasks/move-task! (:id task) tasks-file complete-file)
 
-    (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
-          modified-files [tasks-rel-path complete-rel-path]
-          git-result (when use-git?
-                       (git/commit-task-changes (:base-dir config)
-                                                (:id task)
-                                                (:title task)
-                                                modified-files
-                                                "Complete"))]
-      (helpers/build-completion-response msg-text modified-files use-git? git-result))))
+      (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
+            modified-files [tasks-rel-path complete-rel-path]
+            git-result (when use-git?
+                         (git/commit-task-changes (:base-dir config)
+                                                  (:id task)
+                                                  (:title task)
+                                                  modified-files
+                                                  "Complete"))
+            task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
+                       :metadata {:file complete-file
+                                  :operation "complete-task"}}]
+        (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -229,17 +234,22 @@
       :else
       (do
         (tasks/mark-complete (:id task) completion-comment)
-        (tasks/save-tasks! tasks-file)
+        ;; Get the updated task after marking complete
+        (let [updated-task (tasks/get-task (:id task))]
+          (tasks/save-tasks! tasks-file)
 
-        (let [msg-text (str "Task " (:id task) " completed")
-              modified-files [tasks-rel-path]
-              git-result (when use-git?
-                           (git/commit-task-changes (:base-dir config)
-                                                    (:id task)
-                                                    (:title task)
-                                                    modified-files
-                                                    "Complete"))]
-          (helpers/build-completion-response msg-text modified-files use-git? git-result))))))
+          (let [msg-text (str "Task " (:id task) " completed")
+                modified-files [tasks-rel-path]
+                git-result (when use-git?
+                             (git/commit-task-changes (:base-dir config)
+                                                      (:id task)
+                                                      (:title task)
+                                                      modified-files
+                                                      "Complete"))
+                task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
+                           :metadata {:file tasks-file
+                                      :operation "complete-task"}}]
+            (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))))
 
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
@@ -276,9 +286,11 @@
         ;; Mark story as complete in memory
         (tasks/mark-complete (:id task) completion-comment)
 
-        ;; Move story and all children to complete.ednl atomically
-        (let [all-ids (cons (:id task) (mapv :id children))
+        ;; Get updated story BEFORE moving (since move-tasks! removes from memory)
+        (let [updated-story (tasks/get-task (:id task))
+              all-ids (cons (:id task) (mapv :id children))
               child-count (count children)]
+          ;; Move story and all children to complete.ednl atomically
           (tasks/move-tasks! all-ids tasks-file complete-file)
 
           ;; Prepare response
@@ -315,7 +327,15 @@
                                  {:success false
                                   :commit-sha nil
                                   :error (.getMessage e)})))]
-            (helpers/build-completion-response msg-text modified-files use-git? git-result)))))))
+            (helpers/build-completion-response
+              msg-text
+              modified-files
+              use-git?
+              git-result
+              {:task (select-keys updated-story [:id :title :description :category :type :status :parent-id])
+               :metadata {:file complete-file
+                          :operation "complete-task"
+                          :archived-children child-count}})))))))
 
 (defn- complete-task-impl
   "Implementation of complete-task tool.
@@ -509,7 +529,7 @@
                                           (cond-> {:git-status (if (:success git-result)
                                                                  "success"
                                                                  "error")
-                                                   :git-commit-sha (:commit-sha git-result)}
+                                                   :git-commit (:commit-sha git-result)}
                                             (:error git-result)
                                             (assoc :git-error (:error git-result))))}]
                        :isError false}
@@ -609,6 +629,15 @@
               result-count (count limited-tasks)]
 
           ;; Check unique? constraint
+          ;; When unique is true and a specific task-id was requested, 0 matches is an error
+          (when (and unique (zero? total-matches) task-id)
+            (let [response-data {:error "No task found with the specified task-id"
+                                 :metadata {:task-id task-id
+                                            :file tasks-file}}]
+              (throw (ex-info "Task not found"
+                              {:response response-data}))))
+
+          ;; Multiple matches with unique is also an error
           (when (and unique (> total-matches 1))
             (let [response-data {:error "Multiple tasks matched but :unique was specified"
                                  :metadata {:count result-count
@@ -778,7 +807,7 @@
                                   (cond-> {:git-status (if (:success git-result)
                                                          "success"
                                                          "error")
-                                           :git-commit-sha (:commit-sha git-result)}
+                                           :git-commit (:commit-sha git-result)}
                                     (:error git-result)
                                     (assoc :git-error (:error git-result))))}]
                :isError false}
@@ -986,17 +1015,40 @@
             (do
               (tasks/update-task task-id updates)
               (tasks/save-tasks! tasks-file)
-              (let [final-task (tasks/get-task task-id)]
-                {:content [{:type "text"
-                            :text (str "Task " task-id " updated in " tasks-file)}
-                           {:type "text"
-                            :text (json/write-str
-                                    {:task (select-keys
-                                             final-task
-                                             [:id :title :category :type :status :parent-id])
-                                     :metadata {:file tasks-file
-                                                :operation "update-task"}})}]
-                 :isError false})))))))
+              (let [final-task (tasks/get-task task-id)
+                    use-git? (:use-git? config)
+                    tasks-path (helpers/task-path config ["tasks.ednl"])
+                    tasks-rel-path (:relative tasks-path)
+                    git-result (when use-git?
+                                 (let [truncated-title (helpers/truncate-title (:title final-task))
+                                       git-dir (str (:base-dir config) "/.mcp-tasks")
+                                       commit-msg (str "Update task #" task-id ": " truncated-title)]
+                                   (git/perform-git-commit git-dir [tasks-rel-path] commit-msg)))
+                    task-data-json (json/write-str
+                                     {:task (select-keys
+                                              final-task
+                                              [:id :title :category :type :status :parent-id])
+                                      :metadata {:file tasks-file
+                                                 :operation "update-task"}})]
+                (if use-git?
+                  {:content [{:type "text"
+                              :text (str "Task " task-id " updated in " tasks-file)}
+                             {:type "text"
+                              :text task-data-json}
+                             {:type "text"
+                              :text (json/write-str
+                                      (cond-> {:git-status (if (:success git-result)
+                                                             "success"
+                                                             "error")
+                                               :git-commit (:commit-sha git-result)}
+                                        (:error git-result)
+                                        (assoc :git-error (:error git-result))))}]
+                   :isError false}
+                  {:content [{:type "text"
+                              :text (str "Task " task-id " updated in " tasks-file)}
+                             {:type "text"
+                              :text task-data-json}]
+                   :isError false}))))))))
 
 (defn update-task-tool
   "Tool to update fields of an existing task.

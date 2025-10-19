@@ -15,35 +15,33 @@ Task-based workflow management for AI agents via Model Context Protocol (MCP).
                   org.clojure/clojure {:mvn/version "1.12.3"}}
    :exec-fn mcp-tasks.main/start}}}
 
-# Configure Claude Code
-claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
-
 # Initialize task directories
 mkdir -p .mcp-tasks/prompts
 
 # (Optional) Initialize as git repository for version control
 cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
 
-# List available prompt templates
-clojure -M:mcp-tasks --list-prompts
-
-# Install prompt templates (optional)
-clojure -M:mcp-tasks --install-prompts simple,clarify-task
+# Using with MCP Client (Claude Code, Claude Desktop, etc.)
+# Configure Claude Code
+claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
 
 # Add your first task using the MCP tool
 # In Claude Code, use the add-task tool:
 # - category: "simple"
 # - title: "Add README badges for build status"
 
-# Or add a story for larger features
-# - category: "large"
-# - type: "story"
-# - title: "Add CI Pipeline"
-
 # Execute tasks in Claude Code
 /mcp-tasks:next-simple
-# Or for story-based development
-/mcp-tasks:create-story-tasks "Add CI Pipeline"
+
+# Or use the command-line interface directly
+# Add tasks from the terminal
+clojure -M:cli add --category simple --title "Add README badges"
+
+# List tasks
+clojure -M:cli list --format human
+
+# Execute tasks in your MCP client or complete them via CLI
+clojure -M:cli complete --task-id 1
 ```
 
 **[Installation Guide](doc/install.md)** • **[Workflow Documentation](doc/workflow.md)**
@@ -179,6 +177,247 @@ The agent will:
 - Optionally manage feature branches automatically
 
 See **[doc/workflow.md#story-workflows](doc/workflow.md#story-workflows)** for complete documentation.
+
+## Command Line Interface
+
+The CLI provides direct access to task management from the terminal, independent of MCP clients.
+
+### Installation
+
+The CLI is available via the `:cli` alias included in the project's `deps.edn`:
+
+```bash
+# From within the mcp-tasks directory
+clojure -M:cli <command> [options]
+
+# Or create a convenient alias in your shell
+alias mcp-tasks='clojure -M:cli'
+mcp-tasks list --format human
+```
+
+### Commands
+
+**list** - Query tasks with optional filters
+
+```bash
+# List all open tasks in human format
+clojure -M:cli list --status open --format human
+
+# List tasks by category
+clojure -M:cli list --category simple
+
+# List child tasks of a story
+clojure -M:cli list --parent-id 31
+
+# Filter by title pattern (regex)
+clojure -M:cli list --title-pattern "authentication"
+
+# Combine filters
+clojure -M:cli list --status open --category medium --limit 10
+```
+
+**show** - Display detailed information about a task
+
+```bash
+# Show task by ID
+clojure -M:cli show --task-id 42
+
+# Show with different formats
+clojure -M:cli show --task-id 42 --format json
+```
+
+**add** - Create new tasks
+
+```bash
+# Add a simple task
+clojure -M:cli add --category simple --title "Fix authentication bug"
+
+# Add with full details
+clojure -M:cli add \
+  --category feature \
+  --title "User profile endpoint" \
+  --description "Add REST endpoint for user profile retrieval" \
+  --type feature
+
+# Add as child of a story
+clojure -M:cli add \
+  --category medium \
+  --title "Implement JWT validation" \
+  --parent-id 31
+
+# Prepend to task list (higher priority)
+clojure -M:cli add --category simple --title "Critical fix" --prepend
+```
+
+**update** - Modify existing task fields
+
+```bash
+# Update task status
+clojure -M:cli update --task-id 42 --status in-progress
+
+# Update multiple fields
+clojure -M:cli update \
+  --task-id 42 \
+  --title "Updated title" \
+  --description "New description" \
+  --category medium
+
+# Change task category
+clojure -M:cli update --task-id 42 --category large
+```
+
+**complete** - Mark tasks as complete
+
+```bash
+# Complete a task by ID
+clojure -M:cli complete --task-id 42
+
+# Complete with a comment
+clojure -M:cli complete --task-id 42 \
+  --completion-comment "Fixed via PR #123"
+
+# Complete by title
+clojure -M:cli complete --title "Fix authentication bug"
+```
+
+**delete** - Remove tasks
+
+```bash
+# Delete by task ID
+clojure -M:cli delete --task-id 42
+
+# Delete by title pattern (regex)
+clojure -M:cli delete --title-pattern "^OLD:"
+```
+
+### Output Formats
+
+The CLI supports three output formats via the `--format` option:
+
+**EDN Format (default)** - Structured data for programmatic use
+
+```bash
+clojure -M:cli list --format edn
+# {:tasks [{:id 1 :title "..." :status :open ...}]
+#  :metadata {:count 1 :total-matches 1}}
+```
+
+**JSON Format** - For integration with other tools
+
+```bash
+clojure -M:cli show --task-id 1 --format json
+# {"task": {"id": 1, "title": "...", "status": "open", ...}}
+```
+
+**Human Format** - Readable tables and text
+
+```bash
+clojure -M:cli list --format human
+# ID  Status       Category  Title
+# 1   open         simple    Add README badges
+# 2   in-progress  feature   Implement auth system
+```
+
+### Common Workflows
+
+**Add and track tasks:**
+
+```bash
+# Add several tasks
+clojure -M:cli add --category simple --title "Write unit tests"
+clojure -M:cli add --category feature --title "Add API endpoint"
+
+# Check what's pending
+clojure -M:cli list --status open --format human
+
+# Mark as in-progress
+clojure -M:cli update --task-id 1 --status in-progress
+
+# Complete with notes
+clojure -M:cli complete --task-id 1 --completion-comment "All tests passing"
+```
+
+**Query and filter:**
+
+```bash
+# Find all blocked tasks
+clojure -M:cli list --status blocked
+
+# Show tasks for a specific category
+clojure -M:cli list --category feature --format human
+
+# View completed tasks
+clojure -M:cli list --status closed --limit 5
+```
+
+**Story management:**
+
+```bash
+# List all stories
+clojure -M:cli list --type story
+
+# Show story details
+clojure -M:cli show --task-id 31 --format human
+
+# List tasks belonging to a story
+clojure -M:cli list --parent-id 31 --format human
+```
+
+### Error Handling
+
+**Success:** Commands return structured data with exit code 0
+
+```bash
+clojure -M:cli show --task-id 1 --format edn
+# {:task {:id 1 :title "..." ...}}
+echo $?  # 0
+```
+
+**Errors:** Return error information with non-zero exit codes
+
+```bash
+# EDN/JSON formats include :error key
+clojure -M:cli show --task-id 999 --format edn
+# {:error "Task not found" :task-id 999 :file "/path/to/tasks.ednl"}
+
+# Human format prints to stderr
+clojure -M:cli show --task-id 999 --format human
+# Error: Task not found
+#   Task ID: 999
+#   File: /path/to/tasks.ednl
+echo $?  # 1
+```
+
+### Exit Codes
+
+The CLI follows standard Unix exit code conventions:
+
+- **0** - Success: Command completed without errors
+- **1** - Error: Command failed (e.g., task not found, validation error, file I/O error)
+
+This makes the CLI suitable for use in shell scripts where exit codes determine control flow:
+
+```bash
+# Example: Only proceed if task exists
+if clojure -M:cli show --task-id 42 --format edn > /dev/null 2>&1; then
+  echo "Task 42 exists"
+  # Perform additional operations
+else
+  echo "Task 42 not found"
+  exit 1
+fi
+```
+
+### Configuration
+
+The CLI loads configuration from `.mcp-tasks.edn` in the current directory by default. Override with:
+
+```bash
+# Use different config location
+clojure -M:cli --config-path /path/to/project list --status open
+```
+
+This is useful for managing tasks across multiple projects from a single location.
 
 ## Configuration
 
