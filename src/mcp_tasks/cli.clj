@@ -9,20 +9,22 @@
     [mcp-tasks.cli.parse :as parse]
     [mcp-tasks.config :as config]))
 
+(defn exit
+  "Exit the program with the given status code.
+  Extracted as a separate function to allow testing without actually exiting."
+  [code]
+  (System/exit code))
+
 (defn -main
   "Main entry point for the CLI."
   [& args]
   (try
-    (let [;; Parse global args
-          global-spec {:config-path {:default "."
-                                     :desc "Path to directory containing .mcp-tasks.edn"}
-                       :format {:coerce :keyword
-                                :default :edn
-                                :desc "Output format (edn, json, human)"}
-                       :help {:coerce :boolean
-                              :desc "Show help message"}}
-          {:keys [config-path format help] :as global-opts} (cli/parse-opts args {:spec global-spec :restrict true})
-          remaining-args (:org.babashka/cli global-opts)
+    (let [;; Parse global args and extract command
+          parsed (cli/parse-args args {:coerce {:format :keyword}})
+          {:keys [config-path format help]} (:opts parsed)
+          config-path (or config-path ".")
+          format (or format :edn)
+          remaining-args (:args parsed)
           command (first remaining-args)
           command-args (rest remaining-args)]
 
@@ -31,7 +33,7 @@
         (or help (nil? command))
         (do
           (println parse/help-text)
-          (System/exit 0))
+          (exit 0))
 
         ;; Handle command-specific help
         (and (= "--help" (first command-args))
@@ -44,7 +46,7 @@
             "complete" (println parse/complete-help)
             "update" (println parse/update-help)
             "delete" (println parse/delete-help))
-          (System/exit 0))
+          (exit 0))
 
         ;; Execute command
         :else
@@ -71,7 +73,7 @@
             (do
               (binding [*out* *err*]
                 (println (format/format-error parsed-args)))
-              (System/exit 1))
+              (exit 1))
 
             ;; Execute command
             (let [result (case command
@@ -84,7 +86,7 @@
                   output-format (or (:format parsed-args) format :edn)
                   formatted-output (format/render output-format result)]
               (println formatted-output)
-              (System/exit 0))))))
+              (exit 0))))))
 
     (catch clojure.lang.ExceptionInfo e
       (let [data (ex-data e)]
@@ -93,9 +95,9 @@
             (println (.getMessage e))
             (println (format/format-error {:error (.getMessage e)
                                            :details data}))))
-        (System/exit 1)))
+        (exit 1)))
 
     (catch Exception e
       (binding [*out* *err*]
         (println (format/format-error {:error (.getMessage e)})))
-      (System/exit 1))))
+      (exit 1))))
