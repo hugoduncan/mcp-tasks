@@ -452,7 +452,7 @@
                              "--task-id" "1")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= "deleted" (:status (:task parsed)))))))
+          (is (= "deleted" (:status (:deleted parsed)))))))
 
     (testing "deleted task moved to complete file"
       (let [tasks (read-tasks-file)
