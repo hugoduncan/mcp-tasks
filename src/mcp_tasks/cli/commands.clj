@@ -11,17 +11,24 @@
   
   Different tools return different numbers of content items:
   - select-tasks: 1 content item with JSON
-  - add-task/update-task: 2 content items (message + JSON)
-  - complete-task/delete-task: 2 content items when no git (message + JSON)
+  - add-task/update-task/complete-task/delete-task:
+    - Without git: 2 content items (message + JSON with task data)
+    - With git: 3 content items (message + JSON with task data + JSON with git status)
   - errors: 2 content items (message + JSON with :error key)
   
-  This function looks for the last content item that contains JSON.
+  This function parses all JSON content items and merges them into a single map.
   Returns the parsed data map (including error responses)."
   [response]
   (let [content-items (:content response)
-        ;; For both errors and success, the JSON is in the last content item
-        last-content (get-in content-items [(dec (count content-items)) :text])]
-    (json/read-str last-content :key-fn keyword)))
+        ;; Parse all JSON content items and merge them
+        json-items (keep (fn [item]
+                           (when-let [text (:text item)]
+                             (try
+                               (json/read-str text :key-fn keyword)
+                               (catch Exception _ nil))))
+                         content-items)]
+    ;; Merge all parsed JSON maps, with later items taking precedence
+    (apply merge {} json-items)))
 
 (def ^:private tool-map
   "Map of command names to their corresponding tool functions."
