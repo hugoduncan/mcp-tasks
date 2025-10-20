@@ -337,39 +337,40 @@
             task-line (nth lines 2)]
         (is (str/includes? task-line "..."))))))
 
-(deftest human-format-single-task-test
-  (testing "render :human for single task"
-    (testing "formats single task with all fields"
+(deftest human-format-list-with-single-task-test
+  (testing "render :human for list with single task"
+    (testing "formats single task as table"
       (let [output (sut/render :human single-task-response)]
-        (is (str/includes? output "Task #42: Fix parser bug"))
-        (is (str/includes? output "Status: open"))
-        (is (str/includes? output "Category: simple"))
-        (is (str/includes? output "Type: bug"))
-        (is (str/includes? output "Parent: #31"))
-        (is (str/includes? output "Relations: blocked-by->#45, related->#50"))
-        (is (str/includes? output "Description:"))
-        (is (str/includes? output "CSV parser fails"))
-        (is (str/includes? output "Design:"))
-        (is (str/includes? output "Use regex"))))
+        ;; Should show table headers
+        (is (str/includes? output "ID"))
+        (is (str/includes? output "Status"))
+        (is (str/includes? output "Category"))
+        (is (str/includes? output "Meta"))
+        (is (str/includes? output "Title"))
+        ;; Should show task data in table format
+        (is (str/includes? output "42"))
+        (is (str/includes? output "Fix parser bug"))
+        (is (str/includes? output "○ open"))
+        (is (str/includes? output "simple"))
+        ;; Should show parent ID in table
+        (is (str/includes? output "31"))
+        ;; Meta should be displayed
+        (is (str/includes? output "{\"priority\" \"high\"}"))))
 
-    (testing "omits empty fields"
+    (testing "formats minimal task in table"
       (let [response {:tasks [minimal-task] :metadata {:count 1 :total-matches 1}}
             output (sut/render :human response)]
-        (is (str/includes? output "Task #1: Simple task"))
-        (is (not (str/includes? output "Parent:")))
-        (is (not (str/includes? output "Relations:")))
-        (is (not (str/includes? output "Description:")))
-        (is (not (str/includes? output "Design:")))))
+        ;; Should show table headers
+        (is (str/includes? output "ID"))
+        (is (str/includes? output "Title"))
+        ;; Should show task data
+        (is (str/includes? output "1"))
+        (is (str/includes? output "Simple task"))
+        (is (str/includes? output "✓ closed"))
+        ;; Empty meta should show as dash
+        (is (str/includes? output "-"))))
 
-    (testing "indents multi-line descriptions"
-      (let [multiline-task (assoc sample-task :description "Line 1\nLine 2\nLine 3")
-            response {:tasks [multiline-task] :metadata {:count 1 :total-matches 1}}
-            output (sut/render :human response)]
-        (is (str/includes? output "  Line 1"))
-        (is (str/includes? output "  Line 2"))
-        (is (str/includes? output "  Line 3"))))
-
-    (testing "handles task with nil fields"
+    (testing "handles task with nil fields in table"
       (let [nil-task {:id nil
                       :status nil
                       :title nil
@@ -379,10 +380,11 @@
                       :relations []}
             response {:tasks [nil-task] :metadata {:count 1 :total-matches 1}}
             output (sut/render :human response)]
-        (is (str/includes? output "Task #?: Untitled"))
-        (is (str/includes? output "Status: open"))
-        (is (str/includes? output "Category: unknown"))
-        (is (str/includes? output "Type: task"))))))
+        ;; Should show table headers
+        (is (str/includes? output "ID"))
+        (is (str/includes? output "Status"))
+        ;; Should handle nil gracefully
+        (is (str/includes? output "○ open"))))))
 
 (deftest human-format-add-task-test
   (testing "render :human for add-task response"
