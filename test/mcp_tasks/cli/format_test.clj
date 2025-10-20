@@ -146,6 +146,20 @@
     (testing "handles nil by defaulting to open"
       (is (= "○ open" (sut/format-status nil))))))
 
+(deftest format-meta-test
+  (testing "format-meta"
+    (testing "formats non-empty meta map"
+      (is (= "{\"refined\" \"true\"}" (sut/format-meta {"refined" "true"})))
+      (is (= "{\"priority\" \"high\"}" (sut/format-meta {"priority" "high"}))))
+
+    (testing "formats meta with multiple keys"
+      (is (= "{\"priority\" \"high\", \"refined\" \"true\"}"
+             (sut/format-meta {"priority" "high" "refined" "true"}))))
+
+    (testing "returns dash for empty meta"
+      (is (= "-" (sut/format-meta {})))
+      (is (= "-" (sut/format-meta nil))))))
+
 ;; EDN format tests
 
 (deftest edn-format-test
@@ -221,11 +235,13 @@
         (is (str/includes? output "ID"))
         (is (str/includes? output "Status"))
         (is (str/includes? output "Category"))
+        (is (str/includes? output "Meta"))
         (is (str/includes? output "Title"))
         (is (str/includes? output "42"))
         (is (str/includes? output "Fix parser bug"))
         (is (str/includes? output "○ open"))
         (is (str/includes? output "✓ closed"))
+        (is (str/includes? output "{\"priority\" \"high\"}"))
         (is (str/includes? output "Total: 5"))
         (is (str/includes? output "showing 2"))))
 
@@ -252,8 +268,7 @@
             output (sut/render :human response)
             lines (str/split-lines output)
             task-line (nth lines 2)]
-        (is (str/includes? task-line "..."))
-        (is (< (count task-line) 100))))
+        (is (str/includes? task-line "..."))))
 
     (testing "handles tasks with nil fields in table"
       (let [nil-task {:id nil
@@ -275,6 +290,52 @@
         (is (string? output))
         (is (str/includes? output "ID"))
         (is (str/includes? output "○ open"))))))
+
+(deftest human-format-table-meta-column-test
+  (testing "render :human table with meta column"
+    (testing "displays refined status in meta column"
+      (let [refined-task {:id 1
+                          :status :open
+                          :title "Refined task"
+                          :category "medium"
+                          :type :task
+                          :meta {"refined" "true"}
+                          :relations []}
+            unrefined-task {:id 2
+                            :status :open
+                            :title "Unrefined task"
+                            :category "simple"
+                            :type :task
+                            :meta {}
+                            :relations []}
+            response {:tasks [refined-task unrefined-task]
+                      :metadata {:count 2 :total-matches 2}}
+            output (sut/render :human response)]
+        (is (str/includes? output "Meta"))
+        (is (str/includes? output "{\"refined\" \"true\"}"))
+        (is (str/includes? output "-"))))
+
+    (testing "truncates long meta values"
+      (let [long-meta-task {:id 1
+                            :status :open
+                            :title "Task 1"
+                            :category "test"
+                            :type :task
+                            :meta {"key1" "val1" "key2" "val2" "key3" "val3"}
+                            :relations []}
+            short-task {:id 2
+                        :status :open
+                        :title "Task 2"
+                        :category "test"
+                        :type :task
+                        :meta {}
+                        :relations []}
+            response {:tasks [long-meta-task short-task]
+                      :metadata {:count 2 :total-matches 2}}
+            output (sut/render :human response)
+            lines (str/split-lines output)
+            task-line (nth lines 2)]
+        (is (str/includes? task-line "..."))))))
 
 (deftest human-format-single-task-test
   (testing "render :human for single task"
