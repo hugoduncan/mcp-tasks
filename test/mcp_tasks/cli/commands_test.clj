@@ -282,12 +282,15 @@
                                {:id 3 :status :closed :title "Task Three" :description "" :design ""
                                 :category "large" :type :feature :meta {} :relations []}])
 
-      (let [result (sut/show-command (h/test-config) {:task-id 2})]
-        (is (= 1 (count (:tasks result))))
-        (is (= "Task Two" (:title (first (:tasks result)))))
-        (is (= 2 (:id (first (:tasks result)))))
-        (is (= "medium" (:category (first (:tasks result)))))
-        (is (= "bug" (:type (first (:tasks result)))))))))
+      (let [result (sut/show-command (h/test-config) {:task-id 2})
+            task (:task result)]
+        (is (some? task))
+        (is (= "Task Two" (:title task)))
+        (is (= 2 (:id task)))
+        (is (= "medium" (:category task)))
+        (is (= "bug" (:type task)))
+        ;; Should not have :tasks key
+        (is (nil? (:tasks result)))))))
 
 (deftest show-command-sets-unique-automatically
   ;; Test show-command sets unique: true automatically
@@ -298,9 +301,12 @@
                                 :category "simple" :type :task :meta {} :relations []}])
 
       ;; Even if unique is not in parsed-args, it should be set
-      (let [result (sut/show-command (h/test-config) {:task-id 1})]
-        (is (= 1 (count (:tasks result))))
-        (is (= "Task One" (:title (first (:tasks result)))))))))
+      (let [result (sut/show-command (h/test-config) {:task-id 1})
+            task (:task result)]
+        (is (some? task))
+        (is (= "Task One" (:title task)))
+        ;; Should not have :tasks key
+        (is (nil? (:tasks result)))))))
 
 (deftest show-command-error-task-not-found
   ;; Test show-command errors when task not found
@@ -324,9 +330,12 @@
                                 :category "simple" :type :task :meta {} :relations []}])
 
       ;; Should not error even with :format in parsed-args
-      (let [result (sut/show-command (h/test-config) {:task-id 1 :format :json})]
-        (is (= 1 (count (:tasks result))))
-        (is (= "Task One" (:title (first (:tasks result)))))))))
+      (let [result (sut/show-command (h/test-config) {:task-id 1 :format :json})
+            task (:task result)]
+        (is (some? task))
+        (is (= "Task One" (:title task)))
+        ;; Should not have :tasks key
+        (is (nil? (:tasks result)))))))
 
 ;; add-command tests
 

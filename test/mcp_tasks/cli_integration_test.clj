@@ -90,8 +90,8 @@
                              "--task-id" "1")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= 1 (-> parsed :tasks first :id)))
-          (is (= "Test task" (-> parsed :tasks first :title))))))
+          (is (= 1 (-> parsed :task :id)))
+          (is (= "Test task" (-> parsed :task :title))))))
 
     (testing "can update the task status"
       (let [result (call-cli "--config-path" *test-dir*
@@ -154,8 +154,8 @@
                              "--task-id" "1")]
         (is (= 0 (:exit result)))
         (let [parsed (json/read-str (:out result) :key-fn keyword)]
-          (is (= 1 (-> parsed :tasks first :id)))
-          (is (= "JSON test" (-> parsed :tasks first :title))))))
+          (is (= 1 (-> parsed :task :id)))
+          (is (= "JSON test" (-> parsed :task :title))))))
 
     (testing "can update in JSON format"
       (let [result (call-cli "--config-path" *test-dir*

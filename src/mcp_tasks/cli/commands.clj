@@ -75,9 +75,17 @@
 (defn show-command
   "Execute the show command.
   
-  Calls tools/select-tasks-tool with unique: true and returns the parsed response data."
+  Calls tools/select-tasks-tool with unique: true and transforms the response
+  to use :task (singular) instead of :tasks to trigger detailed format."
   [config parsed-args]
-  (execute-command config :show parsed-args #(assoc % :unique true)))
+  (let [response (execute-command config :show parsed-args #(assoc % :unique true))
+        ;; Transform {:tasks [...]} to {:task ...} for detailed format
+        tasks (:tasks response)]
+    (if (seq tasks)
+      (-> response
+          (assoc :task (first tasks))
+          (dissoc :tasks))
+      response)))
 
 (defn add-command
   "Execute the add command.

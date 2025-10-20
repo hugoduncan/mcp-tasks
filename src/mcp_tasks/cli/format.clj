@@ -217,9 +217,7 @@
     (let [tasks (:tasks data)
           metadata (:metadata data)
           task-count (count tasks)
-          task-output (if (= 1 task-count)
-                        (format-single-task (first tasks))
-                        (format-table tasks))
+          task-output (format-table tasks)
           git-output (format-git-metadata data)]
       (str/join "\n\n"
                 (filter some?
