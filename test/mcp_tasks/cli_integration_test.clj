@@ -584,3 +584,54 @@
         (let [result (call-cli cmd "--help")]
           (is (= 0 (:exit result)))
           (is (str/includes? (:out result) cmd)))))))
+
+(deftest unknown-option-validation-test
+  ;; Test that CLI rejects unknown options with clear error messages
+  (testing "unknown-option-validation"
+    (testing "add command rejects completely invalid option"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "add"
+                             "--category" "simple"
+                             "--title" "Test"
+                             "--foo" "bar")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "Unknown option: --foo"))
+        (is (str/includes? (:err result) "Use --help"))))
+
+    (testing "add command rejects typo in option name"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "add"
+                             "--category" "simple"
+                             "--titl" "Test")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "Unknown option: --titl"))
+        (is (str/includes? (:err result) "Use --help"))))
+
+    (testing "show command rejects option valid for another command"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "show"
+                             "--task-id" "1"
+                             "--parent-id" "5")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "Unknown option: --parent-id"))
+        (is (str/includes? (:err result) "Use --help"))))
+
+    (testing "list command rejects unknown option"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "list"
+                             "--invalid-filter" "value")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "Unknown option: --invalid-filter"))))
+
+    (testing "complete command rejects unknown option"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "complete"
+                             "--task-id" "1"
+                             "--unknown" "value")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "Unknown option: --unknown"))))))

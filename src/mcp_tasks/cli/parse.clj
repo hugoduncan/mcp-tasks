@@ -222,6 +222,30 @@ EXAMPLES:
   (or (get parsed-map primary-key)
       (get parsed-map alias-key)))
 
+;; Error Handling Functions
+
+(defn format-unknown-option-error
+  "Format babashka.cli unknown option error into user-friendly message.
+
+  Converts ':option-name' to '--option-name' and adds help suggestion."
+  [cli-error-message]
+  (if-let [option-match (re-find #"Unknown option: :(\S+)" cli-error-message)]
+    (str "Unknown option: --" (second option-match) ". Use --help to see valid options.")
+    cli-error-message))
+
+(defn get-allowed-keys
+  "Extract all allowed keys from a spec, including aliases.
+
+  Returns a set of keywords representing all valid option keys."
+  [spec]
+  (reduce
+    (fn [acc [k v]]
+      (if-let [alias (:alias v)]
+        (conj acc k alias)
+        (conj acc k)))
+    #{}
+    spec))
+
 ;; Validation Functions
 
 (defn validate-at-least-one
@@ -432,11 +456,11 @@ EXAMPLES:
 
 (defn parse-list
   "Parse arguments for the list command.
-  
+
   Returns parsed options map or error map with :error key."
   [args]
   (try
-    (let [raw-parsed (cli/parse-opts args {:spec list-spec})
+    (let [raw-parsed (cli/parse-opts args {:spec list-spec :restrict (get-allowed-keys list-spec)})
           parsed (-> raw-parsed
                      (dissoc :s :c :t :p :title)
                      (cond-> (:s raw-parsed) (assoc :status (:s raw-parsed)))
@@ -449,16 +473,16 @@ EXAMPLES:
         parsed
         (dissoc format-validation :valid?)))
     (catch Exception e
-      {:error (str "Failed to parse list arguments: " (.getMessage e))
+      {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
 
 (defn parse-show
   "Parse arguments for the show command.
-  
+
   Returns parsed options map or error map with :error key."
   [args]
   (try
-    (let [parsed (cli/parse-opts args {:spec show-spec})
+    (let [parsed (cli/parse-opts args {:spec show-spec :restrict (get-allowed-keys show-spec)})
           task-id (resolve-alias parsed :task-id :id)]
       (cond
         (not task-id)
@@ -474,16 +498,16 @@ EXAMPLES:
             result
             (dissoc format-validation :valid?)))))
     (catch Exception e
-      {:error (str "Failed to parse show arguments: " (.getMessage e))
+      {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
 
 (defn parse-add
   "Parse arguments for the add command.
-  
+
   Returns parsed options map or error map with :error key."
   [args]
   (try
-    (let [raw-parsed (cli/parse-opts args {:spec add-spec})
+    (let [raw-parsed (cli/parse-opts args {:spec add-spec :restrict (get-allowed-keys add-spec)})
           category (resolve-alias raw-parsed :category :c)
           title (resolve-alias raw-parsed :title :t)
           parsed (-> raw-parsed
@@ -507,17 +531,17 @@ EXAMPLES:
             parsed
             (dissoc format-validation :valid?)))))
     (catch Exception e
-      {:error (str "Failed to parse add arguments: " (.getMessage e))
+      {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
 
 (defn parse-complete
   "Parse arguments for the complete command.
-  
+
   Validates that at least one of task-id or title is provided.
   Returns parsed options map or error map with :error key."
   [args]
   (try
-    (let [raw-parsed (cli/parse-opts args {:spec complete-spec})
+    (let [raw-parsed (cli/parse-opts args {:spec complete-spec :restrict (get-allowed-keys complete-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
                      (dissoc :id :t :c :comment)
@@ -533,17 +557,17 @@ EXAMPLES:
             parsed
             (dissoc format-validation :valid?)))))
     (catch Exception e
-      {:error (str "Failed to parse complete arguments: " (.getMessage e))
+      {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
 
 (defn parse-update
   "Parse arguments for the update command.
-  
+
   Handles JSON parsing for :meta and :relations fields.
   Returns parsed options map or error map with :error key."
   [args]
   (try
-    (let [raw-parsed (cli/parse-opts args {:spec update-spec})
+    (let [raw-parsed (cli/parse-opts args {:spec update-spec :restrict (get-allowed-keys update-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
                      (dissoc :id :t :d :s :c :p)
@@ -591,17 +615,17 @@ EXAMPLES:
                 parsed
                 (dissoc format-validation :valid?)))))))
     (catch Exception e
-      {:error (str "Failed to parse update arguments: " (.getMessage e))
+      {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
 
 (defn parse-delete
   "Parse arguments for the delete command.
-  
+
   Validates that at least one of task-id or title-pattern is provided.
   Returns parsed options map or error map with :error key."
   [args]
   (try
-    (let [raw-parsed (cli/parse-opts args {:spec delete-spec})
+    (let [raw-parsed (cli/parse-opts args {:spec delete-spec :restrict (get-allowed-keys delete-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
                      (dissoc :id :title)
@@ -615,5 +639,5 @@ EXAMPLES:
             parsed
             (dissoc format-validation :valid?)))))
     (catch Exception e
-      {:error (str "Failed to parse delete arguments: " (.getMessage e))
+      {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
