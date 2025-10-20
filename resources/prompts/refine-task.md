@@ -69,7 +69,11 @@ The task can be specified in multiple ways:
      - `task-id`: the task's `:id`
      - `description`: the refined description
      - `design`: the refined design notes
-   - Confirm the save operation to the user
+     - `meta`: Merge existing meta with refinement status:
+       - Preserve all existing meta values from the task's `:meta` field
+       - Add or update `"refined": "true"` to mark the task as refined
+       - Example: If task has `{"priority": "high"}`, result should be `{"priority": "high", "refined": "true"}`
+   - Confirm the save operation to the user, noting that the task has been marked as refined
 
 ## Notes
 

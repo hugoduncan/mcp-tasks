@@ -42,6 +42,7 @@ The story can be specified in multiple ways:
    - The tool returns :tasks (a vector) and :metadata
 
 2. Execute the task directly using the category workflow:
+   - Do NOT check the refinement status of the task
    - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
    - For example, if category is "simple", execute the `category-simple` prompt
    - Run `/mcp-tasks:category-<category>` or use the

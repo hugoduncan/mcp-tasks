@@ -18,6 +18,10 @@
   tasks
   (atom {}))
 
+(defonce ^{:doc "Ordered vector of completed task IDs (matches disk order in complete.ednl)."}
+  complete-task-ids
+  (atom []))
+
 (defonce ^{:doc "Map of parent-id → set of child-ids."}
   parent-children
   (atom {}))
@@ -36,6 +40,7 @@
   "Reset all state atoms to empty values."
   []
   (reset! task-ids [])
+  (reset! complete-task-ids [])
   (reset! tasks {})
   (reset! parent-children {})
   (reset! child-parent {}))
@@ -154,10 +159,11 @@
   Returns empty vector if no matching tasks found."
   [& {:keys [task-id category parent-id title-pattern type status]}]
   (let [task-map @tasks
-        ;; When status is specified (including :closed), search all tasks in @tasks
-        ;; Otherwise, only search active tasks in @task-ids
+        ;; When status is specified (including :closed), search both active and completed tasks
+        ;; When status is nil, only search active tasks (exclude closed)
+        ;; Always preserve file order by iterating through ordered ID vectors
         task-seq (if (some? status)
-                   (vals task-map)
+                   (keep #(get task-map %) (concat @task-ids @complete-task-ids))
                    (keep #(get task-map %) @task-ids))
         ;; Build regex if possible, otherwise use substring match
         title-matcher (when title-pattern
@@ -342,6 +348,8 @@
                        (mapv :id complete-coll))]
     ;; Populate state with active tasks only in task-ids
     (reset! task-ids (mapv :id task-coll))
+    ;; Track completed task IDs in order
+    (reset! complete-task-ids (or complete-ids []))
     ;; But include both active and completed tasks in the tasks map
     (reset! tasks (into {}
                         (concat

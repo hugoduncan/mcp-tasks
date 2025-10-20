@@ -38,9 +38,18 @@ The story can be specified in multiple ways:
      - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
    - If the story doesn't exist, inform the user and stop
 
-2. Display the story content to the user
+2. Check story refinement status:
+   - Check if the story's `:meta` map contains `"refined": "true"`
+   - If not refined:
+     - Display warning: "⚠️ This story has not been refined. Creating tasks from unrefined stories may lead to unclear or incomplete task breakdowns."
+     - Use `AskUserQuestion` tool to ask: "Do you want to proceed anyway?"
+       - Options: "Yes, proceed" and "No, refine first"
+     - If user declines, stop execution and suggest running `/mcp-tasks:refine-task <story-id>` first
+     - If user accepts, continue with task creation
 
-3. Analyze the story and break it down into specific, actionable tasks:
+3. Display the story content to the user
+
+4. Analyze the story and break it down into specific, actionable tasks:
    - Tasks should follow a logical sequence (dependencies first)
    - A single task may contain multiple steps, as long as they are
      logically grouped

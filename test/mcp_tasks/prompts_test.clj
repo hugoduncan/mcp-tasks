@@ -245,6 +245,15 @@
         (is (re-find #"project context" content))
         (is (re-find #"design patterns" content))))
 
+    (testing "includes refinement status instructions"
+      (let [prompts (sut/task-execution-prompts {})
+            prompt (get prompts "refine-task")
+            content (get-in prompt [:messages 0 :content :text])]
+        (is (some? content))
+        (is (re-find #"meta" content) "Should mention meta field")
+        (is (re-find #"refined.*true" content) "Should set refined to true")
+        (is (re-find #"[Pp]reserve.*existing meta" content) "Should preserve existing meta values")))
+
     (testing "works with all task types"
       (let [prompts (sut/task-execution-prompts {})
             prompt (get prompts "refine-task")

@@ -322,6 +322,56 @@
       (let [result (tasks/get-tasks)]
         (is (= [4 1 2] (map :id result)))))))
 
+(deftest get-tasks-with-status-filter-ordering-test
+  ;; Test that get-tasks preserves file order when status filter is applied
+  (testing "get-tasks with status filter"
+    (testing "preserves file order when filtering by :open status"
+      (let [task-a (assoc test-task-1 :id 5 :status :open)
+            task-b (assoc test-task-2 :id 3 :status :open)
+            task-c (assoc test-task-4 :id 7 :status :open)]
+        ;; Set up task-ids in specific order: 5, 3, 7
+        (reset! tasks/task-ids [5 3 7])
+        (reset! tasks/tasks {5 task-a
+                             3 task-b
+                             7 task-c})
+        ;; Query with explicit :open status should preserve order
+        (let [result (tasks/get-tasks :status :open)]
+          (is (= 3 (count result)))
+          (is (= [5 3 7] (map :id result))
+              "Tasks should be returned in file order (5, 3, 7), not sorted by ID"))))
+
+    (testing "preserves file order when filtering :open with parent-id"
+      (let [task-a (assoc test-task-1 :id 170 :status :open :parent-id 165)
+            task-b (assoc test-task-2 :id 169 :status :open :parent-id 165)]
+        ;; File order: 169 before 170
+        (reset! tasks/task-ids [169 170])
+        (reset! tasks/tasks {169 task-b
+                             170 task-a})
+        ;; Query with both parent-id and status filters
+        (let [result (tasks/get-tasks :parent-id 165 :status :open)]
+          (is (= 2 (count result)))
+          (is (= [169 170] (map :id result))
+              "Should return task 169 first (as it appears first in file), not 170"))))
+
+    (testing "preserves order when searching both active and completed tasks"
+      (let [active-1 (assoc test-task-1 :id 10 :status :open)
+            active-2 (assoc test-task-2 :id 5 :status :open)
+            complete-1 (assoc test-task-3 :id 15 :status :closed)
+            complete-2 (assoc test-task-4 :id 3 :status :closed)]
+        ;; Active tasks order: 10, 5
+        ;; Completed tasks order: 15, 3
+        (reset! tasks/task-ids [10 5])
+        (reset! tasks/complete-task-ids [15 3])
+        (reset! tasks/tasks {10 active-1
+                             5 active-2
+                             15 complete-1
+                             3 complete-2})
+        ;; Query for closed tasks should use complete-task-ids order
+        (let [result (tasks/get-tasks :status :closed)]
+          (is (= 2 (count result)))
+          (is (= [15 3] (map :id result))
+              "Completed tasks should be in complete.ednl file order"))))))
+
 ;; Mutation API Tests
 
 (deftest add-task-test

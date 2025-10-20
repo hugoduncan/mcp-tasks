@@ -76,34 +76,45 @@
     nil "○ open"
     (name status)))
 
+(defn format-meta
+  "Format meta map for table display.
+  
+  Returns a string representation, using '-' for empty meta."
+  [meta]
+  (if (seq meta)
+    (pr-str meta)
+    "-"))
+
 ;; Table formatting
 
 (defn format-table-row
   "Format a single row of the table with proper column widths."
-  [id parent-id status category title max-title-width]
-  (format "%4s  %-8s  %-12s  %-10s  %s"
+  [id parent-id status category meta title max-title-width]
+  (format "%4s  %-8s  %-12s  %-10s  %-20s  %s"
           (or id "")
           (if parent-id (str parent-id) "")
           (truncate-text status 12)
           (truncate-text category 10)
+          (truncate-text meta 20)
           (truncate-text title max-title-width)))
 
 (defn format-table
   "Format a vector of tasks as an ASCII table.
   
-  Columns: ID, Parent, Status, Category, Title (truncated)"
+  Columns: ID, Parent, Status, Category, Meta, Title (truncated)"
   [tasks]
   (if (empty? tasks)
     "No tasks found"
     (let [max-title-width 50
-          header (format "%4s  %-8s  %-12s  %-10s  %s" "ID" "Parent" "Status" "Category" "Title")
-          separator (str/join (repeat (+ 4 2 8 2 12 2 10 2 max-title-width) "-"))
+          header (format "%4s  %-8s  %-12s  %-10s  %-20s  %s" "ID" "Parent" "Status" "Category" "Meta" "Title")
+          separator (str/join (repeat (+ 4 2 8 2 12 2 10 2 20 2 max-title-width) "-"))
           rows (map (fn [task]
                       (format-table-row
                         (:id task)
                         (:parent-id task)
                         (format-status (:status task))
                         (:category task)
+                        (format-meta (:meta task))
                         (:title task)
                         max-title-width))
                     tasks)]

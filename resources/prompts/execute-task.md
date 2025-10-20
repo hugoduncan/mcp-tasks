@@ -45,7 +45,27 @@ If no arguments were provided:
 - Work with the task already in context
 - Proceed directly to step 2
 
-### 2. Retrieve Category Instructions
+### 2. Check Refinement Status
+
+Once you have identified the task to execute:
+
+1. **Check if refined**: Examine the task's `:meta` map for the key `"refined"`
+   - If the value is `"true"`, the task has been refined - proceed to step 3
+   - If the key is absent or has any other value, the task is unrefined - continue to step 2
+
+2. **Warn and confirm**: If the task is not refined:
+   - Display warning: "⚠️  This task has not been refined. Running unrefined tasks may lead to unclear requirements or scope creep."
+   - Use the `AskUserQuestion` tool to ask: "Do you want to proceed anyway?"
+     - Options:
+       - "Yes, proceed" - continue to step 3
+       - "No, refine first" - stop execution
+   - If user chooses "No, refine first":
+     - Suggest: "You can refine this task by running `/mcp-tasks:refine-task <task-id>`"
+     - Stop execution - do not proceed to step 3
+   - If user chooses "Yes, proceed":
+     - Continue to step 3
+
+### 3. Retrieve Category Instructions
 
 Once you have identified a single task:
 
@@ -65,14 +85,14 @@ Once you have identified a single task:
    - Inform the user: "Category instructions for '<category>' are not
      available. Please ensure the category prompt resource exists or
      contact the maintainer."
-   - Stop execution - do not proceed to step 3
+   - Stop execution - do not proceed to step 4
 
 4. **Extract instructions**: The resource will return a `text` field
    containing the category-specific workflow steps
 
-### 3. Execute the Task
+### 4. Execute the Task
 
-Follow the category-specific instructions retrieved in step 2 to execute
+Follow the category-specific instructions retrieved in step 3 to execute
 the task:
 
 1. **Provide task context**: When executing the category instructions,
@@ -88,7 +108,7 @@ the task:
    with specific steps (e.g., analysis, design, planning,
    implementation). Execute each step in order.
 
-### 4. Mark Task Complete
+### 5. Mark Task Complete
 
 After successfully completing all execution steps:
 - Use the `complete-task` tool to mark the task as complete
