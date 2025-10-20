@@ -30,9 +30,13 @@
   (keyword value))
 
 (defn- convert-meta-field
-  "Convert meta field value, treating nil as empty map.
+  "Convert meta field value, ensuring string keys and values.
 
-  Returns the value or {} if nil.
+  The Task schema requires meta to be [:map-of :string :string].
+  This function ensures both keys and values are coerced to strings,
+  preventing keywordization from JSON parsing or MCP client libraries.
+
+  Returns {} if value is nil.
 
   Note: When updating a task's :meta field, the entire map is replaced,
   not merged. This design decision ensures predictable behavior - users
@@ -40,7 +44,9 @@
   This matches the story requirements and simplifies the mental model
   for task updates."
   [value]
-  (or value {}))
+  (if value
+    (into {} (map (fn [[k v]] [(str k) (str v)]) value))
+    {}))
 
 (defn- convert-relations-field
   "Convert relations from JSON structure to Clojure keyword-based structure.

@@ -310,3 +310,22 @@
           ;; Relations should be completely replaced, not appended
           (is (= 1 (count (:relations task))))
           (is (= [{:id 2 :relates-to 3 :as-type :blocked-by}] (:relations task))))))))
+
+(deftest update-task-validates-meta-string-values
+  ;; Tests that meta field values are coerced to strings to match schema
+  (testing "update-task"
+    (testing "validates meta values are strings"
+      (h/write-ednl-test-file "tasks.ednl"
+                              [{:id 1 :parent-id nil :title "task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+      (let [result (#'sut/update-task-impl
+                    (h/test-config)
+                    nil
+                    {:task-id 1 :meta {"refined" "true" "priority" "high"}})]
+        (is (false? (:isError result)))
+        (let [tasks (h/read-ednl-test-file "tasks.ednl")
+              task (first tasks)]
+          ;; Meta values should be strings, not keywords
+          (is (= {"refined" "true" "priority" "high"} (:meta task)))
+          ;; Verify schema compliance - all keys and values must be strings
+          (is (every? string? (keys (:meta task))))
+          (is (every? string? (vals (:meta task)))))))))

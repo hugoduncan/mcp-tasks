@@ -867,14 +867,17 @@
                                                         "assigned-to" "alice"}})]
               (is (not (:isError result))))
 
-            ;; Test invalid meta with non-string value
+            ;; Test meta with non-string value gets coerced to string
             (let [result @(mcp-client/call-tool client
                                                 "update-task"
                                                 {:task-id 1
                                                  :meta {"priority" 123}})]
-              (is (:isError result))
-              (is (re-find #"Invalid task field values"
-                           (-> result :content first :text))))
+              (is (not (:isError result)))
+              ;; Verify the number was coerced to a string
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    updated-task (first tasks)]
+                (is (= {"priority" "123"} (:meta updated-task)))))
 
             (finally
               (mcp-client/close! client)
