@@ -45,7 +45,7 @@
           parsed (cli/parse-args global-args {:coerce {:format :keyword}})
           {:keys [config-path format help]} (:opts parsed)
           config-path (or config-path ".")
-          format (or format :edn)
+          format (or format :human)
           command (first command-and-args)
           command-args (rest command-and-args)]
 
