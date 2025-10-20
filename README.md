@@ -294,7 +294,16 @@ clojure -M:cli delete --title-pattern "^OLD:"
 
 The CLI supports three output formats via the `--format` option:
 
-**EDN Format (default)** - Structured data for programmatic use
+**Human Format (default)** - Readable tables and text
+
+```bash
+clojure -M:cli list --format human
+# ID  Status       Category  Title
+# 1   open         simple    Add README badges
+# 2   in-progress  feature   Implement auth system
+```
+
+**EDN Format** - Structured data for programmatic use
 
 ```bash
 clojure -M:cli list --format edn
@@ -307,15 +316,6 @@ clojure -M:cli list --format edn
 ```bash
 clojure -M:cli show --task-id 1 --format json
 # {"task": {"id": 1, "title": "...", "status": "open", ...}}
-```
-
-**Human Format** - Readable tables and text
-
-```bash
-clojure -M:cli list --format human
-# ID  Status       Category  Title
-# 1   open         simple    Add README badges
-# 2   in-progress  feature   Implement auth system
 ```
 
 ### Common Workflows

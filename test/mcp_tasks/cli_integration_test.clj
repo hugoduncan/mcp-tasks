@@ -635,3 +635,37 @@
         (is (= 1 (:exit result)))
         (is (not (str/blank? (:err result))))
         (is (str/includes? (:err result) "Unknown option: --unknown"))))))
+
+(deftest default-format-test
+  ;; Test that the default format (when --format is not specified) is human-readable
+  (testing "default-format"
+    (testing "list command uses human format by default"
+      ;; Add a task first
+      (call-cli "--config-path" *test-dir*
+                "add"
+                "--category" "simple"
+                "--title" "Default format test")
+
+      (let [result (call-cli "--config-path" *test-dir*
+                             "list")]
+        (is (= 0 (:exit result)))
+        ;; Human format should contain table headers
+        (is (str/includes? (:out result) "ID"))
+        (is (str/includes? (:out result) "Status"))
+        (is (str/includes? (:out result) "Category"))
+        (is (str/includes? (:out result) "Title"))
+        ;; Should NOT contain EDN-style output like ":tasks" or ":metadata"
+        (is (not (str/includes? (:out result) ":tasks")))
+        (is (not (str/includes? (:out result) ":metadata")))))
+
+    (testing "show command uses human format by default"
+      (let [result (call-cli "--config-path" *test-dir*
+                             "show"
+                             "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        ;; Human format should contain "Task #" prefix
+        (is (str/includes? (:out result) "Task #1"))
+        (is (str/includes? (:out result) "Default format test"))
+        ;; Should NOT contain EDN-style output like ":task" or ":id"
+        (is (not (str/includes? (:out result) ":task")))
+        (is (not (str/includes? (:out result) ":id")))))))
