@@ -377,6 +377,15 @@
                          (let [file-content (slurp resource-path)
                                {:keys [metadata content]} (parse-frontmatter
                                                             file-content)
+                               ;; Tailor execute-task content based on config
+                               tailored-content
+                               (cond-> content
+                                 (and (= prompt-name "execute-task")
+                                      (:branch-management? config))
+                                 (str
+                                   "\n\n"
+                                   (slurp
+                                     (io/resource "prompts/branch-management.md"))))
                                description (or (get metadata "description")
                                                (format
                                                  "Task execution prompt: %s"
@@ -388,7 +397,7 @@
                                        :description description
                                        :messages [{:role "user"
                                                    :content {:type "text"
-                                                             :text content}}]}
+                                                             :text tailored-content}}]}
                                 (seq arguments) (assoc
                                                   :arguments
                                                   arguments)))]))]

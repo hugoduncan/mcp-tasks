@@ -619,3 +619,41 @@
         ;; If file is missing, the prompt won't be in the map
         ;; This should not throw an exception
         (is (map? prompts))))))
+
+(deftest task-execution-prompts-branch-management-test
+  ;; Test that task-execution-prompts conditionally includes branch management
+  ;; instructions in execute-task prompt based on config.
+  (testing "task-execution-prompts branch management"
+    (testing "includes branch management when :branch-management? is true"
+      (let [prompts (sut/task-execution-prompts {:branch-management? true})
+            execute-prompt (get prompts "execute-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (re-find #"Branch Management" content))
+          (is (re-find #"checkout the default branch" content))
+          (is (re-find #"create the appropriately named branch" content)))))
+
+    (testing "excludes branch management when :branch-management? is false"
+      (let [prompts (sut/task-execution-prompts {:branch-management? false})
+            execute-prompt (get prompts "execute-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Branch Management" content)))
+          (is (not (re-find #"checkout the default branch" content))))))
+
+    (testing "excludes branch management when config key is not present"
+      (let [prompts (sut/task-execution-prompts {})
+            execute-prompt (get prompts "execute-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Branch Management" content)))
+          (is (not (re-find #"checkout the default branch" content))))))
+
+    (testing "does not affect other task execution prompts"
+      (let [prompts-with-branch (sut/task-execution-prompts {:branch-management? true})
+            prompts-without-branch (sut/task-execution-prompts {:branch-management? false})]
+        ;; Check that non-execute-task prompts are identical
+        (doseq [prompt-name (keys prompts-with-branch)
+                :when (not= prompt-name "execute-task")]
+          (is (= (get-in prompts-with-branch [prompt-name :messages])
+                 (get-in prompts-without-branch [prompt-name :messages]))))))))
