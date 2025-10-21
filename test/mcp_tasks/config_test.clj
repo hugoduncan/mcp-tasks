@@ -50,9 +50,25 @@
       (is (= {:branch-management? false}
              (sut/validate-config {:branch-management? false}))))
 
+    (testing "accepts config with worktree-management? true"
+      (is (= {:worktree-management? true}
+             (sut/validate-config {:worktree-management? true}))))
+
+    (testing "accepts config with worktree-management? false"
+      (is (= {:worktree-management? false}
+             (sut/validate-config {:worktree-management? false}))))
+
     (testing "accepts config with both use-git? and branch-management?"
       (is (= {:use-git? true :branch-management? false}
              (sut/validate-config {:use-git? true :branch-management? false}))))
+
+    (testing "accepts config with worktree-prefix :project-name"
+      (is (= {:worktree-prefix :project-name}
+             (sut/validate-config {:worktree-prefix :project-name}))))
+
+    (testing "accepts config with worktree-prefix :none"
+      (is (= {:worktree-prefix :none}
+             (sut/validate-config {:worktree-prefix :none}))))
 
     (testing "accepts config with unknown keys for forward compatibility"
       (is (= {:use-git? true :unknown-key "value"}
@@ -89,7 +105,33 @@
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
             #"Expected boolean for :branch-management\?, got .*Long"
-            (sut/validate-config {:branch-management? 1}))))))
+            (sut/validate-config {:branch-management? 1}))))
+
+    (testing "rejects non-boolean worktree-management? value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected boolean for :worktree-management\?, got .*String"
+            (sut/validate-config {:worktree-management? "true"})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected boolean for :worktree-management\?, got .*Long"
+            (sut/validate-config {:worktree-management? 1}))))
+
+    (testing "rejects non-keyword worktree-prefix value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected keyword for :worktree-prefix, got .*String"
+            (sut/validate-config {:worktree-prefix "project-name"})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected keyword for :worktree-prefix, got .*Boolean"
+            (sut/validate-config {:worktree-prefix true}))))
+
+    (testing "rejects invalid keyword worktree-prefix value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Invalid value for :worktree-prefix, must be :project-name or :none"
+            (sut/validate-config {:worktree-prefix :custom}))))))
 
 (deftest validate-config-error-data-structure
   ;; Test that validation errors include structured data for programmatic handling
@@ -217,31 +259,60 @@
       (is (true? (sut/determine-git-mode test-project-dir {}))))))
 
 (deftest resolve-config-adds-use-git
-  ;; Test that resolve-config adds :use-git? and :base-dir to config map
+  ;; Test that resolve-config adds :use-git?, :base-dir, and :worktree-prefix to config map
   (testing "resolve-config"
-    (testing "adds :use-git? false and :base-dir when no config and no git repo"
-      (is (= {:use-git? false :base-dir test-project-dir}
+    (testing "adds :use-git? false, :base-dir, and :worktree-prefix when no config and no git repo"
+      (is (= {:use-git? false :base-dir test-project-dir :worktree-prefix :project-name}
              (sut/resolve-config test-project-dir {}))))
 
-    (testing "adds :use-git? true and :base-dir when no config but git repo exists"
+    (testing "adds :use-git? true, :base-dir, and :worktree-prefix when no config but git repo exists"
       (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (= {:use-git? true :base-dir test-project-dir}
+      (is (= {:use-git? true :base-dir test-project-dir :worktree-prefix :project-name}
              (sut/resolve-config test-project-dir {}))))
 
-    (testing "preserves explicit :use-git? true and adds :base-dir"
-      (is (= {:use-git? true :base-dir test-project-dir}
+    (testing "preserves explicit :use-git? true and adds :base-dir and :worktree-prefix"
+      (is (= {:use-git? true :base-dir test-project-dir :worktree-prefix :project-name}
              (sut/resolve-config test-project-dir {:use-git? true}))))
 
-    (testing "preserves explicit :use-git? false even with git repo and adds :base-dir"
+    (testing "preserves explicit :use-git? false even with git repo and adds :base-dir and :worktree-prefix"
       (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (= {:use-git? false :base-dir test-project-dir}
+      (is (= {:use-git? false :base-dir test-project-dir :worktree-prefix :project-name}
              (sut/resolve-config test-project-dir {:use-git? false}))))
 
-    (testing "preserves other config keys and adds :use-git? and :base-dir"
+    (testing "preserves other config keys and adds :use-git?, :base-dir, and :worktree-prefix"
       (cleanup-test-project)
       (setup-test-project)
-      (is (= {:use-git? false :base-dir test-project-dir :other-key "value"}
+      (is (= {:use-git? false :base-dir test-project-dir :other-key "value" :worktree-prefix :project-name}
              (sut/resolve-config test-project-dir {:other-key "value"}))))))
+
+(deftest resolve-config-auto-enables-branch-management
+  ;; Test that resolve-config auto-enables :branch-management? when :worktree-management? is true
+  (testing "resolve-config auto-enables branch management"
+    (testing "enables :branch-management? when :worktree-management? is true"
+      (is (= {:worktree-management? true
+              :branch-management? true
+              :use-git? false
+              :base-dir test-project-dir
+              :worktree-prefix :project-name}
+             (sut/resolve-config test-project-dir {:worktree-management? true}))))
+
+    (testing "preserves explicit :branch-management? false when :worktree-management? is false"
+      (is (= {:worktree-management? false
+              :branch-management? false
+              :use-git? false
+              :base-dir test-project-dir
+              :worktree-prefix :project-name}
+             (sut/resolve-config test-project-dir {:worktree-management? false
+                                                   :branch-management? false}))))
+
+    (testing "overrides :branch-management? false when :worktree-management? is true"
+      (is (= {:worktree-management? true
+              :branch-management? true
+              :use-git? false
+              :base-dir test-project-dir
+              :worktree-prefix :project-name}
+             (sut/resolve-config test-project-dir {:worktree-management? true
+                                                   :branch-management? false}))))))
 
 (deftest validate-git-repo-with-git-disabled
   ;; Test that validation passes when git mode is disabled

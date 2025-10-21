@@ -307,6 +307,28 @@
          :description description
          :required is-required}))))
 
+(defn- append-management-instructions
+  "Append branch and worktree management instructions to prompt content.
+
+  Conditionally appends management instruction files based on config flags.
+  Only appends to prompts matching target-prompt-name.
+
+  Parameters:
+  - content: Base prompt content string
+  - prompt-name: Name of the current prompt being processed
+  - target-prompt-name: Prompt that should receive the instructions
+  - config: Config map with :branch-management? and :worktree-management? flags
+
+  Returns the content with instructions appended if conditions match."
+  [content prompt-name target-prompt-name config]
+  (cond-> content
+    (and (= prompt-name target-prompt-name)
+         (:branch-management? config))
+    (str "\n\n" (slurp (io/resource "prompts/branch-management.md")))
+    (and (= prompt-name target-prompt-name)
+         (:worktree-management? config))
+    (str "\n\n" (slurp (io/resource "prompts/worktree-management.md")))))
+
 (defn story-prompts
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts.
 
@@ -328,13 +350,11 @@
                   {:keys [metadata content]} (parse-frontmatter prompt-content)
                   ;; Tailor execute-story-task content based on config
                   tailored-content
-                  (cond-> content
-                    (and (= prompt-name "execute-story-task")
-                         (:branch-management? config))
-                    (str
-                      "\n\n"
-                      (slurp
-                        (io/resource "prompts/branch-management.md"))))
+                  (append-management-instructions
+                    content
+                    prompt-name
+                    "execute-story-task"
+                    config)
                   description (or (get metadata "description")
                                   (:doc (meta v))
                                   (format "Story prompt: %s" prompt-name))
@@ -379,13 +399,11 @@
                                                             file-content)
                                ;; Tailor execute-task content based on config
                                tailored-content
-                               (cond-> content
-                                 (and (= prompt-name "execute-task")
-                                      (:branch-management? config))
-                                 (str
-                                   "\n\n"
-                                   (slurp
-                                     (io/resource "prompts/branch-management.md"))))
+                               (append-management-instructions
+                                 content
+                                 prompt-name
+                                 "execute-task"
+                                 config)
                                description (or (get metadata "description")
                                                (format
                                                  "Task execution prompt: %s"

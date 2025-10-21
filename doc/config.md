@@ -13,6 +13,10 @@ task tracking.
 {:use-git? false}  ; Disable git mode
 {:branch-management? false}  ; Disable branch management (default when key is absent)
 {:branch-management? true}   ; Enable branch management for both story tasks and standalone tasks
+{:worktree-management? false}  ; Disable worktree management (default when key is absent)
+{:worktree-management? true}   ; Enable automatic worktree management (implies :branch-management? true)
+{:worktree-prefix :project-name}  ; Include project name in worktree directory (default)
+{:worktree-prefix :none}          ; Omit project name prefix from worktree directory
 ```
 
 **File location:**
@@ -64,6 +68,72 @@ Task title: "Fix bug #123"
 Task title: "!!!" (empty after sanitization, task-id=45)
 → Branch name: "task-45"
 ```
+
+### Worktree Management
+
+The `:worktree-management?` configuration option enables automatic git worktree creation and management during task execution. This provides better isolation for parallel development efforts by creating separate working directories for different tasks or stories.
+
+**Default behavior:** When `:worktree-management?` is not present in the config, it defaults to `false` (no worktree management).
+
+**Applies to:** Both story tasks and standalone tasks
+
+**Dependency on branch management:** Worktree management requires branch management to be enabled because worktrees must be on specific branches. When `:worktree-management? true`, the system automatically enables `:branch-management? true`.
+
+**Worktree location:** Worktrees are created in sibling directories (parent of project directory).
+
+**Worktree naming convention:**
+
+The `:worktree-prefix` option controls whether the project name is included in worktree directory names:
+
+- **`:project-name` (default)**: Include project name prefix
+  - Format: `<project-name>-<story-or-task-name>`
+  - Use when: Working on multiple unrelated projects to avoid conflicts
+  
+- **`:none`**: Omit project name prefix
+  - Format: `<story-or-task-name>`
+  - Use when: Working on a single project for shorter directory names
+
+Where:
+- `<project-name>`: Derived from current directory name
+- `<story-or-task-name>`: Title converted using same sanitization as branch names
+
+**Examples with `:worktree-prefix :project-name` (default):**
+```
+Project: "mcp-tasks", Story: "Add Git Worktree Management Option"
+→ Worktree path: "../mcp-tasks-add-git-worktree-management-option"
+
+Project: "mcp-tasks", Task: "Fix parser bug"
+→ Worktree path: "../mcp-tasks-fix-parser-bug"
+```
+
+**Examples with `:worktree-prefix :none`:**
+```
+Project: "mcp-tasks", Story: "Add Git Worktree Management Option"
+→ Worktree path: "../add-git-worktree-management-option"
+
+Project: "mcp-tasks", Task: "Fix parser bug"
+→ Worktree path: "../fix-parser-bug"
+```
+
+**Worktree lifecycle:**
+
+1. **Creation**: When executing a task with `:worktree-management? true`:
+   - Check if worktree already exists for the story/task
+   - If exists: Verify it's on the correct branch, warn if working directory is not clean
+   - If not exists: Create new worktree in sibling directory on appropriate branch
+   - Switch to worktree directory for task execution
+
+2. **Reuse**: Existing worktrees are reused across multiple executions of the same story/task
+
+3. **Cleanup**: After task/story completion:
+   - AI agent asks user for confirmation before removing worktree
+   - If confirmed: Remove worktree using `git worktree remove`
+   - If declined: Leave worktree in place and inform user
+
+**Error handling:** All worktree operations fail-fast with clear error messages:
+- Worktree creation fails → stop, don't execute task
+- Worktree already exists at path but not tracked → stop with error
+- Invalid story/task name for path → stop with error
 
 ### Auto-Detection Mechanism
 

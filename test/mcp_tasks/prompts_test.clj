@@ -657,3 +657,76 @@
                 :when (not= prompt-name "execute-task")]
           (is (= (get-in prompts-with-branch [prompt-name :messages])
                  (get-in prompts-without-branch [prompt-name :messages]))))))))
+
+(deftest story-prompts-worktree-management-test
+  ;; Test that story-prompts conditionally includes worktree management
+  ;; instructions in execute-story-task prompt based on config.
+  (testing "story-prompts worktree management"
+    (testing "includes worktree management when :worktree-management? is true"
+      (let [prompts (sut/story-prompts {:worktree-management? true})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (re-find #"Worktree Management" content))
+          (is (re-find #"work-on" content))
+          (is (re-find #"git worktree remove" content)))))
+
+    (testing "excludes worktree management when :worktree-management? is false"
+      (let [prompts (sut/story-prompts {:worktree-management? false})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Worktree Management" content)))
+          (is (not (re-find #"git worktree remove" content))))))
+
+    (testing "excludes worktree management when config key is not present"
+      (let [prompts (sut/story-prompts {})
+            execute-prompt (get prompts "execute-story-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Worktree Management" content)))
+          (is (not (re-find #"git worktree remove" content))))))
+
+    (testing "does not affect other story prompts"
+      (let [prompts-with-worktree (sut/story-prompts {:worktree-management? true})
+            prompts-without-worktree (sut/story-prompts {:worktree-management? false})
+            create-with (get prompts-with-worktree "create-story-tasks")
+            create-without (get prompts-without-worktree "create-story-tasks")]
+        (is (= (:messages create-with) (:messages create-without)))))))
+
+(deftest task-execution-prompts-worktree-management-test
+  ;; Test that task-execution-prompts conditionally includes worktree management
+  ;; instructions in execute-task prompt based on config.
+  (testing "task-execution-prompts worktree management"
+    (testing "includes worktree management when :worktree-management? is true"
+      (let [prompts (sut/task-execution-prompts {:worktree-management? true})
+            execute-prompt (get prompts "execute-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (re-find #"Worktree Management" content))
+          (is (re-find #"work-on" content))
+          (is (re-find #"git worktree remove" content)))))
+
+    (testing "excludes worktree management when :worktree-management? is false"
+      (let [prompts (sut/task-execution-prompts {:worktree-management? false})
+            execute-prompt (get prompts "execute-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Worktree Management" content)))
+          (is (not (re-find #"git worktree remove" content))))))
+
+    (testing "excludes worktree management when config key is not present"
+      (let [prompts (sut/task-execution-prompts {})
+            execute-prompt (get prompts "execute-task")]
+        (is (some? execute-prompt))
+        (let [content (get-in execute-prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Worktree Management" content)))
+          (is (not (re-find #"git worktree remove" content))))))
+
+    (testing "does not affect other task execution prompts"
+      (let [prompts-with-worktree (sut/task-execution-prompts {:worktree-management? true})
+            prompts-without-worktree (sut/task-execution-prompts {:worktree-management? false})]
+        (doseq [prompt-name (keys prompts-with-worktree)
+                :when (not= prompt-name "execute-task")]
+          (is (= (get-in prompts-with-worktree [prompt-name :messages])
+                 (get-in prompts-without-worktree [prompt-name :messages]))))))))

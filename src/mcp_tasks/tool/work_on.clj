@@ -92,7 +92,7 @@
                                                    (git/branch-exists? base-dir configured-base-branch)
                                                    (str "branch-exists? " configured-base-branch))]
                                 (when-not (:exists? branch-check)
-                                  (throw (ex-info (str "Configured base branch '" configured-base-branch "' does not exist")
+                                  (throw (ex-info (str "Configured base branch " configured-base-branch " does not exist")
                                                   {:base-branch configured-base-branch
                                                    :operation "validate-base-branch"})))
                                 configured-base-branch)
@@ -140,6 +140,262 @@
        :error (:error (ex-data e) (.getMessage e))
        :metadata (dissoc (ex-data e) :error)})))
 
+(defn- in-worktree?
+  "Check if the current directory is inside the specified worktree path.
+  
+  Compares canonical paths to handle symlinks and relative paths correctly."
+  [current-dir worktree-path]
+  (when worktree-path
+    (let [worktree-canonical (.getCanonicalPath (java.io.File. worktree-path))]
+      (= current-dir worktree-canonical))))
+
+(defn- worktree-needs-creation?
+  "Check if a worktree needs to be created (doesn't exist yet)."
+  [worktree-exists?]
+  (not worktree-exists?))
+
+(defn- worktree-needs-switch?
+  "Check if we need to switch to an existing worktree (exists but we're not in it)."
+  [worktree-exists? current-dir worktree-path]
+  (and worktree-exists?
+       (not (in-worktree? current-dir worktree-path))))
+
+(defn- manage-worktree
+  "Manages git worktree for task execution.
+
+  Parameters:
+  - base-dir: Base directory of the git repository
+  - task: The task being worked on
+  - parent-story: The parent story (nil if standalone task)
+  - config: Configuration map from read-config
+
+  Returns a map with:
+  - :success - boolean indicating if operation succeeded
+  - :worktree-path - path to the worktree
+  - :worktree-created? - boolean indicating if worktree was created
+  - :needs-directory-switch? - boolean indicating if user needs to switch directories
+  - :branch-name - the branch name for the worktree
+  - :clean? - boolean indicating if worktree has no uncommitted changes (nil if not in worktree)
+  - :error - error message string (or nil if successful)
+  - :message - user-facing message about required actions
+
+  Examples:
+  ;; Worktree doesn't exist, needs creation
+  (manage-worktree \"/path\" task nil config)
+  ;; => {:success true :worktree-path \"../mcp-tasks-fix-bug\" :worktree-created? true
+  ;;     :needs-directory-switch? true :branch-name \"fix-bug\" :clean? nil
+  ;;     :message \"Worktree created at ../mcp-tasks-fix-bug. Please start a new Claude Code session in that directory.\"}
+
+  ;; Worktree exists but not in it
+  (manage-worktree \"/path\" task nil config)
+  ;; => {:success true :worktree-path \"../mcp-tasks-fix-bug\" :worktree-created? false
+  ;;     :needs-directory-switch? true :branch-name \"fix-bug\" :clean? nil
+  ;;     :message \"Worktree exists at ../mcp-tasks-fix-bug. Please start a new Claude Code session in that directory.\"}
+
+  ;; In worktree, correct branch, clean
+  (manage-worktree \"/path\" task nil config)
+  ;; => {:success true :worktree-path \"/path\" :worktree-created? false
+  ;;     :needs-directory-switch? false :branch-name \"fix-bug\" :clean? true}
+
+  ;; In worktree, correct branch, dirty
+  (manage-worktree \"/path\" task nil config)
+  ;; => {:success true :worktree-path \"/path\" :worktree-created? false
+  ;;     :needs-directory-switch? false :branch-name \"fix-bug\" :clean? false}
+
+  ;; In worktree, wrong branch (error)
+  (manage-worktree \"/path\" task nil config)
+  ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
+  [base-dir task parent-story config]
+  (try
+    ;; Determine branch name and worktree path
+    (let [title (if parent-story
+                  (:title parent-story)
+                  (:title task))
+          branch-source-id (if parent-story
+                             (:id parent-story)
+                             (:id task))
+          branch-name (util/sanitize-branch-name title branch-source-id)
+
+          ;; Derive worktree path
+          path-result (git/ensure-git-success!
+                        (git/derive-worktree-path base-dir title config)
+                        "derive-worktree-path")
+          worktree-path (:path path-result)
+
+          ;; Get current working directory (canonical path)
+          current-dir (.getCanonicalPath (java.io.File. (System/getProperty "user.dir")))
+
+          ;; Check if worktree exists
+          exists-result (git/ensure-git-success!
+                          (git/worktree-exists? base-dir worktree-path)
+                          "worktree-exists?")
+          worktree-exists? (:exists? exists-result)]
+
+      (cond
+        ;; Worktree doesn't exist - create it
+        (worktree-needs-creation? worktree-exists?)
+        (do
+          (git/ensure-git-success!
+            (git/create-worktree base-dir worktree-path branch-name)
+            (str "create-worktree " worktree-path " " branch-name))
+          {:success true
+           :worktree-path worktree-path
+           :worktree-created? true
+           :needs-directory-switch? true
+           :branch-name branch-name
+           :clean? nil
+           :error nil
+           :message (str "Worktree created at " worktree-path ". Please start a new Claude Code session in that directory.")})
+
+        ;; Worktree exists but we're not in it
+        (worktree-needs-switch? worktree-exists? current-dir worktree-path)
+        {:success true
+         :worktree-path worktree-path
+         :worktree-created? false
+         :needs-directory-switch? true
+         :branch-name branch-name
+         :clean? nil
+         :error nil
+         :message (str "Worktree exists at " worktree-path ". Please start a new Claude Code session in that directory.")}
+
+        ;; We're in the worktree - verify branch and check clean status
+        :else
+        (let [current-branch (-> (git/worktree-branch worktree-path)
+                                 (git/ensure-git-success! "worktree-branch")
+                                 :branch)]
+
+          ;; Verify we're on the correct branch
+          (when (not= current-branch branch-name)
+            (throw (ex-info (str "Worktree is on branch " current-branch " but expected " branch-name)
+                            {:current-branch current-branch
+                             :expected-branch branch-name
+                             :worktree-path worktree-path
+                             :operation "verify-worktree-branch"})))
+
+          ;; Check if worktree is clean
+          (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
+                              (git/ensure-git-success! "check-uncommitted-changes")
+                              :has-changes?
+                              not)]
+            {:success true
+             :worktree-path worktree-path
+             :worktree-created? false
+             :needs-directory-switch? false
+             :branch-name branch-name
+             :clean? is-clean?
+             :error nil}))))
+
+    (catch clojure.lang.ExceptionInfo e
+      {:success false
+       :error (:error (ex-data e) (.getMessage e))
+       :metadata (dissoc (ex-data e) :error)})))
+
+(defn- validate-task-id-param
+  "Validates the task-id parameter.
+
+  Parameters:
+  - task-id: The task ID to validate (can be any type)
+
+  Returns:
+  - task-id if valid
+
+  Throws:
+  - ExceptionInfo with :response key if validation fails"
+  [task-id]
+  (when-not task-id
+    (throw (ex-info "Missing required parameter"
+                    {:response {:error "task-id parameter is required"
+                                :metadata {}}})))
+
+  (when-not (integer? task-id)
+    (throw (ex-info "Invalid parameter type"
+                    {:response {:error "task-id must be an integer"
+                                :metadata {:provided-value task-id
+                                           :provided-type (str (type task-id))}}})))
+  task-id)
+
+(defn- load-task-and-story
+  "Loads and validates a task and its optional parent story.
+
+  Parameters:
+  - cfg: Configuration map
+  - task-id: The task ID to load
+
+  Returns:
+  - Map with :task and :parent-story keys (parent-story is nil if not a story task)
+
+  Throws:
+  - ExceptionInfo with :response key if task or parent story not found"
+  [cfg task-id]
+  (let [tasks-path (helpers/task-path cfg ["tasks.ednl"])
+        tasks-file (:absolute tasks-path)
+        complete-path (helpers/task-path cfg ["complete.ednl"])
+        complete-file (:absolute complete-path)]
+
+    ;; Load tasks from EDNL file
+    (when (helpers/file-exists? tasks-file)
+      (tasks/load-tasks! tasks-file :complete-file complete-file))
+
+    ;; Get the specific task
+    (let [matching-tasks (tasks/get-tasks :task-id task-id)
+          task (first matching-tasks)]
+
+      ;; Validate task exists
+      (when-not task
+        (throw (ex-info "Task not found"
+                        {:response {:error "No task found with the specified task-id"
+                                    :metadata {:task-id task-id
+                                               :file tasks-file}}})))
+
+      ;; Get parent story if this is a story task
+      (let [parent-story (when-let [parent-id (:parent-id task)]
+                           (let [story (first (tasks/get-tasks :task-id parent-id))]
+                             ;; Validate parent story exists
+                             (when-not story
+                               (throw (ex-info "Parent story not found"
+                                               {:response {:error "Task references a parent story that does not exist"
+                                                           :metadata {:task-id task-id
+                                                                      :parent-id parent-id
+                                                                      :file tasks-file}}})))
+                             story))]
+        {:task task
+         :parent-story parent-story}))))
+
+(defn- build-success-response
+  "Builds a success response for the work-on tool.
+
+  Parameters:
+  - task: The task being worked on
+  - branch-info: Optional branch management result (nil if not enabled)
+  - worktree-info: Optional worktree management result (nil if not enabled)
+  - state-file-path: Path to the execution state file
+
+  Returns:
+  - MCP response map with :content and :isError keys"
+  [task branch-info worktree-info state-file-path]
+  (let [base-response {:task-id (:id task)
+                       :title (:title task)
+                       :category (:category task)
+                       :type (:type task)
+                       :status (:status task)
+                       :execution-state-file state-file-path
+                       :message "Task validated successfully and execution state written"}
+        response-with-branch (if branch-info
+                               (assoc base-response
+                                      :branch-name (:branch-name branch-info)
+                                      :branch-created? (:branch-created? branch-info)
+                                      :branch-switched? (:branch-switched? branch-info))
+                               base-response)
+        response-data (if worktree-info
+                        (assoc response-with-branch
+                               :worktree-path (:worktree-path worktree-info)
+                               :worktree-created? (:worktree-created? worktree-info)
+                               :worktree-clean? (:clean? worktree-info))
+                        response-with-branch)]
+    {:content [{:type "text"
+                :text (json/write-str response-data)}]
+     :isError false}))
+
 (defn- work-on-impl
   "Implementation of work-on tool.
 
@@ -161,93 +417,58 @@
   - started-at: ISO-8601 timestamp when work started"
   [cfg _context {:keys [task-id]}]
   (try
-    ;; Validate task-id parameter
-    (when-not task-id
-      (let [response-data {:error "task-id parameter is required"
-                           :metadata {}}]
-        (throw (ex-info "Missing required parameter"
-                        {:response response-data}))))
+    ;; Validate parameters
+    (validate-task-id-param task-id)
 
-    (when-not (integer? task-id)
-      (let [response-data {:error "task-id must be an integer"
-                           :metadata {:provided-value task-id
-                                      :provided-type (str (type task-id))}}]
-        (throw (ex-info "Invalid parameter type"
-                        {:response response-data}))))
+    ;; Load task, story, config, and setup base directory
+    (let [{:keys [task parent-story]} (load-task-and-story cfg task-id)
+          user-config (config/read-config (:base-dir cfg))
+          base-dir (:base-dir cfg)
+          branch-mgmt-enabled? (:branch-management? user-config)
+          worktree-mgmt-enabled? (:worktree-management? user-config)
 
-    ;; Load tasks and validate task exists
-    (let [tasks-path (helpers/task-path cfg ["tasks.ednl"])
-          tasks-file (:absolute tasks-path)
-          complete-path (helpers/task-path cfg ["complete.ednl"])
-          complete-file (:absolute complete-path)]
+          ;; Handle branch management if configured
+          branch-info (when branch-mgmt-enabled?
+                        (let [branch-result (manage-branch base-dir task parent-story user-config)]
+                          (when-not (:success branch-result)
+                            (throw (ex-info "Branch management failed"
+                                            {:response {:error (:error branch-result)
+                                                        :metadata (:metadata branch-result {})}})))
+                          branch-result))
 
-      ;; Load tasks from EDNL file
-      (when (helpers/file-exists? tasks-file)
-        (tasks/load-tasks! tasks-file :complete-file complete-file))
+          ;; Handle worktree management if configured
+          worktree-info (when worktree-mgmt-enabled?
+                          (let [worktree-result (manage-worktree base-dir task parent-story user-config)]
+                            (when-not (:success worktree-result)
+                              (throw (ex-info "Worktree management failed"
+                                              {:response {:error (:error worktree-result)
+                                                          :metadata (:metadata worktree-result {})}})))
+                            worktree-result))]
 
-      ;; Get the specific task
-      (let [matching-tasks (tasks/get-tasks :task-id task-id)
-            task (first matching-tasks)]
+      ;; If worktree management requires directory switch, return early with message
+      (if (and worktree-info (:needs-directory-switch? worktree-info))
+        (let [response-data {:task-id (:id task)
+                             :title (:title task)
+                             :category (:category task)
+                             :type (:type task)
+                             :status (:status task)
+                             :worktree-path (:worktree-path worktree-info)
+                             :worktree-created? (:worktree-created? worktree-info)
+                             :branch-name (:branch-name worktree-info)
+                             :message (:message worktree-info)}]
+          {:content [{:type "text"
+                      :text (json/write-str response-data)}]
+           :isError false})
 
-        ;; Validate task exists
-        (when-not task
-          (let [response-data {:error "No task found with the specified task-id"
-                               :metadata {:task-id task-id
-                                          :file tasks-file}}]
-            (throw (ex-info "Task not found"
-                            {:response response-data}))))
-
-        ;; Handle branch management if configured
-        (let [user-config (config/read-config (:base-dir cfg))
-              branch-mgmt-enabled? (:branch-management? user-config)
-              branch-info (when branch-mgmt-enabled?
-                            ;; Get parent story if this is a story task
-                            (let [parent-story (when-let [parent-id (:parent-id task)]
-                                                 (let [story (first (tasks/get-tasks :task-id parent-id))]
-                                                   ;; Validate parent story exists
-                                                   (when-not story
-                                                     (throw (ex-info "Parent story not found"
-                                                                     {:response {:error "Task references a parent story that does not exist"
-                                                                                 :metadata {:task-id task-id
-                                                                                            :parent-id parent-id
-                                                                                            :file tasks-file}}})))
-                                                   story))
-                                  base-dir (:base-dir cfg)
-                                  branch-result (manage-branch base-dir task parent-story user-config)]
-                              (if-not (:success branch-result)
-                                ;; Branch management failed - return error response directly
-                                (throw (ex-info "Branch management failed"
-                                                {:response {:error (:error branch-result)
-                                                            :metadata (:metadata branch-result {})}}))
-                                branch-result)))
-
-              ;; Write execution state
-              base-dir (:base-dir cfg)
-              story-id (:parent-id task)
+        ;; Otherwise proceed with execution state and normal response
+        (let [story-id (:parent-id task)
               started-at (java.time.Instant/now)
               state {:task-id task-id
                      :story-id story-id
                      :started-at (str started-at)}
               _ (execution-state/write-execution-state! base-dir state)
-
-              ;; Build success response with task details
-              state-file-path (str base-dir "/.mcp-tasks-current.edn")
-              base-response {:task-id (:id task)
-                             :title (:title task)
-                             :category (:category task)
-                             :type (:type task)
-                             :status (:status task)
-                             :execution-state-file state-file-path
-                             :message "Task validated successfully and execution state written"}
-              response-data (if branch-info
-                              (assoc base-response
-                                     :branch-name (:branch-name branch-info)
-                                     :branch-created? (:branch-created? branch-info)
-                                     :branch-switched? (:branch-switched? branch-info))
-                              base-response)]
-          {:content [{:type "text"
-                      :text (json/write-str response-data)}]
-           :isError false})))
+              state-file-path (str base-dir "/.mcp-tasks-current.edn")]
+          (build-success-response task branch-info worktree-info state-file-path))))
 
     (catch clojure.lang.ExceptionInfo e
       ;; Handle validation errors with structured response

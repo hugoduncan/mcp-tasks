@@ -26,6 +26,26 @@
                        :key :branch-management?
                        :value branch-mgmt
                        :expected 'boolean?}))))
+  (when-let [worktree-mgmt (:worktree-management? config)]
+    (when-not (boolean? worktree-mgmt)
+      (throw (ex-info (str "Expected boolean for :worktree-management?, got " (type worktree-mgmt))
+                      {:type :invalid-config-type
+                       :key :worktree-management?
+                       :value worktree-mgmt
+                       :expected 'boolean?}))))
+  (when-let [worktree-prefix (:worktree-prefix config)]
+    (when-not (keyword? worktree-prefix)
+      (throw (ex-info (str "Expected keyword for :worktree-prefix, got " (type worktree-prefix))
+                      {:type :invalid-config-type
+                       :key :worktree-prefix
+                       :value worktree-prefix
+                       :expected 'keyword?})))
+    (when-not (#{:project-name :none} worktree-prefix)
+      (throw (ex-info (str "Invalid value for :worktree-prefix, must be :project-name or :none, got " worktree-prefix)
+                      {:type :invalid-config-value
+                       :key :worktree-prefix
+                       :value worktree-prefix
+                       :expected #{:project-name :none}}))))
   (when-let [base-branch (:base-branch config)]
     (when-not (string? base-branch)
       (throw (ex-info (str "Expected string for :base-branch, got " (type base-branch))
@@ -88,10 +108,19 @@
   "Returns final config map with :use-git? and :base-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence.  Base directory defaults to current working directory
-  if project-dir not provided."
+  if project-dir not provided.
+  
+  When :worktree-management? is true, automatically enables :branch-management?.
+  When :worktree-prefix is not set, defaults to :project-name."
   [project-dir config]
-  (let [base-dir (or project-dir (System/getProperty "user.dir"))]
-    (assoc config
+  (let [base-dir (or project-dir (System/getProperty "user.dir"))
+        config-with-branch-mgmt (if (:worktree-management? config)
+                                  (assoc config :branch-management? true)
+                                  config)
+        config-with-defaults (if (contains? config-with-branch-mgmt :worktree-prefix)
+                               config-with-branch-mgmt
+                               (assoc config-with-branch-mgmt :worktree-prefix :project-name))]
+    (assoc config-with-defaults
            :use-git? (determine-git-mode project-dir config)
            :base-dir base-dir)))
 

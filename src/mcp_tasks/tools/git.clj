@@ -88,6 +88,8 @@
   - :branch - branch name string (or nil if failed)
   - :error - error message string (or nil if successful)"
   [base-dir]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "rev-parse" "--abbrev-ref" "HEAD")]
       (if (zero? (:exit result))
@@ -116,6 +118,8 @@
   - :branch - branch name string (or nil if failed)
   - :error - error message string (or nil if successful)"
   [base-dir]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))]}
   (try
     ;; Try to get remote default branch
     (let [result (sh/sh "git" "-C" base-dir "symbolic-ref" "refs/remotes/origin/HEAD" "--short")]
@@ -156,6 +160,8 @@
   - :has-changes? - boolean indicating if uncommitted changes exist
   - :error - error message string (or nil if successful)"
   [base-dir]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "status" "--porcelain")]
       (if (zero? (:exit result))
@@ -182,6 +188,10 @@
   - :exists? - boolean indicating if branch exists
   - :error - error message string (or nil if successful)"
   [base-dir branch-name]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))
+         (string? branch-name)
+         (not (clojure.string/blank? branch-name))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "rev-parse" "--verify" branch-name)]
       {:success true
@@ -203,6 +213,10 @@
   - :success - boolean indicating if checkout succeeded
   - :error - error message string (or nil if successful)"
   [base-dir branch-name]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))
+         (string? branch-name)
+         (not (clojure.string/blank? branch-name))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "checkout" branch-name)]
       (if (zero? (:exit result))
@@ -225,6 +239,10 @@
   - :success - boolean indicating if operation succeeded
   - :error - error message string (or nil if successful)"
   [base-dir branch-name]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))
+         (string? branch-name)
+         (not (clojure.string/blank? branch-name))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "checkout" "-b" branch-name)]
       (if (zero? (:exit result))
@@ -250,6 +268,10 @@
   - :pulled? - boolean indicating if changes were pulled (false for local-only repos)
   - :error - error message string (or nil if successful/local-only)"
   [base-dir branch-name]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))
+         (string? branch-name)
+         (not (clojure.string/blank? branch-name))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "pull" "origin" branch-name)]
       (if (zero? (:exit result))
@@ -265,3 +287,256 @@
       {:success true
        :pulled? false
        :error nil})))
+
+(defn derive-project-name
+  "Extracts the project name from a project directory path.
+
+  Parameters:
+  - project-dir: Path to the project directory
+
+  Returns a map with:
+  - :success - boolean indicating if operation succeeded
+  - :name - project name string (last component of path)
+  - :error - error message string (or nil if successful)"
+  [project-dir]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))]}
+  (try
+    (let [file (java.io.File. project-dir)
+          name (.getName file)]
+      (if (str/blank? name)
+        {:success false
+         :name nil
+         :error "Could not extract project name from path"}
+        {:success true
+         :name name
+         :error nil}))
+    (catch Exception e
+      {:success false
+       :name nil
+       :error (.getMessage e)})))
+
+(defn derive-worktree-path
+  "Generates a worktree path from a project directory and title.
+
+  The worktree path format depends on the :worktree-prefix config:
+  - :project-name (default when not specified): <parent-dir>/<project-name>-<sanitized-title>
+  - :none: <parent-dir>/<sanitized-title>
+
+  The title is sanitized by:
+  - Converting to lowercase
+  - Replacing spaces with dashes
+  - Removing all characters except a-z, 0-9, and -
+
+  Parameters:
+  - project-dir: Path to the project directory
+  - title: Story or task title to convert to path
+  - config: Configuration map containing :worktree-prefix
+
+  Returns a map with:
+  - :success - boolean indicating if operation succeeded
+  - :path - worktree path string
+  - :error - error message string (or nil if successful)"
+  [project-dir title config]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))
+         (string? title)
+         (not (clojure.string/blank? title))
+         (map? config)]}
+  (try
+    (let [worktree-prefix (:worktree-prefix config :project-name)
+          sanitized (-> title
+                        str/lower-case
+                        (str/replace #"\s+" "-")
+                        (str/replace #"[^a-z0-9-]" ""))
+          parent-dir (.getParent (java.io.File. project-dir))
+
+          ;; Build path based on prefix mode
+          worktree-path (if (= worktree-prefix :none)
+                          (str parent-dir "/" sanitized)
+                          (let [name-result (derive-project-name project-dir)]
+                            (if-not (:success name-result)
+                              (throw (ex-info (:error name-result)
+                                              {:operation "derive-project-name"}))
+                              (let [project-name (:name name-result)]
+                                (str parent-dir "/" project-name "-" sanitized)))))]
+
+      (if (str/blank? sanitized)
+        {:success false
+         :path nil
+         :error "Title produced empty path after sanitization"}
+        {:success true
+         :path worktree-path
+         :error nil}))
+    (catch Exception e
+      {:success false
+       :path nil
+       :error (.getMessage e)})))
+
+(defn list-worktrees
+  "Lists all git worktrees in the repository.
+
+  Parses the porcelain format output from 'git worktree list --porcelain'.
+
+  Parameters:
+  - project-dir: Path to the project directory
+
+  Returns a map with:
+  - :success - boolean indicating if operation succeeded
+  - :worktrees - vector of maps with :path, :head, :branch (or :detached)
+  - :error - error message string (or nil if successful)"
+  [project-dir]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))]}
+  (try
+    (let [result (sh/sh "git" "-C" project-dir "worktree" "list" "--porcelain")]
+      (if (zero? (:exit result))
+        (let [output (str/trim (:out result))
+              entries (if (str/blank? output)
+                        []
+                        (str/split output #"\n\n"))
+              worktrees (for [entry entries]
+                          (let [lines (str/split-lines entry)
+                                parse-line (fn [line]
+                                             (if-let [[_ k v] (re-matches #"(\w+)\s+(.*)" line)]
+                                               [k v]
+                                               (when-let [[_ k] (re-matches #"(\w+)" line)]
+                                                 [k true])))
+                                pairs (keep parse-line lines)
+                                data (into {} pairs)]
+                            (cond-> {:path (get data "worktree")
+                                     :head (get data "HEAD")}
+                              (contains? data "branch")
+                              (assoc :branch (str/replace (get data "branch") #"^refs/heads/" ""))
+
+                              (get data "detached")
+                              (assoc :detached true))))]
+          {:success true
+           :worktrees (vec worktrees)
+           :error nil})
+        {:success false
+         :worktrees nil
+         :error (str/trim (:err result))}))
+    (catch Exception e
+      {:success false
+       :worktrees nil
+       :error (.getMessage e)})))
+
+(defn worktree-exists?
+  "Checks if a worktree exists at the given path.
+
+  Parameters:
+  - project-dir: Path to the project directory
+  - worktree-path: Path to check for worktree existence
+
+  Returns a map with:
+  - :success - boolean indicating if check succeeded
+  - :exists? - boolean indicating if worktree exists
+  - :worktree - worktree info map (or nil if doesn't exist)
+  - :error - error message string (or nil if successful)"
+  [project-dir worktree-path]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))
+         (string? worktree-path)
+         (not (clojure.string/blank? worktree-path))]}
+  (let [result (list-worktrees project-dir)]
+    (if-not (:success result)
+      (assoc result :exists? nil :worktree nil)
+      (let [worktree (first (filter #(= (:path %) worktree-path)
+                                    (:worktrees result)))]
+        {:success true
+         :exists? (some? worktree)
+         :worktree worktree
+         :error nil}))))
+
+(defn worktree-branch
+  "Returns the branch name of a worktree.
+
+  Parameters:
+  - worktree-path: Path to the worktree directory
+
+  Returns a map with:
+  - :success - boolean indicating if operation succeeded
+  - :branch - branch name string (or nil if failed/detached)
+  - :detached? - boolean indicating if HEAD is detached
+  - :error - error message string (or nil if successful)"
+  [worktree-path]
+  {:pre [(string? worktree-path)
+         (not (clojure.string/blank? worktree-path))]}
+  (try
+    (let [result (sh/sh "git" "-C" worktree-path "rev-parse" "--abbrev-ref" "HEAD")]
+      (if (zero? (:exit result))
+        (let [branch (str/trim (:out result))]
+          (if (= "HEAD" branch)
+            {:success true
+             :branch nil
+             :detached? true
+             :error nil}
+            {:success true
+             :branch branch
+             :detached? false
+             :error nil}))
+        {:success false
+         :branch nil
+         :detached? nil
+         :error (str/trim (:err result))}))
+    (catch Exception e
+      {:success false
+       :branch nil
+       :detached? nil
+       :error (.getMessage e)})))
+
+(defn create-worktree
+  "Creates a new git worktree.
+
+  Parameters:
+  - project-dir: Path to the project directory
+  - worktree-path: Path where the worktree should be created
+  - branch-name: Name of the branch for the worktree
+
+  Returns a map with:
+  - :success - boolean indicating if creation succeeded
+  - :error - error message string (or nil if successful)"
+  [project-dir worktree-path branch-name]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))
+         (string? worktree-path)
+         (not (clojure.string/blank? worktree-path))
+         (string? branch-name)
+         (not (clojure.string/blank? branch-name))]}
+  (try
+    (let [result (sh/sh "git" "-C" project-dir "worktree" "add" worktree-path branch-name)]
+      (if (zero? (:exit result))
+        {:success true
+         :error nil}
+        {:success false
+         :error (str/trim (:err result))}))
+    (catch Exception e
+      {:success false
+       :error (.getMessage e)})))
+
+(defn remove-worktree
+  "Removes a git worktree.
+
+  Parameters:
+  - project-dir: Path to the project directory
+  - worktree-path: Path to the worktree to remove
+
+  Returns a map with:
+  - :success - boolean indicating if removal succeeded
+  - :error - error message string (or nil if successful)"
+  [project-dir worktree-path]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))
+         (string? worktree-path)
+         (not (clojure.string/blank? worktree-path))]}
+  (try
+    (let [result (sh/sh "git" "-C" project-dir "worktree" "remove" worktree-path)]
+      (if (zero? (:exit result))
+        {:success true
+         :error nil}
+        {:success false
+         :error (str/trim (:err result))}))
+    (catch Exception e
+      {:success false
+       :error (.getMessage e)})))

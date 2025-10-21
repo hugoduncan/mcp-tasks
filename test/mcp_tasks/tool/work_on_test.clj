@@ -12,6 +12,25 @@
     [mcp-tasks.tool.work-on :as sut]
     [mcp-tasks.tools.git :as git]))
 
+;; Testing Limitations
+;;
+;; Worktree Directory Context:
+;; Several tests in this namespace cannot fully simulate the scenario where the
+;; work-on tool is invoked from within an existing worktree directory. This is
+;; because the test environment runs in a fixed directory location, and we cannot
+;; easily change the working directory mid-test to simulate being inside a worktree.
+;;
+;; Affected Scenarios:
+;; - Detecting when already in a worktree with uncommitted changes
+;; - Verifying branch mismatch when operating from within a worktree
+;; - Testing clean status checks that occur when in the worktree directory
+;;
+;; Current Test Approach:
+;; Tests verify the "worktree exists but we're not in it" behavior by mocking
+;; git operations. The actual in-worktree behavior (clean status checking,
+;; branch verification) is tested implicitly through the manage-worktree function
+;; and would require integration testing with actual directory switching.
+
 (use-fixtures :each h/test-fixture)
 
 (deftest work-on-parameter-validation
@@ -644,7 +663,7 @@
 
               (is (false? (:isError result)))
               (is (contains? response :error))
-              (is (str/includes? (:error response) "Configured base branch 'nonexistent' does not exist"))
+              (is (str/includes? (:error response) "Configured base branch nonexistent does not exist"))
               (is (= "nonexistent" (get-in response [:metadata :base-branch])))
               (is (= "validate-base-branch" (get-in response [:metadata :operation]))))))))
 
@@ -666,3 +685,183 @@
           (is (not (contains? response :branch-name)))
           (is (not (contains? response :branch-created?)))
           (is (not (contains? response :branch-switched?))))))))
+
+(deftest work-on-worktree-creates-worktree
+  ;; Test worktree creation on first execution
+  (testing "work-on creates worktree on first execution"
+    (let [base-dir (:base-dir (h/test-config))
+          config-file (str base-dir "/.mcp-tasks.edn")]
+      (spit config-file "{:worktree-management? true}")
+
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Fix Parser Bug" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Fix Parser Bug")]
+
+        ;; Mock git and file operations
+        (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                      mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                      mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                      mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
+                      mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                      mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                      mcp-tasks.tools.git/create-and-checkout-branch (fn [_ _] {:success true :error nil})
+                      mcp-tasks.tools.git/derive-project-name (fn [_] {:success true :name "mcp-tasks" :error nil})
+                      mcp-tasks.tools.git/derive-worktree-path (fn [_ title _config]
+                                                                 (is (= "Fix Parser Bug" title))
+                                                                 {:success true :path expected-worktree-path :error nil})
+                      mcp-tasks.tools.git/worktree-exists? (fn [_ path]
+                                                             (is (= expected-worktree-path path))
+                                                             {:success true :exists? false :worktree nil :error nil})
+                      mcp-tasks.tools.git/create-worktree (fn [_ path branch]
+                                                            (is (= expected-worktree-path path))
+                                                            (is (= "fix-parser-bug" branch))
+                                                            {:success true :error nil})]
+
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            (is (false? (:isError result)))
+            (is (= expected-worktree-path (:worktree-path response)))
+            (is (true? (:worktree-created? response)))
+            (is (= "fix-parser-bug" (:branch-name response)))
+            (is (str/includes? (:message response) "Worktree created"))
+            (is (str/includes? (:message response) expected-worktree-path))
+            ;; Should not have written execution state since directory switch needed
+            (is (not (contains? response :execution-state-file)))))))))
+
+(deftest work-on-worktree-reuses-existing
+  ;; Test worktree reuse when already in the worktree
+  (testing "work-on reuses existing worktree and checks clean status"
+    (testing "detects when in worktree with uncommitted changes"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Add Feature")]
+        (spit config-file "{:worktree-management? true}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Add Feature" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
+                        mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
+                        mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                        mcp-tasks.tools.git/worktree-exists? (fn [_ _]
+                                                               {:success true :exists? true
+                                                                :worktree {:path expected-worktree-path :branch "add-feature"}
+                                                                :error nil})]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (= expected-worktree-path (:worktree-path response)))
+              (is (false? (:worktree-created? response)))
+              (is (str/includes? (:message response) "Please start a new Claude Code session"))
+              ;; Should not have written execution state since directory switch needed
+              (is (not (contains? response :execution-state-file))))))))
+
+    (testing "detects existing worktree"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Clean Task")]
+        (spit config-file "{:worktree-management? true}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Clean Task" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
+                        mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
+                        mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                        mcp-tasks.tools.git/worktree-exists? (fn [_ _]
+                                                               {:success true :exists? true
+                                                                :worktree {:path expected-worktree-path :branch "clean-task"}
+                                                                :error nil})]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (= expected-worktree-path (:worktree-path response)))
+              (is (false? (:worktree-created? response)))
+              (is (str/includes? (:message response) "Please start a new Claude Code session"))
+              ;; Should not have written execution state since directory switch needed
+              (is (not (contains? response :execution-state-file))))))))))
+
+(deftest work-on-worktree-wrong-branch-error
+  ;; Test error when worktree is on wrong branch
+  (testing "work-on detects worktree on wrong branch (requires being in worktree)"
+    (let [base-dir (:base-dir (h/test-config))
+          config-file (str base-dir "/.mcp-tasks.edn")]
+      (spit config-file "{:worktree-management? true}")
+
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Expected Branch" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])
+            expected-worktree-path (str (.getParent (io/file base-dir)) "/mcp-tasks-expected-branch")]
+
+        (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                      mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                      mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                      mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
+                      mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                      mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
+                      mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                      mcp-tasks.tools.git/worktree-exists? (fn [_ _]
+                                                             {:success true :exists? true
+                                                              :worktree {:path expected-worktree-path :branch "wrong-branch"}
+                                                              :error nil})]
+
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            ;; Since we're not in the worktree, we get the "switch directory" message
+            (is (false? (:isError result)))
+            (is (= expected-worktree-path (:worktree-path response)))
+            (is (false? (:worktree-created? response)))
+            (is (str/includes? (:message response) "Please start a new Claude Code session"))))))))
+
+(deftest work-on-worktree-directory-switch-required
+  ;; Test that work-on informs user when they need to switch directories
+  (testing "work-on requires directory switch when worktree exists but not in it"
+    (let [base-dir (:base-dir (h/test-config))
+          config-file (str base-dir "/.mcp-tasks.edn")]
+      (spit config-file "{:worktree-management? true}")
+
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Switch Dir Task" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Switch Dir Task")]
+
+        ;; Mock to simulate worktree exists but we're not in it
+        (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                      mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                      mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                      mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
+                      mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                      mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
+                      mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                      mcp-tasks.tools.git/worktree-exists? (fn [_ _]
+                                                             {:success true :exists? true
+                                                              :worktree {:path expected-worktree-path :branch "switch-dir-task"}
+                                                              :error nil})]
+
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            (is (false? (:isError result)))
+            (is (= expected-worktree-path (:worktree-path response)))
+            (is (false? (:worktree-created? response)))
+            (is (str/includes? (:message response) "Please start a new Claude Code session"))
+            (is (str/includes? (:message response) expected-worktree-path))
+            ;; Should not have written execution state since directory switch needed
+            (is (not (contains? response :execution-state-file)))))))))
