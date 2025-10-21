@@ -12,6 +12,25 @@
     [mcp-tasks.tool.work-on :as sut]
     [mcp-tasks.tools.git :as git]))
 
+;; Testing Limitations
+;;
+;; Worktree Directory Context:
+;; Several tests in this namespace cannot fully simulate the scenario where the
+;; work-on tool is invoked from within an existing worktree directory. This is
+;; because the test environment runs in a fixed directory location, and we cannot
+;; easily change the working directory mid-test to simulate being inside a worktree.
+;;
+;; Affected Scenarios:
+;; - Detecting when already in a worktree with uncommitted changes
+;; - Verifying branch mismatch when operating from within a worktree
+;; - Testing clean status checks that occur when in the worktree directory
+;;
+;; Current Test Approach:
+;; Tests verify the "worktree exists but we're not in it" behavior by mocking
+;; git operations. The actual in-worktree behavior (clean status checking,
+;; branch verification) is tested implicitly through the manage-worktree function
+;; and would require integration testing with actual directory switching.
+
 (use-fixtures :each h/test-fixture)
 
 (deftest work-on-parameter-validation
@@ -715,11 +734,6 @@
   ;; Test worktree reuse when already in the worktree
   (testing "work-on reuses existing worktree and checks clean status"
     (testing "detects when in worktree with uncommitted changes"
-      ;; Note: This test verifies behavior when worktree exists
-      ;; In a real scenario where we're actually in the worktree directory,
-      ;; the tool would check clean status. In this test environment,
-      ;; we can't easily simulate being in a different directory,
-      ;; so we verify the "exists but not in it" behavior
       (let [base-dir (:base-dir (h/test-config))
             config-file (str base-dir "/.mcp-tasks.edn")
             expected-worktree-path (h/derive-test-worktree-path base-dir "Add Feature")]
@@ -729,7 +743,6 @@
               add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
               task-id (get-in add-response [:task :id])]
 
-          ;; Mock to simulate worktree existing (but we're not in it due to test limitations)
           (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                         mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
                         mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
@@ -753,9 +766,6 @@
               (is (not (contains? response :execution-state-file))))))))
 
     (testing "detects existing worktree"
-      ;; Note: Similar to above test, we verify the "exists but not in it" behavior
-      ;; A full end-to-end test of the clean status checking would require
-      ;; actually being in the worktree directory
       (let [base-dir (:base-dir (h/test-config))
             config-file (str base-dir "/.mcp-tasks.edn")
             expected-worktree-path (h/derive-test-worktree-path base-dir "Clean Task")]
@@ -765,7 +775,6 @@
               add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
               task-id (get-in add-response [:task :id])]
 
-          ;; Mock to simulate worktree existing
           (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                         mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
                         mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
@@ -790,9 +799,6 @@
 
 (deftest work-on-worktree-wrong-branch-error
   ;; Test error when worktree is on wrong branch
-  ;; Note: This test would require being in the worktree directory to trigger the branch check
-  ;; In the test environment, we can't easily simulate that, so we skip this specific scenario
-  ;; The branch verification logic is tested implicitly through the manage-worktree function
   (testing "work-on detects worktree on wrong branch (requires being in worktree)"
     (let [base-dir (:base-dir (h/test-config))
           config-file (str base-dir "/.mcp-tasks.edn")]
@@ -803,7 +809,6 @@
             task-id (get-in add-response [:task :id])
             expected-worktree-path (str (.getParent (io/file base-dir)) "/mcp-tasks-expected-branch")]
 
-        ;; Mock to simulate worktree existing (but we're not in it due to test limitations)
         (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                       mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
                       mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
