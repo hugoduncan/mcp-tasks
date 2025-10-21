@@ -36,7 +36,8 @@
     [mcp-tasks.tool.delete-task :as delete-task]
     [mcp-tasks.tool.execution-state :as execution-state]
     [mcp-tasks.tool.select-tasks :as select-tasks]
-    [mcp-tasks.tool.update-task :as update-task]))
+    [mcp-tasks.tool.update-task :as update-task]
+    [mcp-tasks.tool.work-on :as work-on]))
 
 (defn tools
   "Returns map of all MCP tools for task management.
@@ -51,4 +52,5 @@
    "execution-state" (execution-state/execution-state-tool config)
    "select-tasks" (select-tasks/select-tasks-tool config)
    "add-task" (add-task/add-task-tool config)
-   "update-task" (update-task/update-task-tool config)})
+   "update-task" (update-task/update-task-tool config)
+   "work-on" (work-on/work-on-tool config)})
