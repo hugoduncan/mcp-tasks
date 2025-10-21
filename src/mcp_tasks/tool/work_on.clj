@@ -202,7 +202,15 @@
               branch-info (when branch-mgmt-enabled?
                             ;; Get parent story if this is a story task
                             (let [parent-story (when-let [parent-id (:parent-id task)]
-                                                 (first (tasks/get-tasks :task-id parent-id)))
+                                                 (let [story (first (tasks/get-tasks :task-id parent-id))]
+                                                   ;; Validate parent story exists
+                                                   (when-not story
+                                                     (throw (ex-info "Parent story not found"
+                                                                     {:response {:error "Task references a parent story that does not exist"
+                                                                                 :metadata {:task-id task-id
+                                                                                            :parent-id parent-id
+                                                                                            :file tasks-file}}})))
+                                                   story))
                                   base-dir (:base-dir cfg)
                                   branch-result (manage-branch base-dir task parent-story)]
                               (when-not (:success branch-result)

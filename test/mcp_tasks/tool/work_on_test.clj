@@ -375,3 +375,183 @@
               (is (contains? response :error))
               (is (str/includes? (:error response) "Failed to checkout"))
               (is (contains? (:metadata response) :operation)))))))))
+
+(deftest work-on-validates-parent-story-exists
+  ;; Test that work-on validates parent story exists when branch management is enabled
+  (testing "work-on validates parent story exists"
+    (let [base-dir (:base-dir (h/test-config))
+          config-file (str base-dir "/.mcp-tasks.edn")]
+      (spit config-file "{:branch-management? true}")
+
+      ;; Create a task
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Orphan Task" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])
+            non-existent-parent-id 99999]
+
+        ;; Mock tasks/get-tasks to return a task with invalid parent-id
+        (with-redefs [mcp-tasks.tasks/get-tasks
+                      (fn [& {:keys [task-id]}]
+                        (if (= task-id 1)
+                          [{:id 1
+                            :parent-id non-existent-parent-id ; Invalid parent reference
+                            :title "Orphan Task"
+                            :category "simple"
+                            :type "task"
+                            :status "open"
+                            :description ""
+                            :design ""
+                            :meta {}
+                            :relations []}]
+                          []))
+                      mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})]
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            (is (false? (:isError result)))
+            (is (contains? response :error))
+            (is (str/includes? (:error response) "parent story that does not exist"))
+            (is (= task-id (get-in response [:metadata :task-id])))
+            (is (= non-existent-parent-id (get-in response [:metadata :parent-id])))))))))
+
+(deftest work-on-default-branch-fallback-chain
+  ;; Test that work-on uses fallback chain for default branch detection
+  (testing "work-on uses fallback chain for default branch"
+    (testing "falls back to 'main' when origin/HEAD not found"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        (spit config-file "{:branch-management? true}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Test Fallback" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          ;; Mock git operations - no remote, falls back to main
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "feature" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/checkout-branch (fn [_ branch-name]
+                                                              (is (= "main" branch-name) "Should checkout main as default")
+                                                              {:success true :error nil})
+                        mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? false :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                        mcp-tasks.tools.git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (= "test-fallback" (:branch-name response)))
+              (is (true? (:branch-created? response))))))))
+
+    (testing "falls back to 'master' when main not found"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        (spit config-file "{:branch-management? true}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Test Master" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          ;; Mock git operations - falls back to master
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "feature" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/get-default-branch (fn [_] {:success true :branch "master" :error nil})
+                        mcp-tasks.tools.git/checkout-branch (fn [_ branch-name]
+                                                              (is (= "master" branch-name) "Should checkout master as fallback")
+                                                              {:success true :error nil})
+                        mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? false :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                        mcp-tasks.tools.git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (= "test-master" (:branch-name response)))
+              (is (true? (:branch-created? response))))))))))
+
+(deftest work-on-idempotency
+  ;; Test that calling work-on multiple times is safe and idempotent
+  (testing "work-on is idempotent"
+    (testing "calling multiple times updates execution state timestamp"
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Idempotent Task" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])
+            base-dir (:base-dir (h/test-config))]
+
+        ;; First call
+        (let [result1 (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+              response1 (json/read-str (get-in result1 [:content 0 :text]) :key-fn keyword)
+              state1 (execution-state/read-execution-state base-dir)
+              timestamp1 (:started-at state1)]
+
+          (is (false? (:isError result1)))
+          (is (= task-id (:task-id response1)))
+
+          ;; Wait a moment to ensure timestamp changes
+          (Thread/sleep 10)
+
+          ;; Second call
+          (let [result2 (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response2 (json/read-str (get-in result2 [:content 0 :text]) :key-fn keyword)
+                state2 (execution-state/read-execution-state base-dir)
+                timestamp2 (:started-at state2)]
+
+            (is (false? (:isError result2)))
+            (is (= task-id (:task-id response2)))
+
+            ;; Execution state should be updated with new timestamp
+            (is (= task-id (:task-id state2)))
+            (is (not= timestamp1 timestamp2) "Timestamps should differ")))))
+
+    (testing "calling with different task-ids updates execution state"
+      (let [add-result1 (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Task One" :type "task"})
+            add-response1 (json/read-str (get-in add-result1 [:content 1 :text]) :key-fn keyword)
+            task-id1 (get-in add-response1 [:task :id])
+
+            add-result2 (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Task Two" :type "task"})
+            add-response2 (json/read-str (get-in add-result2 [:content 1 :text]) :key-fn keyword)
+            task-id2 (get-in add-response2 [:task :id])
+            base-dir (:base-dir (h/test-config))]
+
+        ;; Work on first task
+        (#'sut/work-on-impl (h/test-config) nil {:task-id task-id1})
+        (let [state1 (execution-state/read-execution-state base-dir)]
+          (is (= task-id1 (:task-id state1))))
+
+        ;; Work on second task
+        (#'sut/work-on-impl (h/test-config) nil {:task-id task-id2})
+        (let [state2 (execution-state/read-execution-state base-dir)]
+          (is (= task-id2 (:task-id state2))))))))
+
+(deftest work-on-handles-config-read-errors
+  ;; Test that work-on gracefully handles config read errors
+  (testing "work-on handles config read errors"
+    (testing "continues without branch management when config is invalid"
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Test Config Error" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])]
+
+        ;; Mock config/read-config to simulate invalid config that returns default (empty map)
+        (with-redefs [mcp-tasks.config/read-config (fn [_] {})]
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            ;; Should succeed, but without branch management
+            (is (false? (:isError result)))
+            (is (= task-id (:task-id response)))
+            (is (not (contains? response :branch-name)))))))
+
+    (testing "continues when config file doesn't exist"
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "No Config Task" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])]
+
+        ;; No config file should exist in fresh test environment
+        (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+          (is (false? (:isError result)))
+          (is (= task-id (:task-id response)))
+          (is (not (contains? response :branch-name))))))))
