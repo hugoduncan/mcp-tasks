@@ -296,7 +296,7 @@
   "Generates a worktree path from a project directory and title.
 
   The worktree path format depends on the :worktree-prefix config:
-  - :project-name (default): <parent-dir>/<project-name>-<sanitized-title>
+  - :project-name (default when not specified): <parent-dir>/<project-name>-<sanitized-title>
   - :none: <parent-dir>/<sanitized-title>
 
   The title is sanitized by:
