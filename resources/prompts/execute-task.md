@@ -90,16 +90,17 @@ Once you have identified a single task:
 4. **Extract instructions**: The resource will return a `text` field
    containing the category-specific workflow steps
 
-### 4. Write Execution State
+### 4. Prepare Task Environment
 
-Before executing the task, record execution state using the `execution-state` MCP tool:
-- Use the `mcp__mcp-tasks__execution-state` tool with the following parameters:
-  - `action`: "write"
+Before executing the task, set up the task environment using the `work-on` MCP tool:
+- Use the `mcp__mcp-tasks__work-on` tool with the following parameter:
   - `task-id`: The task's ID number
-  - `started-at`: Current timestamp in ISO-8601 format (e.g., "2025-10-20T14:30:00Z")
-  - `story-id`: Include the task's `:parent-id` value if it exists (for story tasks), otherwise omit this parameter
 
-This creates a `.mcp-tasks-current.edn` file that external tools can use to monitor progress.
+This tool automatically:
+- Records execution state in `.mcp-tasks-current.edn` for external monitoring
+- Handles optional branch management (creates/switches to task branch if configured)
+- Handles optional worktree management (creates/switches to task worktree if configured)
+- Returns task details for confirmation
 
 ### 5. Execute the Task
 
@@ -129,7 +130,7 @@ After successfully completing all execution steps:
 - Optional parameter:
   - `completion-comment`: Any notes about the completion
 
-The tool will automatically clear the execution state and confirm completion to the user.
+The tool will automatically clear the task environment state and confirm completion to the user.
 
 ## Notes
 
@@ -138,6 +139,6 @@ The tool will automatically clear the execution state and confirm completion to 
 - Task status defaults to "open" unless specified otherwise
 - If task execution fails or is blocked, do not mark the task as complete
 - If task execution fails or is interrupted:
-  - Do NOT clear the execution state - leave it in place
-  - The stale state can be detected by external tools via the `:started-at` timestamp
-  - When starting a new task, the execution state will be overwritten automatically
+  - The task environment state remains in place for external tools to detect
+  - External tools can detect stale executions via the `:started-at` timestamp
+  - When starting a new task, the `work-on` tool will overwrite the previous state automatically
