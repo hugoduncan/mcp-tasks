@@ -260,11 +260,9 @@
 
         ;; We're in the worktree - verify branch and check clean status
         :else
-        (let [;; Check current branch in worktree
-              branch-result (git/ensure-git-success!
-                              (git/worktree-branch worktree-path)
-                              "worktree-branch")
-              current-branch (:branch branch-result)]
+        (let [current-branch (-> (git/worktree-branch worktree-path)
+                                 (git/ensure-git-success! "worktree-branch")
+                                 :branch)]
 
           ;; Verify we're on the correct branch
           (when (not= current-branch branch-name)
@@ -275,10 +273,10 @@
                              :operation "verify-worktree-branch"})))
 
           ;; Check if worktree is clean
-          (let [changes-result (git/ensure-git-success!
-                                 (git/check-uncommitted-changes worktree-path)
-                                 "check-uncommitted-changes")
-                is-clean? (not (:has-changes? changes-result))]
+          (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
+                              (git/ensure-git-success! "check-uncommitted-changes")
+                              :has-changes?
+                              not)]
             {:success true
              :worktree-path worktree-path
              :worktree-created? false
