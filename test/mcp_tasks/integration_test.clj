@@ -9,6 +9,7 @@
     [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
+    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.in-memory-transport.shared :as shared]
@@ -18,19 +19,23 @@
     [mcp-tasks.main :as main]
     [mcp-tasks.tasks-file :as tasks-file]))
 
-(def test-project-dir (.getAbsolutePath (io/file "test-resources/integration-test")))
+(def ^:dynamic *test-project-dir* nil)
+
+(defn- test-project-dir
+  "Get the current test project directory from dynamic binding."
+  []
+  *test-project-dir*)
 
 (defn- cleanup-test-project
-  []
-  (let [dir (io/file test-project-dir)]
-    (when (fs/exists? dir)
-      (doseq [file (reverse (file-seq dir))]
-        (fs/delete file)))))
+  [dir]
+  (when (and dir (fs/exists? dir))
+    (doseq [file (reverse (file-seq (io/file dir)))]
+      (fs/delete file))))
 
 (defn- setup-test-project
   []
-  (cleanup-test-project)
-  (let [mcp-tasks-dir (io/file test-project-dir ".mcp-tasks")
+  (let [temp-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-test-"}))
+        mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
         tasks-dir (io/file mcp-tasks-dir "tasks")
         prompts-dir (io/file mcp-tasks-dir "prompts")]
     (.mkdirs tasks-dir)
@@ -39,29 +44,42 @@
     (spit (io/file prompts-dir "simple.md")
           "---\ndescription: Test category for simple tasks\n---\nTest execution instructions\n")
     ;; Also create a simple.md in tasks for backward compatibility with other tests
-    (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")))
+    (spit (io/file tasks-dir "simple.md") "- [ ] test task\n")
+    temp-dir))
+
+(defn- init-test-git-repo
+  "Initialize a real git repository in the test .mcp-tasks directory.
+
+  This ensures git commands stay isolated to the test directory."
+  []
+  (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+    (sh/sh "git" "init" (.getAbsolutePath git-dir))
+    (sh/sh "git" "-C" (.getAbsolutePath git-dir) "config" "user.email" "test@example.com")
+    (sh/sh "git" "-C" (.getAbsolutePath git-dir) "config" "user.name" "Test User")))
 
 (defn- write-config-file
   [content]
   (when content
-    (spit (io/file test-project-dir ".mcp-tasks.edn") content)))
+    (spit (io/file (test-project-dir) ".mcp-tasks.edn") content)))
 
 (defn- with-test-project
   [f]
-  (setup-test-project)
-  (try
-    (f)
-    (finally
-      (cleanup-test-project))))
+  (let [temp-dir (setup-test-project)]
+    (try
+      (binding [*test-project-dir* temp-dir]
+        (f))
+      (finally
+        (cleanup-test-project temp-dir)))))
 
 (use-fixtures :each with-test-project)
 
 (defn- load-test-config
   "Load config for test, using test-project-dir as the config path"
   []
-  (let [raw-config (config/read-config test-project-dir)
-        resolved-config (config/resolve-config test-project-dir (or raw-config {}))]
-    (config/validate-startup test-project-dir resolved-config)
+  (let [dir (test-project-dir)
+        raw-config (config/read-config dir)
+        resolved-config (config/resolve-config dir (or raw-config {}))]
+    (config/validate-startup dir resolved-config)
     resolved-config))
 
 (defn- create-test-server-and-client
@@ -103,7 +121,7 @@
             ((:stop server))))))
 
     (testing "starts with git repo (auto-detects git mode on)"
-      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (init-test-git-repo)
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           (is (mcp-client/client-ready? client))
@@ -118,7 +136,7 @@
   (testing "server startup with explicit git mode enabled"
     (testing "starts successfully when git repo exists"
       (write-config-file "{:use-git? true}")
-      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (init-test-git-repo)
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           (is (mcp-client/client-ready? client))
@@ -144,7 +162,7 @@
 
     (testing "starts successfully even when git repo exists"
       (write-config-file "{:use-git? false}")
-      (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+      (init-test-git-repo)
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           (is (mcp-client/client-ready? client))
@@ -187,7 +205,7 @@
   ;; Prompt content details are covered in prompts_test.clj unit tests.
   (testing "prompts availability"
     (write-config-file "{:use-git? true}")
-    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+    (init-test-git-repo)
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
@@ -207,7 +225,7 @@
   ;; Resource content details are covered in resources unit tests.
   (testing "resources availability"
     (write-config-file "{:use-git? true}")
-    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+    (init-test-git-repo)
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
@@ -269,7 +287,7 @@
   ;; Validates YAML frontmatter structure and prompt message text consistency.
   (testing "prompt resources content validation"
     (write-config-file "{:use-git? true}")
-    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+    (init-test-git-repo)
 
     (let [{:keys [server client]} (create-test-server-and-client)]
       (try
@@ -350,7 +368,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Create a story task in tasks.ednl
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 story-task {:id 1
                             :title "new-story"
                             :description "Story description"
@@ -372,7 +390,7 @@
             (is (re-find #"Task added" (-> result :content first :text)))
 
             ;; Verify task was added to tasks.ednl with parent-id
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   child-tasks (filter #(= (:parent-id %) 1) tasks)]
               (is (= 2 (count tasks)) "Should have story + child task")
@@ -397,7 +415,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Create a story task with one existing child in tasks.ednl
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 story-task {:id 1
                             :title "existing-story"
                             :description ""
@@ -428,7 +446,7 @@
             (is (not (:isError result)))
 
             ;; Verify second task was appended
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   child-tasks (filter #(= (:parent-id %) 1) tasks)]
               (is (= 3 (count tasks)) "Should have story + 2 child tasks")
@@ -453,7 +471,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Create a story task with one existing child in tasks.ednl
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 story-task {:id 1
                             :title "prepend-story"
                             :description ""
@@ -484,7 +502,7 @@
             (is (not (:isError result)))
 
             ;; Verify new task was prepended (appears first in file)
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))]
               (is (= 3 (count tasks)) "Should have story + 2 child tasks")
               ;; The prepended task should appear before the existing task in the file
@@ -504,7 +522,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Create a story task in tasks.ednl
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 story-task {:id 1
                             :title "test-story"
                             :description ""
@@ -532,7 +550,7 @@
 
             ;; Verify both tasks are in tasks.ednl
             (let [tasks-file (io/file
-                               test-project-dir
+                               (test-project-dir)
                                ".mcp-tasks"
                                "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
@@ -585,7 +603,7 @@
       (write-config-file "{:use-git? false}")
 
       ;; Create a tasks.ednl file with a real task
-      (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+      (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
             initial-task-content "{:id 1 :title \"Existing task\" :description \"Test\" :design \"\" :category \"simple\" :status :open :type :task :meta {} :relations []}\n"]
         (spit tasks-file initial-task-content)
 
@@ -623,7 +641,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create an initial task in tasks.ednl
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 1
                                 :title "Original title"
                                 :description "Original desc"
@@ -647,7 +665,7 @@
                            (-> result :content first :text)))
 
               ;; Verify task was updated in tasks.ednl
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first tasks)]
                 (is (= 1 (count tasks)))
@@ -669,7 +687,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create an initial task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 2
                                 :title "Keep title"
                                 :description "Change desc"
@@ -689,7 +707,7 @@
               (is (not (:isError result)))
 
               ;; Verify only description changed
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first tasks)]
                 (is (= "Keep title" (:title updated-task)))
@@ -724,7 +742,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create initial task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 1
                                 :title "Test task"
                                 :description "Desc"
@@ -764,7 +782,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create initial task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 1
                                 :title "Test task"
                                 :description "Desc"
@@ -804,7 +822,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create parent and child tasks
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   parent-task {:id 1
                                :title "Parent"
                                :description ""
@@ -851,7 +869,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create initial task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 1
                                 :title "Test task"
                                 :description "Desc"
@@ -878,7 +896,7 @@
                                                  :meta {"priority" 123}})]
               (is (not (:isError result)))
               ;; Verify the number was coerced to a string
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first tasks)]
                 (is (= {"priority" "123"} (:meta updated-task)))))
@@ -893,7 +911,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create initial tasks
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   task-1 {:id 1
                           :title "Task 1"
                           :description ""
@@ -966,7 +984,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create parent and child tasks
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   parent-task {:id 1
                                :title "Parent"
                                :description ""
@@ -996,7 +1014,7 @@
               (is (not (:isError result)))
 
               ;; Verify parent-id was cleared
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first (filter #(= (:id %) 2) tasks))]
                 (is (nil? (:parent-id updated-task)))))
@@ -1011,7 +1029,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create task with meta
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 1
                                 :title "Test task"
                                 :description "Desc"
@@ -1031,7 +1049,7 @@
               (is (not (:isError result)))
 
               ;; Verify meta was cleared to empty map
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first tasks)]
                 (is (= {} (:meta updated-task)))))
@@ -1046,7 +1064,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create task with relations
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   task-1 {:id 1
                           :title "Task 1"
                           :description ""
@@ -1075,7 +1093,7 @@
               (is (not (:isError result)))
 
               ;; Verify relations were cleared to empty vector
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first (filter #(= (:id %) 1) tasks))]
                 (is (= [] (:relations updated-task)))))
@@ -1091,7 +1109,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create task with initial meta
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   initial-task {:id 1
                                 :title "Test task"
                                 :description "Desc"
@@ -1112,7 +1130,7 @@
               (is (not (:isError result)))
 
               ;; Verify old keys are gone and only new keys exist
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first tasks)]
                 (is (= {"new-key" "new-value"} (:meta updated-task)))
@@ -1129,7 +1147,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create tasks with initial relations
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   task-1 {:id 1
                           :title "Task 1"
                           :description ""
@@ -1170,7 +1188,7 @@
               (is (not (:isError result)))
 
               ;; Verify old relations are gone and only new relation exists
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     updated-task (first (filter #(= (:id %) 1) tasks))]
                 (is (= 1 (count (:relations updated-task))))
@@ -1189,10 +1207,10 @@
   ;; without task lookup/completion workflow.
   (testing "category prompt resources integration"
     (write-config-file "{:use-git? true}")
-    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+    (init-test-git-repo)
 
     ;; Create test prompt files
-    (let [prompts-dir (io/file test-project-dir ".mcp-tasks" "prompts")]
+    (let [prompts-dir (io/file (test-project-dir) ".mcp-tasks" "prompts")]
       (.mkdirs prompts-dir)
       (spit (io/file prompts-dir "simple.md")
             "---\ndescription: Execute simple tasks with basic workflow\n---\n\n- Analyze the task\n- Implement solution")
@@ -1283,7 +1301,7 @@
   ;; Validates argument parsing, MCP schema, markdown documentation, and consistency.
   (testing "story prompts arguments validation"
     (write-config-file "{:use-git? true}")
-    (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+    (init-test-git-repo)
 
     (let [{:keys [server client]} (create-test-server-and-client)
           story-prompt-names ["execute-story-task"
@@ -1365,7 +1383,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 initial-task {:id 1
                               :title "Unrefined task"
                               :description "Task description"
@@ -1383,7 +1401,7 @@
                                                :meta {"refined" "true"}})]
             (is (not (:isError result)))
 
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   updated-task (first tasks)]
               (is (= {"refined" "true"} (:meta updated-task)))))
@@ -1397,7 +1415,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 initial-task {:id 1
                               :title "Task with meta"
                               :description "Task description"
@@ -1419,7 +1437,7 @@
                                   "refined" "true"}})]
             (is (not (:isError result)))
 
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   updated-task (first tasks)]
               (is (= {"priority" "high"
@@ -1438,7 +1456,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 initial-task {:id 1
                               :title "Already refined"
                               :description "Task description"
@@ -1456,7 +1474,7 @@
                                                :meta {"refined" "true"}})]
             (is (not (:isError result)))
 
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   updated-task (first tasks)]
               (is (= {"refined" "true"} (:meta updated-task)))))
@@ -1470,7 +1488,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 story-task {:id 1
                             :title "Unrefined story"
                             :description "Story description"
@@ -1488,7 +1506,7 @@
                                                :meta {"refined" "true"}})]
             (is (not (:isError result)))
 
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                   updated-task (first tasks)]
               (is (= :story (:type updated-task)))
@@ -1507,7 +1525,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 refined-task {:id 1
                               :title "Refined task"
                               :description "Task description"
@@ -1520,7 +1538,7 @@
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [refined-task]))
 
           ;; Verify via file read
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 task (first tasks)]
             (is (= "true" (get-in task [:meta "refined"])))
@@ -1535,7 +1553,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 unrefined-task {:id 1
                                 :title "Unrefined task"
                                 :description "Task description"
@@ -1548,7 +1566,7 @@
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [unrefined-task]))
 
           ;; Verify via file read
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 task (first tasks)]
             (is (= {} (:meta task)))
@@ -1563,7 +1581,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 refined-story {:id 1
                                :title "Refined story"
                                :description "Story description"
@@ -1576,7 +1594,7 @@
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [refined-story]))
 
           ;; Verify via file read
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 story (first tasks)]
             (is (= :story (:type story)))
@@ -1591,7 +1609,7 @@
 
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 refined-task {:id 1
                               :title "Refined task"
                               :description ""
@@ -1624,7 +1642,7 @@
                                     [refined-task bypass-task both-task]))
 
           ;; Verify via file read
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 refined-task (first tasks)
                 bypass-task (second tasks)
@@ -1652,7 +1670,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Ensure tasks file is empty before starting
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")]
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")]
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) []))
 
           ;; Step 1: Create an unrefined task
@@ -1663,14 +1681,14 @@
             (is (not (:isError add-result))))
 
           ;; Step 2: Verify task is unrefined initially
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 task (first tasks)]
             (is (not (contains? (:meta task) "refined")))
             (is (= {} (:meta task))))
 
           ;; Step 3: Simulate refine-task by updating with refined meta
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 task-id (:id (first tasks))
                 update-result @(mcp-client/call-tool client
@@ -1680,7 +1698,7 @@
             (is (not (:isError update-result))))
 
           ;; Step 4: Verify task is now refined
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 task (first tasks)]
             (is (contains? (:meta task) "refined"))
@@ -1696,7 +1714,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Step 1: Create story task
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 story-task {:id 1
                             :title "User authentication"
                             :description "Implement user auth"
@@ -1709,7 +1727,7 @@
             (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story-task]))
 
           ;; Step 2: Verify story is unrefined
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 story (first tasks)]
             (is (= :story (:type story)))
@@ -1723,7 +1741,7 @@
             (is (not (:isError update-result))))
 
           ;; Step 4: Verify story is refined
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 story (first tasks)]
             (is (= "true" (get-in story [:meta "refined"]))))
@@ -1737,7 +1755,7 @@
             (is (not (:isError add-result))))
 
           ;; Step 6: Verify child task was created
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 child-tasks (filter #(= 1 (:parent-id %)) tasks)]
             (is (= 1 (count child-tasks)))
@@ -1755,7 +1773,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Create a refined task with additional meta
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 initial-task {:id 1
                               :title "Original title"
                               :description "Original desc"
@@ -1777,7 +1795,7 @@
             (is (not (:isError update-result))))
 
           ;; Verify meta is preserved (since we didn't update it)
-          (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                 tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                 updated-task (first tasks)]
             (is (= "Updated title" (:title updated-task)))
@@ -1813,7 +1831,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Write execution state file
-          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")
+          (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")
                 state {:story-id 177
                        :task-id 181
                        :started-at "2025-10-20T14:30:00Z"}]
@@ -1837,7 +1855,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Write invalid execution state file (missing required field)
-          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")
+          (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")
                 invalid-state {:story-id 177}]
             (spit state-file (pr-str invalid-state)))
 
@@ -1856,7 +1874,7 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Write execution state file with nil story-id
-          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")
+          (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")
                 state {:story-id nil
                        :task-id 42
                        :started-at "2025-10-20T15:00:00Z"}]
@@ -1903,14 +1921,14 @@
       (let [{:keys [server client]} (create-test-server-and-client)]
         (try
           ;; Verify state file doesn't exist initially
-          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+          (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (is (not (fs/exists? state-file))))
 
           ;; Simulate task execution starting - write state directly
           (let [state {:story-id 177
                        :task-id 181
                        :started-at "2025-10-20T14:30:00Z"}
-                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
             ;; Verify state file exists and contains correct data
@@ -1933,12 +1951,12 @@
           (let [state {:story-id 177
                        :task-id 181
                        :started-at "2025-10-20T14:30:00Z"}
-                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
             (is (fs/exists? state-file)))
 
           ;; Simulate task completion - delete state file
-          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+          (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (fs/delete state-file)
 
             ;; Verify state file was removed
@@ -1957,7 +1975,7 @@
           (let [state {:story-id nil
                        :task-id 42
                        :started-at "2025-10-20T10:00:00Z"}
-                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
             ;; Verify timestamp can be read for stale detection
@@ -1978,7 +1996,7 @@
           (let [state {:story-id 177
                        :task-id 181
                        :started-at "2025-10-20T14:30:00Z"}
-                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
             ;; Verify story-id is persisted
@@ -1999,7 +2017,7 @@
           (let [state {:story-id nil
                        :task-id 42
                        :started-at "2025-10-20T15:00:00Z"}
-                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
             ;; Verify nil story-id is persisted
@@ -2022,7 +2040,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create a regular task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   task {:id 1
                         :title "Regular task"
                         :description "Test task"
@@ -2038,7 +2056,7 @@
             (let [state {:story-id nil
                          :task-id 1
                          :started-at "2025-10-20T14:30:00Z"}
-                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                  state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file) "State file should exist before completion"))
 
@@ -2050,11 +2068,11 @@
               (is (not (:isError result)) "Complete-task should succeed")
 
               ;; Verify state file was deleted
-              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
                 (is (not (fs/exists? state-file)) "State file should be cleared after completion"))
 
               ;; Verify task was moved to complete.ednl
-              (let [complete-file (io/file test-project-dir ".mcp-tasks" "complete.ednl")
+              (let [complete-file (io/file (test-project-dir) ".mcp-tasks" "complete.ednl")
                     completed-tasks (tasks-file/read-ednl (.getAbsolutePath complete-file))]
                 (is (= 1 (count completed-tasks)))
                 (is (= :closed (:status (first completed-tasks))))))
@@ -2065,12 +2083,12 @@
 
       (testing "clears state with git enabled"
         (write-config-file "{:use-git? true}")
-        (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+        (init-test-git-repo)
 
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create a regular task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   task {:id 2
                         :title "Regular task with git"
                         :description "Test task"
@@ -2086,7 +2104,7 @@
             (let [state {:story-id nil
                          :task-id 2
                          :started-at "2025-10-20T14:35:00Z"}
-                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                  state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
 
@@ -2098,7 +2116,7 @@
               (is (not (:isError result)))
 
               ;; Verify state file was deleted
-              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
                 (is (not (fs/exists? state-file)))))
 
             (finally
@@ -2112,7 +2130,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create story and child task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   story {:id 10
                          :title "Test story"
                          :description "Story for testing"
@@ -2138,7 +2156,7 @@
             (let [state {:story-id 10
                          :task-id 11
                          :started-at "2025-10-20T14:40:00Z"}
-                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                  state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
 
@@ -2150,11 +2168,11 @@
               (is (not (:isError result)))
 
               ;; Verify state file was deleted
-              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
                 (is (not (fs/exists? state-file))))
 
               ;; Verify child was marked closed but stayed in tasks.ednl
-              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+              (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                     tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
                     child-task (first (filter #(= 11 (:id %)) tasks))]
                 (is (= :closed (:status child-task)))
@@ -2166,12 +2184,12 @@
 
       (testing "clears state with git enabled"
         (write-config-file "{:use-git? true}")
-        (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+        (init-test-git-repo)
 
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create story and child task
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   story {:id 20
                          :title "Test story git"
                          :description "Story for testing"
@@ -2197,7 +2215,7 @@
             (let [state {:story-id 20
                          :task-id 21
                          :started-at "2025-10-20T14:45:00Z"}
-                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                  state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
 
@@ -2209,7 +2227,7 @@
               (is (not (:isError result)))
 
               ;; Verify state file was deleted
-              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
                 (is (not (fs/exists? state-file)))))
 
             (finally
@@ -2223,7 +2241,7 @@
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create story with child tasks
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   story {:id 30
                          :title "Story to complete"
                          :description "Story for testing"
@@ -2259,7 +2277,7 @@
             (let [state {:story-id 30
                          :task-id 30
                          :started-at "2025-10-20T14:50:00Z"}
-                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                  state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
 
@@ -2271,11 +2289,11 @@
               (is (not (:isError result)))
 
               ;; Verify state file was deleted
-              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
                 (is (not (fs/exists? state-file))))
 
               ;; Verify story and children were moved to complete.ednl
-              (let [complete-file (io/file test-project-dir ".mcp-tasks" "complete.ednl")
+              (let [complete-file (io/file (test-project-dir) ".mcp-tasks" "complete.ednl")
                     completed-tasks (tasks-file/read-ednl (.getAbsolutePath complete-file))
                     story-tasks (filter #(#{30 31 32} (:id %)) completed-tasks)]
                 (is (= 3 (count story-tasks)) "Story and 2 children should be in complete.ednl")
@@ -2289,12 +2307,12 @@
 
       (testing "clears state with git enabled"
         (write-config-file "{:use-git? true}")
-        (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+        (init-test-git-repo)
 
         (let [{:keys [server client]} (create-test-server-and-client)]
           (try
             ;; Create story with child tasks
-            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
                   story {:id 40
                          :title "Story git complete"
                          :description "Story for testing"
@@ -2320,7 +2338,7 @@
             (let [state {:story-id 40
                          :task-id 40
                          :started-at "2025-10-20T14:55:00Z"}
-                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                  state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
 
@@ -2332,7 +2350,7 @@
               (is (not (:isError result)))
 
               ;; Verify state file was deleted
-              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (let [state-file (io/file (test-project-dir) ".mcp-tasks-current.edn")]
                 (is (not (fs/exists? state-file)))))
 
             (finally
@@ -2344,8 +2362,8 @@
   ;; Each worktree should have its own .mcp-tasks-current.edn file.
   (testing "execution state worktree isolation"
     (testing "different base directories have separate state files"
-      (let [base-dir-1 (str test-project-dir "/worktree-1")
-            base-dir-2 (str test-project-dir "/worktree-2")]
+      (let [base-dir-1 (str (test-project-dir) "/worktree-1")
+            base-dir-2 (str (test-project-dir) "/worktree-2")]
 
         ;; Setup both worktrees
         (.mkdirs (io/file base-dir-1))
@@ -2383,8 +2401,8 @@
               (fs/delete-tree base-dir-2))))))
 
     (testing "clearing state in one worktree doesn't affect another"
-      (let [base-dir-1 (str test-project-dir "/worktree-a")
-            base-dir-2 (str test-project-dir "/worktree-b")]
+      (let [base-dir-1 (str (test-project-dir) "/worktree-a")
+            base-dir-2 (str (test-project-dir) "/worktree-b")]
 
         ;; Setup both worktrees
         (.mkdirs (io/file base-dir-1))
