@@ -30,6 +30,13 @@ The `:branch-management?` configuration option enables automatic git branch crea
 
 **Applies to:** Both story tasks and standalone tasks
 
+**Dependency on git mode:** Branch management requires git mode to be enabled. This means:
+- `:use-git?` must be `true` (either explicitly set or auto-detected via `.mcp-tasks/.git`)
+- You cannot use branch management without git mode
+- If you explicitly set `:use-git? false` and `:branch-management? true`, branch operations will fail at runtime since there's no git repository for the `.mcp-tasks` directory
+
+**Independent use of git mode:** Note that `:use-git?` can be used independently without `:branch-management?`. This allows you to version-control task tracking history without automatic branch creation for each task.
+
 **Branch naming convention:**
 - **Story tasks**: Branch name derived from the story title
 - **Standalone tasks**: Branch name derived from the task title
