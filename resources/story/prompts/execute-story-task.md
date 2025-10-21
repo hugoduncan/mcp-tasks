@@ -41,13 +41,14 @@ The story can be specified in multiple ways:
    - If no category is found for the task, inform the user and stop
    - The tool returns :tasks (a vector) and :metadata
 
-2. Write execution state and execute the task:
-   - First, write execution state using the `execution-state` tool:
-     - Call `mcp__mcp-tasks__execution-state` with:
-       - `action`: "write"
+2. Set up task environment and execute the task:
+   - First, set up the task environment using the `work-on` tool:
+     - Call `mcp__mcp-tasks__work-on` with:
        - `task-id`: <task-id-from-step-1>
-       - `started-at`: <current-ISO-8601-timestamp>
-       - `story-id`: <story-id-from-step-1>
+     - The tool will automatically:
+       - Write execution state with story-id and timestamp
+       - Handle branch management if configured
+       - Handle worktree management if configured
    - Then execute the task using the category workflow:
      - Do NOT check the refinement status of the task
      - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
@@ -74,6 +75,6 @@ The story can be specified in multiple ways:
 ## Error Handling
 
 - If task execution fails or is interrupted:
-  - Do NOT clear the execution state - leave it in place
-  - The stale state can be detected by external tools via the `:started-at` timestamp
-  - When starting a new task, the execution state will be overwritten automatically
+  - The execution state remains in place (managed by work-on tool)
+  - External tools can detect stale execution via the `:started-at` timestamp
+  - When starting a new task, work-on will overwrite the execution state automatically
