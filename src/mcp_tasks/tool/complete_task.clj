@@ -244,7 +244,7 @@
   (str
     "Complete a task by changing :status to :closed.\n"
     (when (:use-git? config)
-      "Automatically commits the tasj changes.\n")
+      "Automatically commits the task changes.\n")
     "\nIdentifies tasks by exact match using task-id or title (title).
    At least one identifier must be provided.
 
