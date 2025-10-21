@@ -667,7 +667,7 @@
           (is (not (contains? response :branch-created?)))
           (is (not (contains? response :branch-switched?))))))))
 
-(deftest work-on-worktree-management-creates-worktree
+(deftest work-on-worktree-creates-worktree
   ;; Test worktree creation on first execution
   (testing "work-on creates worktree on first execution"
     (let [base-dir (:base-dir (h/test-config))
@@ -711,7 +711,7 @@
             ;; Should not have written execution state since directory switch needed
             (is (not (contains? response :execution-state-file)))))))))
 
-(deftest work-on-worktree-management-reuses-existing-worktree
+(deftest work-on-worktree-reuses-existing
   ;; Test worktree reuse when already in the worktree
   (testing "work-on reuses existing worktree and checks clean status"
     (testing "detects when in worktree with uncommitted changes"
@@ -788,7 +788,7 @@
               ;; Should not have written execution state since directory switch needed
               (is (not (contains? response :execution-state-file))))))))))
 
-(deftest work-on-worktree-management-errors-on-wrong-branch
+(deftest work-on-worktree-wrong-branch-error
   ;; Test error when worktree is on wrong branch
   ;; Note: This test would require being in the worktree directory to trigger the branch check
   ;; In the test environment, we can't easily simulate that, so we skip this specific scenario
@@ -825,7 +825,7 @@
             (is (false? (:worktree-created? response)))
             (is (str/includes? (:message response) "Please start a new Claude Code session"))))))))
 
-(deftest work-on-worktree-management-requires-directory-switch
+(deftest work-on-worktree-directory-switch-required
   ;; Test that work-on informs user when they need to switch directories
   (testing "work-on requires directory switch when worktree exists but not in it"
     (let [base-dir (:base-dir (h/test-config))
