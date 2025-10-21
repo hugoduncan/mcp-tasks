@@ -50,6 +50,14 @@
       (is (= {:branch-management? false}
              (sut/validate-config {:branch-management? false}))))
 
+    (testing "accepts config with worktree-management? true"
+      (is (= {:worktree-management? true}
+             (sut/validate-config {:worktree-management? true}))))
+
+    (testing "accepts config with worktree-management? false"
+      (is (= {:worktree-management? false}
+             (sut/validate-config {:worktree-management? false}))))
+
     (testing "accepts config with both use-git? and branch-management?"
       (is (= {:use-git? true :branch-management? false}
              (sut/validate-config {:use-git? true :branch-management? false}))))
@@ -89,7 +97,17 @@
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
             #"Expected boolean for :branch-management\?, got .*Long"
-            (sut/validate-config {:branch-management? 1}))))))
+            (sut/validate-config {:branch-management? 1}))))
+
+    (testing "rejects non-boolean worktree-management? value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected boolean for :worktree-management\?, got .*String"
+            (sut/validate-config {:worktree-management? "true"})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected boolean for :worktree-management\?, got .*Long"
+            (sut/validate-config {:worktree-management? 1}))))))
 
 (deftest validate-config-error-data-structure
   ;; Test that validation errors include structured data for programmatic handling
@@ -242,6 +260,32 @@
       (setup-test-project)
       (is (= {:use-git? false :base-dir test-project-dir :other-key "value"}
              (sut/resolve-config test-project-dir {:other-key "value"}))))))
+
+(deftest resolve-config-auto-enables-branch-management
+  ;; Test that resolve-config auto-enables :branch-management? when :worktree-management? is true
+  (testing "resolve-config auto-enables branch management"
+    (testing "enables :branch-management? when :worktree-management? is true"
+      (is (= {:worktree-management? true
+              :branch-management? true
+              :use-git? false
+              :base-dir test-project-dir}
+             (sut/resolve-config test-project-dir {:worktree-management? true}))))
+
+    (testing "preserves explicit :branch-management? false when :worktree-management? is false"
+      (is (= {:worktree-management? false
+              :branch-management? false
+              :use-git? false
+              :base-dir test-project-dir}
+             (sut/resolve-config test-project-dir {:worktree-management? false
+                                                   :branch-management? false}))))
+
+    (testing "overrides :branch-management? false when :worktree-management? is true"
+      (is (= {:worktree-management? true
+              :branch-management? true
+              :use-git? false
+              :base-dir test-project-dir}
+             (sut/resolve-config test-project-dir {:worktree-management? true
+                                                   :branch-management? false}))))))
 
 (deftest validate-git-repo-with-git-disabled
   ;; Test that validation passes when git mode is disabled

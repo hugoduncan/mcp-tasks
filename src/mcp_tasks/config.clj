@@ -26,6 +26,13 @@
                        :key :branch-management?
                        :value branch-mgmt
                        :expected 'boolean?}))))
+  (when-let [worktree-mgmt (:worktree-management? config)]
+    (when-not (boolean? worktree-mgmt)
+      (throw (ex-info (str "Expected boolean for :worktree-management?, got " (type worktree-mgmt))
+                      {:type :invalid-config-type
+                       :key :worktree-management?
+                       :value worktree-mgmt
+                       :expected 'boolean?}))))
   (when-let [base-branch (:base-branch config)]
     (when-not (string? base-branch)
       (throw (ex-info (str "Expected string for :base-branch, got " (type base-branch))
@@ -88,10 +95,15 @@
   "Returns final config map with :use-git? and :base-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence.  Base directory defaults to current working directory
-  if project-dir not provided."
+  if project-dir not provided.
+  
+  When :worktree-management? is true, automatically enables :branch-management?."
   [project-dir config]
-  (let [base-dir (or project-dir (System/getProperty "user.dir"))]
-    (assoc config
+  (let [base-dir (or project-dir (System/getProperty "user.dir"))
+        config-with-branch-mgmt (if (:worktree-management? config)
+                                  (assoc config :branch-management? true)
+                                  config)]
+    (assoc config-with-branch-mgmt
            :use-git? (determine-git-mode project-dir config)
            :base-dir base-dir)))
 
