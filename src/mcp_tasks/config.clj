@@ -26,6 +26,18 @@
                        :key :branch-management?
                        :value branch-mgmt
                        :expected 'boolean?}))))
+  (when-let [base-branch (:base-branch config)]
+    (when-not (string? base-branch)
+      (throw (ex-info (str "Expected string for :base-branch, got " (type base-branch))
+                      {:type :invalid-config-type
+                       :key :base-branch
+                       :value base-branch
+                       :expected 'string?})))
+    (when (empty? base-branch)
+      (throw (ex-info "Value for :base-branch cannot be empty string"
+                      {:type :invalid-config-value
+                       :key :base-branch
+                       :value base-branch}))))
   config)
 
 (defn read-config
