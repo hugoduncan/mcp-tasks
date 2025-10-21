@@ -311,7 +311,7 @@
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts.
 
   For execute-story-task prompt, tailors content based on
-  config :story-branch-management?.
+  config :branch-management?.
 
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
@@ -330,7 +330,7 @@
                   tailored-content
                   (cond-> content
                     (and (= prompt-name "execute-story-task")
-                         (:story-branch-management? config))
+                         (:branch-management? config))
                     (str
                       "\n\n"
                       (slurp

@@ -485,8 +485,8 @@
   ;; Test that story-prompts conditionally includes branch management
   ;; instructions in execute-story-task prompt based on config.
   (testing "story-prompts branch management"
-    (testing "includes branch management when :story-branch-management? is true"
-      (let [prompts (sut/story-prompts {:story-branch-management? true})
+    (testing "includes branch management when :branch-management? is true"
+      (let [prompts (sut/story-prompts {:branch-management? true})
             execute-prompt (get prompts "execute-story-task")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
@@ -494,8 +494,8 @@
           (is (re-find #"checkout the default branch" content))
           (is (re-find #"create the appropriately named branch" content)))))
 
-    (testing "excludes branch management when :story-branch-management? is false"
-      (let [prompts (sut/story-prompts {:story-branch-management? false})
+    (testing "excludes branch management when :branch-management? is false"
+      (let [prompts (sut/story-prompts {:branch-management? false})
             execute-prompt (get prompts "execute-story-task")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
@@ -511,8 +511,8 @@
           (is (not (re-find #"checkout the default branch" content))))))
 
     (testing "does not affect other story prompts"
-      (let [prompts-with-branch (sut/story-prompts {:story-branch-management? true})
-            prompts-without-branch (sut/story-prompts {:story-branch-management? false})
+      (let [prompts-with-branch (sut/story-prompts {:branch-management? true})
+            prompts-without-branch (sut/story-prompts {:branch-management? false})
             create-with (get prompts-with-branch "create-story-tasks")
             create-without (get prompts-without-branch "create-story-tasks")]
         (is (= (:messages create-with) (:messages create-without)))))))
