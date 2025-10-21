@@ -34,6 +34,7 @@
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.complete-task :as complete-task]
     [mcp-tasks.tool.delete-task :as delete-task]
+    [mcp-tasks.tool.execution-state :as execution-state]
     [mcp-tasks.tool.select-tasks :as select-tasks]
     [mcp-tasks.tool.update-task :as update-task]))
 
@@ -47,6 +48,7 @@
   [config]
   {"complete-task" (complete-task/complete-task-tool config)
    "delete-task" (delete-task/delete-task-tool config)
+   "execution-state" (execution-state/execution-state-tool config)
    "select-tasks" (select-tasks/select-tasks-tool config)
    "add-task" (add-task/add-task-tool config)
    "update-task" (update-task/update-task-tool config)})

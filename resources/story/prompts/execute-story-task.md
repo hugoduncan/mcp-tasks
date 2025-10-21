@@ -42,15 +42,12 @@ The story can be specified in multiple ways:
    - The tool returns :tasks (a vector) and :metadata
 
 2. Write execution state and execute the task:
-   - First, write execution state using the mcp-tasks Clojure REPL:
-     ```clojure
-     (require '[mcp-tasks.execution-state :as es])
-     (es/write-execution-state!
-       "."
-       {:story-id <story-id-from-step-1>
-        :task-id <task-id-from-step-1>
-        :started-at "<current-ISO-8601-timestamp>"})
-     ```
+   - First, write execution state using the `execution-state` tool:
+     - Call `mcp__mcp-tasks__execution-state` with:
+       - `action`: "write"
+       - `task-id`: <task-id-from-step-1>
+       - `started-at`: <current-ISO-8601-timestamp>
+       - `story-id`: <story-id-from-step-1>
    - Then execute the task using the category workflow:
      - Do NOT check the refinement status of the task
      - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
@@ -65,11 +62,8 @@ The story can be specified in multiple ways:
      tool
    - Parameters: category (from step 1), title (partial match from
      beginning of task), and optionally completion-comment
-   - Clear execution state using the mcp-tasks Clojure REPL:
-     ```clojure
-     (require '[mcp-tasks.execution-state :as es])
-     (es/clear-execution-state! ".")
-     ```
+   - Clear execution state using the `execution-state` tool:
+     - Call `mcp__mcp-tasks__execution-state` with `action`: "clear"
    - Confirm to the user that the task has been marked complete
 
 ## Notes
