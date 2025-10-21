@@ -128,9 +128,8 @@ After successfully completing all execution steps:
   - `title`: The task's title (for verification)
 - Optional parameter:
   - `completion-comment`: Any notes about the completion
-- The `complete-task` tool automatically clears the execution state
 
-Confirm to the user that the task has been marked complete.
+The tool will automatically clear the execution state and confirm completion to the user.
 
 ## Notes
 

@@ -62,8 +62,7 @@ The story can be specified in multiple ways:
      tool
    - Parameters: category (from step 1), title (partial match from
      beginning of task), and optionally completion-comment
-   - The `complete-task` tool automatically clears the execution state
-   - Confirm to the user that the task has been marked complete
+   - The tool will automatically clear the execution state
 
 ## Notes
 
