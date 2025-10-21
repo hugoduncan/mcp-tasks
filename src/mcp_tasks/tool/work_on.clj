@@ -92,7 +92,7 @@
                                                    (git/branch-exists? base-dir configured-base-branch)
                                                    (str "branch-exists? " configured-base-branch))]
                                 (when-not (:exists? branch-check)
-                                  (throw (ex-info (str "Configured base branch '" configured-base-branch "' does not exist")
+                                  (throw (ex-info (str "Configured base branch " configured-base-branch " does not exist")
                                                   {:base-branch configured-base-branch
                                                    :operation "validate-base-branch"})))
                                 configured-base-branch)
@@ -250,7 +250,7 @@
 
           ;; Verify we're on the correct branch
           (when (not= current-branch branch-name)
-            (throw (ex-info (str "Worktree is on branch '" current-branch "' but expected '" branch-name "'")
+            (throw (ex-info (str "Worktree is on branch " current-branch " but expected " branch-name)
                             {:current-branch current-branch
                              :expected-branch branch-name
                              :worktree-path worktree-path

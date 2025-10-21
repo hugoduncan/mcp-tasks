@@ -644,7 +644,7 @@
 
               (is (false? (:isError result)))
               (is (contains? response :error))
-              (is (str/includes? (:error response) "Configured base branch 'nonexistent' does not exist"))
+              (is (str/includes? (:error response) "Configured base branch nonexistent does not exist"))
               (is (= "nonexistent" (get-in response [:metadata :base-branch])))
               (is (= "validate-base-branch" (get-in response [:metadata :operation]))))))))
 
