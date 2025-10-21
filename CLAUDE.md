@@ -46,6 +46,47 @@ Task relationships are defined as:
 - Depends on local `mcp-clj` server library at `../mcp-clj/projects/server`
 - Ensure the sibling mcp-clj repository is available for development
 
+## Execution State Tracking
+
+The system tracks which story and task are currently being executed, making this information discoverable from outside the agent.
+
+**Execution State Storage:**
+- `.mcp-tasks-current.edn` - Current execution state file in project root
+- `resource://current-execution` - MCP resource exposing the same information
+
+**State Schema:**
+```clojure
+{:story-id 177              ;; nil if standalone task
+ :task-id 180
+ :started-at "2025-10-20T14:30:00Z"}
+```
+
+**State Lifecycle:**
+- State file is created when task/story execution starts
+- State file is cleared when task completes successfully via `complete-task`
+- Each worktree maintains its own state file in its root directory
+- External tools can detect stale executions via `:started-at` timestamp
+
+**Querying Current Execution:**
+
+Via filesystem:
+```bash
+# Read current execution state
+cat .mcp-tasks-current.edn
+```
+
+Via MCP resource:
+```clojure
+;; Access via MCP client
+(read-resource "resource://current-execution")
+```
+
+**Use Cases:**
+- Monitor agent progress from external tools
+- Resume work after interruptions
+- Coordinate between multiple agents or tools
+- Provide status visibility in dashboards or CLIs
+
 ## Story-Based Workflow
 
 The system provides story support for managing larger features or initiatives that span multiple tasks:

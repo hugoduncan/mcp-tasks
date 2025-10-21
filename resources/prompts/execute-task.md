@@ -90,7 +90,18 @@ Once you have identified a single task:
 4. **Extract instructions**: The resource will return a `text` field
    containing the category-specific workflow steps
 
-### 4. Execute the Task
+### 4. Write Execution State
+
+Before executing the task, record execution state using the `execution-state` MCP tool:
+- Use the `mcp__mcp-tasks__execution-state` tool with the following parameters:
+  - `action`: "write"
+  - `task-id`: The task's ID number
+  - `started-at`: Current timestamp in ISO-8601 format (e.g., "2025-10-20T14:30:00Z")
+  - `story-id`: Include the task's `:parent-id` value if it exists (for story tasks), otherwise omit this parameter
+
+This creates a `.mcp-tasks-current.edn` file that external tools can use to monitor progress.
+
+### 5. Execute the Task
 
 Follow the category-specific instructions retrieved in step 3 to execute
 the task:
@@ -108,7 +119,7 @@ the task:
    with specific steps (e.g., analysis, design, planning,
    implementation). Execute each step in order.
 
-### 5. Mark Task Complete
+### 6. Mark Task Complete
 
 After successfully completing all execution steps:
 - Use the `complete-task` tool to mark the task as complete
@@ -118,7 +129,7 @@ After successfully completing all execution steps:
 - Optional parameter:
   - `completion-comment`: Any notes about the completion
 
-Confirm to the user that the task has been marked complete.
+The tool will automatically clear the execution state and confirm completion to the user.
 
 ## Notes
 
@@ -126,3 +137,7 @@ Confirm to the user that the task has been marked complete.
 - The `title-pattern` parameter accepts regex or substring matching
 - Task status defaults to "open" unless specified otherwise
 - If task execution fails or is blocked, do not mark the task as complete
+- If task execution fails or is interrupted:
+  - Do NOT clear the execution state - leave it in place
+  - The stale state can be detected by external tools via the `:started-at` timestamp
+  - When starting a new task, the execution state will be overwritten automatically

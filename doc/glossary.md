@@ -12,11 +12,15 @@
 
 **Completion Comment**: Optional text appended to a task's `:description` field when marking it complete.
 
+**Current Execution Resource**: An MCP resource (`resource://current-execution`) that exposes the currently executing story and task information for external tools and monitoring.
+
 **Category Prompts**: Category-specific execution steps defined in `.mcp-tasks/prompts/<category>.md`.
 
 **EDN (Extensible Data Notation)**: Clojure's data format used for task storage, providing rich data types and human-readable structure.
 
 **EDNL (EDN Lines)**: Line-oriented EDN format where each line contains a complete EDN data structure. Used in `tasks.ednl` and `complete.ednl` files.
+
+**Execution State**: A record of the currently executing story and task stored in `.mcp-tasks-current.edn`, containing `:story-id`, `:task-id`, and `:started-at` timestamp. Enables external monitoring and coordination.
 
 **Frontmatter**: YAML-style metadata at the start of prompt files delimited by `---`, containing key-value pairs.
 

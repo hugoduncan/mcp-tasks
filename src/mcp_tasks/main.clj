@@ -113,10 +113,12 @@
                            (tp/story-prompts config)
                            (tp/task-execution-prompts config))
         category-resources-vec (tp/category-prompt-resources config)
+        base-dir (:base-dir config)
         all-resources (merge
                         (resources/prompt-resources all-prompts)
                         (resources/category-prompt-resources
-                          category-resources-vec))]
+                          category-resources-vec)
+                        (resources/current-execution-resource base-dir))]
     {:transport transport
      :tools (tools/tools config)
      :prompts all-prompts
