@@ -263,29 +263,61 @@
 
 (deftest derive-worktree-path-test
   ;; Tests worktree path generation from titles
-  ;; Verifies sanitization and path construction
+  ;; Verifies sanitization and path construction with different prefix modes
 
   (testing "derive-worktree-path"
-    (testing "generates path from simple title"
-      (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug")]
+    (testing "with :project-name prefix (default)"
+      (testing "generates path from simple title"
+        (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug"
+                                               {:worktree-prefix :project-name})]
+          (is (true? (:success result)))
+          (is (= "/Users/test/mcp-tasks-fix-parser-bug" (:path result)))
+          (is (nil? (:error result)))))
+
+      (testing "sanitizes title with special characters"
+        (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "Add Git Worktree Management (Option)!"
+                                               {:worktree-prefix :project-name})]
+          (is (true? (:success result)))
+          (is (= "/Users/test/mcp-tasks-add-git-worktree-management-option" (:path result)))
+          (is (nil? (:error result)))))
+
+      (testing "handles multiple spaces"
+        (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix    multiple   spaces"
+                                               {:worktree-prefix :project-name})]
+          (is (true? (:success result)))
+          (is (= "/Users/test/mcp-tasks-fix-multiple-spaces" (:path result)))
+          (is (nil? (:error result))))))
+
+    (testing "with :none prefix"
+      (testing "generates path without project name"
+        (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug"
+                                               {:worktree-prefix :none})]
+          (is (true? (:success result)))
+          (is (= "/Users/test/fix-parser-bug" (:path result)))
+          (is (nil? (:error result)))))
+
+      (testing "sanitizes title with special characters"
+        (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "Add Git Worktree Management (Option)!"
+                                               {:worktree-prefix :none})]
+          (is (true? (:success result)))
+          (is (= "/Users/test/add-git-worktree-management-option" (:path result)))
+          (is (nil? (:error result)))))
+
+      (testing "handles multiple spaces"
+        (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix    multiple   spaces"
+                                               {:worktree-prefix :none})]
+          (is (true? (:success result)))
+          (is (= "/Users/test/fix-multiple-spaces" (:path result)))
+          (is (nil? (:error result))))))
+
+    (testing "uses default :project-name when config missing key"
+      (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug" {})]
         (is (true? (:success result)))
         (is (= "/Users/test/mcp-tasks-fix-parser-bug" (:path result)))
         (is (nil? (:error result)))))
 
-    (testing "sanitizes title with special characters"
-      (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "Add Git Worktree Management (Option)!")]
-        (is (true? (:success result)))
-        (is (= "/Users/test/mcp-tasks-add-git-worktree-management-option" (:path result)))
-        (is (nil? (:error result)))))
-
-    (testing "handles multiple spaces"
-      (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix    multiple   spaces")]
-        (is (true? (:success result)))
-        (is (= "/Users/test/mcp-tasks-fix-multiple-spaces" (:path result)))
-        (is (nil? (:error result)))))
-
     (testing "fails on empty title after sanitization"
-      (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "!!!")]
+      (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "!!!" {:worktree-prefix :project-name})]
         (is (false? (:success result)))
         (is (nil? (:path result)))
         (is (= "Title produced empty path after sanitization" (:error result)))))))

@@ -295,8 +295,9 @@
 (defn derive-worktree-path
   "Generates a worktree path from a project directory and title.
 
-  The worktree path is created in a sibling directory with format:
-  <parent-dir>/<project-name>-<sanitized-title>
+  The worktree path format depends on the :worktree-prefix config:
+  - :project-name (default): <parent-dir>/<project-name>-<sanitized-title>
+  - :none: <parent-dir>/<sanitized-title>
 
   The title is sanitized by:
   - Converting to lowercase
@@ -306,30 +307,38 @@
   Parameters:
   - project-dir: Path to the project directory
   - title: Story or task title to convert to path
+  - config: Configuration map containing :worktree-prefix
 
   Returns a map with:
   - :success - boolean indicating if operation succeeded
   - :path - worktree path string
   - :error - error message string (or nil if successful)"
-  [project-dir title]
+  [project-dir title config]
   (try
-    (let [name-result (derive-project-name project-dir)]
-      (if-not (:success name-result)
-        name-result
-        (let [project-name (:name name-result)
-              sanitized (-> title
-                            str/lower-case
-                            (str/replace #"\s+" "-")
-                            (str/replace #"[^a-z0-9-]" ""))
-              parent-dir (.getParent (java.io.File. project-dir))
-              worktree-path (str parent-dir "/" project-name "-" sanitized)]
-          (if (str/blank? sanitized)
-            {:success false
-             :path nil
-             :error "Title produced empty path after sanitization"}
-            {:success true
-             :path worktree-path
-             :error nil}))))
+    (let [worktree-prefix (:worktree-prefix config :project-name)
+          sanitized (-> title
+                        str/lower-case
+                        (str/replace #"\s+" "-")
+                        (str/replace #"[^a-z0-9-]" ""))
+          parent-dir (.getParent (java.io.File. project-dir))
+
+          ;; Build path based on prefix mode
+          worktree-path (if (= worktree-prefix :none)
+                          (str parent-dir "/" sanitized)
+                          (let [name-result (derive-project-name project-dir)]
+                            (if-not (:success name-result)
+                              (throw (ex-info (:error name-result)
+                                              {:operation "derive-project-name"}))
+                              (let [project-name (:name name-result)]
+                                (str parent-dir "/" project-name "-" sanitized)))))]
+
+      (if (str/blank? sanitized)
+        {:success false
+         :path nil
+         :error "Title produced empty path after sanitization"}
+        {:success true
+         :path worktree-path
+         :error nil}))
     (catch Exception e
       {:success false
        :path nil

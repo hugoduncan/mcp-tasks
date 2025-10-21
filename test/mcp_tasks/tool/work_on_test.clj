@@ -688,7 +688,7 @@
                       mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                       mcp-tasks.tools.git/create-and-checkout-branch (fn [_ _] {:success true :error nil})
                       mcp-tasks.tools.git/derive-project-name (fn [_] {:success true :name "mcp-tasks" :error nil})
-                      mcp-tasks.tools.git/derive-worktree-path (fn [_ title]
+                      mcp-tasks.tools.git/derive-worktree-path (fn [_ title _config]
                                                                  (is (= "Fix Parser Bug" title))
                                                                  {:success true :path expected-worktree-path :error nil})
                       mcp-tasks.tools.git/worktree-exists? (fn [_ path]
@@ -736,7 +736,7 @@
                         mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
                         mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                         mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                        mcp-tasks.tools.git/derive-worktree-path (fn [_ _] {:success true :path expected-worktree-path :error nil})
+                        mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
                         mcp-tasks.tools.git/worktree-exists? (fn [_ _]
                                                                {:success true :exists? true
                                                                 :worktree {:path expected-worktree-path :branch "add-feature"}
@@ -772,7 +772,7 @@
                         mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
                         mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                         mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                        mcp-tasks.tools.git/derive-worktree-path (fn [_ _] {:success true :path expected-worktree-path :error nil})
+                        mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
                         mcp-tasks.tools.git/worktree-exists? (fn [_ _]
                                                                {:success true :exists? true
                                                                 :worktree {:path expected-worktree-path :branch "clean-task"}
@@ -810,7 +810,7 @@
                       mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
                       mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                       mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                      mcp-tasks.tools.git/derive-worktree-path (fn [_ _] {:success true :path expected-worktree-path :error nil})
+                      mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
                       mcp-tasks.tools.git/worktree-exists? (fn [_ _]
                                                              {:success true :exists? true
                                                               :worktree {:path expected-worktree-path :branch "wrong-branch"}
@@ -844,7 +844,7 @@
                       mcp-tasks.tools.git/checkout-branch (fn [_ _] {:success true :error nil})
                       mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                       mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                      mcp-tasks.tools.git/derive-worktree-path (fn [_ _] {:success true :path expected-worktree-path :error nil})
+                      mcp-tasks.tools.git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
                       mcp-tasks.tools.git/worktree-exists? (fn [_ _]
                                                              {:success true :exists? true
                                                               :worktree {:path expected-worktree-path :branch "switch-dir-task"}

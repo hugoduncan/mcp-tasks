@@ -15,6 +15,8 @@ task tracking.
 {:branch-management? true}   ; Enable branch management for both story tasks and standalone tasks
 {:worktree-management? false}  ; Disable worktree management (default when key is absent)
 {:worktree-management? true}   ; Enable automatic worktree management (implies :branch-management? true)
+{:worktree-prefix :project-name}  ; Include project name in worktree directory (default)
+{:worktree-prefix :none}          ; Omit project name prefix from worktree directory
 ```
 
 **File location:**
@@ -80,21 +82,37 @@ The `:worktree-management?` configuration option enables automatic git worktree 
 **Worktree location:** Worktrees are created in sibling directories (parent of project directory).
 
 **Worktree naming convention:**
-```
-<project-name>-<story-or-task-name>
-```
+
+The `:worktree-prefix` option controls whether the project name is included in worktree directory names:
+
+- **`:project-name` (default)**: Include project name prefix
+  - Format: `<project-name>-<story-or-task-name>`
+  - Use when: Working on multiple unrelated projects to avoid conflicts
+  
+- **`:none`**: Omit project name prefix
+  - Format: `<story-or-task-name>`
+  - Use when: Working on a single project for shorter directory names
 
 Where:
 - `<project-name>`: Derived from current directory name
 - `<story-or-task-name>`: Title converted using same sanitization as branch names
 
-**Examples:**
+**Examples with `:worktree-prefix :project-name` (default):**
 ```
 Project: "mcp-tasks", Story: "Add Git Worktree Management Option"
 → Worktree path: "../mcp-tasks-add-git-worktree-management-option"
 
 Project: "mcp-tasks", Task: "Fix parser bug"
 → Worktree path: "../mcp-tasks-fix-parser-bug"
+```
+
+**Examples with `:worktree-prefix :none`:**
+```
+Project: "mcp-tasks", Story: "Add Git Worktree Management Option"
+→ Worktree path: "../add-git-worktree-management-option"
+
+Project: "mcp-tasks", Task: "Fix parser bug"
+→ Worktree path: "../fix-parser-bug"
 ```
 
 **Worktree lifecycle:**

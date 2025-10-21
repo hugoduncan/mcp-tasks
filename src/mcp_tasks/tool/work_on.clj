@@ -198,7 +198,7 @@
 
           ;; Derive worktree path
           path-result (git/ensure-git-success!
-                        (git/derive-worktree-path base-dir title)
+                        (git/derive-worktree-path base-dir title config)
                         "derive-worktree-path")
           worktree-path (:path path-result)
 
