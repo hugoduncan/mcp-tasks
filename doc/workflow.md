@@ -272,7 +272,7 @@ This agent-first approach means you don't need to learn EDN query syntax or file
 
 ### Story Branch Management
 
-When `:story-branch-management? true` is configured in `.mcp-tasks.edn`,
+When `:branch-management? true` is configured in `.mcp-tasks.edn`,
 the system automatically manages git branches for stories:
 
 **Automatic branch operations:**
@@ -281,7 +281,7 @@ the system automatically manages git branches for stories:
 - All story task commits go to the story branch
 - Branch persists across multiple task executions
 
-**Manual branch workflow (default when `:story-branch-management? false`):**
+**Manual branch workflow (default when `:branch-management? false`):**
 - You manually create and manage story branches
 - System respects your current branch
 - Gives you full control over branch strategy
@@ -289,7 +289,7 @@ the system automatically manages git branches for stories:
 **Example with branch management enabled:**
 ```bash
 # Configure story branch management
-echo '{:use-git? true :story-branch-management? true}' > .mcp-tasks.edn
+echo '{:use-git? true :branch-management? true}' > .mcp-tasks.edn
 
 # Start story work - automatically creates/switches to user-auth branch
 # Run: /mcp-tasks:execute-story-task user-auth
@@ -712,7 +712,7 @@ Execute the next task from a story.
 
 **Branch management (conditional):**
 
-If configuration includes `:story-branch-management? true`:
+If configuration includes `:branch-management? true`:
 1. Before starting task execution:
    - Checks if currently on a branch named `<story-name>`
    - If not, checks out the default branch, ensures it's up to date with
@@ -721,7 +721,7 @@ If configuration includes `:story-branch-management? true`:
    - Remains on the `<story-name>` branch for the next task
    - Does not merge or push automatically
 
-If `:story-branch-management?` is false (default):
+If `:branch-management?` is false (default):
 - Executes tasks on the current branch without any branch operations
 
 **Key characteristics:**

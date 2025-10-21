@@ -40,7 +40,7 @@ The story can be specified in multiple ways:
    - Check current branch name
    - Ensure not on master or main branch
    - If on master/main, inform user they need to be on the story branch
-   - The story branch should follow the naming convention from story-branch-management
+   - The story branch should follow the naming convention from branch-management
 
 3. Collect commits from the story branch:
    - Identify the default branch (master or main)

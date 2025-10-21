@@ -311,7 +311,7 @@
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts.
 
   For execute-story-task prompt, tailors content based on
-  config :story-branch-management?.
+  config :branch-management?.
 
   Returns a map of prompt names to prompt definitions, suitable for registering
   with the MCP server."
@@ -330,12 +330,11 @@
                   tailored-content
                   (cond-> content
                     (and (= prompt-name "execute-story-task")
-                         (:story-branch-management? config))
+                         (:branch-management? config))
                     (str
                       "\n\n"
                       (slurp
-                        (io/resource
-                          "story/prompts/story-branch-management.md"))))
+                        (io/resource "prompts/branch-management.md"))))
                   description (or (get metadata "description")
                                   (:doc (meta v))
                                   (format "Story prompt: %s" prompt-name))
@@ -378,6 +377,15 @@
                          (let [file-content (slurp resource-path)
                                {:keys [metadata content]} (parse-frontmatter
                                                             file-content)
+                               ;; Tailor execute-task content based on config
+                               tailored-content
+                               (cond-> content
+                                 (and (= prompt-name "execute-task")
+                                      (:branch-management? config))
+                                 (str
+                                   "\n\n"
+                                   (slurp
+                                     (io/resource "prompts/branch-management.md"))))
                                description (or (get metadata "description")
                                                (format
                                                  "Task execution prompt: %s"
@@ -389,7 +397,7 @@
                                        :description description
                                        :messages [{:role "user"
                                                    :content {:type "text"
-                                                             :text content}}]}
+                                                             :text tailored-content}}]}
                                 (seq arguments) (assoc
                                                   :arguments
                                                   arguments)))]))]

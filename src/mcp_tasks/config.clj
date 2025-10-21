@@ -19,12 +19,12 @@
                        :key :use-git?
                        :value use-git
                        :expected 'boolean?}))))
-  (when-let [story-branch-mgmt (:story-branch-management? config)]
-    (when-not (boolean? story-branch-mgmt)
-      (throw (ex-info (str "Expected boolean for :story-branch-management?, got " (type story-branch-mgmt))
+  (when-let [branch-mgmt (:branch-management? config)]
+    (when-not (boolean? branch-mgmt)
+      (throw (ex-info (str "Expected boolean for :branch-management?, got " (type branch-mgmt))
                       {:type :invalid-config-type
-                       :key :story-branch-management?
-                       :value story-branch-mgmt
+                       :key :branch-management?
+                       :value branch-mgmt
                        :expected 'boolean?}))))
   config)
 

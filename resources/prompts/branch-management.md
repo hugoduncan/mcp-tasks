@@ -1,18 +1,20 @@
 ## Branch Management
 
 **Branch Naming Convention:**
-The `<story-name>` branch is created from the story title by:
+The branch name is created from the title by:
 - Converting to lowercase
 - Replacing spaces with dashes
-- Removing all special characters
+- Removing all special characters (keeping only a-z, 0-9, and -)
+- For story tasks: use the story title
+- For standalone tasks: use the task title
 
 For example: "Complete Remaining Work for EDN Storage Migration" becomes "complete-remaining-work-for-edn-storage-migration"
 
 1. Before starting task execution:
-   - Check if currently on a branch named `<story-name>`
+   - Check if currently on a branch named according to the convention above
    - If not, checkout the default branch, ensure it's up to date with
-     origin, then create the `<story-name>` branch
+     origin, then create the appropriately named branch
 
 2. After task completion:
-   - Remain on the `<story-name>` branch for the next task
+   - Remain on the branch for the next task
    - Do not merge or push automatically

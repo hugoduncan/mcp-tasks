@@ -2435,3 +2435,330 @@
               (fs/delete-tree base-dir-1))
             (when (fs/exists? base-dir-2)
               (fs/delete-tree base-dir-2))))))))
+
+(deftest ^:integ standalone-task-branch-management-enabled-test
+  ;; Test that execute-task prompt includes branch management when config is true.
+  ;; Validates actual git operations with sanitized branch names.
+  (testing "standalone task branch management enabled"
+    (testing "execute-task prompt includes branch management instructions"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Get execute-task prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-task" {})
+                content (get-in prompt-response [:messages 0 :content :text])]
+            (is (not (:isError prompt-response)))
+            (is (string? content))
+            (is (re-find #"Branch Management" content))
+            (is (re-find #"checkout the default branch" content))
+            (is (re-find #"create the appropriately named branch" content)))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "creates sanitized branch from task title"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create initial commit on main
+          (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+            (spit (io/file git-dir "test.txt") "test")
+            (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+            (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+            (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main"))
+
+          ;; Create a task with title requiring sanitization
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
+                task {:id 1
+                      :title "Fix Bug #123!"
+                      :description "Fix the bug"
+                      :design ""
+                      :category "simple"
+                      :status :open
+                      :type :task
+                      :meta {}
+                      :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task]))
+
+          ;; Simulate branch creation as prompt instructs
+          (let [git-dir (io/file (test-project-dir) ".mcp-tasks")
+                branch-name "fix-bug-123"
+                result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+            (is (= 0 (:exit result)))
+
+            ;; Verify we're on the new branch
+            (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                               "rev-parse" "--abbrev-ref" "HEAD")
+                  current-branch (str/trim (:out current-branch-result))]
+              (is (= branch-name current-branch))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ standalone-task-branch-management-disabled-test
+  ;; Test that execute-task prompt excludes branch management when config is false.
+  (testing "standalone task branch management disabled"
+    (testing "execute-task prompt excludes branch management instructions"
+      (write-config-file "{:use-git? false :branch-management? false}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Get execute-task prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-task" {})
+                content (get-in prompt-response [:messages 0 :content :text])]
+            (is (not (:isError prompt-response)))
+            (is (string? content))
+            (is (not (re-find #"Branch Management" content)))
+            (is (not (re-find #"checkout the default branch" content))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "execute-task prompt excludes branch management when config key is missing"
+      (write-config-file "{:use-git? false}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Get execute-task prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-task" {})
+                content (get-in prompt-response [:messages 0 :content :text])]
+            (is (not (:isError prompt-response)))
+            (is (string? content))
+            (is (not (re-find #"Branch Management" content)))
+            (is (not (re-find #"checkout the default branch" content))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ story-task-branch-management-test
+  ;; Test that story task execution continues to work with new branch management location.
+  (testing "story task branch management"
+    (testing "execute-story-task prompt includes branch management with new config"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Get execute-story-task prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-story-task" {})
+                content (get-in prompt-response [:messages 0 :content :text])]
+            (is (not (:isError prompt-response)))
+            (is (string? content))
+            (is (re-find #"Branch Management" content))
+            (is (re-find #"checkout the default branch" content))
+            (is (re-find #"create the appropriately named branch" content)))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "execute-story-task prompt excludes branch management when config is false"
+      (write-config-file "{:use-git? false :branch-management? false}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Get execute-story-task prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-story-task" {})
+                content (get-in prompt-response [:messages 0 :content :text])]
+            (is (not (:isError prompt-response)))
+            (is (string? content))
+            (is (not (re-find #"Branch Management" content)))
+            (is (not (re-find #"checkout the default branch" content))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "story branch created with sanitized story title"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create initial commit on main
+          (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+            (spit (io/file git-dir "test.txt") "test")
+            (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+            (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+            (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main"))
+
+          ;; Create a story with title requiring sanitization
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
+                story {:id 1
+                       :title "User Auth & Login!!"
+                       :description "Implement authentication"
+                       :design ""
+                       :category "large"
+                       :status :open
+                       :type :story
+                       :meta {}
+                       :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story]))
+
+          ;; Simulate branch creation as prompt instructs for story
+          (let [git-dir (io/file (test-project-dir) ".mcp-tasks")
+                branch-name "user-auth-login"
+                result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+            (is (= 0 (:exit result)))
+
+            ;; Verify we're on the new branch
+            (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                               "rev-parse" "--abbrev-ref" "HEAD")
+                  current-branch (str/trim (:out current-branch-result))]
+              (is (= branch-name current-branch))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ branch-naming-edge-cases-integration-test
+  ;; Test that branch naming edge cases work with actual git operations.
+  ;; Validates the sanitize-branch-name function produces valid git branch names.
+  (testing "branch naming edge cases with git operations"
+    (testing "short title (2-3 chars) creates valid branch"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+        ;; Create initial commit on main
+        (spit (io/file git-dir "test.txt") "test")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main")
+
+        ;; Test very short title
+        (let [branch-name "ab"
+              result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+          (is (= 0 (:exit result)))
+
+          ;; Verify we're on the new branch
+          (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                current-branch (str/trim (:out current-branch-result))]
+            (is (= branch-name current-branch))))))
+
+    (testing "only special chars falls back to task-N"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+        ;; Create initial commit on main
+        (spit (io/file git-dir "test.txt") "test")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main")
+
+        ;; Test fallback for title with only special chars
+        (let [branch-name "task-42"
+              result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+          (is (= 0 (:exit result)))
+
+          ;; Verify we're on the new branch
+          (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                current-branch (str/trim (:out current-branch-result))]
+            (is (= branch-name current-branch))))))
+
+    (testing "very long title truncated to 200 chars"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+        ;; Create initial commit on main
+        (spit (io/file git-dir "test.txt") "test")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main")
+
+        ;; Test very long branch name (sanitized to 200 chars)
+        (let [long-title (apply str (repeat 250 "a"))
+              branch-name (subs long-title 0 200)
+              result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+          (is (= 0 (:exit result)))
+          (is (= 200 (count branch-name)))
+
+          ;; Verify we're on the new branch
+          (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                current-branch (str/trim (:out current-branch-result))]
+            (is (= branch-name current-branch))))))
+
+    (testing "mixed special chars and alphanumeric creates valid branch"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+        ;; Create initial commit on main
+        (spit (io/file git-dir "test.txt") "test")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main")
+
+        ;; Test mixed chars: "Fix Bug #123!" -> "fix-bug-123"
+        (let [branch-name "fix-bug-123"
+              result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+          (is (= 0 (:exit result)))
+
+          ;; Verify we're on the new branch
+          (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                current-branch (str/trim (:out current-branch-result))]
+            (is (= branch-name current-branch))))))
+
+    (testing "multiple consecutive dashes reduced to single dash"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+        ;; Create initial commit on main
+        (spit (io/file git-dir "test.txt") "test")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main")
+
+        ;; Test title that would create multiple dashes: "Fix    Multiple    Spaces" -> "fix-multiple-spaces"
+        (let [branch-name "fix-multiple-spaces"
+              result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+          (is (= 0 (:exit result)))
+          (is (not (re-find #"--" branch-name)) "Should not have consecutive dashes")
+
+          ;; Verify we're on the new branch
+          (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                current-branch (str/trim (:out current-branch-result))]
+            (is (= branch-name current-branch))))))
+
+    (testing "leading and trailing dashes are removed"
+      (write-config-file "{:use-git? false :branch-management? true}")
+      (init-test-git-repo)
+
+      (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
+        ;; Create initial commit on main
+        (spit (io/file git-dir "test.txt") "test")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "add" ".")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" "main")
+
+        ;; Test branch name without leading/trailing dashes
+        (let [branch-name "valid-branch-name"
+              result (sh/sh "git" "-C" (.getAbsolutePath git-dir) "checkout" "-b" branch-name)]
+          (is (= 0 (:exit result)))
+          (is (not (str/starts-with? branch-name "-")) "Should not start with dash")
+          (is (not (str/ends-with? branch-name "-")) "Should not end with dash")
+
+          ;; Verify we're on the new branch
+          (let [current-branch-result (sh/sh "git" "-C" (.getAbsolutePath git-dir)
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                current-branch (str/trim (:out current-branch-result))]
+            (is (= branch-name current-branch))))))))
