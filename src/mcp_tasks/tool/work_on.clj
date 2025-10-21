@@ -26,6 +26,7 @@
   - base-dir: Base directory of the git repository
   - task: The task being worked on
   - parent-story: The parent story (nil if standalone task)
+  - config: Configuration map from read-config
 
   Returns a map with:
   - :success - boolean indicating if operation succeeded
@@ -33,16 +34,16 @@
   - :branch-created? - boolean indicating if branch was created
   - :branch-switched? - boolean indicating if branch was switched
   - :error - error message string (or nil if successful)"
-  [base-dir task parent-story]
+  [base-dir task parent-story config]
   (try
     ;; Determine branch name from story or task title
     (let [title (if parent-story
                   (:title parent-story)
                   (:title task))
-          task-id (if parent-story
-                    (:id parent-story)
-                    (:id task))
-          branch-name (util/sanitize-branch-name title task-id)
+          branch-source-id (if parent-story
+                             (:id parent-story)
+                             (:id task))
+          branch-name (util/sanitize-branch-name title branch-source-id)
 
           ;; Get current branch
           current-branch (:branch (git/ensure-git-success!
@@ -67,8 +68,7 @@
                       :target-branch branch-name}}
 
           ;; Get base branch (from config or auto-detect)
-          (let [user-config (config/read-config base-dir)
-                configured-base-branch (:base-branch user-config)
+          (let [configured-base-branch (:base-branch config)
                 base-branch (if configured-base-branch
                               ;; Use configured base branch
                               (let [branch-check (git/ensure-git-success!
@@ -196,7 +196,7 @@
                                                                                             :file tasks-file}}})))
                                                    story))
                                   base-dir (:base-dir cfg)
-                                  branch-result (manage-branch base-dir task parent-story)]
+                                  branch-result (manage-branch base-dir task parent-story user-config)]
                               (if-not (:success branch-result)
                                 ;; Branch management failed - return error response directly
                                 (throw (ex-info "Branch management failed"
