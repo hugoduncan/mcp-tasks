@@ -33,7 +33,24 @@
   - :branch-name - the target branch name
   - :branch-created? - boolean indicating if branch was created
   - :branch-switched? - boolean indicating if branch was switched
-  - :error - error message string (or nil if successful)"
+  - :error - error message string (or nil if successful)
+
+  Examples:
+  ;; Story task, creates new branch from story title
+  (manage-branch \"/path\" task story-task config)
+  ;; => {:success true :branch-name \"my-story\" :branch-created? true :branch-switched? true}
+
+  ;; Story task, existing branch
+  (manage-branch \"/path\" task story-task config)
+  ;; => {:success true :branch-name \"my-story\" :branch-created? false :branch-switched? true}
+
+  ;; Standalone task
+  (manage-branch \"/path\" task nil config)
+  ;; => {:success true :branch-name \"my-task\" :branch-created? true :branch-switched? true}
+
+  ;; Already on correct branch (no-op case)
+  (manage-branch \"/path\" task nil config)
+  ;; => {:success true :branch-name \"my-task\" :branch-created? false :branch-switched? false}"
   [base-dir task parent-story config]
   (try
     ;; Determine branch name from story or task title
