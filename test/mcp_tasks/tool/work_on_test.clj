@@ -1,12 +1,16 @@
 (ns mcp-tasks.tool.work-on-test
   (:require
     [clojure.data.json :as json]
+    [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
+    [mcp-tasks.config :as config]
     [mcp-tasks.execution-state :as execution-state]
+    [mcp-tasks.tasks :as tasks]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.add-task :as add-task]
-    [mcp-tasks.tool.work-on :as sut]))
+    [mcp-tasks.tool.work-on :as sut]
+    [mcp-tasks.tools.git :as git]))
 
 (use-fixtures :each h/test-fixture)
 
@@ -396,14 +400,13 @@
 
         (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "No Config Task" :type "task"})
               add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
-              task-id (get-in add-response [:task :id])]
+              task-id (get-in add-response [:task :id])
+              result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
-          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
-                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-
-            (is (false? (:isError result)))
-            (is (= task-id (:task-id response)))
-            (is (not (contains? response :branch-name)))))))))
+          (is (false? (:isError result)))
+          (is (= task-id (:task-id response)))
+          (is (not (contains? response :branch-name))))))))
 
 (deftest work-on-validates-parent-story-exists
   ;; Test that work-on validates parent story exists when branch management is enabled
@@ -507,32 +510,31 @@
       (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Idempotent Task" :type "task"})
             add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
             task-id (get-in add-response [:task :id])
-            base-dir (:base-dir (h/test-config))]
+            base-dir (:base-dir (h/test-config))
 
-        ;; First call
-        (let [result1 (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
-              response1 (json/read-str (get-in result1 [:content 0 :text]) :key-fn keyword)
-              state1 (execution-state/read-execution-state base-dir)
-              timestamp1 (:started-at state1)]
+            ;; First call
+            result1 (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+            response1 (json/read-str (get-in result1 [:content 0 :text]) :key-fn keyword)
+            state1 (execution-state/read-execution-state base-dir)
+            timestamp1 (:started-at state1)
+            _ (is (false? (:isError result1)))
+            _ (is (= task-id (:task-id response1)))
 
-          (is (false? (:isError result1)))
-          (is (= task-id (:task-id response1)))
+            ;; Wait a moment to ensure timestamp changes
+            _ (Thread/sleep 10)
 
-          ;; Wait a moment to ensure timestamp changes
-          (Thread/sleep 10)
+            ;; Second call
+            result2 (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+            response2 (json/read-str (get-in result2 [:content 0 :text]) :key-fn keyword)
+            state2 (execution-state/read-execution-state base-dir)
+            timestamp2 (:started-at state2)]
 
-          ;; Second call
-          (let [result2 (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
-                response2 (json/read-str (get-in result2 [:content 0 :text]) :key-fn keyword)
-                state2 (execution-state/read-execution-state base-dir)
-                timestamp2 (:started-at state2)]
+        (is (false? (:isError result2)))
+        (is (= task-id (:task-id response2)))
 
-            (is (false? (:isError result2)))
-            (is (= task-id (:task-id response2)))
-
-            ;; Execution state should be updated with new timestamp
-            (is (= task-id (:task-id state2)))
-            (is (not= timestamp1 timestamp2) "Timestamps should differ")))))
+        ;; Execution state should be updated with new timestamp
+        (is (= task-id (:task-id state2)))
+        (is (not= timestamp1 timestamp2) "Timestamps should differ")))
 
     (testing "calling with different task-ids updates execution state"
       (let [add-result1 (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Task One" :type "task"})
@@ -654,14 +656,13 @@
 
         (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Ignored Config Task" :type "task"})
               add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
-              task-id (get-in add-response [:task :id])]
+              task-id (get-in add-response [:task :id])
+              result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
-          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
-                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-
-            (is (false? (:isError result)))
-            (is (= task-id (:task-id response)))
-            ;; No branch management should have occurred
-            (is (not (contains? response :branch-name)))
-            (is (not (contains? response :branch-created?)))
-            (is (not (contains? response :branch-switched?)))))))))
+          (is (false? (:isError result)))
+          (is (= task-id (:task-id response)))
+          ;; No branch management should have occurred
+          (is (not (contains? response :branch-name)))
+          (is (not (contains? response :branch-created?)))
+          (is (not (contains? response :branch-switched?))))))))

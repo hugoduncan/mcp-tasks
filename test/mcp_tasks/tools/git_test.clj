@@ -1,5 +1,6 @@
 (ns mcp-tasks.tools.git-test
   (:require
+    [clojure.java.shell :as shell]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.tools.git :as sut]))
 

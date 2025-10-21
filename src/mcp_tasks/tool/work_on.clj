@@ -219,35 +219,35 @@
                                 (throw (ex-info "Branch management failed"
                                                 {:response {:error (:error branch-result)
                                                             :metadata (:metadata branch-result {})}}))
-                                branch-result)))]
+                                branch-result)))
 
-          ;; Write execution state
-          (let [base-dir (:base-dir cfg)
-                story-id (:parent-id task)
-                started-at (java.time.Instant/now)
-                state {:task-id task-id
-                       :story-id story-id
-                       :started-at (str started-at)}]
-            (execution-state/write-execution-state! base-dir state)
+              ;; Write execution state
+              base-dir (:base-dir cfg)
+              story-id (:parent-id task)
+              started-at (java.time.Instant/now)
+              state {:task-id task-id
+                     :story-id story-id
+                     :started-at (str started-at)}
+              _ (execution-state/write-execution-state! base-dir state)
 
-            ;; Build success response with task details
-            (let [state-file-path (str base-dir "/.mcp-tasks-current.edn")
-                  base-response {:task-id (:id task)
-                                 :title (:title task)
-                                 :category (:category task)
-                                 :type (:type task)
-                                 :status (:status task)
-                                 :execution-state-file state-file-path
-                                 :message "Task validated successfully and execution state written"}
-                  response-data (if branch-info
-                                  (assoc base-response
-                                         :branch-name (:branch-name branch-info)
-                                         :branch-created? (:branch-created? branch-info)
-                                         :branch-switched? (:branch-switched? branch-info))
-                                  base-response)]
-              {:content [{:type "text"
-                          :text (json/write-str response-data)}]
-               :isError false})))))
+              ;; Build success response with task details
+              state-file-path (str base-dir "/.mcp-tasks-current.edn")
+              base-response {:task-id (:id task)
+                             :title (:title task)
+                             :category (:category task)
+                             :type (:type task)
+                             :status (:status task)
+                             :execution-state-file state-file-path
+                             :message "Task validated successfully and execution state written"}
+              response-data (if branch-info
+                              (assoc base-response
+                                     :branch-name (:branch-name branch-info)
+                                     :branch-created? (:branch-created? branch-info)
+                                     :branch-switched? (:branch-switched? branch-info))
+                              base-response)]
+          {:content [{:type "text"
+                      :text (json/write-str response-data)}]
+           :isError false})))
 
     (catch clojure.lang.ExceptionInfo e
       ;; Handle validation errors with structured response
