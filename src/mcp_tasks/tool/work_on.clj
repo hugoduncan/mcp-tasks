@@ -11,6 +11,7 @@
   manual workflow preparation, and external tool integration."
   (:require
     [clojure.data.json :as json]
+    [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.response :as response]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.helpers :as helpers]))
@@ -18,18 +19,22 @@
 (defn- work-on-impl
   "Implementation of work-on tool.
 
-  Validates that the specified task exists and returns task details.
+  Validates that the specified task exists, writes execution state, and returns task details.
 
   Parameters:
   - task-id (required, integer): The ID of the task to work on
 
   Returns JSON-encoded response with:
-  - Task details (id, title, category, type)
+  - Task details (id, title, category, type, status)
+  - Execution state file path
   - Success indicator
 
-  For this initial implementation, we focus on core functionality:
-  task validation and basic response structure. Branch management
-  and execution state will be added in subsequent iterations."
+  Writes execution state to .mcp-tasks-current.edn with:
+  - task-id: The task being worked on
+  - story-id: The parent story ID if this is a story task, nil otherwise
+  - started-at: ISO-8601 timestamp when work started
+
+  Branch management will be added in a subsequent iteration."
   [config _context {:keys [task-id]}]
   (try
     ;; Validate task-id parameter
@@ -68,16 +73,27 @@
             (throw (ex-info "Task not found"
                             {:response response-data}))))
 
-        ;; Build success response with task details
-        (let [response-data {:task-id (:id task)
-                             :title (:title task)
-                             :category (:category task)
-                             :type (:type task)
-                             :status (:status task)
-                             :message "Task validated successfully"}]
-          {:content [{:type "text"
-                      :text (json/write-str response-data)}]
-           :isError false})))
+        ;; Write execution state
+        (let [base-dir (:base-dir config)
+              story-id (:parent-id task)
+              started-at (java.time.Instant/now)
+              state {:task-id task-id
+                     :story-id story-id
+                     :started-at (str started-at)}]
+          (execution-state/write-execution-state! base-dir state)
+
+          ;; Build success response with task details
+          (let [state-file-path (str base-dir "/.mcp-tasks-current.edn")
+                response-data {:task-id (:id task)
+                               :title (:title task)
+                               :category (:category task)
+                               :type (:type task)
+                               :status (:status task)
+                               :execution-state-file state-file-path
+                               :message "Task validated successfully and execution state written"}]
+            {:content [{:type "text"
+                        :text (json/write-str response-data)}]
+             :isError false}))))
 
     (catch clojure.lang.ExceptionInfo e
       ;; Handle validation errors with structured response

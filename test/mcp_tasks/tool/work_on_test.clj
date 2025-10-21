@@ -3,6 +3,7 @@
     [clojure.data.json :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
+    [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.work-on :as sut]))
@@ -100,3 +101,56 @@
         (is (false? (:isError result)))
         (is (= "User Story" (:title response)))
         (is (= "story" (:type response)))))))
+
+(deftest work-on-writes-execution-state
+  ;; Test that work-on writes execution state correctly
+  (testing "work-on writes execution state"
+    (testing "writes execution state for standalone task"
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Standalone Task" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])
+
+            result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+
+            ;; Read execution state
+            base-dir (:base-dir (h/test-config))
+            state (execution-state/read-execution-state base-dir)]
+
+        (is (false? (:isError result)))
+        (is (str/includes? (:message response) "execution state written"))
+        (is (contains? response :execution-state-file))
+
+        ;; Verify execution state content
+        (is (some? state))
+        (is (= task-id (:task-id state)))
+        (is (nil? (:story-id state)))
+        (is (string? (:started-at state)))
+        (is (not (str/blank? (:started-at state))))))
+
+    (testing "writes execution state for story task"
+      ;; Create a story
+      (let [story-result (#'add-task/add-task-impl (h/test-config) nil {:category "story" :title "Test Story" :type "story"})
+            story-response (json/read-str (get-in story-result [:content 1 :text]) :key-fn keyword)
+            story-id (get-in story-response [:task :id])
+
+            ;; Create a task with parent-id
+            task-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Story Task" :type "task" :parent-id story-id})
+            task-response (json/read-str (get-in task-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in task-response [:task :id])
+
+            result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+
+            ;; Read execution state
+            base-dir (:base-dir (h/test-config))
+            state (execution-state/read-execution-state base-dir)]
+
+        (is (false? (:isError result)))
+        (is (str/includes? (:message response) "execution state written"))
+
+        ;; Verify execution state content includes story-id
+        (is (some? state))
+        (is (= task-id (:task-id state)))
+        (is (= story-id (:story-id state)))
+        (is (string? (:started-at state)))))))
