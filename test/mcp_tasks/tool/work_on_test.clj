@@ -10,30 +10,26 @@
 
 (use-fixtures :each h/test-fixture)
 
-(deftest work-on-validates-task-id-required
-  ;; Test that work-on requires task-id parameter
-  (testing "work-on validates task-id is required"
-    (let [result (#'sut/work-on-impl (h/test-config) nil {})
-          response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-      (is (false? (:isError result)))
-      (is (contains? response :error))
-      (is (str/includes? (:error response) "task-id parameter is required")))))
+(deftest work-on-parameter-validation
+  ;; Test that work-on validates input parameters correctly
+  (testing "work-on parameter validation"
+    (testing "validates task-id is required"
+      (let [result (#'sut/work-on-impl (h/test-config) nil {})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (contains? response :error))
+        (is (str/includes? (:error response) "task-id parameter is required"))))
 
-(deftest work-on-validates-task-id-type
-  ;; Test that work-on validates task-id is an integer
-  (testing "work-on validates task-id is an integer"
-    (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id "not-an-int"})
-          response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-      (is (false? (:isError result)))
-      (is (contains? response :error))
-      (is (str/includes? (:error response) "task-id must be an integer"))
-      (is (= "not-an-int" (get-in response [:metadata :provided-value])))
-      (is (contains? (:metadata response) :provided-type)))))
+    (testing "validates task-id is an integer"
+      (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id "not-an-int"})
+            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+        (is (false? (:isError result)))
+        (is (contains? response :error))
+        (is (str/includes? (:error response) "task-id must be an integer"))
+        (is (= "not-an-int" (get-in response [:metadata :provided-value])))
+        (is (contains? (:metadata response) :provided-type))))
 
-(deftest work-on-validates-task-exists
-  ;; Test that work-on validates the task exists
-  (testing "work-on validates task exists"
-    (testing "returns error when task does not exist"
+    (testing "validates task exists"
       (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id 99999})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
@@ -300,9 +296,9 @@
               (is (true? (:branch-created? response)))
               (is (true? (:branch-switched? response))))))))))
 
-(deftest work-on-branch-management-error-handling
-  ;; Test error handling for branch management operations
-  (testing "work-on handles branch management errors"
+(deftest work-on-error-handling
+  ;; Test error handling for branch management and configuration operations
+  (testing "work-on error handling"
     (testing "returns error when uncommitted changes detected"
       (let [base-dir (:base-dir (h/test-config))
             config-file (str base-dir "/.mcp-tasks.edn")]
@@ -374,7 +370,40 @@
               (is (false? (:isError result)))
               (is (contains? response :error))
               (is (str/includes? (:error response) "Failed to checkout"))
-              (is (contains? (:metadata response) :operation)))))))))
+              (is (contains? (:metadata response) :operation)))))))
+
+    (testing "continues without branch management when config is invalid"
+      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Test Config Error" :type "task"})
+            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            task-id (get-in add-response [:task :id])]
+
+        ;; Mock config/read-config to simulate invalid config that returns default (empty map)
+        (with-redefs [mcp-tasks.config/read-config (fn [_] {})]
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            ;; Should succeed, but without branch management
+            (is (false? (:isError result)))
+            (is (= task-id (:task-id response)))
+            (is (not (contains? response :branch-name)))))))
+
+    (testing "continues when config file doesn't exist"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        ;; Ensure no config file exists
+        (when (.exists (clojure.java.io/file config-file))
+          (clojure.java.io/delete-file config-file))
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "No Config Task" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+            (is (false? (:isError result)))
+            (is (= task-id (:task-id response)))
+            (is (not (contains? response :branch-name)))))))))
 
 (deftest work-on-validates-parent-story-exists
   ;; Test that work-on validates parent story exists when branch management is enabled
@@ -525,33 +554,114 @@
         (let [state2 (execution-state/read-execution-state base-dir)]
           (is (= task-id2 (:task-id state2))))))))
 
-(deftest work-on-handles-config-read-errors
-  ;; Test that work-on gracefully handles config read errors
-  (testing "work-on handles config read errors"
-    (testing "continues without branch management when config is invalid"
-      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Test Config Error" :type "task"})
-            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
-            task-id (get-in add-response [:task :id])]
+(deftest work-on-base-branch-configuration
+  ;; Test that work-on handles base branch configuration correctly
+  (testing "work-on base branch configuration"
+    (testing "uses configured base branch"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        (spit config-file "{:branch-management? true :base-branch \"develop\"}")
 
-        ;; Mock config/read-config to simulate invalid config that returns default (empty map)
-        (with-redefs [mcp-tasks.config/read-config (fn [_] {})]
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Feature Task" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          ;; Mock git operations
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ branch-name]
+                                                             (cond
+                                                               (= branch-name "develop") {:success true :exists? true :error nil}
+                                                               (= branch-name "feature-task") {:success true :exists? false :error nil}
+                                                               :else {:success true :exists? false :error nil}))
+                        mcp-tasks.tools.git/checkout-branch (fn [_ branch-name]
+                                                              (when (= branch-name "develop")
+                                                                (is true "Should checkout configured base branch 'develop'"))
+                                                              {:success true :error nil})
+                        mcp-tasks.tools.git/pull-latest (fn [_ branch-name]
+                                                          (is (= "develop" branch-name) "Should pull from configured base branch")
+                                                          {:success true :pulled? true :error nil})
+                        mcp-tasks.tools.git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (= "feature-task" (:branch-name response)))
+              (is (true? (:branch-created? response)))
+              (is (true? (:branch-switched? response))))))))
+
+    (testing "falls back to auto-detection when base-branch not configured"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        (spit config-file "{:branch-management? true}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Auto Detect Task" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          ;; Mock git operations - should call get-default-branch
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "feature" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/get-default-branch (fn [_]
+                                                                 (is true "Should call get-default-branch when no base-branch configured")
+                                                                 {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/checkout-branch (fn [_ branch-name]
+                                                              (when (= branch-name "main")
+                                                                (is true "Should checkout auto-detected default branch"))
+                                                              {:success true :error nil})
+                        mcp-tasks.tools.git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                        mcp-tasks.tools.git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (= "auto-detect-task" (:branch-name response))))))))
+
+    (testing "errors when configured base branch doesn't exist"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        (spit config-file "{:branch-management? true :base-branch \"nonexistent\"}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Missing Branch Task" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
+          ;; Mock git operations - branch doesn't exist
+          (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                        mcp-tasks.tools.git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        mcp-tasks.tools.git/branch-exists? (fn [_ branch-name]
+                                                             (if (= branch-name "nonexistent")
+                                                               {:success true :exists? false :error nil}
+                                                               {:success true :exists? true :error nil}))]
+
+            (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
+                  response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError result)))
+              (is (contains? response :error))
+              (is (str/includes? (:error response) "Configured base branch 'nonexistent' does not exist"))
+              (is (= "nonexistent" (get-in response [:metadata :base-branch])))
+              (is (= "validate-base-branch" (get-in response [:metadata :operation]))))))))
+
+    (testing "ignores base-branch when branch management disabled"
+      (let [base-dir (:base-dir (h/test-config))
+            config-file (str base-dir "/.mcp-tasks.edn")]
+        ;; Config with base-branch but branch-management disabled
+        (spit config-file "{:branch-management? false :base-branch \"develop\"}")
+
+        (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Ignored Config Task" :type "task"})
+              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              task-id (get-in add-response [:task :id])]
+
           (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
-            ;; Should succeed, but without branch management
             (is (false? (:isError result)))
             (is (= task-id (:task-id response)))
-            (is (not (contains? response :branch-name)))))))
-
-    (testing "continues when config file doesn't exist"
-      (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "No Config Task" :type "task"})
-            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
-            task-id (get-in add-response [:task :id])]
-
-        ;; No config file should exist in fresh test environment
-        (let [result (#'sut/work-on-impl (h/test-config) nil {:task-id task-id})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-
-          (is (false? (:isError result)))
-          (is (= task-id (:task-id response)))
-          (is (not (contains? response :branch-name))))))))
+            ;; No branch management should have occurred
+            (is (not (contains? response :branch-name)))
+            (is (not (contains? response :branch-created?)))
+            (is (not (contains? response :branch-switched?)))))))))
