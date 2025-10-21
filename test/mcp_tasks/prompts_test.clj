@@ -492,7 +492,7 @@
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (re-find #"Branch Management" content))
           (is (re-find #"checkout the default branch" content))
-          (is (re-find #"create the `<story-name>` branch" content)))))
+          (is (re-find #"create the appropriately named branch" content)))))
 
     (testing "excludes branch management when :story-branch-management? is false"
       (let [prompts (sut/story-prompts {:story-branch-management? false})

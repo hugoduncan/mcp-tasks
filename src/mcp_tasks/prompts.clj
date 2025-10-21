@@ -334,8 +334,7 @@
                     (str
                       "\n\n"
                       (slurp
-                        (io/resource
-                          "story/prompts/story-branch-management.md"))))
+                        (io/resource "prompts/branch-management.md"))))
                   description (or (get metadata "description")
                                   (:doc (meta v))
                                   (format "Story prompt: %s" prompt-name))
