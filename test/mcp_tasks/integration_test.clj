@@ -6,6 +6,7 @@
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
     [babashka.fs :as fs]
+    [clojure.data.json :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -1792,7 +1793,7 @@
   ;; Test that current-execution resource exposes execution state correctly.
   ;; Validates resource reads .mcp-tasks-current.edn and returns proper format.
   (testing "current-execution resource"
-    (testing "returns nil when no execution state exists"
+    (testing "returns null when no execution state exists"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
@@ -1800,7 +1801,7 @@
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)]
             (is (not (:isError read-response)))
-            (is (= "nil" text)))
+            (is (= "null" text)))
 
           (finally
             (mcp-client/close! client)
@@ -1820,7 +1821,7 @@
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)
-                state (edn/read-string text)]
+                state (json/read-str text :key-fn keyword)]
             (is (not (:isError read-response)))
             (is (= 177 (:story-id state)))
             (is (= 181 (:task-id state)))
@@ -1830,7 +1831,7 @@
             (mcp-client/close! client)
             ((:stop server))))))
 
-    (testing "returns nil when execution state file is invalid"
+    (testing "returns null when execution state file is invalid"
       (write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (create-test-server-and-client)]
@@ -1843,7 +1844,7 @@
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)]
             (is (not (:isError read-response)))
-            (is (= "nil" text)))
+            (is (= "null" text)))
 
           (finally
             (mcp-client/close! client)
@@ -1863,7 +1864,7 @@
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)
-                state (edn/read-string text)]
+                state (json/read-str text :key-fn keyword)]
             (is (not (:isError read-response)))
             (is (nil? (:story-id state)))
             (is (= 42 (:task-id state)))
