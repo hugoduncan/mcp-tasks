@@ -128,16 +128,9 @@ After successfully completing all execution steps:
   - `title`: The task's title (for verification)
 - Optional parameter:
   - `completion-comment`: Any notes about the completion
+- The `complete-task` tool automatically clears the execution state
 
 Confirm to the user that the task has been marked complete.
-
-### 7. Clear Execution State
-
-After successfully marking the task as complete, clear the execution state:
-- Use the `mcp__mcp-tasks__execution-state` tool with:
-  - `action`: "clear"
-
-This removes the `.mcp-tasks-current.edn` file, signaling that no task is currently executing.
 
 ## Notes
 

@@ -1,6 +1,8 @@
 (ns mcp-tasks.tool.complete-task-test
   (:require
+    [babashka.fs :as fs]
     [clojure.data.json :as json]
+    [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.test-helpers :as h]
@@ -550,3 +552,146 @@
         (let [completed-tasks (h/read-ednl-test-file "complete.ednl")]
           (is (= 4 (count completed-tasks))))
         (is (empty? (h/read-ednl-test-file "tasks.ednl")))))))
+
+;; Execution State Clearing Tests
+
+(deftest complete-regular-task-clears-execution-state
+  ;; Tests that completing a regular task automatically clears the execution state.
+  (testing "complete-task"
+    (testing "clears execution state when completing regular task"
+      ;; Setup task
+      (h/write-ednl-test-file
+        "tasks.ednl"
+        [{:id 1
+          :parent-id nil
+          :title "regular task"
+          :description "test task"
+          :design ""
+          :category "test"
+          :type :task
+          :status :open
+          :meta {}
+          :relations []}])
+
+      ;; Write execution state file to simulate task execution
+      (let [state {:story-id nil
+                   :task-id 1
+                   :started-at "2025-10-20T14:30:00Z"}
+            state-file (io/file h/*test-dir* ".mcp-tasks-current.edn")]
+        (spit state-file (pr-str state))
+        (is (fs/exists? state-file)))
+
+      ;; Complete the task
+      (let [result (#'sut/complete-task-impl
+                    (h/test-config)
+                    nil
+                    {:task-id 1})]
+        (is (false? (:isError result)))
+
+        ;; Verify execution state file was cleared
+        (let [state-file (io/file h/*test-dir* ".mcp-tasks-current.edn")]
+          (is (not (fs/exists? state-file))))))))
+
+(deftest complete-child-task-clears-execution-state
+  ;; Tests that completing a story child task automatically clears the execution state.
+  (testing "complete-task"
+    (testing "clears execution state when completing child task"
+      ;; Setup story and child task
+      (h/write-ednl-test-file
+        "tasks.ednl"
+        [{:id 50
+          :parent-id nil
+          :title "story task"
+          :description "parent story"
+          :design ""
+          :category "simple"
+          :type :story
+          :status :open
+          :meta {}
+          :relations []}
+         {:id 51
+          :parent-id 50
+          :title "child task"
+          :description "child of story"
+          :design ""
+          :category "test"
+          :type :task
+          :status :open
+          :meta {}
+          :relations []}])
+
+      ;; Write execution state file to simulate task execution
+      (let [state {:story-id 50
+                   :task-id 51
+                   :started-at "2025-10-20T14:30:00Z"}
+            state-file (io/file h/*test-dir* ".mcp-tasks-current.edn")]
+        (spit state-file (pr-str state))
+        (is (fs/exists? state-file)))
+
+      ;; Complete the child task
+      (let [result (#'sut/complete-task-impl
+                    (h/test-config)
+                    nil
+                    {:task-id 51})]
+        (is (false? (:isError result)))
+
+        ;; Verify execution state file was cleared
+        (let [state-file (io/file h/*test-dir* ".mcp-tasks-current.edn")]
+          (is (not (fs/exists? state-file))))))))
+
+(deftest complete-story-task-clears-execution-state
+  ;; Tests that completing a story task automatically clears the execution state.
+  (testing "complete-task"
+    (testing "clears execution state when completing story task"
+      ;; Setup story with closed children
+      (h/write-ednl-test-file
+        "tasks.ednl"
+        [{:id 60
+          :parent-id nil
+          :title "story task"
+          :description "parent story"
+          :design ""
+          :category "simple"
+          :type :story
+          :status :open
+          :meta {}
+          :relations []}
+         {:id 61
+          :parent-id 60
+          :title "child task 1"
+          :description "first child"
+          :design ""
+          :category "test"
+          :type :task
+          :status :closed
+          :meta {}
+          :relations []}
+         {:id 62
+          :parent-id 60
+          :title "child task 2"
+          :description "second child"
+          :design ""
+          :category "test"
+          :type :task
+          :status :closed
+          :meta {}
+          :relations []}])
+
+      ;; Write execution state file to simulate task execution
+      (let [state {:story-id nil
+                   :task-id 60
+                   :started-at "2025-10-20T14:30:00Z"}
+            state-file (io/file h/*test-dir* ".mcp-tasks-current.edn")]
+        (spit state-file (pr-str state))
+        (is (fs/exists? state-file)))
+
+      ;; Complete the story task
+      (let [result (#'sut/complete-task-impl
+                    (h/test-config)
+                    nil
+                    {:task-id 60})]
+        (is (false? (:isError result)))
+
+        ;; Verify execution state file was cleared
+        (let [state-file (io/file h/*test-dir* ".mcp-tasks-current.edn")]
+          (is (not (fs/exists? state-file))))))))

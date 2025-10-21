@@ -57,13 +57,12 @@ The story can be specified in multiple ways:
      - The task is already in the tasks queue
      - Complete all implementation steps according to the category workflow
 
-3. Mark the task as complete and clear execution state:
+3. Mark the task as complete:
    - After task execution completes successfully, use the `complete-task`
      tool
    - Parameters: category (from step 1), title (partial match from
      beginning of task), and optionally completion-comment
-   - Clear execution state using the `execution-state` tool:
-     - Call `mcp__mcp-tasks__execution-state` with `action`: "clear"
+   - The `complete-task` tool automatically clears the execution state
    - Confirm to the user that the task has been marked complete
 
 ## Notes

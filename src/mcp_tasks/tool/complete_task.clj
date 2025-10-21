@@ -17,6 +17,7 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
+    [mcp-tasks.execution-state :as exec-state]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
@@ -38,6 +39,8 @@
     ;; Get the updated task after marking complete
     (let [updated-task (tasks/get-task (:id task))]
       (tasks/move-task! (:id task) tasks-file complete-file)
+      ;; Clear execution state after successful completion
+      (exec-state/clear-execution-state! (:base-dir config))
 
       (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
             modified-files [tasks-rel-path complete-rel-path]
@@ -89,6 +92,8 @@
         ;; Get the updated task after marking complete
         (let [updated-task (tasks/get-task (:id task))]
           (tasks/save-tasks! tasks-file)
+          ;; Clear execution state after successful completion
+          (exec-state/clear-execution-state! (:base-dir config))
 
           (let [msg-text (str "Task " (:id task) " completed")
                 modified-files [tasks-rel-path]
@@ -142,6 +147,8 @@
               child-count (count children)]
           ;; Move story and all children to complete.ednl atomically
           (tasks/move-tasks! all-ids tasks-file complete-file)
+          ;; Clear execution state after successful completion
+          (exec-state/clear-execution-state! (:base-dir config))
 
           ;; Prepare response
           (let [msg-text (str "Story " (:id task) " completed and archived"
