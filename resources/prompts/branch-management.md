@@ -4,7 +4,7 @@
 The branch name is created from the title by:
 - Converting to lowercase
 - Replacing spaces with dashes
-- Removing all special characters
+- Removing all special characters (keeping only a-z, 0-9, and -)
 - For story tasks: use the story title
 - For standalone tasks: use the task title
 
