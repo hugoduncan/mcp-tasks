@@ -1,1 +1,3 @@
-{:branch-management? true}
+{:branch-management? true
+ :worktree-management? true
+ :worktree-prefix :none}
