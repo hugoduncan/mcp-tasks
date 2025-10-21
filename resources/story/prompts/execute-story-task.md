@@ -41,20 +41,35 @@ The story can be specified in multiple ways:
    - If no category is found for the task, inform the user and stop
    - The tool returns :tasks (a vector) and :metadata
 
-2. Execute the task directly using the category workflow:
-   - Do NOT check the refinement status of the task
-   - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
-   - For example, if category is "simple", execute the `category-simple` prompt
-   - Run `/mcp-tasks:category-<category>` or use the
-     `prompt://category-<category>` resource to access the prompt
-   - The task is already in the tasks queue
-   - Complete all implementation steps according to the category workflow
+2. Write execution state and execute the task:
+   - First, write execution state using the mcp-tasks Clojure REPL:
+     ```clojure
+     (require '[mcp-tasks.execution-state :as es])
+     (es/write-execution-state!
+       "."
+       {:story-id <story-id-from-step-1>
+        :task-id <task-id-from-step-1>
+        :started-at "<current-ISO-8601-timestamp>"})
+     ```
+   - Then execute the task using the category workflow:
+     - Do NOT check the refinement status of the task
+     - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
+     - For example, if category is "simple", execute the `category-simple` prompt
+     - Run `/mcp-tasks:category-<category>` or use the
+       `prompt://category-<category>` resource to access the prompt
+     - The task is already in the tasks queue
+     - Complete all implementation steps according to the category workflow
 
-3. Mark the task as complete:
+3. Mark the task as complete and clear execution state:
    - After task execution completes successfully, use the `complete-task`
      tool
    - Parameters: category (from step 1), title (partial match from
      beginning of task), and optionally completion-comment
+   - Clear execution state using the mcp-tasks Clojure REPL:
+     ```clojure
+     (require '[mcp-tasks.execution-state :as es])
+     (es/clear-execution-state! ".")
+     ```
    - Confirm to the user that the task has been marked complete
 
 ## Notes
@@ -63,3 +78,10 @@ The story can be specified in multiple ways:
 - The category workflow will find and execute the task by its position
   in the queue
 - If task execution fails, do not mark the task as complete
+
+## Error Handling
+
+- If task execution fails or is interrupted:
+  - Do NOT clear the execution state - leave it in place
+  - The stale state can be detected by external tools via the `:started-at` timestamp
+  - When starting a new task, the execution state will be overwritten automatically
