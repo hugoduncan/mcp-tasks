@@ -140,6 +140,26 @@
        :error (:error (ex-data e) (.getMessage e))
        :metadata (dissoc (ex-data e) :error)})))
 
+(defn- in-worktree?
+  "Check if the current directory is inside the specified worktree path.
+  
+  Compares canonical paths to handle symlinks and relative paths correctly."
+  [current-dir worktree-path]
+  (when worktree-path
+    (let [worktree-canonical (.getCanonicalPath (java.io.File. worktree-path))]
+      (= current-dir worktree-canonical))))
+
+(defn- worktree-needs-creation?
+  "Check if a worktree needs to be created (doesn't exist yet)."
+  [worktree-exists?]
+  (not worktree-exists?))
+
+(defn- worktree-needs-switch?
+  "Check if we need to switch to an existing worktree (exists but we're not in it)."
+  [worktree-exists? current-dir worktree-path]
+  (and worktree-exists?
+       (not (in-worktree? current-dir worktree-path))))
+
 (defn- manage-worktree
   "Manages git worktree for task execution.
 
@@ -204,8 +224,6 @@
 
           ;; Get current working directory (canonical path)
           current-dir (.getCanonicalPath (java.io.File. (System/getProperty "user.dir")))
-          worktree-canonical-path (when worktree-path
-                                    (.getCanonicalPath (java.io.File. worktree-path)))
 
           ;; Check if worktree exists
           exists-result (git/ensure-git-success!
@@ -215,7 +233,7 @@
 
       (cond
         ;; Worktree doesn't exist - create it
-        (not worktree-exists?)
+        (worktree-needs-creation? worktree-exists?)
         (do
           (git/ensure-git-success!
             (git/create-worktree base-dir worktree-path branch-name)
@@ -230,7 +248,7 @@
            :message (str "Worktree created at " worktree-path ". Please start a new Claude Code session in that directory.")})
 
         ;; Worktree exists but we're not in it
-        (not= current-dir worktree-canonical-path)
+        (worktree-needs-switch? worktree-exists? current-dir worktree-path)
         {:success true
          :worktree-path worktree-path
          :worktree-created? false
@@ -404,15 +422,14 @@
     ;; Validate parameters
     (validate-task-id-param task-id)
 
-    ;; Load and validate task and parent story
+    ;; Load task, story, config, and setup base directory
     (let [{:keys [task parent-story]} (load-task-and-story cfg task-id)
-
-          ;; Load user configuration
           user-config (config/read-config (:base-dir cfg))
           base-dir (:base-dir cfg)
+          branch-mgmt-enabled? (:branch-management? user-config)
+          worktree-mgmt-enabled? (:worktree-management? user-config)
 
           ;; Handle branch management if configured
-          branch-mgmt-enabled? (:branch-management? user-config)
           branch-info (when branch-mgmt-enabled?
                         (let [branch-result (manage-branch base-dir task parent-story user-config)]
                           (when-not (:success branch-result)
@@ -422,7 +439,6 @@
                           branch-result))
 
           ;; Handle worktree management if configured
-          worktree-mgmt-enabled? (:worktree-management? user-config)
           worktree-info (when worktree-mgmt-enabled?
                           (let [worktree-result (manage-worktree base-dir task parent-story user-config)]
                             (when-not (:success worktree-result)
@@ -447,16 +463,13 @@
            :isError false})
 
         ;; Otherwise proceed with execution state and normal response
-        (let [;; Write execution state
-              story-id (:parent-id task)
+        (let [story-id (:parent-id task)
               started-at (java.time.Instant/now)
               state {:task-id task-id
                      :story-id story-id
                      :started-at (str started-at)}
               _ (execution-state/write-execution-state! base-dir state)
               state-file-path (str base-dir "/.mcp-tasks-current.edn")]
-
-          ;; Build and return success response
           (build-success-response task branch-info worktree-info state-file-path))))
 
     (catch clojure.lang.ExceptionInfo e
