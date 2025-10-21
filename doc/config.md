@@ -11,8 +11,8 @@ task tracking.
 ```clojure
 {:use-git? true}   ; Enable git mode
 {:use-git? false}  ; Disable git mode
-{:branch-management? false}  ; Disable story branch management (default)
-{:branch-management? true}   ; Enable story branch management
+{:branch-management? false}  ; Disable branch management (default when key is absent)
+{:branch-management? true}   ; Enable branch management for both story tasks and standalone tasks
 ```
 
 **File location:**
@@ -20,6 +20,42 @@ task tracking.
 project-root/
 ├── .mcp-tasks/       # Task files directory
 └── .mcp-tasks.edn    # Optional configuration file
+```
+
+### Branch Management
+
+The `:branch-management?` configuration option enables automatic git branch creation and switching during task execution.
+
+**Default behavior:** When `:branch-management?` is not present in the config, it defaults to `false` (no branch management).
+
+**Applies to:** Both story tasks and standalone tasks
+
+**Branch naming convention:**
+- **Story tasks**: Branch name derived from the story title
+- **Standalone tasks**: Branch name derived from the task title
+
+**Sanitization pattern** (same for both):
+- Convert to lowercase
+- Replace spaces with dashes
+- Remove all special characters (keep only a-z, 0-9, -)
+- Replace multiple consecutive dashes with single dash
+- Trim leading/trailing dashes
+- Truncate to 200 characters maximum
+- Fallback to `task-<task-id>` if result is empty
+
+**Examples:**
+```
+Story title: "Implement Branch Management for Tasks"
+→ Branch name: "implement-branch-management-for-tasks"
+
+Task title: "Update documentation for new config option"
+→ Branch name: "update-documentation-for-new-config-option"
+
+Task title: "Fix bug #123"
+→ Branch name: "fix-bug-123"
+
+Task title: "!!!" (empty after sanitization, task-id=45)
+→ Branch name: "task-45"
 ```
 
 ### Auto-Detection Mechanism
