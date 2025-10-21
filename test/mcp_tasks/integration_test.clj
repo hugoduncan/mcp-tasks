@@ -6,6 +6,7 @@
    thoroughly tested in unit tests (tools_test.clj, prompts_test.clj)."
   (:require
     [babashka.fs :as fs]
+    [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -225,8 +226,8 @@
                 (is (string? (:name resource)))
                 (is (string? (:uri resource)))
                 (is (string? (:mimeType resource)))
-                (is (= "text/markdown" (:mimeType resource)))
-                (is (str/starts-with? (:uri resource) "prompt://"))))
+                (is (or (str/starts-with? (:uri resource) "prompt://")
+                        (str/starts-with? (:uri resource) "resource://")))))
 
             (testing "includes resources for all configured prompts"
               (let [resource-names (set (map :name resources))]
@@ -238,8 +239,9 @@
         (testing "can read resource content"
           (let [resources-response @(mcp-client/list-resources client)
                 resources (:resources resources-response)
-                first-resource (first resources)
-                uri (:uri first-resource)
+                ;; Find a prompt resource to test (not resource://)
+                prompt-resource (first (filter #(str/starts-with? (:uri %) "prompt://") resources))
+                uri (:uri prompt-resource)
                 read-response @(mcp-client/read-resource client uri)
                 contents (:contents read-response)]
             (is (not (:isError read-response)))
@@ -317,11 +319,12 @@
               (let [uri (:uri resource)
                     read-response @(mcp-client/read-resource client uri)
                     text (-> read-response :contents first :text)
-                    is-category-resource? (str/starts-with? uri "prompt://category-")]
+                    is-category-resource? (str/starts-with? uri "prompt://category-")
+                    is-prompt-resource? (str/starts-with? uri "prompt://")]
                 (is (not (:isError read-response))
                     (str "Should read resource successfully: " uri))
-                ;; Category resources have frontmatter stripped, only check other resources
-                (when-not is-category-resource?
+                ;; Only prompt resources have frontmatter (not category or resource:// resources)
+                (when (and is-prompt-resource? (not is-category-resource?))
                   (is (str/starts-with? text "---\n")
                       (str "Resource should have YAML frontmatter: " uri))
                   (is (str/includes? text "\n---\n")
@@ -1780,6 +1783,110 @@
             (is (= "Updated desc" (:description updated-task)))
             ;; Meta should remain unchanged
             (is (= {"refined" "true" "priority" "high"} (:meta updated-task))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ current-execution-resource-test
+  ;; Test that current-execution resource exposes execution state correctly.
+  ;; Validates resource reads .mcp-tasks-current.edn and returns proper format.
+  (testing "current-execution resource"
+    (testing "returns nil when no execution state exists"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [read-response @(mcp-client/read-resource client "resource://current-execution")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (= "nil" text)))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "returns execution state when file exists"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Write execution state file
+          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")
+                state {:story-id 177
+                       :task-id 181
+                       :started-at "2025-10-20T14:30:00Z"}]
+            (spit state-file (pr-str state)))
+
+          (let [read-response @(mcp-client/read-resource client "resource://current-execution")
+                text (-> read-response :contents first :text)
+                state (edn/read-string text)]
+            (is (not (:isError read-response)))
+            (is (= 177 (:story-id state)))
+            (is (= 181 (:task-id state)))
+            (is (= "2025-10-20T14:30:00Z" (:started-at state))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "returns nil when execution state file is invalid"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Write invalid execution state file (missing required field)
+          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")
+                invalid-state {:story-id 177}]
+            (spit state-file (pr-str invalid-state)))
+
+          (let [read-response @(mcp-client/read-resource client "resource://current-execution")
+                text (-> read-response :contents first :text)]
+            (is (not (:isError read-response)))
+            (is (= "nil" text)))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "returns execution state with nil story-id for standalone task"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Write execution state file with nil story-id
+          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")
+                state {:story-id nil
+                       :task-id 42
+                       :started-at "2025-10-20T15:00:00Z"}]
+            (spit state-file (pr-str state)))
+
+          (let [read-response @(mcp-client/read-resource client "resource://current-execution")
+                text (-> read-response :contents first :text)
+                state (edn/read-string text)]
+            (is (not (:isError read-response)))
+            (is (nil? (:story-id state)))
+            (is (= 42 (:task-id state)))
+            (is (= "2025-10-20T15:00:00Z" (:started-at state))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "resource is listed in available resources"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          (let [resources-response @(mcp-client/list-resources client)
+                resources (:resources resources-response)
+                current-exec-resource (first (filter #(= "resource://current-execution" (:uri %))
+                                                     resources))]
+            (is (some? current-exec-resource))
+            (is (= "current-execution" (:name current-exec-resource)))
+            (is (= "resource://current-execution" (:uri current-exec-resource)))
+            (is (= "application/json" (:mimeType current-exec-resource)))
+            (is (= "Current story and task execution state" (:description current-exec-resource))))
 
           (finally
             (mcp-client/close! client)

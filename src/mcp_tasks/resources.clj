@@ -1,7 +1,8 @@
 (ns mcp-tasks.resources
   "Resource definitions for MCP server"
   (:require
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [mcp-tasks.execution-state :as execution-state]))
 
 (defn- format-argument-hint
   "Format argument hint from prompt :arguments vector.
@@ -97,3 +98,29 @@
               :mime-type (:mimeType resource)
               :description (:description resource)
               :implementation impl-fn}]))))
+
+(defn current-execution-resource
+  "Create resource definition for current execution state.
+
+  Returns a resource definition that exposes the current story/task
+  execution state from .mcp-tasks-current.edn.
+
+  Parameters:
+  - base-dir: Path to project root directory (where .mcp-tasks-current.edn lives)"
+  [base-dir]
+  (let [uri "resource://current-execution"
+        impl-fn (fn [_context _uri]
+                  (let [state (execution-state/read-execution-state base-dir)]
+                    (if state
+                      {:contents [{:uri uri
+                                   :mimeType "application/json"
+                                   :text (pr-str state)}]}
+                      {:contents [{:uri uri
+                                   :mimeType "application/json"
+                                   :text "nil"}]})))]
+    {uri
+     {:name "current-execution"
+      :uri uri
+      :mime-type "application/json"
+      :description "Current story and task execution state"
+      :implementation impl-fn}}))
