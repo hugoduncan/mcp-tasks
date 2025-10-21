@@ -2011,6 +2011,334 @@
             (mcp-client/close! client)
             ((:stop server))))))))
 
+(deftest ^:integ complete-task-clears-execution-state-test
+  ;; Test that complete-task tool automatically clears execution state after successful completion.
+  ;; Validates integration between complete-task and execution state clearing across all task types.
+  (testing "complete-task tool clears execution state"
+    (testing "regular task completion"
+      (testing "clears state with git disabled"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create a regular task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  task {:id 1
+                        :title "Regular task"
+                        :description "Test task"
+                        :design ""
+                        :category "simple"
+                        :status :open
+                        :type :task
+                        :meta {}
+                        :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task]))
+
+            ;; Simulate execution state being written when task starts
+            (let [state {:story-id nil
+                         :task-id 1
+                         :started-at "2025-10-20T14:30:00Z"}
+                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (spit state-file (pr-str state))
+              (is (fs/exists? state-file) "State file should exist before completion"))
+
+            ;; Call complete-task tool
+            (let [result @(mcp-client/call-tool
+                            client
+                            "complete-task"
+                            {:task-id 1})]
+              (is (not (:isError result)) "Complete-task should succeed")
+
+              ;; Verify state file was deleted
+              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                (is (not (fs/exists? state-file)) "State file should be cleared after completion"))
+
+              ;; Verify task was moved to complete.ednl
+              (let [complete-file (io/file test-project-dir ".mcp-tasks" "complete.ednl")
+                    completed-tasks (tasks-file/read-ednl (.getAbsolutePath complete-file))]
+                (is (= 1 (count completed-tasks)))
+                (is (= :closed (:status (first completed-tasks))))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "clears state with git enabled"
+        (write-config-file "{:use-git? true}")
+        (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create a regular task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  task {:id 2
+                        :title "Regular task with git"
+                        :description "Test task"
+                        :design ""
+                        :category "simple"
+                        :status :open
+                        :type :task
+                        :meta {}
+                        :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task]))
+
+            ;; Simulate execution state
+            (let [state {:story-id nil
+                         :task-id 2
+                         :started-at "2025-10-20T14:35:00Z"}
+                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (spit state-file (pr-str state))
+              (is (fs/exists? state-file)))
+
+            ;; Call complete-task tool
+            (let [result @(mcp-client/call-tool
+                            client
+                            "complete-task"
+                            {:task-id 2})]
+              (is (not (:isError result)))
+
+              ;; Verify state file was deleted
+              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                (is (not (fs/exists? state-file)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))
+
+    (testing "child task completion"
+      (testing "clears state with git disabled"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create story and child task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  story {:id 10
+                         :title "Test story"
+                         :description "Story for testing"
+                         :design ""
+                         :category "large"
+                         :status :open
+                         :type :story
+                         :meta {}
+                         :relations []}
+                  child {:id 11
+                         :parent-id 10
+                         :title "Child task"
+                         :description "Test child"
+                         :design ""
+                         :category "simple"
+                         :status :open
+                         :type :task
+                         :meta {}
+                         :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story child]))
+
+            ;; Simulate execution state with story-id
+            (let [state {:story-id 10
+                         :task-id 11
+                         :started-at "2025-10-20T14:40:00Z"}
+                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (spit state-file (pr-str state))
+              (is (fs/exists? state-file)))
+
+            ;; Call complete-task tool for child
+            (let [result @(mcp-client/call-tool
+                            client
+                            "complete-task"
+                            {:task-id 11})]
+              (is (not (:isError result)))
+
+              ;; Verify state file was deleted
+              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                (is (not (fs/exists? state-file))))
+
+              ;; Verify child was marked closed but stayed in tasks.ednl
+              (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                    tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                    child-task (first (filter #(= 11 (:id %)) tasks))]
+                (is (= :closed (:status child-task)))
+                (is (= 10 (:parent-id child-task)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "clears state with git enabled"
+        (write-config-file "{:use-git? true}")
+        (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create story and child task
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  story {:id 20
+                         :title "Test story git"
+                         :description "Story for testing"
+                         :design ""
+                         :category "large"
+                         :status :open
+                         :type :story
+                         :meta {}
+                         :relations []}
+                  child {:id 21
+                         :parent-id 20
+                         :title "Child task git"
+                         :description "Test child"
+                         :design ""
+                         :category "simple"
+                         :status :open
+                         :type :task
+                         :meta {}
+                         :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story child]))
+
+            ;; Simulate execution state
+            (let [state {:story-id 20
+                         :task-id 21
+                         :started-at "2025-10-20T14:45:00Z"}
+                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (spit state-file (pr-str state))
+              (is (fs/exists? state-file)))
+
+            ;; Call complete-task tool
+            (let [result @(mcp-client/call-tool
+                            client
+                            "complete-task"
+                            {:task-id 21})]
+              (is (not (:isError result)))
+
+              ;; Verify state file was deleted
+              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                (is (not (fs/exists? state-file)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))
+
+    (testing "story task completion"
+      (testing "clears state with git disabled"
+        (write-config-file "{:use-git? false}")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create story with child tasks
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  story {:id 30
+                         :title "Story to complete"
+                         :description "Story for testing"
+                         :design ""
+                         :category "large"
+                         :status :open
+                         :type :story
+                         :meta {}
+                         :relations []}
+                  child1 {:id 31
+                          :parent-id 30
+                          :title "Child 1"
+                          :description "First child"
+                          :design ""
+                          :category "simple"
+                          :status :closed
+                          :type :task
+                          :meta {}
+                          :relations []}
+                  child2 {:id 32
+                          :parent-id 30
+                          :title "Child 2"
+                          :description "Second child"
+                          :design ""
+                          :category "simple"
+                          :status :closed
+                          :type :task
+                          :meta {}
+                          :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story child1 child2]))
+
+            ;; Simulate execution state
+            (let [state {:story-id 30
+                         :task-id 30
+                         :started-at "2025-10-20T14:50:00Z"}
+                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (spit state-file (pr-str state))
+              (is (fs/exists? state-file)))
+
+            ;; Call complete-task tool for story
+            (let [result @(mcp-client/call-tool
+                            client
+                            "complete-task"
+                            {:task-id 30})]
+              (is (not (:isError result)))
+
+              ;; Verify state file was deleted
+              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                (is (not (fs/exists? state-file))))
+
+              ;; Verify story and children were moved to complete.ednl
+              (let [complete-file (io/file test-project-dir ".mcp-tasks" "complete.ednl")
+                    completed-tasks (tasks-file/read-ednl (.getAbsolutePath complete-file))
+                    story-tasks (filter #(#{30 31 32} (:id %)) completed-tasks)]
+                (is (= 3 (count story-tasks)) "Story and 2 children should be in complete.ednl")
+                (is (some #(and (= 30 (:id %)) (= :closed (:status %))) story-tasks))
+                (is (some #(and (= 31 (:id %)) (= :closed (:status %))) story-tasks))
+                (is (some #(and (= 32 (:id %)) (= :closed (:status %))) story-tasks))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))
+
+      (testing "clears state with git enabled"
+        (write-config-file "{:use-git? true}")
+        (.mkdirs (io/file test-project-dir ".mcp-tasks" ".git"))
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create story with child tasks
+            (let [tasks-file (io/file test-project-dir ".mcp-tasks" "tasks.ednl")
+                  story {:id 40
+                         :title "Story git complete"
+                         :description "Story for testing"
+                         :design ""
+                         :category "large"
+                         :status :open
+                         :type :story
+                         :meta {}
+                         :relations []}
+                  child {:id 41
+                         :parent-id 40
+                         :title "Child git"
+                         :description "Child task"
+                         :design ""
+                         :category "simple"
+                         :status :closed
+                         :type :task
+                         :meta {}
+                         :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story child]))
+
+            ;; Simulate execution state
+            (let [state {:story-id 40
+                         :task-id 40
+                         :started-at "2025-10-20T14:55:00Z"}
+                  state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+              (spit state-file (pr-str state))
+              (is (fs/exists? state-file)))
+
+            ;; Call complete-task tool
+            (let [result @(mcp-client/call-tool
+                            client
+                            "complete-task"
+                            {:task-id 40})]
+              (is (not (:isError result)))
+
+              ;; Verify state file was deleted
+              (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+                (is (not (fs/exists? state-file)))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server)))))))))
+
 (deftest ^:integ execution-state-worktree-isolation-test
   ;; Test that execution state is isolated per worktree/base-dir.
   ;; Each worktree should have its own .mcp-tasks-current.edn file.
