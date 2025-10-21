@@ -334,7 +334,13 @@
                     (str
                       "\n\n"
                       (slurp
-                        (io/resource "prompts/branch-management.md"))))
+                        (io/resource "prompts/branch-management.md")))
+                    (and (= prompt-name "execute-story-task")
+                         (:worktree-management? config))
+                    (str
+                      "\n\n"
+                      (slurp
+                        (io/resource "prompts/worktree-management.md"))))
                   description (or (get metadata "description")
                                   (:doc (meta v))
                                   (format "Story prompt: %s" prompt-name))
@@ -385,7 +391,13 @@
                                  (str
                                    "\n\n"
                                    (slurp
-                                     (io/resource "prompts/branch-management.md"))))
+                                     (io/resource "prompts/branch-management.md")))
+                                 (and (= prompt-name "execute-task")
+                                      (:worktree-management? config))
+                                 (str
+                                   "\n\n"
+                                   (slurp
+                                     (io/resource "prompts/worktree-management.md"))))
                                description (or (get metadata "description")
                                                (format
                                                  "Task execution prompt: %s"
