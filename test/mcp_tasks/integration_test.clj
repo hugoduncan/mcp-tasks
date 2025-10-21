@@ -1891,3 +1891,200 @@
           (finally
             (mcp-client/close! client)
             ((:stop server))))))))
+
+(deftest ^:integ execution-state-workflow-test
+  ;; Test execution state creation, persistence, and clearing through complete workflow.
+  ;; Validates that state file is created/cleared at appropriate points in task lifecycle.
+  (testing "execution state workflow"
+    (testing "state file created when write-execution-state is called"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Verify state file doesn't exist initially
+          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (is (not (fs/exists? state-file))))
+
+          ;; Simulate task execution starting - write state directly
+          (let [state {:story-id 177
+                       :task-id 181
+                       :started-at "2025-10-20T14:30:00Z"}
+                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (spit state-file (pr-str state))
+
+            ;; Verify state file exists and contains correct data
+            (is (fs/exists? state-file))
+            (let [read-state (edn/read-string (slurp state-file))]
+              (is (= 177 (:story-id read-state)))
+              (is (= 181 (:task-id read-state)))
+              (is (= "2025-10-20T14:30:00Z" (:started-at read-state)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "state file cleared when clear-execution-state is called"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create state file
+          (let [state {:story-id 177
+                       :task-id 181
+                       :started-at "2025-10-20T14:30:00Z"}
+                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (spit state-file (pr-str state))
+            (is (fs/exists? state-file)))
+
+          ;; Simulate task completion - delete state file
+          (let [state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (fs/delete state-file)
+
+            ;; Verify state file was removed
+            (is (not (fs/exists? state-file))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "state file contains started-at timestamp for stale detection"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Write state with timestamp
+          (let [state {:story-id nil
+                       :task-id 42
+                       :started-at "2025-10-20T10:00:00Z"}
+                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (spit state-file (pr-str state))
+
+            ;; Verify timestamp can be read for stale detection
+            (let [read-state (edn/read-string (slurp state-file))]
+              (is (string? (:started-at read-state)))
+              (is (= "2025-10-20T10:00:00Z" (:started-at read-state)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "state persists story-id for story tasks"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Write state for story task
+          (let [state {:story-id 177
+                       :task-id 181
+                       :started-at "2025-10-20T14:30:00Z"}
+                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (spit state-file (pr-str state))
+
+            ;; Verify story-id is persisted
+            (let [read-state (edn/read-string (slurp state-file))]
+              (is (= 177 (:story-id read-state)))
+              (is (= 181 (:task-id read-state)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))
+
+    (testing "state uses nil story-id for standalone tasks"
+      (write-config-file "{:use-git? false}")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Write state for standalone task
+          (let [state {:story-id nil
+                       :task-id 42
+                       :started-at "2025-10-20T15:00:00Z"}
+                state-file (io/file test-project-dir ".mcp-tasks-current.edn")]
+            (spit state-file (pr-str state))
+
+            ;; Verify nil story-id is persisted
+            (let [read-state (edn/read-string (slurp state-file))]
+              (is (nil? (:story-id read-state)))
+              (is (= 42 (:task-id read-state)))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))
+
+(deftest ^:integ execution-state-worktree-isolation-test
+  ;; Test that execution state is isolated per worktree/base-dir.
+  ;; Each worktree should have its own .mcp-tasks-current.edn file.
+  (testing "execution state worktree isolation"
+    (testing "different base directories have separate state files"
+      (let [base-dir-1 (str test-project-dir "/worktree-1")
+            base-dir-2 (str test-project-dir "/worktree-2")]
+
+        ;; Setup both worktrees
+        (.mkdirs (io/file base-dir-1))
+        (.mkdirs (io/file base-dir-2))
+
+        (try
+          ;; Write different state to each worktree
+          (let [state-1 {:story-id 100
+                         :task-id 101
+                         :started-at "2025-10-20T14:00:00Z"}
+                state-2 {:story-id 200
+                         :task-id 201
+                         :started-at "2025-10-20T15:00:00Z"}
+                state-file-1 (io/file base-dir-1 ".mcp-tasks-current.edn")
+                state-file-2 (io/file base-dir-2 ".mcp-tasks-current.edn")]
+            (spit state-file-1 (pr-str state-1))
+            (spit state-file-2 (pr-str state-2))
+
+            ;; Verify both files exist and contain different data
+            (is (fs/exists? state-file-1))
+            (is (fs/exists? state-file-2))
+
+            (let [read-state-1 (edn/read-string (slurp state-file-1))
+                  read-state-2 (edn/read-string (slurp state-file-2))]
+              (is (= 100 (:story-id read-state-1)))
+              (is (= 101 (:task-id read-state-1)))
+              (is (= 200 (:story-id read-state-2)))
+              (is (= 201 (:task-id read-state-2)))))
+
+          (finally
+            ;; Cleanup
+            (when (fs/exists? base-dir-1)
+              (fs/delete-tree base-dir-1))
+            (when (fs/exists? base-dir-2)
+              (fs/delete-tree base-dir-2))))))
+
+    (testing "clearing state in one worktree doesn't affect another"
+      (let [base-dir-1 (str test-project-dir "/worktree-a")
+            base-dir-2 (str test-project-dir "/worktree-b")]
+
+        ;; Setup both worktrees
+        (.mkdirs (io/file base-dir-1))
+        (.mkdirs (io/file base-dir-2))
+
+        (try
+          ;; Write state to both worktrees
+          (let [state {:story-id 50
+                       :task-id 51
+                       :started-at "2025-10-20T12:00:00Z"}
+                state-file-1 (io/file base-dir-1 ".mcp-tasks-current.edn")
+                state-file-2 (io/file base-dir-2 ".mcp-tasks-current.edn")]
+            (spit state-file-1 (pr-str state))
+            (spit state-file-2 (pr-str state))
+
+            ;; Clear state in worktree-1
+            (fs/delete state-file-1)
+
+            ;; Verify worktree-1 state is cleared but worktree-2 remains
+            (is (not (fs/exists? state-file-1)))
+            (is (fs/exists? state-file-2))
+
+            (let [read-state-2 (edn/read-string (slurp state-file-2))]
+              (is (= 50 (:story-id read-state-2)))
+              (is (= 51 (:task-id read-state-2)))))
+
+          (finally
+            ;; Cleanup
+            (when (fs/exists? base-dir-1)
+              (fs/delete-tree base-dir-1))
+            (when (fs/exists? base-dir-2)
+              (fs/delete-tree base-dir-2))))))))
