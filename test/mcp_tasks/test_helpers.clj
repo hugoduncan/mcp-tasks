@@ -72,6 +72,30 @@
         result (sh/sh "git" "rev-parse" "HEAD" :dir git-dir)]
     (zero? (:exit result))))
 
+(defn derive-test-worktree-path
+  "Generate expected worktree path for testing.
+  Mimics the logic from mcp-tasks.tools.git/derive-worktree-path
+  using the test directory structure.
+  
+  Parameters:
+  - base-dir: Test base directory (from *test-dir*)
+  - title: Task or story title
+  - config: Optional config map (default uses :worktree-prefix :project-name)
+  
+  Returns the expected worktree path string."
+  ([base-dir title]
+   (derive-test-worktree-path base-dir title {:worktree-prefix :project-name}))
+  ([base-dir title config]
+   (let [worktree-prefix (:worktree-prefix config :project-name)
+         sanitized (-> title
+                       str/lower-case
+                       (str/replace #"\s+" "-")
+                       (str/replace #"[^a-z0-9-]" ""))
+         parent-dir (.getParent (io/file base-dir))]
+     (if (= worktree-prefix :none)
+       (str parent-dir "/" sanitized)
+       (str parent-dir "/mcp-tasks-" sanitized)))))
+
 (defn test-fixture
   "Fixture that sets up and cleans up test directory for each test.
   Binds *test-dir* to a temporary directory and resets task state."

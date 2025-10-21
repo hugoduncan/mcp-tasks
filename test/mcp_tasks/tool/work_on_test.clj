@@ -677,7 +677,7 @@
       (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Fix Parser Bug" :type "task"})
             add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
             task-id (get-in add-response [:task :id])
-            expected-worktree-path (str (.getParent (io/file base-dir)) "/mcp-tasks-fix-parser-bug")]
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Fix Parser Bug")]
 
         ;; Mock git and file operations
         (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
@@ -722,7 +722,7 @@
       ;; so we verify the "exists but not in it" behavior
       (let [base-dir (:base-dir (h/test-config))
             config-file (str base-dir "/.mcp-tasks.edn")
-            expected-worktree-path (str (.getParent (io/file base-dir)) "/mcp-tasks-add-feature")]
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Add Feature")]
         (spit config-file "{:worktree-management? true}")
 
         (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Add Feature" :type "task"})
@@ -758,7 +758,7 @@
       ;; actually being in the worktree directory
       (let [base-dir (:base-dir (h/test-config))
             config-file (str base-dir "/.mcp-tasks.edn")
-            expected-worktree-path (str (.getParent (io/file base-dir)) "/mcp-tasks-clean-task")]
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Clean Task")]
         (spit config-file "{:worktree-management? true}")
 
         (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Clean Task" :type "task"})
@@ -835,7 +835,7 @@
       (let [add-result (#'add-task/add-task-impl (h/test-config) nil {:category "simple" :title "Switch Dir Task" :type "task"})
             add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
             task-id (get-in add-response [:task :id])
-            expected-worktree-path "/some/other/path/mcp-tasks-switch-dir-task"]
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Switch Dir Task")]
 
         ;; Mock to simulate worktree exists but we're not in it
         (with-redefs [mcp-tasks.tools.git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
