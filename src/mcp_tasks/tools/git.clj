@@ -4,6 +4,22 @@
     [clojure.java.shell :as sh]
     [clojure.string :as str]))
 
+(defn ensure-git-success!
+  "Throws ex-info if git operation failed. Returns result on success.
+  
+  Parameters:
+  - result: Map with :success and :error keys from a git operation
+  - operation: String describing the operation for error context
+  
+  Returns the result map unchanged if successful.
+  Throws ex-info with operation details if failed."
+  [result operation]
+  (when-not (:success result)
+    (throw (ex-info (str "Git operation failed: " operation)
+                    {:error (:error result)
+                     :operation operation})))
+  result)
+
 (defn perform-git-commit
   "Performs git add and commit operations.
 
@@ -244,7 +260,7 @@
         {:success true
          :pulled? false
          :error nil}))
-    (catch Exception e
+    (catch Exception _
       ;; Exception during pull - treat as local-only repo
       {:success true
        :pulled? false

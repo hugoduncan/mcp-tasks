@@ -34,120 +34,94 @@
   - :branch-switched? - boolean indicating if branch was switched
   - :error - error message string (or nil if successful)"
   [base-dir task parent-story]
-  ;; Determine branch name from story or task title
-  (let [title (if parent-story
-                (:title parent-story)
-                (:title task))
-        task-id (if parent-story
-                  (:id parent-story)
-                  (:id task))
-        branch-name (util/sanitize-branch-name title task-id)]
+  (try
+    ;; Determine branch name from story or task title
+    (let [title (if parent-story
+                  (:title parent-story)
+                  (:title task))
+          task-id (if parent-story
+                    (:id parent-story)
+                    (:id task))
+          branch-name (util/sanitize-branch-name title task-id)
 
-    ;; Get current branch
-    (let [current-branch-result (git/get-current-branch base-dir)]
-      (if-not (:success current-branch-result)
-        {:success false
-         :error (:error current-branch-result)
-         :metadata {:operation "get-current-branch"}}
+          ;; Get current branch
+          current-branch (:branch (git/ensure-git-success!
+                                    (git/get-current-branch base-dir)
+                                    "get-current-branch"))]
 
-        (let [current-branch (:branch current-branch-result)]
-          (if (= current-branch branch-name)
-            ;; Already on target branch
-            {:success true
-             :branch-name branch-name
-             :branch-created? false
-             :branch-switched? false
-             :error nil}
+      (if (= current-branch branch-name)
+        ;; Already on target branch
+        {:success true
+         :branch-name branch-name
+         :branch-created? false
+         :branch-switched? false
+         :error nil}
 
-            ;; Need to switch branches
-            (let [;; Check for uncommitted changes
-                  changes-result (git/check-uncommitted-changes base-dir)]
-              (if-not (:success changes-result)
-                {:success false
-                 :error (:error changes-result)
-                 :metadata {:operation "check-uncommitted-changes"}}
+        ;; Need to switch branches - check for uncommitted changes first
+        (if (:has-changes? (git/ensure-git-success!
+                             (git/check-uncommitted-changes base-dir)
+                             "check-uncommitted-changes"))
+          {:success false
+           :error "Cannot switch branches with uncommitted changes. Please commit or stash your changes first."
+           :metadata {:current-branch current-branch
+                      :target-branch branch-name}}
 
-                (if (:has-changes? changes-result)
-                  {:success false
-                   :error "Cannot switch branches with uncommitted changes. Please commit or stash your changes first."
-                   :metadata {:current-branch current-branch
-                              :target-branch branch-name}}
+          ;; Get base branch (from config or auto-detect)
+          (let [user-config (config/read-config base-dir)
+                configured-base-branch (:base-branch user-config)
+                base-branch (if configured-base-branch
+                              ;; Use configured base branch
+                              (let [branch-check (git/ensure-git-success!
+                                                   (git/branch-exists? base-dir configured-base-branch)
+                                                   (str "branch-exists? " configured-base-branch))]
+                                (when-not (:exists? branch-check)
+                                  (throw (ex-info (str "Configured base branch '" configured-base-branch "' does not exist")
+                                                  {:base-branch configured-base-branch
+                                                   :operation "validate-base-branch"})))
+                                configured-base-branch)
+                              ;; Auto-detect default branch
+                              (:branch (git/ensure-git-success!
+                                         (git/get-default-branch base-dir)
+                                         "get-default-branch")))]
 
-                  ;; Get base branch (from config or auto-detect)
-                  (let [user-config (config/read-config base-dir)
-                        configured-base-branch (:base-branch user-config)
-                        base-branch-result (if configured-base-branch
-                                             ;; Use configured base branch
-                                             (let [branch-exists-result (git/branch-exists? base-dir configured-base-branch)]
-                                               (if-not (:success branch-exists-result)
-                                                 {:success false
-                                                  :error (:error branch-exists-result)
-                                                  :metadata {:operation "branch-exists?"
-                                                             :branch configured-base-branch}}
-                                                 (if-not (:exists? branch-exists-result)
-                                                   {:success false
-                                                    :error (str "Configured base branch '" configured-base-branch "' does not exist")
-                                                    :metadata {:base-branch configured-base-branch
-                                                               :operation "validate-base-branch"}}
-                                                   {:success true :branch configured-base-branch})))
-                                             ;; Auto-detect default branch
-                                             (let [default-branch-result (git/get-default-branch base-dir)]
-                                               (if-not (:success default-branch-result)
-                                                 {:success false
-                                                  :error (:error default-branch-result)
-                                                  :metadata {:operation "get-default-branch"}}
-                                                 {:success true :branch (:branch default-branch-result)})))]
+            ;; Checkout base branch
+            (git/ensure-git-success!
+              (git/checkout-branch base-dir base-branch)
+              (str "checkout-branch " base-branch))
 
-                    (if-not (:success base-branch-result)
-                      base-branch-result
+            ;; Pull latest (ignore errors for local-only repos)
+            (git/pull-latest base-dir base-branch)
 
-                      (let [base-branch (:branch base-branch-result)
-                            ;; Checkout base branch
-                            checkout-base-result (git/checkout-branch base-dir base-branch)]
-                        (if-not (:success checkout-base-result)
-                          {:success false
-                           :error (:error checkout-base-result)
-                           :metadata {:operation "checkout-branch"
-                                      :branch base-branch}}
+            ;; Check if target branch exists and act accordingly
+            (if (:exists? (git/ensure-git-success!
+                            (git/branch-exists? base-dir branch-name)
+                            (str "branch-exists? " branch-name)))
+              ;; Branch exists, checkout
+              (do
+                (git/ensure-git-success!
+                  (git/checkout-branch base-dir branch-name)
+                  (str "checkout-branch " branch-name))
+                {:success true
+                 :branch-name branch-name
+                 :branch-created? false
+                 :branch-switched? true
+                 :error nil})
 
-                          (do
-                            ;; Pull latest (ignore errors for local-only repos)
-                            (git/pull-latest base-dir base-branch)
+              ;; Branch doesn't exist, create and checkout
+              (do
+                (git/ensure-git-success!
+                  (git/create-and-checkout-branch base-dir branch-name)
+                  (str "create-and-checkout-branch " branch-name))
+                {:success true
+                 :branch-name branch-name
+                 :branch-created? true
+                 :branch-switched? true
+                 :error nil}))))))
 
-                            ;; Check if target branch exists
-                            (let [branch-exists-result (git/branch-exists? base-dir branch-name)]
-                              (if-not (:success branch-exists-result)
-                                {:success false
-                                 :error (:error branch-exists-result)
-                                 :metadata {:operation "branch-exists?"
-                                            :branch branch-name}}
-
-                                (if (:exists? branch-exists-result)
-                                  ;; Branch exists, checkout
-                                  (let [checkout-result (git/checkout-branch base-dir branch-name)]
-                                    (if (:success checkout-result)
-                                      {:success true
-                                       :branch-name branch-name
-                                       :branch-created? false
-                                       :branch-switched? true
-                                       :error nil}
-                                      {:success false
-                                       :error (:error checkout-result)
-                                       :metadata {:operation "checkout-branch"
-                                                  :branch branch-name}}))
-
-                                  ;; Branch doesn't exist, create and checkout
-                                  (let [create-result (git/create-and-checkout-branch base-dir branch-name)]
-                                    (if (:success create-result)
-                                      {:success true
-                                       :branch-name branch-name
-                                       :branch-created? true
-                                       :branch-switched? true
-                                       :error nil}
-                                      {:success false
-                                       :error (:error create-result)
-                                       :metadata {:operation "create-and-checkout-branch"
-                                                  :branch branch-name}})))))))))))))))))))
+    (catch clojure.lang.ExceptionInfo e
+      {:success false
+       :error (:error (ex-data e) (.getMessage e))
+       :metadata (dissoc (ex-data e) :error)})))
 
 (defn- work-on-impl
   "Implementation of work-on tool.
