@@ -10,6 +10,7 @@
   making it available for individual task execution, story task execution,
   manual workflow preparation, and external tool integration."
   (:require
+    [babashka.fs :as fs]
     [clojure.data.json :as json]
     [mcp-tasks.config :as config]
     [mcp-tasks.execution-state :as execution-state]
@@ -19,13 +20,40 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.util :as util]))
 
+(defn- calculate-branch-name
+  "Calculate the branch name for a task or story.
+
+  Uses the parent story's title if present, otherwise uses the task's title.
+  The title is sanitized using util/sanitize-branch-name.
+
+  Parameters:
+  - task: The task being worked on
+  - parent-story: The parent story (nil if standalone task)
+
+  Returns:
+  - The sanitized branch name string
+
+  Examples:
+  (calculate-branch-name {:title \"My Task\" :id 42} nil)
+  ;; => \"my-task-42\"
+
+  (calculate-branch-name {:title \"Child Task\" :id 10} {:title \"Parent Story\" :id 5})
+  ;; => \"parent-story-5\""
+  [task parent-story]
+  (let [title (if parent-story
+                (:title parent-story)
+                (:title task))
+        branch-source-id (if parent-story
+                           (:id parent-story)
+                           (:id task))]
+    (util/sanitize-branch-name title branch-source-id)))
+
 (defn- manage-branch
   "Manages git branch for task execution.
 
   Parameters:
   - base-dir: Base directory of the git repository
-  - task: The task being worked on
-  - parent-story: The parent story (nil if standalone task)
+  - branch-name: The sanitized branch name to use
   - config: Configuration map from read-config
 
   Returns a map with:
@@ -36,33 +64,20 @@
   - :error - error message string (or nil if successful)
 
   Examples:
-  ;; Story task, creates new branch from story title
-  (manage-branch \"/path\" task story-task config)
+  ;; Creates new branch
+  (manage-branch \"/path\" \"my-story\" config)
   ;; => {:success true :branch-name \"my-story\" :branch-created? true :branch-switched? true}
 
-  ;; Story task, existing branch
-  (manage-branch \"/path\" task story-task config)
+  ;; Branch exists, switches to it
+  (manage-branch \"/path\" \"my-story\" config)
   ;; => {:success true :branch-name \"my-story\" :branch-created? false :branch-switched? true}
 
-  ;; Standalone task
-  (manage-branch \"/path\" task nil config)
-  ;; => {:success true :branch-name \"my-task\" :branch-created? true :branch-switched? true}
-
   ;; Already on correct branch (no-op case)
-  (manage-branch \"/path\" task nil config)
+  (manage-branch \"/path\" \"my-task\" config)
   ;; => {:success true :branch-name \"my-task\" :branch-created? false :branch-switched? false}"
-  [base-dir task parent-story config]
+  [base-dir branch-name config]
   (try
-    ;; Determine branch name from story or task title
-    (let [title (if parent-story
-                  (:title parent-story)
-                  (:title task))
-          branch-source-id (if parent-story
-                             (:id parent-story)
-                             (:id task))
-          branch-name (util/sanitize-branch-name title branch-source-id)
-
-          ;; Get current branch
+    (let [;; Get current branch
           current-branch (:branch (git/ensure-git-success!
                                     (git/get-current-branch base-dir)
                                     "get-current-branch"))]
@@ -142,11 +157,11 @@
 
 (defn- in-worktree?
   "Check if the current directory is inside the specified worktree path.
-  
+
   Compares canonical paths to handle symlinks and relative paths correctly."
   [current-dir worktree-path]
   (when worktree-path
-    (let [worktree-canonical (.getCanonicalPath (java.io.File. worktree-path))]
+    (let [worktree-canonical (fs/canonicalize worktree-path)]
       (= current-dir worktree-canonical))))
 
 (defn- worktree-needs-creation?
@@ -155,18 +170,37 @@
   (not worktree-exists?))
 
 (defn- worktree-needs-switch?
-  "Check if we need to switch to an existing worktree (exists but we're not in it)."
+  "Check if we need to switch to an existing worktree.
+   If the worktree exists but we're not in it,"
   [worktree-exists? current-dir worktree-path]
   (and worktree-exists?
        (not (in-worktree? current-dir worktree-path))))
+
+(defn- worktree-switch-message
+  "Create a user-facing message for worktree directory switch.
+
+  Parameters:
+  - status: Either :created or :exists
+  - worktree-path: Path to the worktree
+
+  Returns:
+  - String message instructing user to switch to the worktree directory"
+  [status worktree-path]
+  (str "Worktree "
+       (case status
+         :created "created"
+         :exists "exists")
+       " at "
+       worktree-path
+       ". Please start a new Claude Code session in that directory."))
 
 (defn- manage-worktree
   "Manages git worktree for task execution.
 
   Parameters:
   - base-dir: Base directory of the git repository
-  - task: The task being worked on
-  - parent-story: The parent story (nil if standalone task)
+  - title: The title to use for deriving the worktree path
+  - branch-name: The sanitized branch name to use
   - config: Configuration map from read-config
 
   Returns a map with:
@@ -181,43 +215,34 @@
 
   Examples:
   ;; Worktree doesn't exist, needs creation
-  (manage-worktree \"/path\" task nil config)
+  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success true :worktree-path \"../mcp-tasks-fix-bug\" :worktree-created? true
   ;;     :needs-directory-switch? true :branch-name \"fix-bug\" :clean? nil
   ;;     :message \"Worktree created at ../mcp-tasks-fix-bug. Please start a new Claude Code session in that directory.\"}
 
   ;; Worktree exists but not in it
-  (manage-worktree \"/path\" task nil config)
+  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success true :worktree-path \"../mcp-tasks-fix-bug\" :worktree-created? false
   ;;     :needs-directory-switch? true :branch-name \"fix-bug\" :clean? nil
   ;;     :message \"Worktree exists at ../mcp-tasks-fix-bug. Please start a new Claude Code session in that directory.\"}
 
   ;; In worktree, correct branch, clean
-  (manage-worktree \"/path\" task nil config)
+  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success true :worktree-path \"/path\" :worktree-created? false
   ;;     :needs-directory-switch? false :branch-name \"fix-bug\" :clean? true}
 
   ;; In worktree, correct branch, dirty
-  (manage-worktree \"/path\" task nil config)
+  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success true :worktree-path \"/path\" :worktree-created? false
   ;;     :needs-directory-switch? false :branch-name \"fix-bug\" :clean? false}
 
   ;; In worktree, wrong branch (error)
-  (manage-worktree \"/path\" task nil config)
+  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
-  [base-dir task parent-story config]
+  [base-dir title branch-name config]
   (try
-    ;; Determine branch name
-    (let [title (if parent-story
-                  (:title parent-story)
-                  (:title task))
-          branch-source-id (if parent-story
-                             (:id parent-story)
-                             (:id task))
-          branch-name (util/sanitize-branch-name title branch-source-id)
-
-          ;; Get current working directory (canonical path)
-          current-dir (.getCanonicalPath (java.io.File. (System/getProperty "user.dir")))
+    (let [;; Get current working directory (canonical path)
+          current-dir (fs/canonicalize (System/getProperty "user.dir"))
 
           ;; Check if branch already exists in any worktree
           find-result (git/ensure-git-success!
@@ -231,7 +256,8 @@
           (if (in-worktree? current-dir worktree-path)
             ;; Already in the correct worktree - check if clean
             (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
-                                (git/ensure-git-success! "check-uncommitted-changes")
+                                (git/ensure-git-success!
+                                  "check-uncommitted-changes")
                                 :has-changes?
                                 not)]
               {:success true
@@ -250,9 +276,10 @@
              :branch-name branch-name
              :clean? nil
              :error nil
-             :message (str "Worktree exists at " worktree-path ". Please start a new Claude Code session in that directory.")}))
+             :message (worktree-switch-message :exists worktree-path)}))
 
-        ;; Branch not in any worktree - proceed with deriving path and creating/checking worktree
+        ;; Branch not in any worktree - proceed with deriving path and
+        ;; creating/checking worktree
         (let [;; Derive worktree path
               path-result (git/ensure-git-success!
                             (git/derive-worktree-path base-dir title config)
@@ -279,7 +306,7 @@
                :branch-name branch-name
                :clean? nil
                :error nil
-               :message (str "Worktree created at " worktree-path ". Please start a new Claude Code session in that directory.")})
+               :message (worktree-switch-message :created worktree-path)})
 
             ;; Worktree exists but we're not in it
             (worktree-needs-switch? worktree-exists? current-dir worktree-path)
@@ -290,7 +317,7 @@
              :branch-name branch-name
              :clean? nil
              :error nil
-             :message (str "Worktree exists at " worktree-path ". Please start a new Claude Code session in that directory.")}
+             :message (worktree-switch-message :exists worktree-path)}
 
             ;; We're in the worktree - verify branch and check clean status
             :else
@@ -300,11 +327,13 @@
 
               ;; Verify we're on the correct branch
               (when (not= current-branch branch-name)
-                (throw (ex-info (str "Worktree is on branch " current-branch " but expected " branch-name)
-                                {:current-branch current-branch
-                                 :expected-branch branch-name
-                                 :worktree-path worktree-path
-                                 :operation "verify-worktree-branch"})))
+                (throw
+                  (ex-info
+                    (str "Worktree is on branch " current-branch " but expected " branch-name)
+                    {:current-branch current-branch
+                     :expected-branch branch-name
+                     :worktree-path worktree-path
+                     :operation "verify-worktree-branch"})))
 
               ;; Check if worktree is clean
               (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
@@ -458,26 +487,48 @@
     (let [{:keys [task parent-story]} (load-task-and-story cfg task-id)
           user-config (config/read-config (:base-dir cfg))
           base-dir (:base-dir cfg)
-          branch-mgmt-enabled? (:branch-management? user-config)
           worktree-mgmt-enabled? (:worktree-management? user-config)
+          branch-mgmt-enabled? (or worktree-mgmt-enabled?
+                                   (:branch-management? user-config))
 
-          ;; Handle branch management if configured
-          branch-info (when branch-mgmt-enabled?
-                        (let [branch-result (manage-branch base-dir task parent-story user-config)]
-                          (when-not (:success branch-result)
-                            (throw (ex-info "Branch management failed"
-                                            {:response {:error (:error branch-result)
-                                                        :metadata (:metadata branch-result {})}})))
-                          branch-result))
+          ;; Calculate branch name and title once for use in branch/worktree
+          ;; management
+          title (if parent-story
+                  (:title parent-story)
+                  (:title task))
+          branch-name (calculate-branch-name task parent-story)
 
           ;; Handle worktree management if configured
           worktree-info (when worktree-mgmt-enabled?
-                          (let [worktree-result (manage-worktree base-dir task parent-story user-config)]
+                          (let [worktree-result (manage-worktree
+                                                  base-dir
+                                                  title
+                                                  branch-name
+                                                  user-config)]
                             (when-not (:success worktree-result)
-                              (throw (ex-info "Worktree management failed"
-                                              {:response {:error (:error worktree-result)
-                                                          :metadata (:metadata worktree-result {})}})))
-                            worktree-result))]
+                              (throw
+                                (ex-info
+                                  "Worktree management failed"
+                                  {:response
+                                   {:error (:error worktree-result)
+                                    :metadata (:metadata worktree-result {})}})))
+                            worktree-result))
+
+          ;; Handle branch management if configured
+          branch-info (when (and branch-mgmt-enabled?
+                                 (not worktree-mgmt-enabled?))
+                        (let [branch-result (manage-branch
+                                              base-dir
+                                              branch-name
+                                              user-config)]
+                          (when-not (:success branch-result)
+                            (throw
+                              (ex-info
+                                "Branch management failed"
+                                {:response
+                                 {:error (:error branch-result)
+                                  :metadata (:metadata branch-result {})}})))
+                          branch-result))]
 
       ;; If worktree management requires directory switch, return early with message
       (if (and worktree-info (:needs-directory-switch? worktree-info))
