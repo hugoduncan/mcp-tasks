@@ -58,6 +58,13 @@
                       {:type :invalid-config-value
                        :key :base-branch
                        :value base-branch}))))
+  (when-let [tasks-dir (:tasks-dir config)]
+    (when-not (string? tasks-dir)
+      (throw (ex-info (str "Expected string for :tasks-dir, got " (type tasks-dir))
+                      {:type :invalid-config-type
+                       :key :tasks-dir
+                       :value tasks-dir
+                       :expected 'string?}))))
   config)
 
 (defn find-config-file
@@ -129,8 +136,36 @@
     (:use-git? config)
     (git-repo-exists? config-dir)))
 
+(defn resolve-tasks-dir
+  "Resolves :tasks-dir to an absolute canonical path.
+  
+  Resolution logic:
+  - If :tasks-dir is absolute → canonicalize and use as-is
+  - If :tasks-dir is relative → resolve relative to config-dir
+  - If :tasks-dir not specified → default to .mcp-tasks relative to config-dir
+  
+  Validates that explicitly specified :tasks-dir exists.
+  Default .mcp-tasks doesn't need to exist yet."
+  [config-dir config]
+  (let [tasks-dir (:tasks-dir config ".mcp-tasks")
+        resolved-path (if (fs/absolute? tasks-dir)
+                        tasks-dir
+                        (str config-dir "/" tasks-dir))]
+    ;; Validate explicitly specified paths exist
+    (when (and (contains? config :tasks-dir)
+               (not (fs/exists? resolved-path)))
+      (throw (ex-info (str "Configured :tasks-dir does not exist: " tasks-dir)
+                      {:type :invalid-config-value
+                       :key :tasks-dir
+                       :value tasks-dir
+                       :resolved-path resolved-path})))
+    ;; Return canonical path if it exists, otherwise return resolved path
+    (if (fs/exists? resolved-path)
+      (str (fs/canonicalize resolved-path))
+      resolved-path)))
+
 (defn resolve-config
-  "Returns final config map with :use-git? and :base-dir resolved.
+  "Returns final config map with :use-git?, :base-dir, and :resolved-tasks-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence. Base directory is set to the config directory (canonicalized).
   
@@ -138,6 +173,7 @@
   When :worktree-prefix is not set, defaults to :project-name."
   [config-dir config]
   (let [base-dir (str (fs/canonicalize config-dir))
+        resolved-tasks-dir (resolve-tasks-dir config-dir config)
         config-with-branch-mgmt (if (:worktree-management? config)
                                   (assoc config :branch-management? true)
                                   config)
@@ -146,7 +182,8 @@
                                (assoc config-with-branch-mgmt :worktree-prefix :project-name))]
     (assoc config-with-defaults
            :use-git? (determine-git-mode config-dir config)
-           :base-dir base-dir)))
+           :base-dir base-dir
+           :resolved-tasks-dir resolved-tasks-dir)))
 
 ;; Startup validation
 
