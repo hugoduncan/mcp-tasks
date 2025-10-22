@@ -2,33 +2,28 @@
   "Shared test helper functions for mcp-tasks testing."
   (:require
     [babashka.fs :as fs]
-    [clojure.java.io :as io]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tasks-file :as tasks-file]))
 
-(def ^:dynamic *test-dir*
-  "Dynamic var for test directory path. Bound by test-fixture."
-  nil)
-
 (defn setup-test-dir
   "Creates test directory structure with .mcp-tasks subdirectory."
   [test-dir]
-  (fs/create-dirs (io/file test-dir ".mcp-tasks")))
+  (fs/create-dirs (fs/file test-dir ".mcp-tasks")))
 
 (defn write-ednl-test-file
   "Write tasks as EDNL format to test file.
   Path is relative to .mcp-tasks directory."
-  [path tasks]
-  (let [file-path (str *test-dir* "/.mcp-tasks/" path)]
+  [test-dir path tasks]
+  (let [file-path (str test-dir "/.mcp-tasks/" path)]
     (tasks-file/write-tasks file-path tasks)))
 
 (defn read-ednl-test-file
   "Read tasks from EDNL test file.
   Path is relative to .mcp-tasks directory."
-  [path]
-  (let [file-path (str *test-dir* "/.mcp-tasks/" path)]
+  [test-dir path]
+  (let [file-path (str test-dir "/.mcp-tasks/" path)]
     (tasks-file/read-ednl file-path)))
 
 (defn reset-tasks-state!
@@ -42,13 +37,13 @@
 
 (defn test-config
   "Returns test config with git disabled."
-  []
-  {:base-dir *test-dir* :use-git? false})
+  [test-dir]
+  {:base-dir test-dir :use-git? false})
 
 (defn git-test-config
   "Returns test config with git enabled."
-  []
-  {:base-dir *test-dir* :use-git? true})
+  [test-dir]
+  {:base-dir test-dir :use-git? true})
 
 (defn init-git-repo
   "Initialize a git repository in the test .mcp-tasks directory."
@@ -76,12 +71,12 @@
   "Generate expected worktree path for testing.
   Mimics the logic from mcp-tasks.tools.git/derive-worktree-path
   using the test directory structure.
-  
+
   Parameters:
   - base-dir: Test base directory (from *test-dir*)
   - title: Task or story title
   - config: Optional config map (default uses :worktree-prefix :project-name)
-  
+
   Returns the expected worktree path string."
   ([base-dir title]
    (derive-test-worktree-path base-dir title {:worktree-prefix :project-name}))
@@ -91,20 +86,23 @@
                        str/lower-case
                        (str/replace #"\s+" "-")
                        (str/replace #"[^a-z0-9-]" ""))
-         parent-dir (.getParent (io/file base-dir))]
+         parent-dir (fs/parent base-dir)]
      (if (= worktree-prefix :none)
        (str parent-dir "/" sanitized)
        (str parent-dir "/mcp-tasks-" sanitized)))))
 
-(defn test-fixture
-  "Fixture that sets up and cleans up test directory for each test.
-  Binds *test-dir* to a temporary directory and resets task state."
+(defn with-test-setup*
   [f]
   (let [dir (fs/create-temp-dir {:prefix "mcp-tasks-test-"})]
     (try
-      (binding [*test-dir* (str dir)]
-        (setup-test-dir *test-dir*)
-        (reset-tasks-state!)
-        (f))
+      (setup-test-dir dir)
+      (reset-tasks-state!)
+      (f dir)
       (finally
         (fs/delete-tree dir)))))
+
+(defmacro with-test-setup
+  "Fixture that sets up and cleans up test directory for each test.
+  Binds *test-dir* to a temporary directory and resets task state."
+  [[dir] & body]
+  `(with-test-setup* (fn [~dir] ~@body)))

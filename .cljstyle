@@ -7,10 +7,9 @@
          :whitespace  {:remove-surrounding? true
                        :remove-trailing?    true
                        :insert-missing?     true}
-         :eof-newline {:enabled?	 true
+         :eof-newline {:enabled?        true
                        :trailing-blanks? false}
-         :comments    {#_#_:inline-prefix  " "
-                       #_#_:leading-prefix " "}
+         :comments    {}
          :vars        {:enabled? true}
          :functions   {:enabled? true}
          :types       {:types?     true
@@ -19,4 +18,5 @@
                        :proxies?   true}
          :namespaces  {:indent-size        0
                        :break-libs?        true
-                       :import-break-width 0}}}
+                       :import-break-width 0}
+         :indentation {:indents {with-test-setup [[:block 1]]}}}}

@@ -1,6 +1,6 @@
 (ns mcp-tasks.cli-integration-test
   "End-to-end integration tests for the CLI.
-  
+
   Tests complete workflows chaining multiple commands together and verifies
   that the CLI correctly calls underlying tool functions."
   (:require
@@ -29,8 +29,7 @@
   (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-cli-integration-"}))]
     (try
       (setup-test-dir test-dir)
-      (binding [h/*test-dir* test-dir
-                *test-dir* test-dir]
+      (binding [*test-dir* test-dir]
         (h/reset-tasks-state!)
         (f))
       (finally

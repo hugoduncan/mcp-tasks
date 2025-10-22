@@ -1,16 +1,17 @@
 (ns mcp-tasks.tools.git
   "Git-related helper functions for task management"
   (:require
+    [babashka.fs :as fs]
     [clojure.java.shell :as sh]
     [clojure.string :as str]))
 
 (defn ensure-git-success!
   "Throws ex-info if git operation failed. Returns result on success.
-  
+
   Parameters:
   - result: Map with :success and :error keys from a git operation
   - operation: String describing the operation for error context
-  
+
   Returns the result map unchanged if successful.
   Throws ex-info with operation details if failed."
   [result operation]
@@ -188,10 +189,9 @@
   - :exists? - boolean indicating if branch exists
   - :error - error message string (or nil if successful)"
   [base-dir branch-name]
-  {:pre [(string? base-dir)
-         (not (clojure.string/blank? base-dir))
+  {:pre [(some? base-dir)
          (string? branch-name)
-         (not (clojure.string/blank? branch-name))]}
+         (not (str/blank? branch-name))]}
   (try
     (let [result (sh/sh "git" "-C" base-dir "rev-parse" "--verify" branch-name)]
       {:success true
@@ -200,7 +200,7 @@
     (catch Exception e
       {:success false
        :exists? nil
-       :error (.getMessage e)})))
+       :error (ex-message e)})))
 
 (defn checkout-branch
   "Checks out an existing branch.
@@ -302,7 +302,7 @@
   {:pre [(string? project-dir)
          (not (clojure.string/blank? project-dir))]}
   (try
-    (let [file (java.io.File. project-dir)
+    (let [file (fs/file project-dir)
           name (.getName file)]
       (if (str/blank? name)
         {:success false
@@ -349,7 +349,7 @@
                         str/lower-case
                         (str/replace #"\s+" "-")
                         (str/replace #"[^a-z0-9-]" ""))
-          parent-dir (.getParent (java.io.File. project-dir))
+          parent-dir (fs/parent project-dir)
 
           ;; Build path based on prefix mode
           worktree-path (if (= worktree-prefix :none)
@@ -521,27 +521,42 @@
   - project-dir: Path to the project directory
   - worktree-path: Path where the worktree should be created
   - branch-name: Name of the branch for the worktree
+  - base-branch: Name of the branch to base branch-name on
+
+  With base-branch, creates the branch.
 
   Returns a map with:
   - :success - boolean indicating if creation succeeded
   - :error - error message string (or nil if successful)"
-  [project-dir worktree-path branch-name]
-  {:pre [(string? project-dir)
-         (not (clojure.string/blank? project-dir))
-         (string? worktree-path)
-         (not (clojure.string/blank? worktree-path))
-         (string? branch-name)
-         (not (clojure.string/blank? branch-name))]}
-  (try
-    (let [result (sh/sh "git" "-C" project-dir "worktree" "add" worktree-path branch-name)]
-      (if (zero? (:exit result))
-        {:success true
-         :error nil}
-        {:success false
-         :error (str/trim (:err result))}))
-    (catch Exception e
-      {:success false
-       :error (.getMessage e)})))
+  ([project-dir worktree-path branch-name]
+   (create-worktree project-dir worktree-path branch-name nil))
+  ([project-dir worktree-path branch-name base-branch]
+   {:pre [(string? project-dir)
+          (not (clojure.string/blank? project-dir))
+          (string? worktree-path)
+          (not (clojure.string/blank? worktree-path))
+          (string? branch-name)
+          (not (clojure.string/blank? branch-name))]}
+   (try
+     (let [result (if base-branch
+                    (sh/sh "git" "-C" project-dir
+                           "worktree" "add"
+                           worktree-path
+                           "-b"
+                           branch-name
+                           base-branch)
+                    (sh/sh "git" "-C" project-dir
+                           "worktree" "add"
+                           worktree-path
+                           branch-name))]
+       (if (zero? (:exit result))
+         {:success true
+          :error   nil}
+         {:success false
+          :error   (str/trim (:err result))}))
+     (catch Exception e
+       {:success false
+        :error   (.getMessage e)}))))
 
 (defn remove-worktree
   "Removes a git worktree.
