@@ -48,6 +48,66 @@ clojure -M:cli complete --task-id 1
 
 ---
 
+### Using with Babashka (Faster Startup)
+
+The CLI can run under [Babashka](https://babashka.org/) for dramatically faster startup times—ideal for scripting and interactive use.
+
+**Performance Comparison:**
+- JVM Clojure: ~6.2 seconds
+- Babashka: ~0.15 seconds
+- **~40x faster startup**
+
+**Prerequisites:**
+```bash
+# Install babashka (if not already installed)
+# macOS
+brew install babashka/brew/babashka
+
+# Linux
+bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+
+# Or see https://github.com/babashka/babashka#installation
+```
+
+**Usage:**
+
+The project includes a `bb.edn` configuration with task aliases for all CLI commands:
+
+```bash
+# List available babashka tasks
+bb tasks
+
+# Use CLI commands with bb prefix
+bb list --category simple
+bb add --category simple --title "New task"
+bb show --task-id 42
+bb complete --task-id 42
+bb update --task-id 42 --status in-progress
+bb delete --task-id 42
+
+# Or use the main CLI entry point
+bb cli list --format json
+bb cli add --category feature --title "Add endpoint"
+```
+
+**Side-by-Side Comparison:**
+
+| Operation | JVM Clojure | Babashka |
+|-----------|-------------|----------|
+| List tasks | `clojure -M:cli list` | `bb list` |
+| Add task | `clojure -M:cli add --category simple --title "..."` | `bb add --category simple --title "..."` |
+| Show task | `clojure -M:cli show --task-id 42` | `bb show --task-id 42` |
+| Complete task | `clojure -M:cli complete --task-id 42` | `bb complete --task-id 42` |
+| Update task | `clojure -M:cli update --task-id 42 --status in-progress` | `bb update --task-id 42 --status in-progress` |
+
+**When to Use Babashka vs JVM:**
+- **Babashka**: CLI operations, scripting, interactive task management
+- **JVM Clojure**: MCP server (requires JVM), development/testing with full Clojure toolchain
+
+**Note:** The MCP server still requires JVM Clojure (`clojure -X:mcp-tasks`). Babashka support is for CLI operations only.
+
+---
+
 ## What & Why
 
 mcp-tasks enables you to manage development tasks in markdown files and have AI agents execute them. Unlike todo tools, mcp-tasks integrates task planning with execution—agents don't just track tasks, they complete them.
