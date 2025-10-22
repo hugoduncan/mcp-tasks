@@ -1,0 +1,34 @@
+{:paths ["src" "resources"]
+
+ :deps {org.hugpduncan/mcp-clj-server
+        {:git/url "https://github.com/hugoduncan/mcp-clj"
+         :git/sha "88d6047ce34d6619ed88780c736d25a5564454f6"
+         :deps/root "projects/server"}
+        metosin/malli {:mvn/version "0.16.4"}
+        cheshire/cheshire {:mvn/version "5.13.0"}
+        babashka/fs {:mvn/version "0.5.22"}
+        org.babashka/cli {:mvn/version "0.8.61"}}
+
+ :tasks
+ {:requires ([mcp-tasks.cli :as cli])
+
+  cli {:doc "Run mcp-tasks CLI"
+       :task (apply cli/-main *command-line-args*)}
+
+  list {:doc "List tasks"
+        :task (apply cli/-main (cons "list" *command-line-args*))}
+
+  add {:doc "Add a task"
+       :task (apply cli/-main (cons "add" *command-line-args*))}
+
+  show {:doc "Show task details"
+        :task (apply cli/-main (cons "show" *command-line-args*))}
+
+  complete {:doc "Complete a task"
+            :task (apply cli/-main (cons "complete" *command-line-args*))}
+
+  update {:doc "Update a task"
+          :task (apply cli/-main (cons "update" *command-line-args*))}
+
+  delete {:doc "Delete a task"
+          :task (apply cli/-main (cons "delete" *command-line-args*))}}}
