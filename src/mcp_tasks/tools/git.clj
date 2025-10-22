@@ -422,6 +422,34 @@
        :worktrees nil
        :error (.getMessage e)})))
 
+(defn find-worktree-for-branch
+  "Finds the worktree (if any) that has the given branch checked out.
+
+  Parameters:
+  - project-dir: Path to the project directory
+  - branch-name: Name of the branch to search for
+
+  Returns:
+  - {:success true :worktree {...} :error nil} if branch found in a worktree
+  - {:success true :worktree nil :error nil} if branch not in any worktree
+  - {:success false :error \"...\"} on error"
+  [project-dir branch-name]
+  {:pre [(string? project-dir)
+         (not (clojure.string/blank? project-dir))
+         (string? branch-name)
+         (not (clojure.string/blank? branch-name))]}
+  (let [result (list-worktrees project-dir)]
+    (if (:success result)
+      (let [matching-worktree (->> (:worktrees result)
+                                   (filter #(= branch-name (:branch %)))
+                                   first)]
+        {:success true
+         :worktree matching-worktree
+         :error nil})
+      {:success false
+       :worktree nil
+       :error (:error result)})))
+
 (defn worktree-exists?
   "Checks if a worktree exists at the given path.
 

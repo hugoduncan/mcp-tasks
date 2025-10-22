@@ -385,6 +385,75 @@
           (is (nil? (:worktrees result)))
           (is (= "fatal: not a git repository" (:error result))))))))
 
+(deftest find-worktree-for-branch-test
+  ;; Tests finding a worktree by branch name
+  ;; Verifies correct handling of matches, no matches, and errors
+
+  (testing "find-worktree-for-branch"
+    (testing "finds branch in a worktree"
+      (with-redefs [mcp-tasks.tools.git/list-worktrees
+                    (fn [project-dir]
+                      (is (= "/test/dir" project-dir))
+                      {:success true
+                       :worktrees [{:path "/test/dir"
+                                    :head "abc123"
+                                    :branch "main"}
+                                   {:path "/test/feature"
+                                    :head "def456"
+                                    :branch "feature-x"}]
+                       :error nil})]
+        (let [result (sut/find-worktree-for-branch "/test/dir" "feature-x")]
+          (is (true? (:success result)))
+          (is (= {:path "/test/feature"
+                  :head "def456"
+                  :branch "feature-x"}
+                 (:worktree result)))
+          (is (nil? (:error result))))))
+
+    (testing "returns nil when branch not in any worktree"
+      (with-redefs [mcp-tasks.tools.git/list-worktrees
+                    (fn [_]
+                      {:success true
+                       :worktrees [{:path "/test/dir"
+                                    :head "abc123"
+                                    :branch "main"}]
+                       :error nil})]
+        (let [result (sut/find-worktree-for-branch "/test/dir" "nonexistent")]
+          (is (true? (:success result)))
+          (is (nil? (:worktree result)))
+          (is (nil? (:error result))))))
+
+    (testing "handles multiple worktrees with only one matching"
+      (with-redefs [mcp-tasks.tools.git/list-worktrees
+                    (fn [_]
+                      {:success true
+                       :worktrees [{:path "/test/dir"
+                                    :head "abc123"
+                                    :branch "main"}
+                                   {:path "/test/feature-a"
+                                    :head "def456"
+                                    :branch "feature-a"}
+                                   {:path "/test/feature-b"
+                                    :head "ghi789"
+                                    :branch "feature-b"}]
+                       :error nil})]
+        (let [result (sut/find-worktree-for-branch "/test/dir" "feature-a")]
+          (is (true? (:success result)))
+          (is (= "feature-a" (-> result :worktree :branch)))
+          (is (= "/test/feature-a" (-> result :worktree :path)))
+          (is (nil? (:error result))))))
+
+    (testing "propagates error from list-worktrees"
+      (with-redefs [mcp-tasks.tools.git/list-worktrees
+                    (fn [_]
+                      {:success false
+                       :worktrees nil
+                       :error "not a git repo"})]
+        (let [result (sut/find-worktree-for-branch "/test/dir" "main")]
+          (is (false? (:success result)))
+          (is (nil? (:worktree result)))
+          (is (= "not a git repo" (:error result))))))))
+
 (deftest worktree-exists-test
   ;; Tests worktree existence checking
   ;; Verifies detection based on list-worktrees output
