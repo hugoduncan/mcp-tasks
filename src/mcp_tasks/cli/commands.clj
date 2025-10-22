@@ -28,7 +28,7 @@
         json-items (keep (fn [item]
                            (when-let [text (:text item)]
                              (try
-                               (json/parse-string text true)
+                               (json/parse-string text keyword)
                                (catch Exception _ nil))))
                          content-items)]
     ;; Merge all parsed JSON maps, with later items taking precedence

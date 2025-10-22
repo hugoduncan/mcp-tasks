@@ -25,7 +25,7 @@
       (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Three"})
 
       (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
-            response (json/parse-string (get-in result [:content 0 :text]) true)]
+            response (json/parse-string (get-in result [:content 0 :text]) keyword)]
         (is (false? (:isError result)))
         (is (= 3 (count (:tasks response))))
         (is (= 3 (get-in response [:metadata :count])))
@@ -47,7 +47,7 @@
 
       (testing "returns up to limit tasks"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 3})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 3 (count (:tasks response))))
           (is (= 3 (get-in response [:metadata :count])))
@@ -58,7 +58,7 @@
 
       (testing "uses default limit of 5"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 5 (count (:tasks response))))
           (is (= 5 (get-in response [:metadata :count])))
@@ -73,7 +73,7 @@
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Unique Task"})
 
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :unique true})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= 1 (get-in response [:metadata :count])))
@@ -82,7 +82,7 @@
 
       (testing "returns empty when no matches"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "nonexistent" :unique true})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 0 (count (:tasks response))))
           (is (= 0 (get-in response [:metadata :count])))
@@ -93,7 +93,7 @@
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Two"})
 
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :unique true})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "Multiple tasks matched"))
@@ -105,7 +105,7 @@
     (testing "select-tasks validation errors"
       (testing "non-positive limit returns error"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit 0})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "positive integer"))
@@ -113,14 +113,14 @@
 
       (testing "negative limit returns error"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit -5})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "positive integer"))))
 
       (testing "limit > 1 with unique true returns error"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit 5 :unique true})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "limit must be 1 when unique"))
@@ -132,7 +132,7 @@
     ;; Test empty results return empty tasks vector
     (testing "select-tasks empty results"
       (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "nonexistent"})
-            response (json/parse-string (get-in result [:content 0 :text]) true)]
+            response (json/parse-string (get-in result [:content 0 :text]) keyword)]
         (is (false? (:isError result)))
         (is (= [] (:tasks response)))
         (is (= 0 (get-in response [:metadata :count])))
@@ -150,14 +150,14 @@
 
       (testing "metadata reflects filtering and limiting"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 1})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (= 1 (get-in response [:metadata :count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))))
 
       (testing "metadata when not limited"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 10})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (= 2 (get-in response [:metadata :count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (false? (get-in response [:metadata :limited?]))))))))
@@ -174,7 +174,7 @@
 
       (testing "filters by type task"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "task"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 2 (count (:tasks response))))
           (is (= ["Regular task" "Another task"]
@@ -182,14 +182,14 @@
 
       (testing "filters by type bug"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "bug"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= "Bug fix" (get-in response [:tasks 0 :title])))))
 
       (testing "filters by type feature"
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "feature"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= "New feature" (get-in response [:tasks 0 :title])))))
@@ -198,7 +198,7 @@
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "other" :title "Other bug" :type "bug"})
 
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :type "bug"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= "Bug fix" (get-in response [:tasks 0 :title]))))))))
@@ -217,7 +217,7 @@
 
         ;; Without status filter, should only return open tasks
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 2 (count (:tasks response))))
           (is (= ["Open task 1" "Open task 2"]
@@ -234,7 +234,7 @@
 
         ;; Explicitly filter by open status
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "open"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= "Open task" (get-in response [:tasks 0 :title])))
@@ -255,7 +255,7 @@
 
         ;; Filter by in-progress status
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "in-progress"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 2 (count (:tasks response))))
           (is (= #{"In progress task 1" "In progress task 2"}
@@ -274,7 +274,7 @@
 
         ;; Filter by category test and status open
         (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :status "open"})
-              response (json/parse-string (get-in result [:content 0 :text]) true)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= "Test open" (get-in response [:tasks 0 :title]))))))))
@@ -285,20 +285,20 @@
     (testing "select-tasks :task-id filter"
       ;; Add tasks
       (let [task1      (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task One"})
-            task1-data (json/parse-string (get-in task1 [:content 1 :text]) true)
+            task1-data (json/parse-string (get-in task1 [:content 1 :text]) keyword)
             task1-id   (get-in task1-data [:task :id])
 
             task2      (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Two"})
-            task2-data (json/parse-string (get-in task2 [:content 1 :text]) true)
+            task2-data (json/parse-string (get-in task2 [:content 1 :text]) keyword)
             task2-id   (get-in task2-data [:task :id])
 
             task3      (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "other" :title "Task Three"})
-            task3-data (json/parse-string (get-in task3 [:content 1 :text]) true)
+            task3-data (json/parse-string (get-in task3 [:content 1 :text]) keyword)
             task3-id   (get-in task3-data [:task :id])]
 
         (testing "filters by task-id to return single task"
           (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task1-id})
-                response (json/parse-string (get-in result [:content 0 :text]) true)]
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
             (is (false? (:isError result)))
             (is (= 1 (count (:tasks response))))
             (is (= task1-id (get-in response [:tasks 0 :id])))
@@ -306,7 +306,7 @@
 
         (testing "returns empty when task-id does not exist"
           (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id 99999})
-                response (json/parse-string (get-in result [:content 0 :text]) true)]
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
             (is (false? (:isError result)))
             (is (= 0 (count (:tasks response))))
             (is (= 0 (get-in response [:metadata :count])))
@@ -316,13 +316,13 @@
           ;; Task 2 has category "test", task 3 has category "other"
           ;; Filtering by task3-id and category "test" should return empty
           (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task3-id :category "test"})
-                response (json/parse-string (get-in result [:content 0 :text]) true)]
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
             (is (false? (:isError result)))
             (is (= 0 (count (:tasks response)))))
 
           ;; Filtering by task3-id and category "other" should return task 3
           (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task3-id :category "other"})
-                response (json/parse-string (get-in result [:content 0 :text]) true)]
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
             (is (false? (:isError result)))
             (is (= 1 (count (:tasks response))))
             (is (= task3-id (get-in response [:tasks 0 :id])))
@@ -330,7 +330,7 @@
 
         (testing "task-id filter works with unique constraint"
           (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task2-id :unique true})
-                response (json/parse-string (get-in result [:content 0 :text]) true)]
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
             (is (false? (:isError result)))
             (is (= 1 (count (:tasks response))))
             (is (= task2-id (get-in response [:tasks 0 :id])))
@@ -389,7 +389,7 @@
                         nil
                         {:parent-id 1 :limit 1})]
             (is (false? (:isError result)))
-            (let [response (json/parse-string (get-in result [:content 0 :text]) true)
+            (let [response (json/parse-string (get-in result [:content 0 :text]) keyword)
                   task     (first (:tasks response))]
               (is (= "First incomplete" (:title task)))
               (is (= "With details" (:description task)))
@@ -428,7 +428,7 @@
                         nil
                         {:parent-id 1})]
             (is (false? (:isError result)))
-            (let [response (json/parse-string (get-in result [:content 0 :text]) true)]
+            (let [response (json/parse-string (get-in result [:content 0 :text]) keyword)]
               (is (empty? (:tasks response))))))))))
 
 (deftest select-tasks-by-title-pattern-finds-story
@@ -461,7 +461,7 @@
                         nil
                         {:title-pattern "test-story" :limit 1})]
             (is (false? (:isError result)))
-            (let [response (json/parse-string (get-in result [:content 0 :text]) true)
+            (let [response (json/parse-string (get-in result [:content 0 :text]) keyword)
                   task     (first (:tasks response))]
               (is (= "test-story" (:title task)))
               (is (= "story" (:category task)))
@@ -508,7 +508,7 @@
                         nil
                         {:parent-id 1 :category "medium" :limit 1})]
             (is (false? (:isError result)))
-            (let [response (json/parse-string (get-in result [:content 0 :text]) true)
+            (let [response (json/parse-string (get-in result [:content 0 :text]) keyword)
                   task     (first (:tasks response))]
               (is (= "Medium task" (:title task)))
               (is (= "medium" (:category task)))

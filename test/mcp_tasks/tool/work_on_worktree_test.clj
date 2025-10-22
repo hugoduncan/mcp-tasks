@@ -18,7 +18,7 @@
         (spit config-file "{:worktree-management? true}")
 
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Fix Parser Bug" :type "task"})
-              add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
               expected-worktree-path (h/derive-test-worktree-path base-dir "Fix Parser Bug")]
 
@@ -85,7 +85,7 @@
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Add Feature" :type "task"})
-                add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
                 task-id (get-in add-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch
@@ -130,7 +130,7 @@
                              :error nil})]
 
               (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-                    response (json/parse-string (get-in result [:content 0 :text]) true)]
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
@@ -146,7 +146,7 @@
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Clean Task" :type "task"})
-                add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
                 task-id (get-in add-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
@@ -163,7 +163,7 @@
                                                   :error nil})]
 
               (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-                    response (json/parse-string (get-in result [:content 0 :text]) true)]
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
@@ -181,7 +181,7 @@
         (spit config-file "{:worktree-management? true}")
 
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Expected Branch" :type "task"})
-              add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
               expected-worktree-path (str (fs/parent base-dir) "/mcp-tasks-expected-branch")]
 
@@ -199,7 +199,7 @@
                                                 :error nil})]
 
             (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-                  response (json/parse-string (get-in result [:content 0 :text]) true)]
+                  response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
               ;; Since we're not in the worktree, we get the "switch directory" message
               (is (false? (:isError result)))
@@ -216,7 +216,7 @@
         (spit config-file "{:worktree-management? true}")
 
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Switch Dir Task" :type "task"})
-              add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
               expected-worktree-path (h/derive-test-worktree-path base-dir "Switch Dir Task")]
 
@@ -235,7 +235,7 @@
                                                 :error nil})]
 
             (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-                  response (json/parse-string (get-in result [:content 0 :text]) true)]
+                  response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
               (is (false? (:isError result)))
               (is (= expected-worktree-path (:worktree-path response)))
@@ -256,7 +256,7 @@
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Reuse Worktree" :type "task"})
-                add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
                 task-id (get-in add-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch (fn [_ branch-name]
@@ -267,7 +267,7 @@
                                                           :error nil})]
 
               (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-                    response (json/parse-string (get-in result [:content 0 :text]) true)]
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
                 (is (= existing-worktree-path (:worktree-path response)))
@@ -283,7 +283,7 @@
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "New Worktree" :type "task"})
-                add-response (json/parse-string (get-in add-result [:content 1 :text]) true)
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
                 task-id (get-in add-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch (fn find-worktree-for-branch
@@ -343,16 +343,16 @@
 
           ;; Create a story
           (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "My Story" :type "story"})
-                story-response (json/parse-string (get-in story-result [:content 1 :text]) true)
+                story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
                 story-id (get-in story-response [:task :id])
 
                 ;; Create two tasks in the story
                 task1-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task One" :type "task" :parent-id story-id})
-                task1-response (json/parse-string (get-in task1-result [:content 1 :text]) true)
+                task1-response (json/parse-string (get-in task1-result [:content 1 :text]) keyword)
                 task1-id (get-in task1-response [:task :id])
 
                 task2-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task Two" :type "task" :parent-id story-id})
-                task2-response (json/parse-string (get-in task2-result [:content 1 :text]) true)
+                task2-response (json/parse-string (get-in task2-result [:content 1 :text]) keyword)
                 task2-id (get-in task2-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch (fn [_ branch-name]
@@ -364,14 +364,14 @@
 
               ;; First task should find existing worktree
               (let [result1 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task1-id})
-                    response1 (json/parse-string (get-in result1 [:content 0 :text]) true)]
+                    response1 (json/parse-string (get-in result1 [:content 0 :text]) keyword)]
                 (is (false? (:isError result1)))
                 (is (= story-worktree-path (:worktree-path response1)))
                 (is (false? (:worktree-created? response1))))
 
               ;; Second task should also find the same worktree
               (let [result2 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task2-id})
-                    response2 (json/parse-string (get-in result2 [:content 0 :text]) true)]
+                    response2 (json/parse-string (get-in result2 [:content 0 :text]) keyword)]
                 (is (false? (:isError result2)))
                 (is (= story-worktree-path (:worktree-path response2)))
                 (is (false? (:worktree-created? response2))))))))

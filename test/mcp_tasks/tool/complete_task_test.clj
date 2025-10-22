@@ -253,14 +253,14 @@
 
           ;; Second content item: modified files
           (let [files-content (second (:content result))
-                files-data (json/parse-string (:text files-content) true)]
+                files-data (json/parse-string (:text files-content) keyword)]
             (is (= "text" (:type files-content)))
             (is (contains? files-data :modified-files))
             (is (= 2 (count (:modified-files files-data)))))
 
           ;; Third content item: git status
           (let [git-content (nth (:content result) 2)
-                git-data (json/parse-string (:text git-content) true)]
+                git-data (json/parse-string (:text git-content) keyword)]
             (is (= "text" (:type git-content)))
             (is (contains? git-data :git-status))
             (is (contains? git-data :git-commit))))))))
@@ -288,7 +288,7 @@
 
           ;; Second content item: task data as JSON
           (let [json-content (second (:content result))
-                data (json/parse-string (:text json-content) true)]
+                data (json/parse-string (:text json-content) keyword)]
             (is (= "text" (:type json-content)))
             (is (map? (:task data)))
             (is (= 1 (get-in data [:task :id])))
@@ -321,7 +321,7 @@
 
           ;; Verify git status in response
           (let [git-content (nth (:content result) 2)
-                git-data (json/parse-string (:text git-content) true)]
+                git-data (json/parse-string (:text git-content) keyword)]
             (is (= "success" (:git-status git-data)))
             (is (string? (:git-commit git-data)))
             (is (= 40 (count (:git-commit git-data)))) ; SHA is 40 chars
@@ -352,7 +352,7 @@
 
           ;; Verify git error is reported in response
           (let [git-content (nth (:content result) 2)
-                git-data (json/parse-string (:text git-content) true)]
+                git-data (json/parse-string (:text git-content) keyword)]
             (is (= "error" (:git-status git-data)))
             (is (nil? (:git-commit git-data)))
             (is (string? (:git-error git-data)))
@@ -374,7 +374,7 @@
                       nil
                       {:task-id 99})
               git-content (nth (:content result) 2)
-              git-data (json/parse-string (:text git-content) true)
+              git-data (json/parse-string (:text git-content) keyword)
               sha (:git-commit git-data)]
 
           ;; Verify SHA format
@@ -406,11 +406,11 @@
           (is (not (str/includes? (get-in result [:content 0 :text]) "moved to")))
 
           ;; Second item: modified-files contains only tasks.ednl
-          (let [files-data (json/parse-string (get-in result [:content 1 :text]) true)]
+          (let [files-data (json/parse-string (get-in result [:content 1 :text]) keyword)]
             (is (= ["tasks.ednl"] (:modified-files files-data))))
 
           ;; Third item: has git-status and commit-sha
-          (let [git-data (json/parse-string (get-in result [:content 2 :text]) true)]
+          (let [git-data (json/parse-string (get-in result [:content 2 :text]) keyword)]
             (is (= "success" (:git-status git-data)))
             (is (string? (:git-commit git-data))))
 
@@ -453,7 +453,7 @@
             (is (str/includes? msg "not closed")))
 
           ;; Second content: error metadata with unclosed children
-          (let [error-data (json/parse-string (get-in result [:content 1 :text]) true)]
+          (let [error-data (json/parse-string (get-in result [:content 1 :text]) keyword)]
             (is (= "Cannot complete story: 2 child tasks still are not closed" (:error error-data)))
             (is (= 30 (get-in error-data [:metadata :task-id])))
             (is (= 2 (count (get-in error-data [:metadata :unclosed-children]))))
@@ -498,7 +498,7 @@
 
           ;; Second content item: task data as JSON
           (let [json-content (second (:content result))
-                data (json/parse-string (:text json-content) true)]
+                data (json/parse-string (:text json-content) keyword)]
             (is (= "text" (:type json-content)))
             (is (map? (:task data)))
             (is (= 40 (get-in data [:task :id])))
@@ -576,11 +576,11 @@
             (is (str/includes? msg "with 3 child tasks")))
 
           ;; Verify modified files includes both tasks.ednl and complete.ednl
-          (let [files-data (json/parse-string (get-in result [:content 1 :text]) true)]
+          (let [files-data (json/parse-string (get-in result [:content 1 :text]) keyword)]
             (is (= ["tasks.ednl" "complete.ednl"] (:modified-files files-data))))
 
           ;; Verify git status is success
-          (let [git-data (json/parse-string (get-in result [:content 2 :text]) true)]
+          (let [git-data (json/parse-string (get-in result [:content 2 :text]) keyword)]
             (is (= "success" (:git-status git-data)))
             (is (string? (:git-commit git-data)))
             (is (= 40 (count (:git-commit git-data)))))

@@ -47,7 +47,7 @@
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)
-                state (json/parse-string text true)]
+                state (json/parse-string text keyword)]
             (is (not (:isError read-response)))
             (is (= 177 (:story-id state)))
             (is (= 181 (:task-id state)))
@@ -90,7 +90,7 @@
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)
-                state (json/parse-string text true)]
+                state (json/parse-string text keyword)]
             (is (not (:isError read-response)))
             (is (nil? (:story-id state)))
             (is (= 42 (:task-id state)))

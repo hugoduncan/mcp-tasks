@@ -304,7 +304,7 @@
           (is (= "Parent task not found" (get-in result [:content 0 :text])))
           ;; Verify structured error data
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)]
+                data (json/parse-string (:text data-content) keyword)]
             (is (= "Parent task not found" (:error data)))
             (is (= 999 (get-in data [:metadata :parent-id])))))))))
 

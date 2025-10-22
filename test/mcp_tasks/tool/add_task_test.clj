@@ -25,7 +25,7 @@
             (is (str/includes? (:text text-content) "Task added to")))
           ;; Second content item is structured data
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)]
+                data (json/parse-string (:text data-content) keyword)]
             (is (= "text" (:type data-content)))
             (is (contains? data :task))
             (is (contains? data :metadata))
@@ -71,7 +71,7 @@
           (is (false? (:isError result)))
           ;; Verify structured data includes parent-id
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)
+                data (json/parse-string (:text data-content) keyword)
                 task (:task data)]
             (is (= 1 (:parent-id task)))
             (is (= "Child task" (:title task)))
@@ -88,7 +88,7 @@
                        :title "Regular task"})]
           (is (false? (:isError result)))
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)
+                data (json/parse-string (:text data-content) keyword)
                 task (:task data)]
             ;; parent-id should be present in select-keys but will be nil
             (is (nil? (:parent-id task)))
@@ -112,7 +112,7 @@
             (is (= "Parent story not found" (:text text-content))))
           ;; Second content is structured error data
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)]
+                data (json/parse-string (:text data-content) keyword)]
             (is (= "text" (:type data-content)))
             (is (contains? data :error))
             (is (contains? data :metadata))
@@ -146,7 +146,7 @@
           (is (every? #(= "text" (:type %)) (:content result)))
           ;; Second content should be valid JSON with error/metadata
           (let [data-text (:text (second (:content result)))
-                data (json/parse-string data-text true)]
+                data (json/parse-string data-text keyword)]
             (is (contains? data :error))
             (is (string? (:error data)))
             (is (contains? data :metadata))
@@ -231,7 +231,7 @@
 
           ;; Second content item: task data
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)]
+                data (json/parse-string (:text data-content) keyword)]
             (is (= "text" (:type data-content)))
             (is (contains? data :task))
             (is (contains? data :metadata))))))))
@@ -257,14 +257,14 @@
 
           ;; Second content item: task data
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)]
+                data (json/parse-string (:text data-content) keyword)]
             (is (= "text" (:type data-content)))
             (is (contains? data :task))
             (is (contains? data :metadata)))
 
           ;; Third content item: git status
           (let [git-content (nth (:content result) 2)
-                git-data (json/parse-string (:text git-content) true)]
+                git-data (json/parse-string (:text git-content) keyword)]
             (is (= "text" (:type git-content)))
             (is (contains? git-data :git-status))
             (is (contains? git-data :git-commit))))))))
@@ -284,7 +284,7 @@
 
           ;; Extract task ID from response
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)
+                data (json/parse-string (:text data-content) keyword)
                 task-id (get-in data [:task :id])]
 
             ;; Verify git commit was created
@@ -296,7 +296,7 @@
 
             ;; Verify git status in response
             (let [git-content (nth (:content result) 2)
-                  git-data (json/parse-string (:text git-content) true)]
+                  git-data (json/parse-string (:text git-content) keyword)]
               (is (= "success" (:git-status git-data)))
               (is (string? (:git-commit git-data)))
               (is (= 40 (count (:git-commit git-data)))) ; SHA is 40 chars
@@ -318,7 +318,7 @@
 
           ;; Extract task ID from response
           (let [data-content (second (:content result))
-                data (json/parse-string (:text data-content) true)
+                data (json/parse-string (:text data-content) keyword)
                 task-id (get-in data [:task :id])]
 
             ;; Verify commit message has truncated title
@@ -353,7 +353,7 @@
 
           ;; Verify git error is reported in response
           (let [git-content (nth (:content result) 2)
-                git-data (json/parse-string (:text git-content) true)]
+                git-data (json/parse-string (:text git-content) keyword)]
             (is (= "error" (:git-status git-data)))
             (is (nil? (:git-commit git-data)))
             (is (string? (:git-error git-data)))

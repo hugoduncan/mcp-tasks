@@ -189,7 +189,7 @@ EXAMPLES:
   Returns the parsed map or an error map."
   [s]
   (try
-    (let [parsed (json/parse-string s true)]
+    (let [parsed (json/parse-string s keyword)]
       (if (map? parsed)
         parsed
         {:error "Expected JSON object for --meta"
@@ -204,9 +204,9 @@ EXAMPLES:
   Returns the parsed vector or an error map."
   [s]
   (try
-    (let [parsed (json/parse-string s true)]
-      (if (vector? parsed)
-        parsed
+    (let [parsed (json/parse-string s keyword)]
+      (if (sequential? parsed)
+        (vec parsed)
         {:error "Expected JSON array for --relations"
          :provided s}))
     (catch Exception e

@@ -150,7 +150,7 @@
                      "--title" "JSON test"
                      "--description" "Test with JSON")]
         (is (= 0 (:exit result)))
-        (let [parsed (json/parse-string (:out result) true)]
+        (let [parsed (json/parse-string (:out result) keyword)]
           (is (map? parsed))
           (is (= 1 (:id (:task parsed)))))))
 
@@ -160,7 +160,7 @@
                      "show"
                      "--task-id" "1")]
         (is (= 0 (:exit result)))
-        (let [parsed (json/parse-string (:out result) true)]
+        (let [parsed (json/parse-string (:out result) keyword)]
           (is (= 1 (-> parsed :task :id)))
           (is (= "JSON test" (-> parsed :task :title))))))
 
@@ -171,7 +171,7 @@
                      "--task-id" "1"
                      "--title" "Updated JSON test")]
         (is (= 0 (:exit result)))
-        (let [parsed (json/parse-string (:out result) true)]
+        (let [parsed (json/parse-string (:out result) keyword)]
           (is (= "Updated JSON test" (:title (:task parsed)))))))
 
     (testing "can complete in JSON format"
@@ -180,7 +180,7 @@
                      "complete"
                      "--task-id" "1")]
         (is (= 0 (:exit result)))
-        (let [parsed (json/parse-string (:out result) true)]
+        (let [parsed (json/parse-string (:out result) keyword)]
           (is (= "closed" (:status (:task parsed)))))))))
 
 (deftest complete-workflow-human-format-test
