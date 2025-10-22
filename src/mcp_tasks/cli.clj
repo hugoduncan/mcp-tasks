@@ -43,8 +43,7 @@
 
           ;; Parse only global args that appear before the command
           parsed (cli/parse-args global-args {:coerce {:format :keyword}})
-          {:keys [config-path format help]} (:opts parsed)
-          config-path (or config-path ".")
+          {:keys [format help]} (:opts parsed)
           format (or format :human)
           command (first command-and-args)
           command-args (rest command-and-args)]
@@ -71,8 +70,7 @@
 
         ;; Execute command
         :else
-        (let [path (str config-path)
-              valid-commands #{"list" "show" "add" "complete" "update" "delete"}]
+        (let [valid-commands #{"list" "show" "add" "complete" "update" "delete"}]
           ;; Validate command is known
           (if-not (contains? valid-commands command)
             (do
@@ -82,54 +80,45 @@
                 (println parse/help-text))
               (exit 1))
 
-            ;; Validate config path exists
-            (if-not (.exists (java.io.File. path))
-              (do
-                (binding [*out* *err*]
-                  (println (format/format-error
-                             {:error "Config path does not exist"
-                              :path path})))
-                (exit 1))
+            ;; Load config using automatic discovery
+            (let [{:keys [raw-config config-dir]} (config/read-config)
+                  resolved-config (config/resolve-config config-dir raw-config)
+                  _ (config/validate-startup config-dir resolved-config)
 
-              (let [;; Load config
-                    raw-config (config/read-config path)
-                    resolved-config (config/resolve-config path (or raw-config {}))
-                    _ (config/validate-startup path resolved-config)
+                  ;; Parse command-specific args
+                  parsed-args (case command
+                                "list" (parse/parse-list command-args)
+                                "show" (parse/parse-show command-args)
+                                "add" (parse/parse-add command-args)
+                                "complete" (parse/parse-complete command-args)
+                                "update" (parse/parse-update command-args)
+                                "delete" (parse/parse-delete command-args))]
 
-                    ;; Parse command-specific args
-                    parsed-args (case command
-                                  "list" (parse/parse-list command-args)
-                                  "show" (parse/parse-show command-args)
-                                  "add" (parse/parse-add command-args)
-                                  "complete" (parse/parse-complete command-args)
-                                  "update" (parse/parse-update command-args)
-                                  "delete" (parse/parse-delete command-args))]
+              ;; Check for parsing errors
+              (if (:error parsed-args)
+                (do
+                  (binding [*out* *err*]
+                    (println (format/format-error parsed-args)))
+                  (exit 1))
 
-                ;; Check for parsing errors
-                (if (:error parsed-args)
-                  (do
-                    (binding [*out* *err*]
-                      (println (format/format-error parsed-args)))
-                    (exit 1))
-
-                  ;; Execute command
-                  (let [result (case command
-                                 "list" (commands/list-command resolved-config parsed-args)
-                                 "show" (commands/show-command resolved-config parsed-args)
-                                 "add" (commands/add-command resolved-config parsed-args)
-                                 "complete" (commands/complete-command resolved-config parsed-args)
-                                 "update" (commands/update-command resolved-config parsed-args)
-                                 "delete" (commands/delete-command resolved-config parsed-args))
-                        output-format (or (:format parsed-args) format)
-                        formatted-output (format/render output-format result)]
-                    (if (:error result)
-                      (do
-                        (binding [*out* *err*]
-                          (println formatted-output))
-                        (exit 1))
-                      (do
-                        (println formatted-output)
-                        (exit 0)))))))))))
+                ;; Execute command
+                (let [result (case command
+                               "list" (commands/list-command resolved-config parsed-args)
+                               "show" (commands/show-command resolved-config parsed-args)
+                               "add" (commands/add-command resolved-config parsed-args)
+                               "complete" (commands/complete-command resolved-config parsed-args)
+                               "update" (commands/update-command resolved-config parsed-args)
+                               "delete" (commands/delete-command resolved-config parsed-args))
+                      output-format (or (:format parsed-args) format)
+                      formatted-output (format/render output-format result)]
+                  (if (:error result)
+                    (do
+                      (binding [*out* *err*]
+                        (println formatted-output))
+                      (exit 1))
+                    (do
+                      (println formatted-output)
+                      (exit 0))))))))))
 
     (catch clojure.lang.ExceptionInfo e
       (let [data (ex-data e)]

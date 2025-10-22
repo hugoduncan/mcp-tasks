@@ -25,9 +25,13 @@ COMMANDS:
   delete    Delete a task
 
 GLOBAL OPTIONS:
-  --config-path <path>  Path to directory containing .mcp-tasks.edn (default: .)
   --format <format>     Output format: edn, json, human (default: edn)
   --help                Show this help message
+
+CONFIG DISCOVERY:
+  The CLI automatically searches for .mcp-tasks.edn starting from the current
+  directory and traversing up the directory tree until found or reaching the
+  filesystem root.
 
 Run 'clojure -M:cli <command> --help' for command-specific options.
 
