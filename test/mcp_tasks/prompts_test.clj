@@ -8,26 +8,26 @@
 
 (deftest discover-categories-test
   ;; Test that discover-categories finds categories from the
-  ;; .mcp-tasks/prompts subdirectory, returning them sorted
-  ;; without .md extensions.
+  ;; prompts subdirectory, returning them sorted without .md extensions.
   (testing "discover-categories"
-    (testing "returns sorted categories from .mcp-tasks/prompts directory"
-      (let [categories (sut/discover-categories)]
-        (is (vector? categories))
-        (is (every? string? categories))
-        (is (= categories (sort categories)))
-        (is (not-any? #(re-find #"\.md$" %) categories))))
+    (let [config {:resolved-tasks-dir ".mcp-tasks"}]
+      (testing "returns sorted categories from prompts directory"
+        (let [categories (sut/discover-categories config)]
+          (is (vector? categories))
+          (is (every? string? categories))
+          (is (= categories (sort categories)))
+          (is (not-any? #(re-find #"\.md$" %) categories))))
 
-    (testing "finds categories from prompts subdirectory"
-      (let [categories (sut/discover-categories)
-            category-set (set categories)]
-        ;; Should find "simple" which exists in prompts
-        (is (contains? category-set "simple"))))
+      (testing "finds categories from prompts subdirectory"
+        (let [categories (sut/discover-categories config)
+              category-set (set categories)]
+          ;; Should find "simple" which exists in prompts
+          (is (contains? category-set "simple"))))
 
-    (testing "returns categories only from prompts subdirectory"
-      (let [categories (sut/discover-categories)]
-        ;; Each category should appear exactly once
-        (is (= (count categories) (count (set categories))))))))
+      (testing "returns categories only from prompts subdirectory"
+        (let [categories (sut/discover-categories config)]
+          ;; Each category should appear exactly once
+          (is (= (count categories) (count (set categories)))))))))
 
 (deftest parse-frontmatter-test
   ;; Test that parse-frontmatter correctly extracts metadata and content
@@ -73,77 +73,79 @@
   ;; Test that create-prompts generates valid MCP prompts for categories
   ;; with both custom and default instructions.
   (testing "create-prompts"
-    (testing "creates prompts for each category"
-      (let [prompts (sut/create-prompts {:use-git? true} ["simple" "test-category"])]
-        (is (vector? prompts))
-        (is (= 2 (count prompts)))
-        (is (every? map? prompts))))
+    (let [config {:use-git? true :resolved-tasks-dir ".mcp-tasks"}]
+      (testing "creates prompts for each category"
+        (let [prompts (sut/create-prompts config ["simple" "test-category"])]
+          (is (vector? prompts))
+          (is (= 2 (count prompts)))
+          (is (every? map? prompts))))
 
-    (testing "generates correct prompt structure"
-      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
-            prompt (first prompts)]
-        (is (contains? prompt :name))
-        (is (contains? prompt :description))
-        (is (contains? prompt :messages))
-        (is (= "next-simple" (:name prompt)))
-        (is (string? (:description prompt)))
-        (is (vector? (:messages prompt)))))
+      (testing "generates correct prompt structure"
+        (let [prompts (sut/create-prompts config ["simple"])
+              prompt (first prompts)]
+          (is (contains? prompt :name))
+          (is (contains? prompt :description))
+          (is (contains? prompt :messages))
+          (is (= "next-simple" (:name prompt)))
+          (is (string? (:description prompt)))
+          (is (vector? (:messages prompt)))))
 
-    (testing "uses default template when no custom prompt file exists"
-      (let [prompts (sut/create-prompts {:use-git? true} ["nonexistent"])
-            prompt (first prompts)
-            message-text (get-in prompt [:messages 0 :content :text])]
-        (is (= "next-nonexistent" (:name prompt)))
-        (is (re-find #"nonexistent task" message-text))
-        (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))))
+      (testing "uses default template when no custom prompt file exists"
+        (let [prompts (sut/create-prompts config ["nonexistent"])
+              prompt (first prompts)
+              message-text (get-in prompt [:messages 0 :content :text])]
+          (is (= "next-nonexistent" (:name prompt)))
+          (is (re-find #"nonexistent task" message-text))
+          (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))))
 
-    (testing "generates prompts with proper category substitution"
-      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
-            prompt (first prompts)
-            message-text (get-in prompt [:messages 0 :content :text])]
-        (is (= "next-simple" (:name prompt)))
-        (is (re-find #"simple task" message-text))
-        (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))
-        (is (re-find #"\.mcp-tasks/complete\.ednl" message-text))))
+      (testing "generates prompts with proper category substitution"
+        (let [prompts (sut/create-prompts config ["simple"])
+              prompt (first prompts)
+              message-text (get-in prompt [:messages 0 :content :text])]
+          (is (= "next-simple" (:name prompt)))
+          (is (re-find #"simple task" message-text))
+          (is (re-find #"\.mcp-tasks/tasks\.ednl" message-text))
+          (is (re-find #"\.mcp-tasks/complete\.ednl" message-text))))
 
-    (testing "uses metadata description when available"
-      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
-            prompt (first prompts)]
-        (is (= "next-simple" (:name prompt)))
-        (is (= "Execute simple tasks with basic workflow" (:description prompt)))))
+      (testing "uses metadata description when available"
+        (let [prompts (sut/create-prompts config ["simple"])
+              prompt (first prompts)]
+          (is (= "next-simple" (:name prompt)))
+          (is (= "Execute simple tasks with basic workflow" (:description prompt)))))
 
-    (testing "uses default description when no metadata"
-      (let [prompts (sut/create-prompts {:use-git? true} ["nonexistent"])
-            prompt (first prompts)]
-        (is (= "next-nonexistent" (:name prompt)))
-        (is (= "Execute the next nonexistent task from .mcp-tasks/tasks.ednl"
-               (:description prompt)))))
+      (testing "uses default description when no metadata"
+        (let [prompts (sut/create-prompts config ["nonexistent"])
+              prompt (first prompts)]
+          (is (= "next-nonexistent" (:name prompt)))
+          (is (= "Execute the next nonexistent task from .mcp-tasks/tasks.ednl"
+                 (:description prompt)))))
 
-    (testing "includes git instructions when use-git? is true"
-      (let [prompts (sut/create-prompts {:use-git? true} ["simple"])
-            prompt (first prompts)
-            message-text (get-in prompt [:messages 0 :content :text])]
-        (is (re-find #"Commit the task tracking changes" message-text))))
+      (testing "includes git instructions when use-git? is true"
+        (let [prompts (sut/create-prompts config ["simple"])
+              prompt (first prompts)
+              message-text (get-in prompt [:messages 0 :content :text])]
+          (is (re-find #"Commit the task tracking changes" message-text))))
 
-    (testing "omits .mcp-tasks git commit instructions when use-git? is false"
-      (let [prompts (sut/create-prompts {:use-git? false} ["simple"])
-            prompt (first prompts)
-            message-text (get-in prompt [:messages 0 :content :text])]
-        (is (not (re-find #"Commit the task tracking changes in the \.mcp-tasks git repository" message-text)))))))
+      (testing "omits .mcp-tasks git commit instructions when use-git? is false"
+        (let [prompts (sut/create-prompts (assoc config :use-git? false) ["simple"])
+              prompt (first prompts)
+              message-text (get-in prompt [:messages 0 :content :text])]
+          (is (not (re-find #"Commit the task tracking changes in the \.mcp-tasks git repository" message-text))))))))
 
 (deftest category-descriptions-test
   ;; Test that category-descriptions returns correct descriptions for all categories.
   (testing "category-descriptions"
-    (testing "returns map of category to description"
-      (let [descs (sut/category-descriptions)]
-        (is (map? descs))
-        (is (contains? descs "simple"))
-        (is (= "Execute simple tasks with basic workflow" (get descs "simple")))))
+    (let [config {:resolved-tasks-dir ".mcp-tasks"}]
+      (testing "returns map of category to description"
+        (let [descs (sut/category-descriptions config)]
+          (is (map? descs))
+          (is (contains? descs "simple"))
+          (is (= "Execute simple tasks with basic workflow" (get descs "simple")))))
 
-    (testing "includes all discovered categories"
-      (let [categories (sut/discover-categories)
-            descs (sut/category-descriptions)]
-        (is (= (set categories) (set (keys descs))))))))
+      (testing "includes all discovered categories"
+        (let [categories (sut/discover-categories config)
+              descs (sut/category-descriptions config)]
+          (is (= (set categories) (set (keys descs)))))))))
 
 (deftest read-task-prompt-text-test
   ;; Test that read-task-prompt-text generates correct prompt text.
@@ -523,7 +525,8 @@
   (testing "category-prompt-resources"
     (let [temp-dir (str (System/getProperty "java.io.tmpdir") "/mcp-tasks-test-" (System/currentTimeMillis))
           prompts-dir (io/file temp-dir ".mcp-tasks" "prompts")
-          config {:base-dir temp-dir}]
+          config {:base-dir temp-dir
+                  :resolved-tasks-dir (str temp-dir "/.mcp-tasks")}]
       (try
         ;; Create test fixtures
         (.mkdirs prompts-dir)
