@@ -241,8 +241,8 @@
               add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
               task-id (get-in add-response [:task :id])]
 
-          ;; Mock config/read-config to simulate invalid config that returns default (empty map)
-          (with-redefs [mcp-tasks.config/read-config (fn [_] {})]
+          ;; Mock config/read-config to simulate missing config - returns empty raw-config
+          (with-redefs [mcp-tasks.config/read-config (fn [_] {:raw-config {} :config-dir test-dir})]
             (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
                   response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 

@@ -43,9 +43,9 @@
 
 (defn- load-test-config
   []
-  (let [raw-config (config/read-config test-project-dir)
-        resolved-config (config/resolve-config test-project-dir (or raw-config {}))]
-    (config/validate-startup test-project-dir resolved-config)
+  (let [{:keys [raw-config config-dir]} (config/read-config test-project-dir)
+        resolved-config (config/resolve-config config-dir raw-config)]
+    (config/validate-startup config-dir resolved-config)
     resolved-config))
 
 (defn- create-test-server-and-client
