@@ -106,6 +106,9 @@ bb cli add --category feature --title "Add endpoint"
 
 **Note:** The MCP server still requires JVM Clojure (`clojure -X:mcp-tasks`). Babashka support is for CLI operations only.
 
+**Testing with Babashka:**
+A `bb test` task is available in `bb.edn`, but currently blocked by a dependency incompatibility. The mcp-clj-server test-dep variant requires clojure.data.json, which doesn't work in babashka. Until this is resolved, use JVM Clojure for testing: `clojure -M:dev:test --focus :unit`
+
 ---
 
 ## What & Why

@@ -1,4 +1,4 @@
-{:paths ["src" "resources"]
+{:paths ["src" "resources" "test"]
 
  :deps {org.hugpduncan/mcp-clj-server
         {:git/url "https://github.com/hugoduncan/mcp-clj"
@@ -7,10 +7,12 @@
         metosin/malli {:mvn/version "0.16.4"}
         cheshire/cheshire {:mvn/version "5.13.0"}
         babashka/fs {:mvn/version "0.5.22"}
-        org.babashka/cli {:mvn/version "0.8.61"}}
+        org.babashka/cli {:mvn/version "0.8.61"}
+        lambdaisland/kaocha {:mvn/version "1.91.1392"}}
 
  :tasks
- {:requires ([mcp-tasks.cli :as cli])
+ {:requires ([mcp-tasks.cli :as cli]
+             [kaocha.runner])
 
   cli {:doc "Run mcp-tasks CLI"
        :task (apply cli/-main *command-line-args*)}
@@ -31,4 +33,7 @@
           :task (apply cli/-main (cons "update" *command-line-args*))}
 
   delete {:doc "Delete a task"
-          :task (apply cli/-main (cons "delete" *command-line-args*))}}}
+          :task (apply cli/-main (cons "delete" *command-line-args*))}
+
+  test {:doc "Run tests (optional: --focus :unit or :integration). NOTE: Currently blocked by mcp-clj-server test-dep dependency requiring clojure.data.json which is incompatible with babashka."
+        :task (apply kaocha.runner/-main *command-line-args*)}}}
