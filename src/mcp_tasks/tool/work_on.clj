@@ -207,7 +207,7 @@
   ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
   [base-dir task parent-story config]
   (try
-    ;; Determine branch name and worktree path
+    ;; Determine branch name
     (let [title (if parent-story
                   (:title parent-story)
                   (:title task))
@@ -216,74 +216,108 @@
                              (:id task))
           branch-name (util/sanitize-branch-name title branch-source-id)
 
-          ;; Derive worktree path
-          path-result (git/ensure-git-success!
-                        (git/derive-worktree-path base-dir title config)
-                        "derive-worktree-path")
-          worktree-path (:path path-result)
-
           ;; Get current working directory (canonical path)
           current-dir (.getCanonicalPath (java.io.File. (System/getProperty "user.dir")))
 
-          ;; Check if worktree exists
-          exists-result (git/ensure-git-success!
-                          (git/worktree-exists? base-dir worktree-path)
-                          "worktree-exists?")
-          worktree-exists? (:exists? exists-result)]
+          ;; Check if branch already exists in any worktree
+          find-result (git/ensure-git-success!
+                        (git/find-worktree-for-branch base-dir branch-name)
+                        "find-worktree-for-branch")
+          existing-worktree (:worktree find-result)]
 
-      (cond
-        ;; Worktree doesn't exist - create it
-        (worktree-needs-creation? worktree-exists?)
-        (do
-          (git/ensure-git-success!
-            (git/create-worktree base-dir worktree-path branch-name)
-            (str "create-worktree " worktree-path " " branch-name))
-          {:success true
-           :worktree-path worktree-path
-           :worktree-created? true
-           :needs-directory-switch? true
-           :branch-name branch-name
-           :clean? nil
-           :error nil
-           :message (str "Worktree created at " worktree-path ". Please start a new Claude Code session in that directory.")})
+      (if existing-worktree
+        ;; Branch exists in a worktree - use that worktree
+        (let [worktree-path (:path existing-worktree)]
+          (if (in-worktree? current-dir worktree-path)
+            ;; Already in the correct worktree - check if clean
+            (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
+                                (git/ensure-git-success! "check-uncommitted-changes")
+                                :has-changes?
+                                not)]
+              {:success true
+               :worktree-path worktree-path
+               :worktree-created? false
+               :needs-directory-switch? false
+               :branch-name branch-name
+               :clean? is-clean?
+               :error nil})
 
-        ;; Worktree exists but we're not in it
-        (worktree-needs-switch? worktree-exists? current-dir worktree-path)
-        {:success true
-         :worktree-path worktree-path
-         :worktree-created? false
-         :needs-directory-switch? true
-         :branch-name branch-name
-         :clean? nil
-         :error nil
-         :message (str "Worktree exists at " worktree-path ". Please start a new Claude Code session in that directory.")}
-
-        ;; We're in the worktree - verify branch and check clean status
-        :else
-        (let [current-branch (-> (git/worktree-branch worktree-path)
-                                 (git/ensure-git-success! "worktree-branch")
-                                 :branch)]
-
-          ;; Verify we're on the correct branch
-          (when (not= current-branch branch-name)
-            (throw (ex-info (str "Worktree is on branch " current-branch " but expected " branch-name)
-                            {:current-branch current-branch
-                             :expected-branch branch-name
-                             :worktree-path worktree-path
-                             :operation "verify-worktree-branch"})))
-
-          ;; Check if worktree is clean
-          (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
-                              (git/ensure-git-success! "check-uncommitted-changes")
-                              :has-changes?
-                              not)]
+            ;; Need to switch to existing worktree
             {:success true
              :worktree-path worktree-path
              :worktree-created? false
-             :needs-directory-switch? false
+             :needs-directory-switch? true
              :branch-name branch-name
-             :clean? is-clean?
-             :error nil}))))
+             :clean? nil
+             :error nil
+             :message (str "Worktree exists at " worktree-path ". Please start a new Claude Code session in that directory.")}))
+
+        ;; Branch not in any worktree - proceed with deriving path and creating/checking worktree
+        (let [;; Derive worktree path
+              path-result (git/ensure-git-success!
+                            (git/derive-worktree-path base-dir title config)
+                            "derive-worktree-path")
+              worktree-path (:path path-result)
+
+              ;; Check if worktree exists at the derived path
+              exists-result (git/ensure-git-success!
+                              (git/worktree-exists? base-dir worktree-path)
+                              "worktree-exists?")
+              worktree-exists? (:exists? exists-result)]
+
+          (cond
+            ;; Worktree doesn't exist - create it
+            (worktree-needs-creation? worktree-exists?)
+            (do
+              (git/ensure-git-success!
+                (git/create-worktree base-dir worktree-path branch-name)
+                (str "create-worktree " worktree-path " " branch-name))
+              {:success true
+               :worktree-path worktree-path
+               :worktree-created? true
+               :needs-directory-switch? true
+               :branch-name branch-name
+               :clean? nil
+               :error nil
+               :message (str "Worktree created at " worktree-path ". Please start a new Claude Code session in that directory.")})
+
+            ;; Worktree exists but we're not in it
+            (worktree-needs-switch? worktree-exists? current-dir worktree-path)
+            {:success true
+             :worktree-path worktree-path
+             :worktree-created? false
+             :needs-directory-switch? true
+             :branch-name branch-name
+             :clean? nil
+             :error nil
+             :message (str "Worktree exists at " worktree-path ". Please start a new Claude Code session in that directory.")}
+
+            ;; We're in the worktree - verify branch and check clean status
+            :else
+            (let [current-branch (-> (git/worktree-branch worktree-path)
+                                     (git/ensure-git-success! "worktree-branch")
+                                     :branch)]
+
+              ;; Verify we're on the correct branch
+              (when (not= current-branch branch-name)
+                (throw (ex-info (str "Worktree is on branch " current-branch " but expected " branch-name)
+                                {:current-branch current-branch
+                                 :expected-branch branch-name
+                                 :worktree-path worktree-path
+                                 :operation "verify-worktree-branch"})))
+
+              ;; Check if worktree is clean
+              (let [is-clean? (-> (git/check-uncommitted-changes worktree-path)
+                                  (git/ensure-git-success! "check-uncommitted-changes")
+                                  :has-changes?
+                                  not)]
+                {:success true
+                 :worktree-path worktree-path
+                 :worktree-created? false
+                 :needs-directory-switch? false
+                 :branch-name branch-name
+                 :clean? is-clean?
+                 :error nil}))))))
 
     (catch clojure.lang.ExceptionInfo e
       {:success false
