@@ -107,13 +107,13 @@
 (defn resolve-config
   "Returns final config map with :use-git? and :base-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
-  repo presence.  Base directory defaults to current working directory
-  if project-dir not provided.
+  repo presence.  Base directory is canonicalized to an absolute path.
   
   When :worktree-management? is true, automatically enables :branch-management?.
   When :worktree-prefix is not set, defaults to :project-name."
   [project-dir config]
-  (let [base-dir (or project-dir (System/getProperty "user.dir"))
+  (let [raw-base-dir (or project-dir (System/getProperty "user.dir"))
+        base-dir (str (fs/canonicalize raw-base-dir))
         config-with-branch-mgmt (if (:worktree-management? config)
                                   (assoc config :branch-management? true)
                                   config)
