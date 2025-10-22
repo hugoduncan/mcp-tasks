@@ -7,7 +7,6 @@
   (:require
     [babashka.fs :as fs]
     [clojure.data.json :as json]
-    [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
