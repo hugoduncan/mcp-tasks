@@ -261,58 +261,88 @@
 (deftest resolve-config-adds-use-git
   ;; Test that resolve-config adds :use-git?, :base-dir, and :worktree-prefix to config map
   (testing "resolve-config"
-    (testing "adds :use-git? false, :base-dir, and :worktree-prefix when no config and no git repo"
-      (is (= {:use-git? false :base-dir test-project-dir :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {}))))
+    (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
+      (testing "adds :use-git? false, :base-dir, and :worktree-prefix when no config and no git repo"
+        (is (= {:use-git? false :base-dir canonical-base-dir :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {}))))
 
-    (testing "adds :use-git? true, :base-dir, and :worktree-prefix when no config but git repo exists"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (= {:use-git? true :base-dir test-project-dir :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {}))))
+      (testing "adds :use-git? true, :base-dir, and :worktree-prefix when no config but git repo exists"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (= {:use-git? true :base-dir canonical-base-dir :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {}))))
 
-    (testing "preserves explicit :use-git? true and adds :base-dir and :worktree-prefix"
-      (is (= {:use-git? true :base-dir test-project-dir :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {:use-git? true}))))
+      (testing "preserves explicit :use-git? true and adds :base-dir and :worktree-prefix"
+        (is (= {:use-git? true :base-dir canonical-base-dir :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {:use-git? true}))))
 
-    (testing "preserves explicit :use-git? false even with git repo and adds :base-dir and :worktree-prefix"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (= {:use-git? false :base-dir test-project-dir :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {:use-git? false}))))
+      (testing "preserves explicit :use-git? false even with git repo and adds :base-dir and :worktree-prefix"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (= {:use-git? false :base-dir canonical-base-dir :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {:use-git? false}))))
 
-    (testing "preserves other config keys and adds :use-git?, :base-dir, and :worktree-prefix"
-      (cleanup-test-project)
-      (setup-test-project)
-      (is (= {:use-git? false :base-dir test-project-dir :other-key "value" :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {:other-key "value"}))))))
+      (testing "preserves other config keys and adds :use-git?, :base-dir, and :worktree-prefix"
+        (cleanup-test-project)
+        (setup-test-project)
+        (is (= {:use-git? false :base-dir canonical-base-dir :other-key "value" :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {:other-key "value"})))))))
 
 (deftest resolve-config-auto-enables-branch-management
   ;; Test that resolve-config auto-enables :branch-management? when :worktree-management? is true
   (testing "resolve-config auto-enables branch management"
-    (testing "enables :branch-management? when :worktree-management? is true"
-      (is (= {:worktree-management? true
-              :branch-management? true
-              :use-git? false
-              :base-dir test-project-dir
-              :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {:worktree-management? true}))))
+    (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
+      (testing "enables :branch-management? when :worktree-management? is true"
+        (is (= {:worktree-management? true
+                :branch-management? true
+                :use-git? false
+                :base-dir canonical-base-dir
+                :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {:worktree-management? true}))))
 
-    (testing "preserves explicit :branch-management? false when :worktree-management? is false"
-      (is (= {:worktree-management? false
-              :branch-management? false
-              :use-git? false
-              :base-dir test-project-dir
-              :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {:worktree-management? false
-                                                   :branch-management? false}))))
+      (testing "preserves explicit :branch-management? false when :worktree-management? is false"
+        (is (= {:worktree-management? false
+                :branch-management? false
+                :use-git? false
+                :base-dir canonical-base-dir
+                :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {:worktree-management? false
+                                                     :branch-management? false}))))
 
-    (testing "overrides :branch-management? false when :worktree-management? is true"
-      (is (= {:worktree-management? true
-              :branch-management? true
-              :use-git? false
-              :base-dir test-project-dir
-              :worktree-prefix :project-name}
-             (sut/resolve-config test-project-dir {:worktree-management? true
-                                                   :branch-management? false}))))))
+      (testing "overrides :branch-management? false when :worktree-management? is true"
+        (is (= {:worktree-management? true
+                :branch-management? true
+                :use-git? false
+                :base-dir canonical-base-dir
+                :worktree-prefix :project-name}
+               (sut/resolve-config test-project-dir {:worktree-management? true
+                                                     :branch-management? false})))))))
+
+(deftest resolve-config-canonicalizes-base-dir
+  ;; Test that resolve-config always returns an absolute path for :base-dir
+  ;; This prevents bugs where relative paths like "." cause fs/parent to return nil/empty
+  (testing "resolve-config canonicalizes base-dir"
+    (testing "converts relative path '.' to absolute path"
+      (let [result (sut/resolve-config "." {})
+            base-dir (:base-dir result)]
+        (is (string? base-dir))
+        (is (not (= "." base-dir)))
+        (is (fs/absolute? base-dir))
+        ;; Should be an actual absolute path (starts with /)
+        (is (re-matches #"/.*" base-dir))))
+
+    (testing "canonicalizes relative paths to absolute paths"
+      (let [result (sut/resolve-config test-project-dir {})
+            base-dir (:base-dir result)]
+        ;; test-project-dir is relative, so it should be canonicalized
+        (is (string? base-dir))
+        (is (fs/absolute? base-dir))
+        (is (= (str (fs/canonicalize test-project-dir)) base-dir))))
+
+    (testing "canonicalizes when project-dir is nil (uses user.dir)"
+      (let [result (sut/resolve-config nil {})
+            base-dir (:base-dir result)]
+        (is (string? base-dir))
+        (is (fs/absolute? base-dir))
+        (is (= (str (fs/canonicalize (System/getProperty "user.dir"))) base-dir))))))
 
 (deftest validate-git-repo-with-git-disabled
   ;; Test that validation passes when git mode is disabled

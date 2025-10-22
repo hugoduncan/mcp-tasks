@@ -310,6 +310,16 @@
           (is (= "/Users/test/fix-multiple-spaces" (:path result)))
           (is (nil? (:error result))))))
 
+    (testing "with relative paths (demonstrates why config must canonicalize)"
+      (testing "relative path produces incorrect path rooted at filesystem root"
+        (let [result (sut/derive-worktree-path "." "fix parser bug"
+                                               {:worktree-prefix :none})]
+          ;; Function succeeds but produces bad path at root (/) instead of proper location
+          ;; This is why resolve-config must canonicalize base-dir before passing to git functions
+          (is (true? (:success result)))
+          (is (= "/fix-parser-bug" (:path result)))
+          (is (nil? (:error result))))))
+
     (testing "uses default :project-name when config missing key"
       (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug" {})]
         (is (true? (:success result)))

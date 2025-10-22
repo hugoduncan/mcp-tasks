@@ -251,7 +251,7 @@
                 prompt-map (prompts/prompts config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (false? (:use-git? config)))
-            (is (= (.getPath temp-dir) (:base-dir config)))
+            (is (= (str (fs/canonicalize temp-dir)) (:base-dir config)))
             (is (map? complete-tool))
             (is (map? simple-prompt))
             (let [message-text (get-in
