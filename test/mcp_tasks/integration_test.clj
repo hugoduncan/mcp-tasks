@@ -2762,3 +2762,154 @@
                                              "rev-parse" "--abbrev-ref" "HEAD")
                 current-branch (str/trim (:out current-branch-result))]
             (is (= branch-name current-branch))))))))
+
+(deftest ^:integ worktree-creates-new-branch-scenario-test
+  ;; Scenario test for worktree management when branch doesn't exist.
+  ;; Validates complete workflow with actual git operations including worktree
+  ;; and branch creation.
+  (testing "worktree management creates branch when it doesn't exist"
+    (testing "creates worktree with new branch from base branch"
+      (write-config-file "{:use-git? false :worktree-management? true}")
+
+      ;; Initialize git repo in project root (not .mcp-tasks) for worktree support
+      (let [project-root (test-project-dir)]
+        (sh/sh "git" "init" project-root)
+        (sh/sh "git" "-C" project-root "config" "user.email" "test@example.com")
+        (sh/sh "git" "-C" project-root "config" "user.name" "Test User")
+
+        ;; Create initial commit on main branch
+        (spit (io/file project-root "test.txt") "initial")
+        (sh/sh "git" "-C" project-root "add" ".")
+        (sh/sh "git" "-C" project-root "commit" "-m" "Initial commit")
+        (sh/sh "git" "-C" project-root "checkout" "-b" "main")
+
+        (let [{:keys [server client]} (create-test-server-and-client)]
+          (try
+            ;; Create a task
+            (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
+                  task {:id 1
+                        :title "Fix Parser Bug"
+                        :description "Fix the parser bug"
+                        :design ""
+                        :category "simple"
+                        :status :open
+                        :type :task
+                        :meta {}
+                        :relations []}]
+              (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task]))
+
+            ;; Call work-on tool
+            (let [tool-response @(mcp-client/call-tool client "work-on" {:task-id 1})
+                  response-text (get-in tool-response [:content 0 :text])]
+
+              ;; Check if tool returned an error
+              (when (:isError tool-response)
+                (is false (str "work-on tool returned an error: " response-text)))
+
+              ;; Verify response is not an error
+              (is (false? (:isError tool-response)))
+
+              (let [response-data (json/read-str response-text :key-fn keyword)]
+                (is (= 1 (:task-id response-data)))
+                (is (= "Fix Parser Bug" (:title response-data)))
+                (is (true? (:worktree-created? response-data)))
+                (is (= "fix-parser-bug" (:branch-name response-data)))
+                (is (string? (:worktree-path response-data)))
+                (is (str/includes? (:message response-data) "Worktree created"))
+                (is (str/includes? (:message response-data) "Please start a new Claude Code session"))
+
+                ;; Get the worktree path from response
+                (let [worktree-path (:worktree-path response-data)]
+
+                  ;; Verify worktree was actually created
+                  (is (fs/exists? worktree-path))
+                  (is (fs/directory? worktree-path))
+
+                  ;; Verify worktree is on the correct branch
+                  (let [branch-result (sh/sh "git" "-C" worktree-path
+                                             "rev-parse" "--abbrev-ref" "HEAD")
+                        current-branch (str/trim (:out branch-result))]
+                    (is (= 0 (:exit branch-result)))
+                    (is (= "fix-parser-bug" current-branch)))
+
+                  ;; Verify branch exists in main repo
+                  (let [branch-exists-result (sh/sh "git" "-C" project-root
+                                                    "branch" "--list" "fix-parser-bug")
+                        branches (str/trim (:out branch-exists-result))]
+                    (is (= 0 (:exit branch-exists-result)))
+                    (is (str/includes? branches "fix-parser-bug")))
+
+                  ;; Verify worktree is in git worktree list
+                  (let [worktree-list-result (sh/sh "git" "-C" project-root
+                                                    "worktree" "list")
+                        worktrees (:out worktree-list-result)]
+                    (is (= 0 (:exit worktree-list-result)))
+                    (is (str/includes? worktrees worktree-path)))
+
+                  ;; Verify branch was created from main (shares commit history)
+                  (let [main-commit-result (sh/sh "git" "-C" project-root
+                                                  "rev-parse" "main")
+                        main-commit (str/trim (:out main-commit-result))
+                        branch-commit-result (sh/sh "git" "-C" worktree-path
+                                                    "rev-parse" "HEAD")
+                        branch-commit (str/trim (:out branch-commit-result))]
+                    (is (= 0 (:exit main-commit-result)))
+                    (is (= 0 (:exit branch-commit-result)))
+                    (is (= main-commit branch-commit) "Branch should start from main commit")))))
+
+            (finally
+              (mcp-client/close! client)
+              ((:stop server))))))))
+
+  (testing "second call to work-on reuses existing worktree"
+    (write-config-file "{:use-git? false :worktree-management? true}")
+
+    ;; Initialize git repo in project root
+    (let [project-root (test-project-dir)]
+      (sh/sh "git" "init" project-root)
+      (sh/sh "git" "-C" project-root "config" "user.email" "test@example.com")
+      (sh/sh "git" "-C" project-root "config" "user.name" "Test User")
+
+      ;; Create initial commit on main branch
+      (spit (io/file project-root "test.txt") "initial")
+      (sh/sh "git" "-C" project-root "add" ".")
+      (sh/sh "git" "-C" project-root "commit" "-m" "Initial commit")
+      (sh/sh "git" "-C" project-root "checkout" "-b" "main")
+
+      (let [{:keys [server client]} (create-test-server-and-client)]
+        (try
+          ;; Create a task
+          (let [tasks-file (io/file (test-project-dir) ".mcp-tasks" "tasks.ednl")
+                task {:id 1
+                      :title "Add Feature"
+                      :description "Add new feature"
+                      :design ""
+                      :category "simple"
+                      :status :open
+                      :type :task
+                      :meta {}
+                      :relations []}]
+            (tasks-file/write-tasks (.getAbsolutePath tasks-file) [task]))
+
+          ;; First call - creates worktree
+          (let [first-response @(mcp-client/call-tool client "work-on" {:task-id 1})
+                first-data (json/read-str (get-in first-response [:content 0 :text]) :key-fn keyword)
+                worktree-path (:worktree-path first-data)]
+
+            (is (true? (:worktree-created? first-data)))
+            (is (fs/exists? worktree-path))
+
+            ;; Second call - reuses worktree
+            (let [second-response @(mcp-client/call-tool client "work-on" {:task-id 1})
+                  second-data (json/read-str (get-in second-response [:content 0 :text]) :key-fn keyword)]
+
+              (is (false? (:isError second-response)))
+              ;; Canonicalize paths for comparison (handles /var vs /private/var on macOS)
+              (is (= (str (fs/canonicalize worktree-path))
+                     (str (fs/canonicalize (:worktree-path second-data)))))
+              (is (false? (:worktree-created? second-data)) "Should not create worktree again")
+              (is (str/includes? (:message second-data) "Worktree exists"))))
+
+          (finally
+            (mcp-client/close! client)
+            ((:stop server))))))))

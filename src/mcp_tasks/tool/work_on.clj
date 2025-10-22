@@ -306,7 +306,9 @@
                               (git/worktree-exists? base-dir worktree-path)
                               "worktree-exists?")
               worktree-exists? (:exists? exists-result)
-              branch-exists? (git/branch-exists? base-dir branch-name)]
+              branch-exists? (:exists? (git/ensure-git-success!
+                                         (git/branch-exists? base-dir branch-name)
+                                         "branch-exists?"))]
 
           (cond
             ;; Worktree doesn't exist - create it
