@@ -59,7 +59,7 @@
       (when-not (:exists? branch-check)
         (throw (ex-info (str "Configured base branch " configured-base-branch " does not exist")
                         {:base-branch configured-base-branch
-                         :operation   "validate-base-branch"})))
+                         :operation "validate-base-branch"})))
       configured-base-branch)
     ;; Auto-detect default branch
     (:branch (git/ensure-git-success!
@@ -163,6 +163,13 @@
        :error (:error (ex-data e) (.getMessage e))
        :metadata (dissoc (ex-data e) :error)})))
 
+(defn- current-working-directory
+  "Get the current working directory as a canonical path.
+  
+  Extracted into a separate function to allow mocking in tests."
+  []
+  (fs/canonicalize (System/getProperty "user.dir")))
+
 (defn- in-worktree?
   "Check if the current directory is inside the specified worktree path.
 
@@ -250,7 +257,7 @@
   [base-dir title branch-name config]
   (try
     (let [;; Get current working directory (canonical path)
-          current-dir (fs/canonicalize (System/getProperty "user.dir"))
+          current-dir (current-working-directory)
 
           ;; Check if branch already exists in any worktree
           find-result (git/ensure-git-success!
@@ -399,9 +406,9 @@
     (throw
       (ex-info
         "Task not found"
-        {:response {:error    "No task found with the specified task-id"
+        {:response {:error "No task found with the specified task-id"
                     :metadata {:task-id task-id
-                               :file    tasks-file}}}))))
+                               :file tasks-file}}}))))
 
 (defn- have-story!
   [story task-id parent-id tasks-file]
