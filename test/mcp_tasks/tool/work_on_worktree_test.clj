@@ -54,7 +54,7 @@
                           [_ path branch base]
                           (is (= expected-worktree-path path))
                           (is (= "fix-parser-bug" branch))
-                          (is (nil? base))
+                          (is (= "main" base))
                           {:success true :error nil})]
 
             (let [result (#'sut/work-on-impl
@@ -303,11 +303,22 @@
                                                  {:success true
                                                   :exists? false
                                                   :error nil})
+                          git/branch-exists? (fn branch-exists?
+                                               [_ branch]
+                                               (is (= "new-worktree" branch))
+                                               {:success true
+                                                :exists? false
+                                                :error nil})
+                          git/get-default-branch (fn get-default-branch
+                                                   [_]
+                                                   {:success true
+                                                    :branch "main"
+                                                    :error nil})
                           git/create-worktree (fn create-worktree
                                                 ([_ path branch base]
                                                  (is (= expected-worktree-path path))
                                                  (is (= "new-worktree" branch))
-                                                 (is (nil? base))
+                                                 (is (= "main" base))
                                                  {:success true :error nil}))]
 
               (let [result (#'sut/work-on-impl
