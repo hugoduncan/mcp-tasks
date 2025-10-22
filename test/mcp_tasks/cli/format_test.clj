@@ -1,7 +1,7 @@
 (ns mcp-tasks.cli.format-test
   "Tests for CLI output formatting."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest testing is]]
     [mcp-tasks.cli.format :as sut]))
@@ -187,7 +187,7 @@
   (testing "render :json"
     (testing "formats task list with camelCase keys"
       (let [output (sut/render :json task-list-response)
-            parsed (json/read-str output)]
+            parsed (json/parse-string output)]
         (is (string? output))
         (is (contains? parsed "tasks"))
         (is (contains? parsed "metadata"))
@@ -196,7 +196,7 @@
 
     (testing "formats error response with camelCase"
       (let [output (sut/render :json error-response)
-            parsed (json/read-str output)]
+            parsed (json/parse-string output)]
         (is (contains? parsed "error"))
         (is (contains? parsed "metadata"))
         (is (contains? (get parsed "metadata") "taskId"))
@@ -205,7 +205,7 @@
     (testing "transforms nested structures"
       (let [data {:task-id 1 :nested {:parent-id 2 :sub-field "value"}}
             output (sut/render :json data)
-            parsed (json/read-str output)]
+            parsed (json/parse-string output)]
         (is (contains? parsed "taskId"))
         (is (contains? (get parsed "nested") "parentId"))
         (is (contains? (get parsed "nested") "subField"))))
@@ -213,7 +213,7 @@
     (testing "handles vectors of maps"
       (let [data {:relations [{:as-type :blocked-by :relates-to 5}]}
             output (sut/render :json data)
-            parsed (json/read-str output)]
+            parsed (json/parse-string output)]
         (is (contains? (first (get parsed "relations")) "asType"))
         (is (contains? (first (get parsed "relations")) "relatesTo"))))))
 

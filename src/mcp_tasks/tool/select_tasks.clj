@@ -17,7 +17,7 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [mcp-tasks.response :as response]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.helpers :as helpers]))
@@ -133,14 +133,14 @@
                                            ;; Add completed-task-count only when parent-id was provided
                                            completed-count (assoc :completed-task-count completed-count))}]
             {:content [{:type "text"
-                        :text (json/write-str response-data)}]
+                        :text (json/generate-string response-data)}]
              :isError false}))))
 
     (catch clojure.lang.ExceptionInfo e
       ;; Handle validation errors with structured response
       (if-let [response-data (:response (ex-data e))]
         {:content [{:type "text"
-                    :text (json/write-str response-data)}]
+                    :text (json/generate-string response-data)}]
          :isError false}
         (response/error-response e)))
 

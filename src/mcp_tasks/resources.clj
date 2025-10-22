@@ -1,7 +1,7 @@
 (ns mcp-tasks.resources
   "Resource definitions for MCP server"
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [mcp-tasks.execution-state :as execution-state]))
 
@@ -114,7 +114,7 @@
                   (let [state (execution-state/read-execution-state base-dir)]
                     {:contents [{:uri uri
                                  :mimeType "application/json"
-                                 :text (json/write-str state)}]}))]
+                                 :text (json/generate-string state)}]}))]
     {uri
      {:name "current-execution"
       :uri uri

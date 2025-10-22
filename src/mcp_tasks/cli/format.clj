@@ -3,7 +3,7 @@
 
   Supports EDN, JSON, and human-readable formats."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]))
 
 ;; Key transformation
@@ -203,7 +203,7 @@
 
 (defmethod render :json
   [_ data]
-  (json/write-str (transform-keys data kebab->camel)))
+  (json/generate-string (transform-keys data kebab->camel)))
 
 (defmethod render :human
   [_ data]

@@ -2,7 +2,7 @@
   "General helper functions for tool implementations"
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-tasks.tasks :as tasks])
@@ -101,7 +101,7 @@
   {:content [{:type "text"
               :text error-message}
              {:type "text"
-              :text (json/write-str
+              :text (json/generate-string
                       {:error error-message
                        :metadata (merge {:attempted-operation operation}
                                         error-metadata)})}]
@@ -295,9 +295,9 @@
                                   (assoc task-data :modified-files modified-files)
                                   {:modified-files modified-files})]
        {:content [{:type "text" :text msg-text}
-                  {:type "text" :text (json/write-str task-data-with-files)}
+                  {:type "text" :text (json/generate-string task-data-with-files)}
                   {:type "text"
-                   :text (json/write-str
+                   :text (json/generate-string
                            (cond-> {:git-status (if (:success git-result)
                                                   "success"
                                                   "error")
@@ -308,7 +308,7 @@
      ;; Git disabled: 1 or 2 items depending on task-data
      (if task-data
        {:content [{:type "text" :text msg-text}
-                  {:type "text" :text (json/write-str task-data)}]
+                  {:type "text" :text (json/generate-string task-data)}]
         :isError false}
        {:content [{:type "text" :text msg-text}]
         :isError false}))))

@@ -1,6 +1,6 @@
 (ns mcp-tasks.tool.update-task-test
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.test-helpers :as h]
@@ -304,7 +304,7 @@
           (is (= "Parent task not found" (get-in result [:content 0 :text])))
           ;; Verify structured error data
           (let [data-content (second (:content result))
-                data (json/read-str (:text data-content) :key-fn keyword)]
+                data (json/parse-string (:text data-content) true)]
             (is (= "Parent task not found" (:error data)))
             (is (= 999 (get-in data [:metadata :parent-id])))))))))
 

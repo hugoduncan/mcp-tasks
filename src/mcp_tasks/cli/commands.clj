@@ -3,7 +3,7 @@
   
   Thin wrappers around mcp-tasks.tools functions."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.complete-task :as complete-task]
     [mcp-tasks.tool.delete-task :as delete-task]
@@ -28,7 +28,7 @@
         json-items (keep (fn [item]
                            (when-let [text (:text item)]
                              (try
-                               (json/read-str text :key-fn keyword)
+                               (json/parse-string text true)
                                (catch Exception _ nil))))
                          content-items)]
     ;; Merge all parsed JSON maps, with later items taking precedence

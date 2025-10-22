@@ -6,7 +6,7 @@
   The state is written to .mcp-tasks-current.edn in the project root for
   external discoverability."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [mcp-tasks.execution-state :as es]
     [mcp-tasks.tools.helpers :as helpers]))
 
@@ -23,7 +23,7 @@
                 story-id (assoc :story-id story-id))]
     (es/write-execution-state! base-dir state)
     {:content [{:type "text"
-                :text (json/write-str
+                :text (json/generate-string
                         {:message (str "Execution state written: task-id=" task-id
                                        (when story-id (str ", story-id=" story-id)))
                          :state-file (str base-dir "/.mcp-tasks-current.edn")
@@ -35,7 +35,7 @@
   [base-dir]
   (let [deleted? (es/clear-execution-state! base-dir)]
     {:content [{:type "text"
-                :text (json/write-str
+                :text (json/generate-string
                         {:message (if deleted?
                                     "Execution state cleared"
                                     "No execution state to clear")

@@ -12,7 +12,7 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.tasks :as tasks]
@@ -38,90 +38,78 @@
   - Git enabled: Three content items (text message + task data JSON + git-status JSON)"
   [config _context
    {:keys [category title description prepend type parent-id]}]
-  ;; Perform file operations inside lock
-  (let [locked-result (helpers/with-task-lock config
-                                              (fn []
-                                                (let [tasks-file (helpers/prepare-task-file config)]
-                                                  ;; Validate parent-id exists if provided
-                                                  (or (when parent-id
-                                                        (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
-                                                                                              :additional-metadata {:title title :category category}))
+  (let [tasks-file (helpers/prepare-task-file config)]
+    ;; Validate parent-id exists if provided
+    (or (when parent-id
+          (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
+                                                :additional-metadata {:title title :category category}))
 
-                                                      ;; All validations passed - create task
-                                                      (let [task-map (cond-> {:title title
-                                                                              :description (or description "")
-                                                                              :design ""
-                                                                              :category category
-                                                                              :status :open
-                                                                              :type (keyword (or type "task"))
-                                                                              :meta {}
-                                                                              :relations []}
-                                                                       parent-id (assoc :parent-id parent-id))
-                                                            ;; Add task to in-memory state and get the complete task with ID
-                                                            created-task (tasks/add-task task-map :prepend? (boolean prepend))
-                                                            ;; Get path info for git operations
-                                                            tasks-path (helpers/task-path config ["tasks.ednl"])
-                                                            tasks-rel-path (:relative tasks-path)]
+        ;; All validations passed - create task
+        (let [task-map (cond-> {:title title
+                                :description (or description "")
+                                :design ""
+                                :category category
+                                :status :open
+                                :type (keyword (or type "task"))
+                                :meta {}
+                                :relations []}
+                         parent-id (assoc :parent-id parent-id))
+              ;; Add task to in-memory state and get the complete task with ID
+              created-task (tasks/add-task task-map :prepend? (boolean prepend))
+              ;; Get path info for git operations
+              tasks-path (helpers/task-path config ["tasks.ednl"])
+              tasks-rel-path (:relative tasks-path)]
 
-                                                        ;; Save to EDNL file
-                                                        (tasks/save-tasks! tasks-file)
+          ;; Save to EDNL file
+          (tasks/save-tasks! tasks-file)
 
-                                                        ;; Return intermediate data for git operations
-                                                        {:created-task created-task
-                                                         :tasks-file tasks-file
-                                                         :tasks-rel-path tasks-rel-path})))))]
-    ;; Check if locked section returned an error
-    (if (:isError locked-result)
-      locked-result
+          ;; Commit to git if enabled
+          (let [use-git? (:use-git? config)
+                git-result (when use-git?
+                             (let [truncated-title (helpers/truncate-title title)]
+                               (git/commit-task-changes (:base-dir config)
+                                                        [tasks-rel-path]
+                                                        (str "Add task #" (:id created-task) ": " truncated-title))))
+                task-data-json (json/generate-string
+                                 {:task (select-keys
+                                          created-task
+                                          [:id
+                                           :title
+                                           :category
+                                           :type
+                                           :status
+                                           :parent-id])
+                                  :metadata {:file tasks-file
+                                             :operation "add-task"}})]
 
-      ;; Perform git operations outside lock
-      (let [{:keys [created-task tasks-file tasks-rel-path]} locked-result
-            use-git? (:use-git? config)
-            git-result (when use-git?
-                         (let [truncated-title (helpers/truncate-title title)]
-                           (git/commit-task-changes (:base-dir config)
-                                                    [tasks-rel-path]
-                                                    (str "Add task #" (:id created-task) ": " truncated-title))))
-            task-data-json (json/write-str
-                             {:task (select-keys
-                                      created-task
-                                      [:id
-                                       :title
-                                       :category
-                                       :type
-                                       :status
-                                       :parent-id])
-                              :metadata {:file tasks-file
-                                         :operation "add-task"}})]
+            ;; Build response based on git mode
+            (if use-git?
+              ;; Git enabled: 3 content items
+              {:content [{:type "text"
+                          :text (str "Task added to " tasks-file)}
+                         {:type "text"
+                          :text task-data-json}
+                         {:type "text"
+                          :text (json/generate-string
+                                  (cond-> {:git-status (if (:success git-result)
+                                                         "success"
+                                                         "error")
+                                           :git-commit (:commit-sha git-result)}
+                                    (:error git-result)
+                                    (assoc :git-error (:error git-result))))}]
+               :isError false}
 
-        ;; Build response based on git mode
-        (if use-git?
-          ;; Git enabled: 3 content items
-          {:content [{:type "text"
-                      :text (str "Task added to " tasks-file)}
-                     {:type "text"
-                      :text task-data-json}
-                     {:type "text"
-                      :text (json/write-str
-                              (cond-> {:git-status (if (:success git-result)
-                                                     "success"
-                                                     "error")
-                                       :git-commit (:commit-sha git-result)}
-                                (:error git-result)
-                                (assoc :git-error (:error git-result))))}]
-           :isError false}
-
-          ;; Git disabled: 2 content items (existing behavior)
-          {:content [{:type "text"
-                      :text (str "Task added to " tasks-file)}
-                     {:type "text"
-                      :text task-data-json}]
-           :isError false})))))
+              ;; Git disabled: 2 content items (existing behavior)
+              {:content [{:type "text"
+                          :text (str "Task added to " tasks-file)}
+                         {:type "text"
+                          :text task-data-json}]
+               :isError false}))))))
 
 (defn- add-task-description
   "Build description for add-task tool with available categories and their descriptions."
-  [config]
-  (let [category-descs (prompts/category-descriptions config)
+  []
+  (let [category-descs (prompts/category-descriptions)
         categories (sort (keys category-descs))]
     [categories
      (if (seq categories)
@@ -169,7 +157,7 @@
 
   Accepts config parameter for future git-aware functionality."
   [config]
-  (let [[categories description] (add-task-description config)]
+  (let [[categories description] (add-task-description)]
     {:name "add-task"
      :description description
      :inputSchema
