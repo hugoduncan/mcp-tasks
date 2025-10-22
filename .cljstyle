@@ -19,4 +19,5 @@
                        :proxies?   true}
          :namespaces  {:indent-size        0
                        :break-libs?        true
-                       :import-break-width 0}}}
+                       :import-break-width 0}}
+ :indents {with-test-setup [[:block 1]]}}

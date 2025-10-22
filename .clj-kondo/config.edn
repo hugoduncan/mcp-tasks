@@ -1,1 +1,2 @@
-{}
+{:lint-as
+ {mcp-tasks.test-helpers/with-test-setup clojure.core/fn}}

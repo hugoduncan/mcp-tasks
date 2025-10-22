@@ -37,7 +37,8 @@
   (calculate-branch-name {:title \"My Task\" :id 42} nil)
   ;; => \"my-task-42\"
 
-  (calculate-branch-name {:title \"Child Task\" :id 10} {:title \"Parent Story\" :id 5})
+  (calculate-branch-name
+    {:title \"Child Task\" :id 10} {:title \"Parent Story\" :id 5})
   ;; => \"parent-story-5\""
   [task parent-story]
   (let [title (if parent-story
@@ -47,6 +48,23 @@
                            (:id parent-story)
                            (:id task))]
     (util/sanitize-branch-name title branch-source-id)))
+
+(defn- calculate-base-branch
+  [configured-base-branch base-dir]
+  (if configured-base-branch
+    ;; Use configured base branch
+    (let [branch-check (git/ensure-git-success!
+                         (git/branch-exists? base-dir configured-base-branch)
+                         (str "branch-exists? " configured-base-branch))]
+      (when-not (:exists? branch-check)
+        (throw (ex-info (str "Configured base branch " configured-base-branch " does not exist")
+                        {:base-branch configured-base-branch
+                         :operation   "validate-base-branch"})))
+      configured-base-branch)
+    ;; Auto-detect default branch
+    (:branch (git/ensure-git-success!
+               (git/get-default-branch base-dir)
+               "get-default-branch"))))
 
 (defn- manage-branch
   "Manages git branch for task execution.
@@ -95,26 +113,16 @@
                              (git/check-uncommitted-changes base-dir)
                              "check-uncommitted-changes"))
           {:success false
-           :error "Cannot switch branches with uncommitted changes. Please commit or stash your changes first."
+           :error (str "Cannot switch branches with uncommitted changes. "
+                       "Please commit or stash your changes first.")
            :metadata {:current-branch current-branch
                       :target-branch branch-name}}
 
           ;; Get base branch (from config or auto-detect)
           (let [configured-base-branch (:base-branch config)
-                base-branch (if configured-base-branch
-                              ;; Use configured base branch
-                              (let [branch-check (git/ensure-git-success!
-                                                   (git/branch-exists? base-dir configured-base-branch)
-                                                   (str "branch-exists? " configured-base-branch))]
-                                (when-not (:exists? branch-check)
-                                  (throw (ex-info (str "Configured base branch " configured-base-branch " does not exist")
-                                                  {:base-branch configured-base-branch
-                                                   :operation "validate-base-branch"})))
-                                configured-base-branch)
-                              ;; Auto-detect default branch
-                              (:branch (git/ensure-git-success!
-                                         (git/get-default-branch base-dir)
-                                         "get-default-branch")))]
+                base-branch (calculate-base-branch
+                              configured-base-branch
+                              base-dir)]
 
             ;; Checkout base branch
             (git/ensure-git-success!
@@ -290,14 +298,22 @@
               exists-result (git/ensure-git-success!
                               (git/worktree-exists? base-dir worktree-path)
                               "worktree-exists?")
-              worktree-exists? (:exists? exists-result)]
+              worktree-exists? (:exists? exists-result)
+              branch-exists? (git/branch-exists? base-dir branch-name)]
 
           (cond
             ;; Worktree doesn't exist - create it
             (worktree-needs-creation? worktree-exists?)
             (do
               (git/ensure-git-success!
-                (git/create-worktree base-dir worktree-path branch-name)
+                (git/create-worktree
+                  base-dir
+                  worktree-path
+                  branch-name
+                  (when-not branch-exists?
+                    (calculate-base-branch
+                      (:base-branch config)
+                      base-dir)))
                 (str "create-worktree " worktree-path " " branch-name))
               {:success true
                :worktree-path worktree-path
@@ -377,6 +393,28 @@
                                            :provided-type (str (type task-id))}}})))
   task-id)
 
+(defn- have-task!
+  [task task-id tasks-file]
+  (when-not task
+    (throw
+      (ex-info
+        "Task not found"
+        {:response {:error    "No task found with the specified task-id"
+                    :metadata {:task-id task-id
+                               :file    tasks-file}}}))))
+
+(defn- have-story!
+  [story task-id parent-id tasks-file]
+  (when-not story
+    (throw
+      (ex-info
+        "Parent story not found"
+        {:response
+         {:error "Task references a parent story that does not exist"
+          :metadata {:task-id task-id
+                     :parent-id parent-id
+                     :file tasks-file}}}))))
+
 (defn- load-task-and-story
   "Loads and validates a task and its optional parent story.
 
@@ -402,24 +440,15 @@
     ;; Get the specific task
     (let [matching-tasks (tasks/get-tasks :task-id task-id)
           task (first matching-tasks)]
-
       ;; Validate task exists
-      (when-not task
-        (throw (ex-info "Task not found"
-                        {:response {:error "No task found with the specified task-id"
-                                    :metadata {:task-id task-id
-                                               :file tasks-file}}})))
+      (have-task! task task-id tasks-file)
 
       ;; Get parent story if this is a story task
       (let [parent-story (when-let [parent-id (:parent-id task)]
-                           (let [story (first (tasks/get-tasks :task-id parent-id))]
+                           (let [story (first
+                                         (tasks/get-tasks :task-id parent-id))]
                              ;; Validate parent story exists
-                             (when-not story
-                               (throw (ex-info "Parent story not found"
-                                               {:response {:error "Task references a parent story that does not exist"
-                                                           :metadata {:task-id task-id
-                                                                      :parent-id parent-id
-                                                                      :file tasks-file}}})))
+                             (have-story! story task-id parent-id tasks-file)
                              story))]
         {:task task
          :parent-story parent-story}))))
@@ -537,7 +566,7 @@
                              :category (:category task)
                              :type (:type task)
                              :status (:status task)
-                             :worktree-path (:worktree-path worktree-info)
+                             :worktree-path (str (:worktree-path worktree-info))
                              :worktree-created? (:worktree-created? worktree-info)
                              :branch-name (:branch-name worktree-info)
                              :message (:message worktree-info)}]
