@@ -6,6 +6,67 @@ This guide describes how to install the mcp-tasks MCP server for use with variou
 
 - Clojure CLI tools installed
 
+## Babashka Installation (Optional)
+
+The mcp-tasks CLI can run under Babashka for faster startup times and better scripting support. This is optional but recommended for CLI usage.
+
+### Minimum Version
+
+- **Required:** Babashka 1.0.0 or later (for full Malli support)
+- **Current Latest:** 1.12.207
+- **Malli Support:** Added in v0.8.9 (July 2022)
+
+### Installation Instructions
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install borkdude/brew/babashka
+
+# Or using the installer script
+bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+```
+
+**Linux:**
+```bash
+# Using the installer script
+bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+
+# Or download binary directly
+wget https://github.com/babashka/babashka/releases/latest/download/babashka-$(uname -s | tr '[:upper:]' '[:lower:]')-amd64.tar.gz
+tar -xzf babashka-*.tar.gz
+sudo mv bb /usr/local/bin/
+```
+
+**Windows:**
+```powershell
+# Using Scoop
+scoop install babashka
+
+# Or download the Windows installer from:
+# https://github.com/babashka/babashka/releases
+```
+
+### bb.edn Setup
+
+After installing Babashka, the mcp-tasks project includes a `bb.edn` configuration file that enables CLI usage. No additional setup is required - just use `bb` commands instead of `clojure` commands.
+
+### Platform Considerations
+
+- **Windows:** The bb.bat wrapper is automatically created during installation
+- **All Platforms:** The bb.edn uses forward slashes for paths, which work correctly on all platforms including Windows
+- **Path separators:** Babashka handles platform-specific path separators automatically
+
+### Verifying Installation
+
+```bash
+# Check babashka version (should be 1.0.0 or later)
+bb --version
+
+# Test with mcp-tasks
+bb list --help
+```
+
 ## Setup
 
 ### Configure Global Clojure Alias
