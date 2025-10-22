@@ -51,6 +51,17 @@ scoop install babashka
 
 After installing Babashka, the mcp-tasks project includes a `bb.edn` configuration file that enables CLI usage. No additional setup is required - just use `bb` commands instead of `clojure` commands.
 
+**JSON Library Choice:**
+
+The mcp-tasks CLI uses `cheshire.core` for JSON parsing and serialization. This choice enables babashka compatibility:
+
+- **Built into babashka**: cheshire is included in the babashka distribution, requiring no additional dependencies
+- **JVM compatible**: Also works seamlessly in standard Clojure when added to deps.edn
+- **API compatible**: Provides the same API as clojure.data.json for our usage (`parse-string`/`read-str` with `:key-fn`, `generate-string`/`write-str`)
+- **Performance**: Enables the CLI to run under babashka with ~40x faster startup times compared to JVM Clojure
+
+This architectural decision allows the same codebase to run efficiently in both JVM and babashka environments without code changes.
+
 ### Platform Considerations
 
 - **Windows:** The bb.bat wrapper is automatically created during installation

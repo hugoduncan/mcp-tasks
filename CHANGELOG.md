@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This changelog is automatically generated using [git-cliff](https://github.com/orhun/git-cliff).
 ## [Unreleased]
 
+### Changed
+
+- Replaced clojure.data.json with cheshire.core for babashka compatibility
+  - cheshire.core is built into babashka (no additional dependency needed)
+  - Also works seamlessly in JVM Clojure when added to deps.edn
+  - API-compatible with clojure.data.json for our usage (read-str with :key-fn, write-str)
+  - Enables CLI to run under babashka for ~40x faster startup times
+
 ### Chores
 
 - Update claude commit instructions (#5) by @hugoduncan in #5 ([79ade55](https://github.com/hugoduncan/mcp-tasks/commit/79ade55cd92dc249ffa798fdc3eaff772c11a020))
