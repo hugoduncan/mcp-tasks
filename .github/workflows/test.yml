@@ -48,3 +48,37 @@ jobs:
 
       - name: Run integration tests
         run: clojure -M:dev:test --focus :integration
+
+  babashka-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Babashka
+        run: bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+
+      - name: Verify bb.edn is valid
+        run: bb tasks
+
+      - name: Test list command help
+        run: bb list --help
+
+      - name: Test add command help
+        run: bb add --help
+
+      - name: Test show command help
+        run: bb show --help
+
+      - name: Test complete command help
+        run: bb complete --help
+
+      - name: Test update command help
+        run: bb update --help
+
+      - name: Test delete command help
+        run: bb delete --help
+
+      - name: Smoke test - list tasks
+        run: bb list --format json
