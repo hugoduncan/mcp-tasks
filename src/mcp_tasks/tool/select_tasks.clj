@@ -76,14 +76,36 @@
         (when (helpers/file-exists? tasks-file)
           (tasks/load-tasks! tasks-file :complete-file complete-file))
 
-        ;; Get all matching incomplete tasks
-        (let [all-tasks (tasks/get-tasks
-                          :task-id task-id
-                          :category category
-                          :parent-id parent-id
-                          :title-pattern title-pattern
-                          :type type-keyword
-                          :status status-keyword)
+        ;; Get all matching tasks
+        ;; When parent-id is provided, we need to count completed child tasks separately
+        (let [query-result (if parent-id
+                             ;; Parent-id case: get non-closed children and count completed separately
+                             (let [;; Get non-closed children (for returning in results)
+                                   non-closed-children (tasks/get-tasks
+                                                         :task-id task-id
+                                                         :category category
+                                                         :parent-id parent-id
+                                                         :title-pattern title-pattern
+                                                         :type type-keyword
+                                                         :status status-keyword)
+                                   ;; Get closed children (for counting only)
+                                   closed-children (tasks/get-tasks
+                                                     :parent-id parent-id
+                                                     :status :closed)
+                                   completed-count (count closed-children)]
+                               {:tasks non-closed-children
+                                :completed-task-count completed-count})
+                             ;; Normal case: use status filter as before
+                             {:tasks (tasks/get-tasks
+                                       :task-id task-id
+                                       :category category
+                                       :parent-id parent-id
+                                       :title-pattern title-pattern
+                                       :type type-keyword
+                                       :status status-keyword)
+                              :completed-task-count nil})
+              all-tasks (:tasks query-result)
+              completed-count (:completed-task-count query-result)
               total-matches (count all-tasks)
               limited-tasks (vec (take effective-limit all-tasks))
               result-count (count limited-tasks)]
@@ -107,9 +129,11 @@
 
           ;; Build success response
           (let [response-data {:tasks limited-tasks
-                               :metadata {:count result-count
-                                          :total-matches total-matches
-                                          :limited? (> total-matches result-count)}}]
+                               :metadata (cond-> {:count result-count
+                                                  :total-matches total-matches
+                                                  :limited? (> total-matches result-count)}
+                                           ;; Add completed-task-count only when parent-id was provided
+                                           completed-count (assoc :completed-task-count completed-count))}]
             {:content [{:type "text"
                         :text (json/write-str response-data)}]
              :isError false}))))
