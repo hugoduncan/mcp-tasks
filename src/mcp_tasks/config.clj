@@ -65,13 +65,37 @@
                        :key :tasks-dir
                        :value tasks-dir
                        :expected 'string?}))))
+  (when-let [lock-timeout (:lock-timeout-ms config)]
+    (when-not (int? lock-timeout)
+      (throw (ex-info (str "Expected integer for :lock-timeout-ms, got " (type lock-timeout))
+                      {:type :invalid-config-type
+                       :key :lock-timeout-ms
+                       :value lock-timeout
+                       :expected 'int?})))
+    (when-not (pos? lock-timeout)
+      (throw (ex-info "Value for :lock-timeout-ms must be positive"
+                      {:type :invalid-config-value
+                       :key :lock-timeout-ms
+                       :value lock-timeout}))))
+  (when-let [poll-interval (:lock-poll-interval-ms config)]
+    (when-not (int? poll-interval)
+      (throw (ex-info (str "Expected integer for :lock-poll-interval-ms, got " (type poll-interval))
+                      {:type :invalid-config-type
+                       :key :lock-poll-interval-ms
+                       :value poll-interval
+                       :expected 'int?})))
+    (when-not (pos? poll-interval)
+      (throw (ex-info "Value for :lock-poll-interval-ms must be positive"
+                      {:type :invalid-config-value
+                       :key :lock-poll-interval-ms
+                       :value poll-interval}))))
   config)
 
 (defn find-config-file
   "Searches for .mcp-tasks.edn by traversing up the directory tree from start-dir.
   Returns {:config-file <path> :config-dir <dir>} when found, nil otherwise.
   Resolves symlinks in paths using fs/canonicalize.
-  
+
   Parameters:
   - start-dir (optional): Directory to start search from. Defaults to CWD."
   ([]
@@ -90,7 +114,7 @@
   Returns map with :raw-config and :config-dir.
   If no config file found, returns {:raw-config {} :config-dir <start-dir>}.
   Throws ex-info with clear message for malformed EDN or invalid schema.
-  
+
   Parameters:
   - start-dir (optional): Directory to start search from. Defaults to CWD."
   ([]
@@ -138,12 +162,12 @@
 
 (defn resolve-tasks-dir
   "Resolves :tasks-dir to an absolute canonical path.
-  
+
   Resolution logic:
   - If :tasks-dir is absolute → canonicalize and use as-is
   - If :tasks-dir is relative → resolve relative to config-dir
   - If :tasks-dir not specified → default to .mcp-tasks relative to config-dir
-  
+
   Validates that explicitly specified :tasks-dir exists.
   Default .mcp-tasks doesn't need to exist yet."
   [config-dir config]
@@ -175,18 +199,29 @@
   "Returns final config map with :use-git?, :base-dir, and :resolved-tasks-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence. Base directory is set to the config directory (canonicalized).
-  
+
   When :worktree-management? is true, automatically enables :branch-management?.
-  When :worktree-prefix is not set, defaults to :project-name."
+  When :worktree-prefix is not set, defaults to :project-name.
+
+  Defaults:
+  - :worktree-prefix defaults to :project-name if not set
+  - :lock-timeout-ms defaults to 30000 (30 seconds) if not set
+  - :lock-poll-interval-ms defaults to 100 (100 milliseconds) if not set"
   [config-dir config]
   (let [base-dir (str (fs/canonicalize config-dir))
         resolved-tasks-dir (resolve-tasks-dir config-dir config)
         config-with-branch-mgmt (if (:worktree-management? config)
                                   (assoc config :branch-management? true)
                                   config)
-        config-with-defaults (if (contains? config-with-branch-mgmt :worktree-prefix)
-                               config-with-branch-mgmt
-                               (assoc config-with-branch-mgmt :worktree-prefix :project-name))]
+        config-with-defaults (cond-> config-with-branch-mgmt
+                               (not (contains? config-with-branch-mgmt :worktree-prefix))
+                               (assoc :worktree-prefix :project-name)
+
+                               (not (contains? config-with-branch-mgmt :lock-timeout-ms))
+                               (assoc :lock-timeout-ms 30000)
+
+                               (not (contains? config-with-branch-mgmt :lock-poll-interval-ms))
+                               (assoc :lock-poll-interval-ms 100))]
     (assoc config-with-defaults
            :use-git? (determine-git-mode config-dir config)
            :base-dir base-dir
