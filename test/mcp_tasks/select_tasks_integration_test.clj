@@ -4,6 +4,7 @@
   Tests end-to-end behavior of select-tasks features including metadata
   enhancements like completed-task-count for story progress tracking."
   (:require
+    [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.mcp-client.core :as mcp-client]
@@ -80,7 +81,7 @@
             (is (not (:isError result)) "select-tasks should succeed")
 
             (let [response (get-in result [:content 0 :text])
-                  data (clojure.data.json/read-str response :key-fn keyword)
+                  data (json/parse-string response true)
                   tasks (:tasks data)
                   metadata (:metadata data)]
 
@@ -149,7 +150,7 @@
             (is (not (:isError result)))
 
             (let [response (get-in result [:content 0 :text])
-                  data (clojure.data.json/read-str response :key-fn keyword)
+                  data (json/parse-string response true)
                   metadata (:metadata data)]
 
               ;; Verify completed-task-count is 0
@@ -212,7 +213,7 @@
             (is (not (:isError result)))
 
             (let [response (get-in result [:content 0 :text])
-                  data (clojure.data.json/read-str response :key-fn keyword)
+                  data (json/parse-string response true)
                   tasks (:tasks data)
                   metadata (:metadata data)]
 
@@ -265,7 +266,7 @@
             (is (not (:isError result)))
 
             (let [response (get-in result [:content 0 :text])
-                  data (clojure.data.json/read-str response :key-fn keyword)
+                  data (json/parse-string response true)
                   metadata (:metadata data)]
 
               ;; Verify only child is counted, not story itself
@@ -312,7 +313,7 @@
             (is (not (:isError result)))
 
             (let [response (get-in result [:content 0 :text])
-                  data (clojure.data.json/read-str response :key-fn keyword)
+                  data (json/parse-string response true)
                   metadata (:metadata data)]
 
               ;; Verify completed-task-count is NOT in metadata

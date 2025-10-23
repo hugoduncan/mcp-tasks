@@ -68,7 +68,7 @@
                                                               (if (seq non-closed-children)
                                                                 ;; Error: non-closed children exist
                                                                 (helpers/build-tool-error-response
-                                                                  (str "Cannot delete task with children. Delete or complete all child tasks first.")
+                                                                  "Cannot delete task with children. Delete or complete all child tasks first."
                                                                   "delete-task"
                                                                   {:task-id (:id task)
                                                                    :title (:title task)
