@@ -65,13 +65,25 @@
                        :key :tasks-dir
                        :value tasks-dir
                        :expected 'string?}))))
+  (when-let [lock-timeout (:lock-timeout-ms config)]
+    (when-not (int? lock-timeout)
+      (throw (ex-info (str "Expected integer for :lock-timeout-ms, got " (type lock-timeout))
+                      {:type :invalid-config-type
+                       :key :lock-timeout-ms
+                       :value lock-timeout
+                       :expected 'int?})))
+    (when-not (pos? lock-timeout)
+      (throw (ex-info "Value for :lock-timeout-ms must be positive"
+                      {:type :invalid-config-value
+                       :key :lock-timeout-ms
+                       :value lock-timeout}))))
   config)
 
 (defn find-config-file
   "Searches for .mcp-tasks.edn by traversing up the directory tree from start-dir.
   Returns {:config-file <path> :config-dir <dir>} when found, nil otherwise.
   Resolves symlinks in paths using fs/canonicalize.
-  
+
   Parameters:
   - start-dir (optional): Directory to start search from. Defaults to CWD."
   ([]
@@ -90,7 +102,7 @@
   Returns map with :raw-config and :config-dir.
   If no config file found, returns {:raw-config {} :config-dir <start-dir>}.
   Throws ex-info with clear message for malformed EDN or invalid schema.
-  
+
   Parameters:
   - start-dir (optional): Directory to start search from. Defaults to CWD."
   ([]
@@ -138,12 +150,12 @@
 
 (defn resolve-tasks-dir
   "Resolves :tasks-dir to an absolute canonical path.
-  
+
   Resolution logic:
   - If :tasks-dir is absolute → canonicalize and use as-is
   - If :tasks-dir is relative → resolve relative to config-dir
   - If :tasks-dir not specified → default to .mcp-tasks relative to config-dir
-  
+
   Validates that explicitly specified :tasks-dir exists.
   Default .mcp-tasks doesn't need to exist yet."
   [config-dir config]
@@ -175,7 +187,7 @@
   "Returns final config map with :use-git?, :base-dir, and :resolved-tasks-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence. Base directory is set to the config directory (canonicalized).
-  
+
   When :worktree-management? is true, automatically enables :branch-management?.
   When :worktree-prefix is not set, defaults to :project-name."
   [config-dir config]

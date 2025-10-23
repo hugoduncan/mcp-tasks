@@ -4,7 +4,10 @@
     [babashka.fs :as fs]
     [clojure.data.json :as json]
     [clojure.string :as str]
-    [mcp-tasks.tasks :as tasks]))
+    [mcp-tasks.tasks :as tasks])
+  (:import
+    (java.io
+      RandomAccessFile)))
 
 (defn file-exists?
   "Check if a file exists"
@@ -86,6 +89,98 @@
                        :metadata (merge {:attempted-operation operation}
                                         error-metadata)})}]
    :isError true})
+
+(defn with-task-lock
+  "Execute function f while holding an exclusive file lock on tasks.ednl.
+
+  Provides cross-process file locking to prevent concurrent task modifications.
+  Uses Java FileLock API with polling-based timeout.
+
+  Parameters:
+  - config: Configuration map with optional :lock-timeout-ms (default 30000ms)
+  - f: Function to execute while holding the lock (no arguments)
+
+  Returns:
+  - Success: Result of calling (f)
+  - Timeout: Tool error map {:content [...] :isError true}
+  - Lock error: Tool error map {:content [...] :isError true}
+
+  Resource management:
+  - Opens FileChannel on tasks.ednl
+  - Acquires exclusive lock with timeout
+  - Ensures lock release and channel close in finally block
+  - Cleans up resources even on exceptions
+
+  Lock acquisition:
+  - Uses .tryLock() with polling loop (100ms sleep between attempts)
+  - Tracks elapsed time and fails after :lock-timeout-ms
+  - Default timeout: 30000ms (30 seconds)"
+  [config f]
+  (let [tasks-path (task-path config ["tasks.ednl"])
+        tasks-file (:absolute tasks-path)
+        lock-timeout-ms (or (:lock-timeout-ms config) 30000)
+        poll-interval-ms 100]
+
+    ;; Ensure file exists before attempting lock
+    (when-not (file-exists? tasks-file)
+      (fs/create-dirs (fs/parent tasks-file))
+      (spit tasks-file ""))
+
+    (let [channel (atom nil)
+          lock (atom nil)]
+      (try
+        ;; Open FileChannel
+        (let [raf (RandomAccessFile. tasks-file "rw")
+              fc (.getChannel raf)]
+          (reset! channel fc)
+
+          ;; Try to acquire lock with timeout
+          (let [start-time (System/currentTimeMillis)
+                deadline (+ start-time lock-timeout-ms)]
+            (loop []
+              (if-let [acquired-lock (.tryLock fc)]
+                (do
+                  (reset! lock acquired-lock)
+                  ;; Lock acquired - execute function
+                  (f))
+                ;; Lock not acquired - check timeout
+                (let [now (System/currentTimeMillis)]
+                  (if (>= now deadline)
+                    ;; Timeout
+                    (build-tool-error-response
+                      (str "Failed to acquire lock on tasks file after "
+                           lock-timeout-ms "ms. "
+                           "Another process may be modifying tasks.")
+                      "with-task-lock"
+                      {:file tasks-file
+                       :timeout-ms lock-timeout-ms})
+                    ;; Sleep and retry
+                    (do
+                      (Thread/sleep poll-interval-ms)
+                      (recur))))))))
+
+        (catch java.io.IOException e
+          (build-tool-error-response
+            (str "Failed to access lock file: " (.getMessage e))
+            "with-task-lock"
+            {:file tasks-file
+             :error-type "io-error"
+             :message (.getMessage e)}))
+
+        (finally
+          ;; Always release lock and close channel
+          (when-let [l @lock]
+            (try
+              (.release l)
+              (catch Exception _e
+                ;; Ignore errors during cleanup
+                nil)))
+          (when-let [ch @channel]
+            (try
+              (.close ch)
+              (catch Exception _e
+                ;; Ignore errors during cleanup
+                nil))))))))
 
 (defn setup-completion-context
   "Prepares common context for task completion and deletion operations.
