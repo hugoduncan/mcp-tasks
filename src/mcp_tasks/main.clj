@@ -86,7 +86,7 @@
   Searches for .mcp-tasks.edn starting from start-dir (or CWD) and traversing up.
   Returns resolved config map with :use-git? and :base-dir set.
   Throws ex-info if validation fails.
-  
+
   Parameters:
   - start-dir (optional): Directory to start search from. Defaults to CWD."
   ([]
@@ -140,10 +140,10 @@
 
 (defn start
   "Start stdio MCP server (uses stdin/stdout).
-  
+
   Searches for .mcp-tasks.edn starting from current working directory,
   traversing up the directory tree until found or reaching filesystem root."
-  []
+  [{:as _args}]
   (try
     (let [config (load-and-validate-config)
           server-config (create-server-config config {:type :stdio})]
@@ -177,7 +177,7 @@
                                if omitted)
 
   No args: Start the MCP server
-  
+
   The server automatically searches for .mcp-tasks.edn starting from the current
   working directory and traversing up the directory tree."
   [& args]
@@ -200,4 +200,4 @@
 
       ;; Default: start server
       :else
-      (start))))
+      (start {}))))
