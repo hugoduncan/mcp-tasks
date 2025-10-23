@@ -189,16 +189,23 @@
   repo presence. Base directory is set to the config directory (canonicalized).
 
   When :worktree-management? is true, automatically enables :branch-management?.
-  When :worktree-prefix is not set, defaults to :project-name."
+  When :worktree-prefix is not set, defaults to :project-name.
+
+  Defaults:
+  - :worktree-prefix defaults to :project-name if not set
+  - :lock-timeout-ms defaults to 30000 (30 seconds) if not set"
   [config-dir config]
   (let [base-dir (str (fs/canonicalize config-dir))
         resolved-tasks-dir (resolve-tasks-dir config-dir config)
         config-with-branch-mgmt (if (:worktree-management? config)
                                   (assoc config :branch-management? true)
                                   config)
-        config-with-defaults (if (contains? config-with-branch-mgmt :worktree-prefix)
-                               config-with-branch-mgmt
-                               (assoc config-with-branch-mgmt :worktree-prefix :project-name))]
+        config-with-defaults (cond-> config-with-branch-mgmt
+                               (not (contains? config-with-branch-mgmt :worktree-prefix))
+                               (assoc :worktree-prefix :project-name)
+
+                               (not (contains? config-with-branch-mgmt :lock-timeout-ms))
+                               (assoc :lock-timeout-ms 30000))]
     (assoc config-with-defaults
            :use-git? (determine-git-mode config-dir config)
            :base-dir base-dir

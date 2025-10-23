@@ -374,27 +374,30 @@
   ;; Test that resolve-config adds :use-git?, :base-dir, :resolved-tasks-dir, and :worktree-prefix to config map
   (testing "resolve-config"
     (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
-      (testing "adds :use-git? false, :base-dir, :resolved-tasks-dir, and :worktree-prefix when no config and no git repo"
+      (testing "adds :use-git? false, :base-dir, :resolved-tasks-dir, :worktree-prefix  amd :lock-timeout-ms when no config and no git repo"
         (let [result (sut/resolve-config canonical-base-dir {})]
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result)))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result)))))
 
-      (testing "adds :use-git? true, :base-dir, :resolved-tasks-dir, and :worktree-prefix when no config but git repo exists"
+      (testing "adds :use-git? true, :base-dir, :lock-timeout-ms, :resolved-tasks-dir, and :worktree-prefix when no config but git repo exists"
         (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
         (let [result (sut/resolve-config canonical-base-dir {})]
           (is (= true (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result)))))
+          (is (string? (:resolved-tasks-dir result)))
+                    (is (int? (:lock-timeout-ms result)))))
 
-      (testing "preserves explicit :use-git? true and adds :base-dir, :resolved-tasks-dir, and :worktree-prefix"
+      (testing "preserves explicit :use-git? true and adds :base-dir, :lock-timeout-ms, :resolved-tasks-dir, and :worktree-prefix"
         (let [result (sut/resolve-config canonical-base-dir {:use-git? true})]
           (is (= true (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result)))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result)))))
 
       (testing "preserves explicit :use-git? false even with git repo and adds :base-dir, :resolved-tasks-dir, and :worktree-prefix"
         (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
@@ -402,7 +405,8 @@
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result)))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result)))))
 
       (testing "preserves other config keys and adds :use-git?, :base-dir, :resolved-tasks-dir, and :worktree-prefix"
         (cleanup-test-project)
@@ -412,7 +416,8 @@
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (= "value" (:other-key result)))
-          (is (string? (:resolved-tasks-dir result))))))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result))))))))
 
 (deftest resolve-config-auto-enables-branch-management
   ;; Test that resolve-config auto-enables :branch-management? when :worktree-management? is true
@@ -425,7 +430,8 @@
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result)))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result)))))
 
       (testing "preserves explicit :branch-management? false when :worktree-management? is false"
         (let [result (sut/resolve-config canonical-base-dir {:worktree-management? false
@@ -435,7 +441,8 @@
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result)))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result)))))
 
       (testing "overrides :branch-management? false when :worktree-management? is true"
         (let [result (sut/resolve-config canonical-base-dir {:worktree-management? true
@@ -445,7 +452,8 @@
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
-          (is (string? (:resolved-tasks-dir result))))))))
+          (is (string? (:resolved-tasks-dir result)))
+          (is (int? (:lock-timeout-ms result))))))))
 
 (deftest resolve-config-canonicalizes-base-dir
   ;; Test that resolve-config always returns an absolute path for :base-dir
