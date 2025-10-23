@@ -29,9 +29,22 @@ GLOBAL OPTIONS:
   --help                Show this help message
 
 CONFIG DISCOVERY:
-  The CLI automatically searches for .mcp-tasks.edn starting from the current
-  directory and traversing up the directory tree until found or reaching the
-  filesystem root.
+  Configuration is discovered automatically - no --config-path option needed.
+  
+  The CLI searches for .mcp-tasks.edn starting from the current directory
+  and traversing up the directory tree until found or reaching the filesystem
+  root. This allows you to invoke the CLI from any subdirectory within your
+  project.
+  
+  Example:
+    # Your project structure:
+    # /project/.mcp-tasks.edn
+    # /project/src/
+    # /project/test/
+    
+    # You can run from any directory:
+    cd /project/src
+    clojure -M:cli list    # Finds /project/.mcp-tasks.edn automatically
 
 Run 'clojure -M:cli <command> --help' for command-specific options.
 
