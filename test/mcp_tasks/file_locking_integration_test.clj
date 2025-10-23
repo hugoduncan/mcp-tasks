@@ -160,7 +160,8 @@
         (let [invalid-dir (str test-dir "/blocked")
               _ (spit invalid-dir "I'm a file, not a directory")
               config (assoc (h/test-config test-dir)
-                            :base-dir invalid-dir)]
+                            :base-dir invalid-dir
+                            :resolved-tasks-dir (str invalid-dir "/.mcp-tasks"))]
 
           ;; The function may throw an exception or return error
           ;; depending on where the error occurs

@@ -158,13 +158,13 @@
         lock-timeout-ms (or (:lock-timeout-ms config) 30000)
         poll-interval-ms (or (:lock-poll-interval-ms config) 100)]
 
-    ;; Ensure file exists before attempting lock
-    (ensure-file-exists! tasks-file)
-
     (let [raf (atom nil)
           channel (atom nil)
           lock (atom nil)]
       (try
+        ;; Ensure file exists before attempting lock
+        (ensure-file-exists! tasks-file)
+
         ;; Open RandomAccessFile and get its channel
         (let [random-access-file (RandomAccessFile. tasks-file "rw")
               file-channel (.getChannel random-access-file)]
