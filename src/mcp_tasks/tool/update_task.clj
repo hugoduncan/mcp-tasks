@@ -105,61 +105,73 @@
   Updates specified fields of an existing task in tasks.ednl.
   Supports all mutable task fields with proper nil handling."
   [config _context arguments]
-  (helpers/with-task-lock config
-                          (fn []
-                            (let [task-id (:task-id arguments)
-                                  tasks-file (helpers/prepare-task-file config)]
-                              (tasks/load-tasks! tasks-file)
-                              (let [updates (extract-provided-updates arguments)]
-                                (if (empty? updates)
-                                  (helpers/build-tool-error-response
-                                    "No fields to update"
-                                    "update-task"
-                                    {:task-id task-id
-                                     :file tasks-file})
-                                  (or (validation/validate-task-exists task-id "update-task" tasks-file)
-                                      (when (and (contains? updates :parent-id) (:parent-id updates))
-                                        (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
-                                      (let [old-task (tasks/get-task task-id)
-                                            updated-task (merge old-task updates)]
-                                        (validation/validate-task-schema updated-task "update-task" task-id tasks-file))
-                                      (do
-                                        (tasks/update-task task-id updates)
-                                        (tasks/save-tasks! tasks-file)
-                                        (let [final-task (tasks/get-task task-id)
-                                              use-git? (:use-git? config)
-                                              tasks-path (helpers/task-path config ["tasks.ednl"])
-                                              tasks-rel-path (:relative tasks-path)
-                                              git-result (when use-git?
-                                                           (let [truncated-title (helpers/truncate-title (:title final-task))]
-                                                             (git/commit-task-changes (:base-dir config)
-                                                                                      [tasks-rel-path]
-                                                                                      (str "Update task #" task-id ": " truncated-title))))
-                                              task-data-json (json/write-str
-                                                               {:task (select-keys
-                                                                        final-task
-                                                                        [:id :title :category :type :status :parent-id])
-                                                                :metadata {:file tasks-file
-                                                                           :operation "update-task"}})]
-                                          (if use-git?
-                                            {:content [{:type "text"
-                                                        :text (str "Task " task-id " updated in " tasks-file)}
-                                                       {:type "text"
-                                                        :text task-data-json}
-                                                       {:type "text"
-                                                        :text (json/write-str
-                                                                (cond-> {:git-status (if (:success git-result)
-                                                                                       "success"
-                                                                                       "error")
-                                                                         :git-commit (:commit-sha git-result)}
-                                                                  (:error git-result)
-                                                                  (assoc :git-error (:error git-result))))}]
-                                             :isError false}
-                                            {:content [{:type "text"
-                                                        :text (str "Task " task-id " updated in " tasks-file)}
-                                                       {:type "text"
-                                                        :text task-data-json}]
-                                             :isError false}))))))))))
+  ;; Perform file operations inside lock
+  (let [locked-result (helpers/with-task-lock config
+                                              (fn []
+                                                (let [task-id (:task-id arguments)
+                                                      tasks-file (helpers/prepare-task-file config)]
+                                                  (tasks/load-tasks! tasks-file)
+                                                  (let [updates (extract-provided-updates arguments)]
+                                                    (if (empty? updates)
+                                                      (helpers/build-tool-error-response
+                                                        "No fields to update"
+                                                        "update-task"
+                                                        {:task-id task-id
+                                                         :file tasks-file})
+                                                      (or (validation/validate-task-exists task-id "update-task" tasks-file)
+                                                          (when (and (contains? updates :parent-id) (:parent-id updates))
+                                                            (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
+                                                          (let [old-task (tasks/get-task task-id)
+                                                                updated-task (merge old-task updates)]
+                                                            (validation/validate-task-schema updated-task "update-task" task-id tasks-file))
+                                                          (do
+                                                            (tasks/update-task task-id updates)
+                                                            (tasks/save-tasks! tasks-file)
+                                                            (let [final-task (tasks/get-task task-id)
+                                                                  tasks-path (helpers/task-path config ["tasks.ednl"])
+                                                                  tasks-rel-path (:relative tasks-path)]
+                                                              ;; Return intermediate data for git operations
+                                                              {:final-task final-task
+                                                               :tasks-file tasks-file
+                                                               :tasks-rel-path tasks-rel-path
+                                                               :task-id task-id}))))))))]
+    ;; Check if locked section returned an error
+    (if (:isError locked-result)
+      locked-result
+
+      ;; Perform git operations outside lock
+      (let [{:keys [final-task tasks-file tasks-rel-path task-id]} locked-result
+            use-git? (:use-git? config)
+            git-result (when use-git?
+                         (let [truncated-title (helpers/truncate-title (:title final-task))]
+                           (git/commit-task-changes (:base-dir config)
+                                                    [tasks-rel-path]
+                                                    (str "Update task #" task-id ": " truncated-title))))
+            task-data-json (json/write-str
+                             {:task (select-keys
+                                      final-task
+                                      [:id :title :category :type :status :parent-id])
+                              :metadata {:file tasks-file
+                                         :operation "update-task"}})]
+        (if use-git?
+          {:content [{:type "text"
+                      :text (str "Task " task-id " updated in " tasks-file)}
+                     {:type "text"
+                      :text task-data-json}
+                     {:type "text"
+                      :text (json/write-str
+                              (cond-> {:git-status (if (:success git-result)
+                                                     "success"
+                                                     "error")
+                                       :git-commit (:commit-sha git-result)}
+                                (:error git-result)
+                                (assoc :git-error (:error git-result))))}]
+           :isError false}
+          {:content [{:type "text"
+                      :text (str "Task " task-id " updated in " tasks-file)}
+                     {:type "text"
+                      :text task-data-json}]
+           :isError false})))))
 
 (defn update-task-tool
   "Tool to update fields of an existing task.

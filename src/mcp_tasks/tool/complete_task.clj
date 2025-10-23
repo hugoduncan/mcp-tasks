@@ -32,7 +32,7 @@
   - task: Task map to complete
   - completion-comment: Optional comment to append to task description
   
-  Returns completion response map."
+  Returns intermediate data map for git operations and response building."
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context]
     (tasks/mark-complete (:id task) completion-comment)
@@ -42,16 +42,14 @@
       ;; Clear execution state after successful completion
       (exec-state/clear-execution-state! (:base-dir config))
 
-      (let [msg-text (str "Task " (:id task) " completed and moved to " complete-file)
-            modified-files [tasks-rel-path complete-rel-path]
-            git-result (when use-git?
-                         (git/commit-task-changes (:base-dir config)
-                                                  modified-files
-                                                  (str "Complete task #" (:id task) ": " (:title task))))
-            task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
-                       :metadata {:file complete-file
-                                  :operation "complete-task"}}]
-        (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))
+      ;; Return intermediate data for git operations
+      {:updated-task updated-task
+       :complete-file complete-file
+       :modified-files [tasks-rel-path complete-rel-path]
+       :use-git? use-git?
+       :base-dir (:base-dir config)
+       :commit-msg (str "Complete task #" (:id task) ": " (:title task))
+       :msg-text (str "Task " (:id task) " completed and moved to " complete-file)})))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -64,7 +62,7 @@
   
   Returns either:
   - Error response if parent validation fails
-  - Completion response map"
+  - Intermediate data map for git operations and response building"
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file tasks-rel-path]} context
         parent (tasks/get-task (:parent-id task))]
@@ -95,16 +93,14 @@
           ;; Clear execution state after successful completion
           (exec-state/clear-execution-state! (:base-dir config))
 
-          (let [msg-text (str "Task " (:id task) " completed")
-                modified-files [tasks-rel-path]
-                git-result (when use-git?
-                             (git/commit-task-changes (:base-dir config)
-                                                      modified-files
-                                                      (str "Complete task #" (:id task) ": " (:title task))))
-                task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
-                           :metadata {:file tasks-file
-                                      :operation "complete-task"}}]
-            (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))))
+          ;; Return intermediate data for git operations
+          {:updated-task updated-task
+           :tasks-file tasks-file
+           :modified-files [tasks-rel-path]
+           :use-git? use-git?
+           :base-dir (:base-dir config)
+           :commit-msg (str "Complete task #" (:id task) ": " (:title task))
+           :msg-text (str "Task " (:id task) " completed")})))))
 
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
@@ -118,7 +114,7 @@
   
   Returns either:
   - Error response if children are not all closed
-  - Completion response map"
+  - Intermediate data map for git operations and response building"
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context
         children (tasks/get-children (:id task))
@@ -150,30 +146,21 @@
           ;; Clear execution state after successful completion
           (exec-state/clear-execution-state! (:base-dir config))
 
-          ;; Prepare response
-          (let [msg-text (str "Story " (:id task) " completed and archived"
-                              (when (pos? child-count)
-                                (str " with " child-count " child task"
-                                     (when (> child-count 1) "s"))))
-                modified-files [tasks-rel-path complete-rel-path]
-                ;; Commit changes if git mode is enabled
-                commit-msg (str "Complete story #" (:id task) ": " (:title task)
-                                (when (pos? child-count)
-                                  (str " (with " child-count " task"
-                                       (when (> child-count 1) "s") ")")))
-                git-result (when use-git?
-                             (git/commit-task-changes (:base-dir config)
-                                                      modified-files
-                                                      commit-msg))]
-            (helpers/build-completion-response
-              msg-text
-              modified-files
-              use-git?
-              git-result
-              {:task (select-keys updated-story [:id :title :description :category :type :status :parent-id])
-               :metadata {:file complete-file
-                          :operation "complete-task"
-                          :archived-children child-count}})))))))
+          ;; Return intermediate data for git operations
+          {:updated-story updated-story
+           :complete-file complete-file
+           :modified-files [tasks-rel-path complete-rel-path]
+           :use-git? use-git?
+           :base-dir (:base-dir config)
+           :child-count child-count
+           :commit-msg (str "Complete story #" (:id task) ": " (:title task)
+                            (when (pos? child-count)
+                              (str " (with " child-count " task"
+                                   (when (> child-count 1) "s") ")")))
+           :msg-text (str "Story " (:id task) " completed and archived"
+                          (when (pos? child-count)
+                            (str " with " child-count " child task"
+                                 (when (> child-count 1) "s"))))})))))
 
 (defn- complete-task-impl
   "Implementation of complete-task tool.
@@ -193,52 +180,71 @@
   - Git mode enabled: Three text items (completion message + JSON with :modified-files + JSON with git status)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
-  (helpers/with-task-lock config
-                          (fn []
-                            ;; Setup common context and load tasks
-                            (let [context (helpers/setup-completion-context config "complete-task")]
-                              (if (:isError context)
-                                context
+  ;; Perform file operations inside lock
+  (let [locked-result (helpers/with-task-lock config
+                                              (fn []
+                                                ;; Setup common context and load tasks
+                                                (let [context (helpers/setup-completion-context config "complete-task")]
+                                                  (if (:isError context)
+                                                    context
 
-                                (let [{:keys [tasks-file]} context
-                                      ;; Find task using shared helper
-                                      task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
+                                                    (let [{:keys [tasks-file]} context
+                                                          ;; Find task using shared helper
+                                                          task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
 
-                                  ;; Check if task-result is an error response
-                                  (if (:isError task-result)
-                                    task-result
+                                                      ;; Check if task-result is an error response
+                                                      (if (:isError task-result)
+                                                        task-result
 
-                                    ;; task-result is the actual task - proceed with validations
-                                    (let [task task-result]
-                                      ;; Verify category if provided (for backwards compatibility)
-                                      (cond
-                                        (and category (not= (:category task) category))
-                                        (helpers/build-tool-error-response
-                                          "Task category does not match"
-                                          "complete-task"
-                                          {:expected-category category
-                                           :actual-category (:category task)
-                                           :task-id (:id task)
-                                           :file tasks-file})
+                                                        ;; task-result is the actual task - proceed with validations
+                                                        (let [task task-result]
+                                                          ;; Verify category if provided (for backwards compatibility)
+                                                          (cond
+                                                            (and category (not= (:category task) category))
+                                                            (helpers/build-tool-error-response
+                                                              "Task category does not match"
+                                                              "complete-task"
+                                                              {:expected-category category
+                                                               :actual-category (:category task)
+                                                               :task-id (:id task)
+                                                               :file tasks-file})
 
-                                        ;; Verify task is not already closed
-                                        (= (:status task) :closed)
-                                        (helpers/build-tool-error-response
-                                          "Task is already closed"
-                                          "complete-task"
-                                          {:task-id (:id task)
-                                           :title (:title task)
-                                           :file tasks-file})
+                                                            ;; Verify task is not already closed
+                                                            (= (:status task) :closed)
+                                                            (helpers/build-tool-error-response
+                                                              "Task is already closed"
+                                                              "complete-task"
+                                                              {:task-id (:id task)
+                                                               :title (:title task)
+                                                               :file tasks-file})
 
-                                        ;; All validations passed - dispatch to appropriate completion function
-                                        (= (:type task) :story)
-                                        (complete-story-task- config context task completion-comment)
+                                                            ;; All validations passed - dispatch to appropriate completion function
+                                                            (= (:type task) :story)
+                                                            (complete-story-task- config context task completion-comment)
 
-                                        (some? (:parent-id task))
-                                        (complete-child-task- config context task completion-comment)
+                                                            (some? (:parent-id task))
+                                                            (complete-child-task- config context task completion-comment)
 
-                                        :else
-                                        (complete-regular-task- config context task completion-comment))))))))))
+                                                            :else
+                                                            (complete-regular-task- config context task completion-comment)))))))))]
+    ;; Check if locked section returned an error
+    (if (:isError locked-result)
+      locked-result
+
+      ;; Perform git operations outside lock and build response
+      (let [{:keys [updated-task updated-story tasks-file complete-file modified-files
+                    use-git? base-dir commit-msg msg-text child-count]} locked-result
+            git-result (when use-git?
+                         (git/commit-task-changes base-dir modified-files commit-msg))
+            ;; Use updated-task for regular/child tasks, updated-story for stories
+            final-task (or updated-task updated-story)
+            ;; Use tasks-file or complete-file depending on completion type
+            metadata-file (or complete-file tasks-file)
+            task-data {:task (select-keys final-task [:id :title :description :category :type :status :parent-id])
+                       :metadata (cond-> {:file metadata-file
+                                          :operation "complete-task"}
+                                   child-count (assoc :archived-children child-count))}]
+        (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
