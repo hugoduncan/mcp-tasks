@@ -79,21 +79,19 @@
         ;; Get all matching tasks
         ;; When parent-id is provided, we need to count completed child tasks separately
         (let [query-result (if parent-id
-                             ;; Parent-id case: get non-closed children and count completed separately
-                             (let [;; Get non-closed children (for returning in results)
-                                   non-closed-children (tasks/get-tasks
-                                                         :task-id task-id
-                                                         :category category
-                                                         :parent-id parent-id
-                                                         :title-pattern title-pattern
-                                                         :type type-keyword
-                                                         :status status-keyword)
-                                   ;; Get closed children (for counting only)
-                                   closed-children (tasks/get-tasks
-                                                     :parent-id parent-id
-                                                     :status :closed)
-                                   completed-count (count closed-children)]
-                               {:tasks non-closed-children
+                             ;; Parent-id case: single query with :status :any, partition by status
+                             (let [all-matching (tasks/get-tasks
+                                                  :task-id task-id
+                                                  :category category
+                                                  :parent-id parent-id
+                                                  :title-pattern title-pattern
+                                                  :type type-keyword
+                                                  :status :any)
+                                   {closed :closed non-closed :non-closed}
+                                   (group-by #(if (= :closed (:status %)) :closed :non-closed)
+                                             all-matching)
+                                   completed-count (count closed)]
+                               {:tasks (or non-closed [])
                                 :completed-task-count completed-count})
                              ;; Normal case: use status filter as before
                              {:tasks (tasks/get-tasks

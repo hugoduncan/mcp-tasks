@@ -370,7 +370,43 @@
         (let [result (tasks/get-tasks :status :closed)]
           (is (= 2 (count result)))
           (is (= [15 3] (map :id result))
-              "Completed tasks should be in complete.ednl file order"))))))
+              "Completed tasks should be in complete.ednl file order"))))
+
+    (testing "returns all tasks when status is :any"
+      (let [active-1 (assoc test-task-1 :id 10 :status :open)
+            active-2 (assoc test-task-2 :id 5 :status :in-progress)
+            complete-1 (assoc test-task-3 :id 15 :status :closed)
+            complete-2 (assoc test-task-4 :id 3 :status :closed)]
+        ;; Active tasks order: 10, 5
+        ;; Completed tasks order: 15, 3
+        (reset! tasks/task-ids [10 5])
+        (reset! tasks/complete-task-ids [15 3])
+        (reset! tasks/tasks {10 active-1
+                             5 active-2
+                             15 complete-1
+                             3 complete-2})
+        ;; Query with :status :any should return all tasks
+        (let [result (tasks/get-tasks :status :any)]
+          (is (= 4 (count result)))
+          (is (= [10 5 15 3] (map :id result))
+              "Should return all tasks in file order (active then complete)"))))
+
+    (testing ":status :any respects other filters"
+      (let [active-1 (assoc test-task-1 :id 10 :status :open :parent-id 1)
+            active-2 (assoc test-task-2 :id 5 :status :open :parent-id 2)
+            complete-1 (assoc test-task-3 :id 15 :status :closed :parent-id 1)
+            complete-2 (assoc test-task-4 :id 3 :status :closed :parent-id 2)]
+        (reset! tasks/task-ids [10 5])
+        (reset! tasks/complete-task-ids [15 3])
+        (reset! tasks/tasks {10 active-1
+                             5 active-2
+                             15 complete-1
+                             3 complete-2})
+        ;; Query with :status :any and :parent-id filter
+        (let [result (tasks/get-tasks :parent-id 1 :status :any)]
+          (is (= 2 (count result)))
+          (is (= [10 15] (map :id result))
+              "Should return only parent-id 1 tasks (both open and closed)"))))))
 
 ;; Mutation API Tests
 

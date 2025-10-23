@@ -154,15 +154,16 @@
   - type: Task type must match exactly (keyword: :task, :bug, :feature, :story, :chore)
   - status: Task status must match exactly (keyword: :open, :closed, :in-progress, :blocked)
             When nil (default), filters out closed tasks (same as old behavior)
+            When :any, returns tasks regardless of status
 
   Returns vector of task maps in the order they appear in tasks.ednl.
   Returns empty vector if no matching tasks found."
   [& {:keys [task-id category parent-id title-pattern type status]}]
   (let [task-map @tasks
-        ;; When status is specified (including :closed), search both active and completed tasks
+        ;; When status is specified (including :closed) or :any, search both active and completed tasks
         ;; When status is nil, only search active tasks (exclude closed)
         ;; Always preserve file order by iterating through ordered ID vectors
-        task-seq (if (some? status)
+        task-seq (if (or (some? status) (= status :any))
                    (keep #(get task-map %) (concat @task-ids @complete-task-ids))
                    (keep #(get task-map %) @task-ids))
         ;; Build regex if possible, otherwise use substring match
@@ -176,10 +177,11 @@
                        (nil? title-pattern) (constantly true)
                        title-matcher #(re-find title-matcher (:title % ""))
                        :else #(str/includes? (:title % "") title-pattern))
-        ;; Status filter: when nil, exclude closed; when specified, match exactly
-        status-match? (if (nil? status)
-                        #(not= (:status %) :closed)
-                        #(= (:status %) status))]
+        ;; Status filter: when nil, exclude closed; when :any, include all; when specified, match exactly
+        status-match? (cond
+                        (nil? status) #(not= (:status %) :closed)
+                        (= status :any) (constantly true)
+                        :else #(= (:status %) status))]
     (->> task-seq
          (filter status-match?)
          (filter #(or (nil? task-id) (= (:id %) task-id)))
