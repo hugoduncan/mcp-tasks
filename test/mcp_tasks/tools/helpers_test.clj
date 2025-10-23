@@ -22,27 +22,27 @@
 
 (deftest with-task-lock-releases-on-exception-test
   ;; Tests that with-task-lock properly releases lock even when function
-  ;; throws exception. Verifies exception propagates while cleanup occurs.
+  ;; throws exception. Verifies error is returned as map, not thrown.
   (h/with-test-setup [test-dir]
     (testing "with-task-lock"
       (testing "releases lock even when function throws exception"
         (let [config (h/test-config test-dir)
-              exception-thrown? (atom false)]
-          (try
-            (sut/with-task-lock
-              config
-              (fn []
-                (reset! exception-thrown? true)
-                (throw (ex-info "Test error" {}))))
-            (catch Exception _e
-              ;; Expected
-              nil))
+              exception-thrown? (atom false)
+              result (sut/with-task-lock
+                       config
+                       (fn []
+                         (reset! exception-thrown? true)
+                         (throw (ex-info "Test error" {}))))]
+          ;; Function was executed (exception was thrown)
           (is (true? @exception-thrown?))
+          ;; Result should be error map, not exception
+          (is (map? result))
+          (is (true? (:isError result)))
           ;; Verify we can acquire the lock again (proves it was released)
-          (let [result (sut/with-task-lock
-                         config
-                         (fn [] :acquired-again))]
-            (is (= :acquired-again result))))))))
+          (let [result2 (sut/with-task-lock
+                          config
+                          (fn [] :acquired-again))]
+            (is (= :acquired-again result2))))))))
 
 (deftest with-task-lock-creates-file-if-missing-test
   ;; Tests that with-task-lock creates tasks.ednl if it doesn't exist.

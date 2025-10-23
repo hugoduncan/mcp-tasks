@@ -155,19 +155,19 @@
 (deftest add-task-schema-validation-error
   (h/with-test-setup [test-dir]
     (testing "add-task"
-      (testing "throws exception for invalid schema"
+      (testing "returns error map for invalid schema"
         (testing "missing required title field"
           ;; category and title are required by the tool's inputSchema
           ;; but if we bypass that and pass invalid data to add-task-impl,
           ;; the schema validation in tasks/add-task should catch it
-          (is (thrown-with-msg?
-                clojure.lang.ExceptionInfo
-                #"Invalid task schema"
-                (#'sut/add-task-impl
-                 (h/test-config test-dir)
-                 nil
-                 {:category "test"
-                  :title nil}))))
+          ;; With new error handling, exceptions are converted to error maps
+          (let [result (#'sut/add-task-impl
+                        (h/test-config test-dir)
+                        nil
+                        {:category "test"
+                         :title nil})]
+            (is (map? result))
+            (is (true? (:isError result)))))
         (testing "invalid status value"
           ;; Status must be one of: :open, :closed, :in-progress, :blocked
           ;; The task map created in add-task-impl sets status to :open,

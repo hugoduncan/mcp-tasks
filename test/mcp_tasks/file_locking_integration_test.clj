@@ -80,19 +80,20 @@
 
 (deftest lock-release-on-exception-test
   ;; Tests that lock is released even when the operation throws an exception.
+  ;; Now expects error map instead of thrown exception.
   (h/with-test-setup [test-dir]
     (testing "lock release on exception"
       (testing "releases lock when operation throws exception"
         (let [config (h/test-config test-dir)]
 
-          ;; Operation that throws exception
-          (is (thrown-with-msg?
-                clojure.lang.ExceptionInfo
-                #"Test exception"
-                (helpers/with-task-lock
-                  config
-                  (fn []
-                    (throw (ex-info "Test exception" {:test true}))))))
+          ;; Operation that throws exception - should return error map
+          (let [result (helpers/with-task-lock
+                         config
+                         (fn []
+                           (throw (ex-info "Test exception" {:test true}))))]
+            ;; Should get error map, not exception
+            (is (map? result))
+            (is (true? (:isError result))))
 
           ;; Verify lock was released by acquiring it again
           (let [result (helpers/with-task-lock

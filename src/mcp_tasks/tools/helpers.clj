@@ -136,9 +136,11 @@
   - f: Function to execute while holding the lock (no arguments)
 
   Returns:
-  - Success: Result of calling (f)
+  - Always returns a map (never throws exceptions)
+  - Success: Result of calling (f) - typically a map with :isError false
   - Timeout: Tool error map {:content [...] :isError true}
   - Lock error: Tool error map {:content [...] :isError true}
+  - Function error: Tool error map {:content [...] :isError true}
 
   Resource management:
   - Opens RandomAccessFile and gets its FileChannel
@@ -176,8 +178,17 @@
                                    poll-interval-ms)]
             (do
               (reset! lock acquired-lock)
-              ;; Lock acquired - execute function
-              (f))
+              ;; Lock acquired - execute function with error handling
+              (try
+                (f)
+                (catch Exception e
+                  ;; Convert any exception from function execution to error map
+                  (build-tool-error-response
+                    (str "Error during task operation: " (.getMessage e))
+                    "with-task-lock"
+                    {:file tasks-file
+                     :error-type (-> e class .getName)
+                     :message (.getMessage e)}))))
             ;; Lock acquisition timed out
             (build-tool-error-response
               (str "Failed to acquire lock on tasks file after "
