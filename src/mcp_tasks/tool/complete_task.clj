@@ -193,50 +193,52 @@
   - Git mode enabled: Three text items (completion message + JSON with :modified-files + JSON with git status)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
-  ;; Setup common context and load tasks
-  (let [context (helpers/setup-completion-context config "complete-task")]
-    (if (:isError context)
-      context
+  (helpers/with-task-lock config
+                          (fn []
+                            ;; Setup common context and load tasks
+                            (let [context (helpers/setup-completion-context config "complete-task")]
+                              (if (:isError context)
+                                context
 
-      (let [{:keys [tasks-file]} context
-            ;; Find task using shared helper
-            task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
+                                (let [{:keys [tasks-file]} context
+                                      ;; Find task using shared helper
+                                      task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
 
-        ;; Check if task-result is an error response
-        (if (:isError task-result)
-          task-result
+                                  ;; Check if task-result is an error response
+                                  (if (:isError task-result)
+                                    task-result
 
-          ;; task-result is the actual task - proceed with validations
-          (let [task task-result]
-            ;; Verify category if provided (for backwards compatibility)
-            (cond
-              (and category (not= (:category task) category))
-              (helpers/build-tool-error-response
-                "Task category does not match"
-                "complete-task"
-                {:expected-category category
-                 :actual-category (:category task)
-                 :task-id (:id task)
-                 :file tasks-file})
+                                    ;; task-result is the actual task - proceed with validations
+                                    (let [task task-result]
+                                      ;; Verify category if provided (for backwards compatibility)
+                                      (cond
+                                        (and category (not= (:category task) category))
+                                        (helpers/build-tool-error-response
+                                          "Task category does not match"
+                                          "complete-task"
+                                          {:expected-category category
+                                           :actual-category (:category task)
+                                           :task-id (:id task)
+                                           :file tasks-file})
 
-              ;; Verify task is not already closed
-              (= (:status task) :closed)
-              (helpers/build-tool-error-response
-                "Task is already closed"
-                "complete-task"
-                {:task-id (:id task)
-                 :title (:title task)
-                 :file tasks-file})
+                                        ;; Verify task is not already closed
+                                        (= (:status task) :closed)
+                                        (helpers/build-tool-error-response
+                                          "Task is already closed"
+                                          "complete-task"
+                                          {:task-id (:id task)
+                                           :title (:title task)
+                                           :file tasks-file})
 
-              ;; All validations passed - dispatch to appropriate completion function
-              (= (:type task) :story)
-              (complete-story-task- config context task completion-comment)
+                                        ;; All validations passed - dispatch to appropriate completion function
+                                        (= (:type task) :story)
+                                        (complete-story-task- config context task completion-comment)
 
-              (some? (:parent-id task))
-              (complete-child-task- config context task completion-comment)
+                                        (some? (:parent-id task))
+                                        (complete-child-task- config context task completion-comment)
 
-              :else
-              (complete-regular-task- config context task completion-comment))))))))
+                                        :else
+                                        (complete-regular-task- config context task completion-comment))))))))))
 
 (defn- description
   "Generate description for complete-task tool based on config."
