@@ -4,6 +4,7 @@
     [babashka.fs :as fs]
     [clojure.data.json :as json]
     [clojure.string :as str]
+    [mcp-clj.log :as log]
     [mcp-tasks.tasks :as tasks])
   (:import
     (java.io
@@ -183,15 +184,17 @@
           (when-let [l @lock]
             (try
               (.release l)
-              (catch Exception _e
-                ;; Ignore errors during cleanup
-                nil)))
+              (catch Exception e
+                (log/warn :lock-release-failed
+                          {:error (.getMessage e)
+                           :file tasks-file}))))
           (when-let [ch @channel]
             (try
               (.close ch)
-              (catch Exception _e
-                ;; Ignore errors during cleanup
-                nil))))))))
+              (catch Exception e
+                (log/warn :channel-close-failed
+                          {:error (.getMessage e)
+                           :file tasks-file})))))))))
 
 (defn setup-completion-context
   "Prepares common context for task completion and deletion operations.
