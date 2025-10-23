@@ -115,32 +115,30 @@
           (helpers/with-task-lock
             config
             (fn []
-              (do
-                (helpers/prepare-task-file config)
-                (tasks/add-task {:title "Task 1"
-                                 :description "First task"
-                                 :design ""
-                                 :category "simple"
-                                 :type :task
-                                 :status :open
-                                 :meta {}
-                                 :relations []})
-                (tasks/save-tasks! tasks-file))))
+              (helpers/prepare-task-file config)
+              (tasks/add-task {:title "Task 1"
+                               :description "First task"
+                               :design ""
+                               :category "simple"
+                               :type :task
+                               :status :open
+                               :meta {}
+                               :relations []})
+              (tasks/save-tasks! tasks-file)))
 
           (helpers/with-task-lock
             config
             (fn []
-              (do
-                (helpers/prepare-task-file config)
-                (tasks/add-task {:title "Task 2"
-                                 :description "Second task"
-                                 :design ""
-                                 :category "simple"
-                                 :type :task
-                                 :status :open
-                                 :meta {}
-                                 :relations []})
-                (tasks/save-tasks! tasks-file))))
+              (helpers/prepare-task-file config)
+              (tasks/add-task {:title "Task 2"
+                               :description "Second task"
+                               :design ""
+                               :category "simple"
+                               :type :task
+                               :status :open
+                               :meta {}
+                               :relations []})
+              (tasks/save-tasks! tasks-file)))
 
           ;; Verify both tasks were added
           (helpers/with-task-lock
