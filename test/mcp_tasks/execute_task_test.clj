@@ -25,6 +25,9 @@
   (let [mcp-tasks-dir (io/file test-project-dir ".mcp-tasks")
         prompts-dir (io/file mcp-tasks-dir "prompts")]
     (.mkdirs prompts-dir)
+    ;; Create .mcp-tasks.edn so config discovery finds it
+    (spit (io/file test-project-dir ".mcp-tasks.edn")
+          "{}")
     ;; Create category prompt files so resources are available
     (spit (io/file prompts-dir "simple.md")
           "---\ndescription: Execute simple tasks with basic workflow\n---\n\n- Analyze the task\n- Implement solution\n- Test")
