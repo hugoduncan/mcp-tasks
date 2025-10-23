@@ -63,7 +63,7 @@
                           {:task-id task-id})
                   response (json/parse-string
                              (get-in result [:content 0 :text])
-                             :key-fn keyword)]
+                             keyword)]
 
               (is (false? (:isError result)))
               (is (= expected-worktree-path (:worktree-path response)))
@@ -327,7 +327,7 @@
                             {:task-id task-id})
                     response (json/parse-string
                                (get-in result [:content 0 :text])
-                               :key-fn keyword)]
+                               keyword)]
 
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
@@ -389,7 +389,7 @@
                              :type "task"})
                 add-response (json/parse-string
                                (get-in add-result [:content 1 :text])
-                               :key-fn keyword)
+                               keyword)
                 task-id (get-in add-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch
@@ -407,7 +407,7 @@
                             {:task-id task-id})
                     response (json/parse-string
                                (get-in result [:content 0 :text])
-                               :key-fn keyword)]
+                               keyword)]
 
                 ;; Since we're in the main repo and the branch is checked out there,
                 ;; the find-worktree-for-branch will return the main repo path,
