@@ -104,10 +104,10 @@
                                        :type type-keyword
                                        :status status-keyword)
                               :completed-task-count nil})
-              all-tasks (:tasks query-result)
+              non-closed-tasks (:tasks query-result)
               completed-count (:completed-task-count query-result)
-              total-matches (count all-tasks)
-              limited-tasks (vec (take effective-limit all-tasks))
+              total-matches (count non-closed-tasks)
+              limited-tasks (vec (take effective-limit non-closed-tasks))
               result-count (count limited-tasks)]
 
           ;; Check unique? constraint
