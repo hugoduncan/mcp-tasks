@@ -154,11 +154,18 @@
     ;; Validate explicitly specified paths exist
     (when (and (contains? config :tasks-dir)
                (not (fs/exists? resolved-path)))
-      (throw (ex-info (str "Configured :tasks-dir does not exist: " tasks-dir)
+      (throw (ex-info (str "Configured :tasks-dir does not exist: " tasks-dir "\n\n"
+                           "Resolved path: " resolved-path "\n"
+                           "Config directory: " config-dir "\n\n"
+                           "Suggestions:\n"
+                           "  - Create the directory if this path is intended\n"
+                           "  - Check for typos in the :tasks-dir value\n"
+                           "  - Note: relative paths are resolved from the config file directory, not CWD")
                       {:type :invalid-config-value
                        :key :tasks-dir
                        :value tasks-dir
-                       :resolved-path resolved-path})))
+                       :resolved-path resolved-path
+                       :config-dir config-dir})))
     ;; Return canonical path if it exists, otherwise return resolved path
     (if (fs/exists? resolved-path)
       (str (fs/canonicalize resolved-path))
