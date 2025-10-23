@@ -23,7 +23,7 @@
 
         (let [result (sut/list-command (h/test-config test-dir) {})]
           (is (= 3 (count (:tasks result))))
-          (is (= 3 (get-in result [:metadata :count])))
+          (is (= 3 (get-in result [:metadata :open-task-count])))
           (is (= 3 (get-in result [:metadata :total-matches])))
           (is (false? (get-in result [:metadata :limited?])))
           (is (= ["Task One" "Task Two" "Task Three"]
@@ -203,7 +203,7 @@
 
         (let [result (sut/list-command (h/test-config test-dir) {:limit 3})]
           (is (= 3 (count (:tasks result))))
-          (is (= 3 (get-in result [:metadata :count])))
+          (is (= 3 (get-in result [:metadata :open-task-count])))
           (is (= 5 (get-in result [:metadata :total-matches])))
           (is (true? (get-in result [:metadata :limited?]))))))))
 
@@ -271,7 +271,7 @@
 
         (let [result (sut/list-command (h/test-config test-dir) {:category "nonexistent"})]
           (is (= 0 (count (:tasks result))))
-          (is (= 0 (get-in result [:metadata :count])))
+          (is (= 0 (get-in result [:metadata :open-task-count])))
           (is (= 0 (get-in result [:metadata :total-matches])))
           (is (false? (get-in result [:metadata :limited?]))))))))
 

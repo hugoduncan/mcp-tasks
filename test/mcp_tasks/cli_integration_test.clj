@@ -136,7 +136,7 @@
                      "--status" "closed")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= 1 (-> parsed :metadata :count)))
+          (is (= 1 (-> parsed :metadata :open-task-count)))
           (is (= "Test task" (-> parsed :tasks first :title))))))))
 
 (deftest complete-workflow-json-format-test
@@ -385,7 +385,7 @@
                      "list")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= 3 (-> parsed :metadata :count))))))
+          (is (= 3 (-> parsed :metadata :open-task-count))))))
 
     (testing "can filter by title pattern"
       (let [result (call-cli
@@ -394,7 +394,7 @@
                      "--title-pattern" "Task 2")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= 1 (-> parsed :metadata :count)))
+          (is (= 1 (-> parsed :metadata :open-task-count)))
           (is (= "Task 2" (-> parsed :tasks first :title))))))
 
     (testing "can complete specific task by title"
@@ -411,7 +411,7 @@
                      "--status" "open")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= 2 (-> parsed :metadata :count))))))))
+          (is (= 2 (-> parsed :metadata :open-task-count))))))))
 
 (deftest git-enabled-workflow-test
   ;; Test workflow with git enabled
@@ -517,7 +517,7 @@
                      "--parent-id" "1")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          (is (= 1 (-> parsed :metadata :count)))
+          (is (= 1 (-> parsed :metadata :open-task-count)))
           (is (= "Child task" (-> parsed :tasks first :title))))))
 
     (testing "can update child task parent-id to nil"

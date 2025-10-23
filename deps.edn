@@ -9,7 +9,7 @@
   metosin/malli {:mvn/version "0.16.4"}
   babashka/fs {:mvn/version "0.5.22"}
   org.babashka/cli {:mvn/version "0.8.61"}
-  org.clojure/data.json {:mvn/version "2.5.0"}}
+  cheshire/cheshire {:mvn/version "5.13.0"}}
 
  :aliases
  {:cli {:main-opts ["-m" "mcp-tasks.cli"]}

@@ -28,7 +28,7 @@
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 3 (count (:tasks response))))
-        (is (= 3 (get-in response [:metadata :count])))
+        (is (= 3 (get-in response [:metadata :open-task-count])))
         (is (= 3 (get-in response [:metadata :total-matches])))
         (is (false? (get-in response [:metadata :limited?])))
         (is (= ["Task One" "Task Two" "Task Three"]
@@ -50,7 +50,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 3 (count (:tasks response))))
-          (is (= 3 (get-in response [:metadata :count])))
+          (is (= 3 (get-in response [:metadata :open-task-count])))
           (is (= 5 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))
           (is (= ["Task 1" "Task 2" "Task 3"]
@@ -61,7 +61,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 5 (count (:tasks response))))
-          (is (= 5 (get-in response [:metadata :count])))
+          (is (= 5 (get-in response [:metadata :open-task-count])))
           (is (= 5 (get-in response [:metadata :total-matches])))
           (is (false? (get-in response [:metadata :limited?]))))))))
 
@@ -76,7 +76,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
-          (is (= 1 (get-in response [:metadata :count])))
+          (is (= 1 (get-in response [:metadata :open-task-count])))
           (is (= 1 (get-in response [:metadata :total-matches])))
           (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
 
@@ -85,7 +85,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 0 (count (:tasks response))))
-          (is (= 0 (get-in response [:metadata :count])))
+          (is (= 0 (get-in response [:metadata :open-task-count])))
           (is (= 0 (get-in response [:metadata :total-matches])))))
 
       (testing "returns error when multiple tasks match"
@@ -135,7 +135,7 @@
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= [] (:tasks response)))
-        (is (= 0 (get-in response [:metadata :count])))
+        (is (= 0 (get-in response [:metadata :open-task-count])))
         (is (= 0 (get-in response [:metadata :total-matches])))
         (is (false? (get-in response [:metadata :limited?])))))))
 
@@ -151,14 +151,14 @@
       (testing "metadata reflects filtering and limiting"
         (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 1})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-          (is (= 1 (get-in response [:metadata :count])))
+          (is (= 1 (get-in response [:metadata :open-task-count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))))
 
       (testing "metadata when not limited"
         (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 10})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-          (is (= 2 (get-in response [:metadata :count])))
+          (is (= 2 (get-in response [:metadata :open-task-count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (false? (get-in response [:metadata :limited?]))))))))
 
@@ -309,7 +309,7 @@
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 0 (count (:tasks response))))
-            (is (= 0 (get-in response [:metadata :count])))
+            (is (= 0 (get-in response [:metadata :open-task-count])))
             (is (= 0 (get-in response [:metadata :total-matches])))))
 
         (testing "combines task-id filter with category filter"
@@ -513,3 +513,179 @@
               (is (= "Medium task" (:title task)))
               (is (= "medium" (:category task)))
               (is (= 3 (:id task))))))))))
+
+;; Completed task count tests
+
+(deftest select-tasks-parent-id-includes-completed-count-when-no-completed
+  ;; Test that :completed-task-count is 0 when no child tasks are completed
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with parent-id includes completed-task-count"
+      (testing "returns 0 when no child tasks are completed"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task1 {:id 2
+                     :parent-id 1
+                     :type :task
+                     :title "Task 1"
+                     :description ""
+                     :design ""
+                     :category "simple"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 3
+                     :parent-id 1
+                     :type :task
+                     :title "Task 2"
+                     :description ""
+                     :design ""
+                     :category "simple"
+                     :status :open
+                     :meta {}
+                     :relations []}]
+          (write-tasks-ednl test-dir [story task1 task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:parent-id 1})]
+            (is (false? (:isError result)))
+            (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              (is (= 2 (get-in response [:metadata :open-task-count])))
+              (is (= 0 (get-in response [:metadata :completed-task-count]))))))))))
+
+(deftest select-tasks-parent-id-includes-completed-count-with-some-completed
+  ;; Test that :completed-task-count reflects the number of completed child tasks
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with parent-id includes completed-task-count"
+      (testing "returns correct count when some child tasks are completed"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              completed-task1 {:id 2
+                               :parent-id 1
+                               :type :task
+                               :title "Completed 1"
+                               :description ""
+                               :design ""
+                               :category "simple"
+                               :status :closed
+                               :meta {}
+                               :relations []}
+              open-task {:id 3
+                         :parent-id 1
+                         :type :task
+                         :title "Open task"
+                         :description ""
+                         :design ""
+                         :category "simple"
+                         :status :open
+                         :meta {}
+                         :relations []}
+              completed-task2 {:id 4
+                               :parent-id 1
+                               :type :task
+                               :title "Completed 2"
+                               :description ""
+                               :design ""
+                               :category "simple"
+                               :status :closed
+                               :meta {}
+                               :relations []}]
+          (write-tasks-ednl test-dir [story open-task])
+          ;; Write completed tasks to complete.ednl
+          (h/write-ednl-test-file test-dir "complete.ednl" [completed-task1 completed-task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:parent-id 1})]
+            (is (false? (:isError result)))
+            (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              (is (= 1 (get-in response [:metadata :open-task-count]))) ; Only open task
+              (is (= 2 (get-in response [:metadata :completed-task-count]))) ; Two completed
+              (is (= ["Open task"] (map :title (:tasks response)))))))))))
+
+(deftest select-tasks-parent-id-includes-completed-count-all-completed
+  ;; Test that :completed-task-count is correct when all child tasks are completed
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with parent-id includes completed-task-count"
+      (testing "returns correct count when all child tasks are completed"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              completed-task1 {:id 2
+                               :parent-id 1
+                               :type :task
+                               :title "Completed 1"
+                               :description ""
+                               :design ""
+                               :category "simple"
+                               :status :closed
+                               :meta {}
+                               :relations []}
+              completed-task2 {:id 3
+                               :parent-id 1
+                               :type :task
+                               :title "Completed 2"
+                               :description ""
+                               :design ""
+                               :category "simple"
+                               :status :closed
+                               :meta {}
+                               :relations []}]
+          (write-tasks-ednl test-dir [story])
+          ;; Write completed tasks to complete.ednl
+          (h/write-ednl-test-file test-dir "complete.ednl" [completed-task1 completed-task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:parent-id 1})]
+            (is (false? (:isError result)))
+            (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              (is (= 0 (get-in response [:metadata :open-task-count]))) ; No open tasks
+              (is (= 2 (get-in response [:metadata :completed-task-count]))) ; Two completed
+              (is (= [] (:tasks response))))))))))
+
+(deftest select-tasks-without-parent-id-excludes-completed-count
+  ;; Test that :completed-task-count is not included when parent-id is not provided
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks without parent-id excludes completed-task-count"
+      (testing "does not include :completed-task-count in metadata"
+        (let [task1 {:id 1
+                     :type :task
+                     :title "Task 1"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Task 2"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :closed
+                     :meta {}
+                     :relations []}]
+          (write-tasks-ednl test-dir [task1])
+          (h/write-ednl-test-file test-dir "complete.ednl" [task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test"})]
+            (is (false? (:isError result)))
+            (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              (is (= 1 (get-in response [:metadata :open-task-count])))
+              (is (nil? (get-in response [:metadata :completed-task-count]))))))))))

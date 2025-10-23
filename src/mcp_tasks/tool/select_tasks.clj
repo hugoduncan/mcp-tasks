@@ -76,16 +76,36 @@
         (when (helpers/file-exists? tasks-file)
           (tasks/load-tasks! tasks-file :complete-file complete-file))
 
-        ;; Get all matching incomplete tasks
-        (let [all-tasks (tasks/get-tasks
-                          :task-id task-id
-                          :category category
-                          :parent-id parent-id
-                          :title-pattern title-pattern
-                          :type type-keyword
-                          :status status-keyword)
-              total-matches (count all-tasks)
-              limited-tasks (vec (take effective-limit all-tasks))
+        ;; Get all matching tasks
+        ;; When parent-id is provided, we need to count completed child tasks separately
+        (let [query-result (if parent-id
+                             ;; Parent-id case: single query with :status :any, partition by status
+                             (let [all-matching (tasks/get-tasks
+                                                  :task-id task-id
+                                                  :category category
+                                                  :parent-id parent-id
+                                                  :title-pattern title-pattern
+                                                  :type type-keyword
+                                                  :status :any)
+                                   {closed :closed non-closed :non-closed}
+                                   (group-by #(if (= :closed (:status %)) :closed :non-closed)
+                                             all-matching)
+                                   completed-count (count closed)]
+                               {:tasks (or non-closed [])
+                                :completed-task-count completed-count})
+                             ;; Normal case: use status filter as before
+                             {:tasks (tasks/get-tasks
+                                       :task-id task-id
+                                       :category category
+                                       :parent-id parent-id
+                                       :title-pattern title-pattern
+                                       :type type-keyword
+                                       :status status-keyword)
+                              :completed-task-count nil})
+              non-closed-tasks (:tasks query-result)
+              completed-count (:completed-task-count query-result)
+              total-matches (count non-closed-tasks)
+              limited-tasks (vec (take effective-limit non-closed-tasks))
               result-count (count limited-tasks)]
 
           ;; Check unique? constraint
@@ -100,16 +120,18 @@
           ;; Multiple matches with unique is also an error
           (when (and unique (> total-matches 1))
             (let [response-data {:error "Multiple tasks matched but :unique was specified"
-                                 :metadata {:count result-count
+                                 :metadata {:open-task-count result-count
                                             :total-matches total-matches}}]
               (throw (ex-info "unique? constraint violated"
                               {:response response-data}))))
 
           ;; Build success response
           (let [response-data {:tasks limited-tasks
-                               :metadata {:count result-count
-                                          :total-matches total-matches
-                                          :limited? (> total-matches result-count)}}]
+                               :metadata (cond-> {:open-task-count result-count
+                                                  :total-matches total-matches
+                                                  :limited? (> total-matches result-count)}
+                                           ;; Add completed-task-count only when parent-id was provided
+                                           completed-count (assoc :completed-task-count completed-count))}]
             {:content [{:type "text"
                         :text (json/write-str response-data)}]
              :isError false}))))
