@@ -356,36 +356,62 @@
 (defn pull-latest
   "Pulls the latest changes from remote.
 
-  Gracefully handles local-only repos by ignoring pull errors.
+  Distinguishes between different failure types to enable appropriate handling.
 
   Parameters:
   - base-dir: Base directory of the git repository
   - branch-name: Name of the branch to pull
 
   Returns a map with:
-  - :success - boolean indicating if operation succeeded
-  - :pulled? - boolean indicating if changes were pulled (false for local-only repos)
-  - :error - error message string (or nil if successful/local-only)"
+  - :success - boolean indicating if operation succeeded (true for exit 0 or :no-remote)
+  - :pulled? - boolean indicating if changes were pulled (true only for exit 0)
+  - :error - error message string (or nil if successful/no-remote)
+  - :error-type - keyword indicating error type (:no-remote | :conflict | :network | :other, or nil if successful)"
   [base-dir branch-name]
   {:pre [(string? base-dir)
          (not (clojure.string/blank? base-dir))
          (string? branch-name)
          (not (clojure.string/blank? branch-name))]}
   (try
-    (let [result (sh/sh "git" "-C" base-dir "pull" "origin" branch-name)]
-      (if (zero? (:exit result))
+    (let [result (sh/sh "git" "-C" base-dir "pull" "origin" branch-name)
+          stderr (str/trim (:err result))
+          exit-code (:exit result)]
+      (if (zero? exit-code)
         {:success true
          :pulled? true
-         :error nil}
-        ;; Pull failed - likely local-only repo, which is fine
-        {:success true
-         :pulled? false
-         :error nil}))
-    (catch Exception _
-      ;; Exception during pull - treat as local-only repo
-      {:success true
+         :error nil
+         :error-type nil}
+        ;; Non-zero exit - determine error type
+        (let [error-type (cond
+                           (or (str/includes? stderr "does not appear to be a git repository")
+                               (str/includes? stderr "No configured push destination"))
+                           :no-remote
+
+                           (str/includes? stderr "CONFLICT")
+                           :conflict
+
+                           (or (str/includes? stderr "Could not resolve host")
+                               (str/includes? stderr "Connection refused"))
+                           :network
+
+                           :else
+                           :other)]
+          (if (= error-type :no-remote)
+            ;; Local-only repo is acceptable
+            {:success true
+             :pulled? false
+             :error nil
+             :error-type :no-remote}
+            ;; Other errors are failures
+            {:success false
+             :pulled? false
+             :error stderr
+             :error-type error-type}))))
+    (catch Exception e
+      {:success false
        :pulled? false
-       :error nil})))
+       :error (.getMessage e)
+       :error-type :other})))
 
 (defn derive-project-name
   "Extracts the project name from a project directory path.
