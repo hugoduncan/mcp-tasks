@@ -15,6 +15,22 @@
   [file-path]
   (fs/exists? file-path))
 
+(defn ensure-file-exists!
+  "Ensure a file exists, creating parent directories and empty file if needed.
+
+  Parameters:
+  - file-path: Absolute path to the file
+
+  Side effects:
+  - Creates parent directories if they don't exist
+  - Creates empty file if it doesn't exist
+
+  Returns: nil"
+  [file-path]
+  (when-not (file-exists? file-path)
+    (fs/create-dirs (fs/parent file-path))
+    (spit file-path "")))
+
 (defn task-path
   "Construct task directory paths using resolved tasks directory from config.
 
@@ -141,9 +157,7 @@
         poll-interval-ms (or (:lock-poll-interval-ms config) 100)]
 
     ;; Ensure file exists before attempting lock
-    (when-not (file-exists? tasks-file)
-      (fs/create-dirs (fs/parent tasks-file))
-      (spit tasks-file ""))
+    (ensure-file-exists! tasks-file)
 
     (let [raf (atom nil)
           channel (atom nil)
