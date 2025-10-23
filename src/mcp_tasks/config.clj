@@ -77,6 +77,18 @@
                       {:type :invalid-config-value
                        :key :lock-timeout-ms
                        :value lock-timeout}))))
+  (when-let [poll-interval (:lock-poll-interval-ms config)]
+    (when-not (int? poll-interval)
+      (throw (ex-info (str "Expected integer for :lock-poll-interval-ms, got " (type poll-interval))
+                      {:type :invalid-config-type
+                       :key :lock-poll-interval-ms
+                       :value poll-interval
+                       :expected 'int?})))
+    (when-not (pos? poll-interval)
+      (throw (ex-info "Value for :lock-poll-interval-ms must be positive"
+                      {:type :invalid-config-value
+                       :key :lock-poll-interval-ms
+                       :value poll-interval}))))
   config)
 
 (defn find-config-file
@@ -193,7 +205,8 @@
 
   Defaults:
   - :worktree-prefix defaults to :project-name if not set
-  - :lock-timeout-ms defaults to 30000 (30 seconds) if not set"
+  - :lock-timeout-ms defaults to 30000 (30 seconds) if not set
+  - :lock-poll-interval-ms defaults to 100 (100 milliseconds) if not set"
   [config-dir config]
   (let [base-dir (str (fs/canonicalize config-dir))
         resolved-tasks-dir (resolve-tasks-dir config-dir config)
@@ -205,7 +218,10 @@
                                (assoc :worktree-prefix :project-name)
 
                                (not (contains? config-with-branch-mgmt :lock-timeout-ms))
-                               (assoc :lock-timeout-ms 30000))]
+                               (assoc :lock-timeout-ms 30000)
+
+                               (not (contains? config-with-branch-mgmt :lock-poll-interval-ms))
+                               (assoc :lock-poll-interval-ms 100))]
     (assoc config-with-defaults
            :use-git? (determine-git-mode config-dir config)
            :base-dir base-dir

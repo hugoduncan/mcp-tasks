@@ -115,6 +115,7 @@
 
   Parameters:
   - config: Configuration map with optional :lock-timeout-ms (default 30000ms)
+            and :lock-poll-interval-ms (default 100ms)
   - f: Function to execute while holding the lock (no arguments)
 
   Returns:
@@ -129,14 +130,14 @@
   - Cleans up resources even on exceptions
 
   Lock acquisition:
-  - Uses .tryLock() with polling (100ms intervals)
+  - Uses .tryLock() with polling (configurable interval, default 100ms)
   - Default timeout: 30000ms (30 seconds)
   - Polling is necessary due to Java FileLock API constraints"
   [config f]
   (let [tasks-path (task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
         lock-timeout-ms (or (:lock-timeout-ms config) 30000)
-        poll-interval-ms 100]
+        poll-interval-ms (or (:lock-poll-interval-ms config) 100)]
 
     ;; Ensure file exists before attempting lock
     (when-not (file-exists? tasks-file)
