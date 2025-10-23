@@ -90,11 +90,28 @@
                                         error-metadata)})}]
    :isError true})
 
+(defn- try-acquire-lock-with-timeout
+  "Attempt to acquire file lock with timeout using polling.
+  
+  Polling is necessary because Java's FileChannel.tryLock() doesn't support
+  timeout parameters - it either succeeds immediately or returns nil.
+  
+  Returns the acquired lock on success, nil on timeout."
+  [file-channel timeout-ms poll-interval-ms]
+  (let [deadline (+ (System/currentTimeMillis) timeout-ms)]
+    (loop []
+      (if-let [acquired-lock (.tryLock file-channel)]
+        acquired-lock
+        (let [now (System/currentTimeMillis)]
+          (when (< now deadline)
+            (Thread/sleep poll-interval-ms)
+            (recur)))))))
+
 (defn with-task-lock
   "Execute function f while holding an exclusive file lock on tasks.ednl.
 
   Provides cross-process file locking to prevent concurrent task modifications.
-  Uses Java FileLock API with polling-based timeout.
+  Uses polling-based timeout (required by Java FileLock API limitations).
 
   Parameters:
   - config: Configuration map with optional :lock-timeout-ms (default 30000ms)
@@ -112,9 +129,9 @@
   - Cleans up resources even on exceptions
 
   Lock acquisition:
-  - Uses .tryLock() with polling loop (100ms sleep between attempts)
-  - Tracks elapsed time and fails after :lock-timeout-ms
-  - Default timeout: 30000ms (30 seconds)"
+  - Uses .tryLock() with polling (100ms intervals)
+  - Default timeout: 30000ms (30 seconds)
+  - Polling is necessary due to Java FileLock API constraints"
   [config f]
   (let [tasks-path (task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
@@ -130,34 +147,27 @@
           lock (atom nil)]
       (try
         ;; Open FileChannel
-        (let [raf (RandomAccessFile. tasks-file "rw")
-              fc (.getChannel raf)]
-          (reset! channel fc)
+        (let [random-access-file (RandomAccessFile. tasks-file "rw")
+              file-channel (.getChannel random-access-file)]
+          (reset! channel file-channel)
 
           ;; Try to acquire lock with timeout
-          (let [start-time (System/currentTimeMillis)
-                deadline (+ start-time lock-timeout-ms)]
-            (loop []
-              (if-let [acquired-lock (.tryLock fc)]
-                (do
-                  (reset! lock acquired-lock)
-                  ;; Lock acquired - execute function
-                  (f))
-                ;; Lock not acquired - check timeout
-                (let [now (System/currentTimeMillis)]
-                  (if (>= now deadline)
-                    ;; Timeout
-                    (build-tool-error-response
-                      (str "Failed to acquire lock on tasks file after "
-                           lock-timeout-ms "ms. "
-                           "Another process may be modifying tasks.")
-                      "with-task-lock"
-                      {:file tasks-file
-                       :timeout-ms lock-timeout-ms})
-                    ;; Sleep and retry
-                    (do
-                      (Thread/sleep poll-interval-ms)
-                      (recur))))))))
+          (if-let [acquired-lock (try-acquire-lock-with-timeout
+                                   file-channel
+                                   lock-timeout-ms
+                                   poll-interval-ms)]
+            (do
+              (reset! lock acquired-lock)
+              ;; Lock acquired - execute function
+              (f))
+            ;; Lock acquisition timed out
+            (build-tool-error-response
+              (str "Failed to acquire lock on tasks file after "
+                   lock-timeout-ms "ms. "
+                   "Another process may be modifying tasks.")
+              "with-task-lock"
+              {:file tasks-file
+               :timeout-ms lock-timeout-ms})))
 
         (catch java.io.IOException e
           (build-tool-error-response
