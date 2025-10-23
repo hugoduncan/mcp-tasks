@@ -156,79 +156,78 @@
   (let [tasks-path (task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
         lock-timeout-ms (or (:lock-timeout-ms config) 30000)
-        poll-interval-ms (or (:lock-poll-interval-ms config) 100)]
+        poll-interval-ms (or (:lock-poll-interval-ms config) 100)
+        raf (atom nil)
+        channel (atom nil)
+        lock (atom nil)]
+    (try
+      ;; Ensure file exists before attempting lock
+      (ensure-file-exists! tasks-file)
 
-    (let [raf (atom nil)
-          channel (atom nil)
-          lock (atom nil)]
-      (try
-        ;; Ensure file exists before attempting lock
-        (ensure-file-exists! tasks-file)
+      ;; Open RandomAccessFile and get its channel
+      (let [random-access-file (RandomAccessFile. tasks-file "rw")
+            file-channel (.getChannel random-access-file)]
+        (reset! raf random-access-file)
+        (reset! channel file-channel)
 
-        ;; Open RandomAccessFile and get its channel
-        (let [random-access-file (RandomAccessFile. tasks-file "rw")
-              file-channel (.getChannel random-access-file)]
-          (reset! raf random-access-file)
-          (reset! channel file-channel)
-
-          ;; Try to acquire lock with timeout
-          (if-let [acquired-lock (try-acquire-lock-with-timeout
-                                   file-channel
-                                   lock-timeout-ms
-                                   poll-interval-ms)]
-            (do
-              (reset! lock acquired-lock)
-              ;; Lock acquired - execute function with error handling
-              (try
-                (f)
-                (catch Exception e
-                  ;; Convert any exception from function execution to error map
-                  (build-tool-error-response
-                    (str "Error during task operation: " (.getMessage e))
-                    "with-task-lock"
-                    {:file tasks-file
-                     :error-type (-> e class .getName)
-                     :message (.getMessage e)}))))
-            ;; Lock acquisition timed out
-            (build-tool-error-response
-              (str "Failed to acquire lock on tasks file after "
-                   lock-timeout-ms "ms. "
-                   "Another process may be modifying tasks.")
-              "with-task-lock"
-              {:file tasks-file
-               :timeout-ms lock-timeout-ms})))
-
-        (catch java.io.IOException e
+        ;; Try to acquire lock with timeout
+        (if-let [acquired-lock (try-acquire-lock-with-timeout
+                                 file-channel
+                                 lock-timeout-ms
+                                 poll-interval-ms)]
+          (do
+            (reset! lock acquired-lock)
+            ;; Lock acquired - execute function with error handling
+            (try
+              (f)
+              (catch Exception e
+                ;; Convert any exception from function execution to error map
+                (build-tool-error-response
+                  (str "Error during task operation: " (.getMessage e))
+                  "with-task-lock"
+                  {:file tasks-file
+                   :error-type (-> e class .getName)
+                   :message (.getMessage e)}))))
+          ;; Lock acquisition timed out
           (build-tool-error-response
-            (str "Failed to access lock file: " (.getMessage e))
+            (str "Failed to acquire lock on tasks file after "
+                 lock-timeout-ms "ms. "
+                 "Another process may be modifying tasks.")
             "with-task-lock"
             {:file tasks-file
-             :error-type "io-error"
-             :message (.getMessage e)}))
+             :timeout-ms lock-timeout-ms})))
 
-        (finally
-          ;; Always release lock, close channel, and close RAF
-          (when-let [l @lock]
-            (try
-              (.release l)
-              (catch Exception e
-                (log/warn :lock-release-failed
-                          {:error (.getMessage e)
-                           :file tasks-file}))))
-          (when-let [ch @channel]
-            (try
-              (.close ch)
-              (catch Exception e
-                (log/warn :channel-close-failed
-                          {:error (.getMessage e)
-                           :file tasks-file}))))
-          (when-let [r @raf]
-            (try
-              (.close r)
-              (catch Exception e
-                (log/warn :raf-close-failed
-                          {:error (.getMessage e)
-                           :file tasks-file})))))))))
+      (catch java.io.IOException e
+        (build-tool-error-response
+          (str "Failed to access lock file: " (.getMessage e))
+          "with-task-lock"
+          {:file tasks-file
+           :error-type "io-error"
+           :message (.getMessage e)}))
+
+      (finally
+        ;; Always release lock, close channel, and close RAF
+        (when-let [l @lock]
+          (try
+            (.release l)
+            (catch Exception e
+              (log/warn :lock-release-failed
+                        {:error (.getMessage e)
+                         :file tasks-file}))))
+        (when-let [ch @channel]
+          (try
+            (.close ch)
+            (catch Exception e
+              (log/warn :channel-close-failed
+                        {:error (.getMessage e)
+                         :file tasks-file}))))
+        (when-let [r @raf]
+          (try
+            (.close r)
+            (catch Exception e
+              (log/warn :raf-close-failed
+                        {:error (.getMessage e)
+                         :file tasks-file}))))))))
 
 (defn setup-completion-context
   "Prepares common context for task completion and deletion operations.
