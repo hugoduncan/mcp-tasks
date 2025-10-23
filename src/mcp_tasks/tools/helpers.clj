@@ -125,9 +125,9 @@
   - Lock error: Tool error map {:content [...] :isError true}
 
   Resource management:
-  - Opens FileChannel on tasks.ednl
+  - Opens RandomAccessFile and gets its FileChannel
   - Acquires exclusive lock with timeout
-  - Ensures lock release and channel close in finally block
+  - Ensures lock release, channel close, and RAF close in finally block
   - Cleans up resources even on exceptions
 
   Lock acquisition:
@@ -145,12 +145,14 @@
       (fs/create-dirs (fs/parent tasks-file))
       (spit tasks-file ""))
 
-    (let [channel (atom nil)
+    (let [raf (atom nil)
+          channel (atom nil)
           lock (atom nil)]
       (try
-        ;; Open FileChannel
+        ;; Open RandomAccessFile and get its channel
         (let [random-access-file (RandomAccessFile. tasks-file "rw")
               file-channel (.getChannel random-access-file)]
+          (reset! raf random-access-file)
           (reset! channel file-channel)
 
           ;; Try to acquire lock with timeout
@@ -180,7 +182,7 @@
              :message (.getMessage e)}))
 
         (finally
-          ;; Always release lock and close channel
+          ;; Always release lock, close channel, and close RAF
           (when-let [l @lock]
             (try
               (.release l)
@@ -193,6 +195,13 @@
               (.close ch)
               (catch Exception e
                 (log/warn :channel-close-failed
+                          {:error (.getMessage e)
+                           :file tasks-file}))))
+          (when-let [r @raf]
+            (try
+              (.close r)
+              (catch Exception e
+                (log/warn :raf-close-failed
                           {:error (.getMessage e)
                            :file tasks-file})))))))))
 
