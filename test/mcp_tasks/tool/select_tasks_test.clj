@@ -28,7 +28,7 @@
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 3 (count (:tasks response))))
-        (is (= 3 (get-in response [:metadata :count])))
+        (is (= 3 (get-in response [:metadata :open-task-count])))
         (is (= 3 (get-in response [:metadata :total-matches])))
         (is (false? (get-in response [:metadata :limited?])))
         (is (= ["Task One" "Task Two" "Task Three"]
@@ -50,7 +50,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 3 (count (:tasks response))))
-          (is (= 3 (get-in response [:metadata :count])))
+          (is (= 3 (get-in response [:metadata :open-task-count])))
           (is (= 5 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))
           (is (= ["Task 1" "Task 2" "Task 3"]
@@ -61,7 +61,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 5 (count (:tasks response))))
-          (is (= 5 (get-in response [:metadata :count])))
+          (is (= 5 (get-in response [:metadata :open-task-count])))
           (is (= 5 (get-in response [:metadata :total-matches])))
           (is (false? (get-in response [:metadata :limited?]))))))))
 
@@ -76,7 +76,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
-          (is (= 1 (get-in response [:metadata :count])))
+          (is (= 1 (get-in response [:metadata :open-task-count])))
           (is (= 1 (get-in response [:metadata :total-matches])))
           (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
 
@@ -85,7 +85,7 @@
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 0 (count (:tasks response))))
-          (is (= 0 (get-in response [:metadata :count])))
+          (is (= 0 (get-in response [:metadata :open-task-count])))
           (is (= 0 (get-in response [:metadata :total-matches])))))
 
       (testing "returns error when multiple tasks match"
@@ -135,7 +135,7 @@
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= [] (:tasks response)))
-        (is (= 0 (get-in response [:metadata :count])))
+        (is (= 0 (get-in response [:metadata :open-task-count])))
         (is (= 0 (get-in response [:metadata :total-matches])))
         (is (false? (get-in response [:metadata :limited?])))))))
 
@@ -151,14 +151,14 @@
       (testing "metadata reflects filtering and limiting"
         (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 1})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-          (is (= 1 (get-in response [:metadata :count])))
+          (is (= 1 (get-in response [:metadata :open-task-count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))))
 
       (testing "metadata when not limited"
         (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 10})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-          (is (= 2 (get-in response [:metadata :count])))
+          (is (= 2 (get-in response [:metadata :open-task-count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (false? (get-in response [:metadata :limited?]))))))))
 
@@ -309,7 +309,7 @@
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 0 (count (:tasks response))))
-            (is (= 0 (get-in response [:metadata :count])))
+            (is (= 0 (get-in response [:metadata :open-task-count])))
             (is (= 0 (get-in response [:metadata :total-matches])))))
 
         (testing "combines task-id filter with category filter"
@@ -555,7 +555,7 @@
                 result (#'sut/select-tasks-impl config nil {:parent-id 1})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-              (is (= 2 (get-in response [:metadata :count])))
+              (is (= 2 (get-in response [:metadata :open-task-count])))
               (is (= 0 (get-in response [:metadata :completed-task-count]))))))))))
 
 (deftest select-tasks-parent-id-includes-completed-count-with-some-completed
@@ -609,7 +609,7 @@
                 result (#'sut/select-tasks-impl config nil {:parent-id 1})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-              (is (= 1 (get-in response [:metadata :count]))) ; Only open task
+              (is (= 1 (get-in response [:metadata :open-task-count]))) ; Only open task
               (is (= 2 (get-in response [:metadata :completed-task-count]))) ; Two completed
               (is (= ["Open task"] (map :title (:tasks response)))))))))))
 
@@ -654,7 +654,7 @@
                 result (#'sut/select-tasks-impl config nil {:parent-id 1})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-              (is (= 0 (get-in response [:metadata :count]))) ; No open tasks
+              (is (= 0 (get-in response [:metadata :open-task-count]))) ; No open tasks
               (is (= 2 (get-in response [:metadata :completed-task-count]))) ; Two completed
               (is (= [] (:tasks response))))))))))
 
@@ -687,5 +687,5 @@
                 result (#'sut/select-tasks-impl config nil {:category "test"})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
-              (is (= 1 (get-in response [:metadata :count])))
+              (is (= 1 (get-in response [:metadata :open-task-count])))
               (is (nil? (get-in response [:metadata :completed-task-count]))))))))))
