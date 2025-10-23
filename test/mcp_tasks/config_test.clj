@@ -74,6 +74,21 @@
       (is (= {:use-git? true :unknown-key "value"}
              (sut/validate-config {:use-git? true :unknown-key "value"}))))))
 
+(deftest validate-config-accepts-tasks-dir
+  ;; Test that validate-config accepts valid :tasks-dir strings
+  (testing "validate-config"
+    (testing "accepts config with :tasks-dir string"
+      (is (= {:tasks-dir ".mcp-tasks"}
+             (sut/validate-config {:tasks-dir ".mcp-tasks"}))))
+
+    (testing "accepts config with absolute :tasks-dir path"
+      (is (= {:tasks-dir "/home/user/.mcp-tasks"}
+             (sut/validate-config {:tasks-dir "/home/user/.mcp-tasks"}))))
+
+    (testing "accepts config with relative :tasks-dir path"
+      (is (= {:tasks-dir "../shared-tasks"}
+             (sut/validate-config {:tasks-dir "../shared-tasks"}))))))
+
 (deftest validate-config-rejects-invalid-structures
   ;; Test that validate-config throws clear errors for invalid structures
   (testing "validate-config"
@@ -133,6 +148,23 @@
             #"Invalid value for :worktree-prefix, must be :project-name or :none"
             (sut/validate-config {:worktree-prefix :custom}))))))
 
+(deftest validate-config-rejects-invalid-tasks-dir
+  ;; Test that validate-config rejects non-string :tasks-dir values
+  (testing "validate-config"
+    (testing "rejects non-string :tasks-dir value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected string for :tasks-dir, got .*Long"
+            (sut/validate-config {:tasks-dir 123})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected string for :tasks-dir, got .*Boolean"
+            (sut/validate-config {:tasks-dir true})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected string for :tasks-dir, got .*Keyword"
+            (sut/validate-config {:tasks-dir :mcp-tasks}))))))
+
 (deftest validate-config-error-data-structure
   ;; Test that validation errors include structured data for programmatic handling
   (testing "validate-config error data"
@@ -154,31 +186,109 @@
           (is (= "true" (:value (ex-data e))))
           (is (= 'boolean? (:expected (ex-data e)))))))))
 
+(deftest find-config-file-in-current-directory
+  ;; Test that find-config-file finds config in the start directory
+  (testing "find-config-file"
+    (testing "finds config in current directory"
+      (write-config-file "{:use-git? true}")
+      (let [result (sut/find-config-file test-project-dir)
+            canonical-dir (str (fs/canonicalize test-project-dir))]
+        (is (some? result))
+        (is (= canonical-dir (:config-dir result)))
+        (is (string? (:config-file result)))
+        (is (.endsWith (:config-file result) ".mcp-tasks.edn"))))))
+
+(deftest find-config-file-in-parent-directory
+  ;; Test that find-config-file traverses up to find config in parent directory
+  (testing "find-config-file"
+    (testing "finds config in parent directory"
+      (write-config-file "{}")
+      (let [subdir (str test-project-dir "/subdir")
+            _ (fs/create-dirs subdir)
+            result (sut/find-config-file subdir)
+            canonical-dir (str (fs/canonicalize test-project-dir))]
+        (is (some? result))
+        (is (= canonical-dir (:config-dir result)))))))
+
+(deftest find-config-file-multiple-levels-up
+  ;; Test that find-config-file can traverse multiple directory levels
+  (testing "find-config-file"
+    (testing "finds config multiple levels up"
+      (write-config-file "{}")
+      (let [deep-subdir (str test-project-dir "/a/b/c")
+            _ (fs/create-dirs deep-subdir)
+            result (sut/find-config-file deep-subdir)
+            canonical-dir (str (fs/canonicalize test-project-dir))]
+        (is (some? result))
+        (is (= canonical-dir (:config-dir result)))))))
+
+(deftest find-config-file-returns-nil-at-root
+  ;; Test that find-config-file returns nil when reaching filesystem root without finding config
+  (testing "find-config-file"
+    (testing "returns nil when reaching filesystem root"
+      ;; Start from a temp dir without .mcp-tasks.edn in any parent
+      (let [temp-dir (str (fs/create-temp-dir))
+            result (sut/find-config-file temp-dir)]
+        (is (nil? result))
+        ;; Clean up
+        (fs/delete-tree temp-dir)))))
+
+(deftest find-config-file-resolves-symlinks
+  ;; Test that find-config-file resolves symlinks correctly
+  (testing "find-config-file"
+    (testing "resolves symlinks in paths"
+      (write-config-file "{}")
+      (let [link-path (str test-project-dir "/link-to-subdir")
+            subdir (str test-project-dir "/subdir")
+            _ (fs/create-dirs subdir)
+            _ (fs/create-sym-link link-path subdir)
+            result (sut/find-config-file link-path)
+            canonical-dir (str (fs/canonicalize test-project-dir))]
+        (is (some? result))
+        ;; The canonical config-dir should be test-project-dir, not the symlink path
+        (is (= canonical-dir (:config-dir result)))
+        ;; Clean up symlink
+        (fs/delete link-path)))))
+
 (deftest read-config-with-missing-file
-  ;; Test that read-config returns nil when config file doesn't exist
+  ;; Test that read-config returns empty config when config file doesn't exist
   (testing "read-config"
-    (testing "returns nil when file doesn't exist"
-      (is (nil? (sut/read-config test-project-dir))))))
+    (testing "returns empty config when file doesn't exist"
+      ;; Use a temp dir that won't have any .mcp-tasks.edn in parent dirs
+      (let [temp-dir (str (fs/create-temp-dir))
+            result (sut/read-config temp-dir)]
+        (is (map? result))
+        (is (= {} (:raw-config result)))
+        (is (string? (:config-dir result)))
+        ;; Clean up
+        (fs/delete-tree temp-dir)))))
 
 (deftest read-config-with-valid-files
   ;; Test that read-config successfully parses valid config files
   (testing "read-config"
     (testing "reads and validates empty config"
       (write-config-file "{}")
-      (is (= {} (sut/read-config test-project-dir))))
+      (let [result (sut/read-config test-project-dir)]
+        (is (= {} (:raw-config result)))
+        (is (string? (:config-dir result)))))
 
     (testing "reads and validates config with use-git? true"
       (write-config-file "{:use-git? true}")
-      (is (= {:use-git? true} (sut/read-config test-project-dir))))
+      (let [result (sut/read-config test-project-dir)]
+        (is (= {:use-git? true} (:raw-config result)))
+        (is (string? (:config-dir result)))))
 
     (testing "reads and validates config with use-git? false"
       (write-config-file "{:use-git? false}")
-      (is (= {:use-git? false} (sut/read-config test-project-dir))))
+      (let [result (sut/read-config test-project-dir)]
+        (is (= {:use-git? false} (:raw-config result)))
+        (is (string? (:config-dir result)))))
 
     (testing "reads and validates config with extra keys"
       (write-config-file "{:use-git? true :other-key \"value\"}")
-      (is (= {:use-git? true :other-key "value"}
-             (sut/read-config test-project-dir))))))
+      (let [result (sut/read-config test-project-dir)]
+        (is (= {:use-git? true :other-key "value"} (:raw-config result)))
+        (is (string? (:config-dir result)))))))
 
 (deftest read-config-with-malformed-edn
   ;; Test that read-config provides clear errors for malformed EDN
@@ -224,97 +334,118 @@
   ;; Test that git-repo-exists? correctly detects presence of .mcp-tasks/.git
   (testing "git-repo-exists?"
     (testing "returns false when .mcp-tasks/.git doesn't exist"
-      (is (false? (sut/git-repo-exists? test-project-dir))))
+      (is (false? (sut/git-repo-exists? (str (fs/canonicalize test-project-dir))))))
 
     (testing "returns true when .mcp-tasks/.git exists"
       (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (true? (sut/git-repo-exists? test-project-dir))))))
+      (is (true? (sut/git-repo-exists? (str (fs/canonicalize test-project-dir))))))))
 
 (deftest determine-git-mode-with-explicit-config
   ;; Test that explicit config values take precedence over auto-detection
   (testing "determine-git-mode with explicit config"
-    (testing "returns true when config has :use-git? true"
-      (is (true? (sut/determine-git-mode test-project-dir {:use-git? true}))))
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "returns true when config has :use-git? true"
+        (is (true? (sut/determine-git-mode config-dir {:use-git? true}))))
 
-    (testing "returns false when config has :use-git? false"
-      (is (false? (sut/determine-git-mode test-project-dir {:use-git? false}))))
+      (testing "returns false when config has :use-git? false"
+        (is (false? (sut/determine-git-mode config-dir {:use-git? false}))))
 
-    (testing "explicit true overrides missing git repo"
-      (is (false? (sut/git-repo-exists? test-project-dir)))
-      (is (true? (sut/determine-git-mode test-project-dir {:use-git? true}))))
+      (testing "explicit true overrides missing git repo"
+        (is (false? (sut/git-repo-exists? config-dir)))
+        (is (true? (sut/determine-git-mode config-dir {:use-git? true}))))
 
-    (testing "explicit false overrides existing git repo"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (true? (sut/git-repo-exists? test-project-dir)))
-      (is (false? (sut/determine-git-mode test-project-dir {:use-git? false}))))))
+      (testing "explicit false overrides existing git repo"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (true? (sut/git-repo-exists? config-dir)))
+        (is (false? (sut/determine-git-mode config-dir {:use-git? false})))))))
 
 (deftest determine-git-mode-with-auto-detection
   ;; Test that auto-detection works when no explicit config is provided
   (testing "determine-git-mode with auto-detection"
-    (testing "returns false when no config and no git repo"
-      (is (false? (sut/determine-git-mode test-project-dir {}))))
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "returns false when no config and no git repo"
+        (is (false? (sut/determine-git-mode config-dir {}))))
 
-    (testing "returns true when no config but git repo exists"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (true? (sut/determine-git-mode test-project-dir {}))))))
+      (testing "returns true when no config but git repo exists"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (true? (sut/determine-git-mode config-dir {})))))))
 
 (deftest resolve-config-adds-use-git
-  ;; Test that resolve-config adds :use-git?, :base-dir, and :worktree-prefix to config map
+  ;; Test that resolve-config adds :use-git?, :base-dir, :resolved-tasks-dir, and :worktree-prefix to config map
   (testing "resolve-config"
     (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
-      (testing "adds :use-git? false, :base-dir, and :worktree-prefix when no config and no git repo"
-        (is (= {:use-git? false :base-dir canonical-base-dir :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {}))))
+      (testing "adds :use-git? false, :base-dir, :resolved-tasks-dir, and :worktree-prefix when no config and no git repo"
+        (let [result (sut/resolve-config canonical-base-dir {})]
+          (is (= false (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result)))))
 
-      (testing "adds :use-git? true, :base-dir, and :worktree-prefix when no config but git repo exists"
+      (testing "adds :use-git? true, :base-dir, :resolved-tasks-dir, and :worktree-prefix when no config but git repo exists"
         (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-        (is (= {:use-git? true :base-dir canonical-base-dir :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {}))))
+        (let [result (sut/resolve-config canonical-base-dir {})]
+          (is (= true (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result)))))
 
-      (testing "preserves explicit :use-git? true and adds :base-dir and :worktree-prefix"
-        (is (= {:use-git? true :base-dir canonical-base-dir :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {:use-git? true}))))
+      (testing "preserves explicit :use-git? true and adds :base-dir, :resolved-tasks-dir, and :worktree-prefix"
+        (let [result (sut/resolve-config canonical-base-dir {:use-git? true})]
+          (is (= true (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result)))))
 
-      (testing "preserves explicit :use-git? false even with git repo and adds :base-dir and :worktree-prefix"
+      (testing "preserves explicit :use-git? false even with git repo and adds :base-dir, :resolved-tasks-dir, and :worktree-prefix"
         (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-        (is (= {:use-git? false :base-dir canonical-base-dir :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {:use-git? false}))))
+        (let [result (sut/resolve-config canonical-base-dir {:use-git? false})]
+          (is (= false (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result)))))
 
-      (testing "preserves other config keys and adds :use-git?, :base-dir, and :worktree-prefix"
+      (testing "preserves other config keys and adds :use-git?, :base-dir, :resolved-tasks-dir, and :worktree-prefix"
         (cleanup-test-project)
         (setup-test-project)
-        (is (= {:use-git? false :base-dir canonical-base-dir :other-key "value" :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {:other-key "value"})))))))
+        (let [result (sut/resolve-config canonical-base-dir {:other-key "value"})]
+          (is (= false (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (= "value" (:other-key result)))
+          (is (string? (:resolved-tasks-dir result))))))))
 
 (deftest resolve-config-auto-enables-branch-management
   ;; Test that resolve-config auto-enables :branch-management? when :worktree-management? is true
   (testing "resolve-config auto-enables branch management"
     (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
       (testing "enables :branch-management? when :worktree-management? is true"
-        (is (= {:worktree-management? true
-                :branch-management? true
-                :use-git? false
-                :base-dir canonical-base-dir
-                :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {:worktree-management? true}))))
+        (let [result (sut/resolve-config canonical-base-dir {:worktree-management? true})]
+          (is (= true (:worktree-management? result)))
+          (is (= true (:branch-management? result)))
+          (is (= false (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result)))))
 
       (testing "preserves explicit :branch-management? false when :worktree-management? is false"
-        (is (= {:worktree-management? false
-                :branch-management? false
-                :use-git? false
-                :base-dir canonical-base-dir
-                :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {:worktree-management? false
-                                                     :branch-management? false}))))
+        (let [result (sut/resolve-config canonical-base-dir {:worktree-management? false
+                                                             :branch-management? false})]
+          (is (= false (:worktree-management? result)))
+          (is (= false (:branch-management? result)))
+          (is (= false (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result)))))
 
       (testing "overrides :branch-management? false when :worktree-management? is true"
-        (is (= {:worktree-management? true
-                :branch-management? true
-                :use-git? false
-                :base-dir canonical-base-dir
-                :worktree-prefix :project-name}
-               (sut/resolve-config test-project-dir {:worktree-management? true
-                                                     :branch-management? false})))))))
+        (let [result (sut/resolve-config canonical-base-dir {:worktree-management? true
+                                                             :branch-management? false})]
+          (is (= true (:worktree-management? result)))
+          (is (= true (:branch-management? result)))
+          (is (= false (:use-git? result)))
+          (is (= canonical-base-dir (:base-dir result)))
+          (is (= :project-name (:worktree-prefix result)))
+          (is (string? (:resolved-tasks-dir result))))))))
 
 (deftest resolve-config-canonicalizes-base-dir
   ;; Test that resolve-config always returns an absolute path for :base-dir
@@ -335,69 +466,162 @@
         ;; test-project-dir is relative, so it should be canonicalized
         (is (string? base-dir))
         (is (fs/absolute? base-dir))
-        (is (= (str (fs/canonicalize test-project-dir)) base-dir))))
+        (is (= (str (fs/canonicalize test-project-dir)) base-dir))))))
 
-    (testing "canonicalizes when project-dir is nil (uses user.dir)"
-      (let [result (sut/resolve-config nil {})
-            base-dir (:base-dir result)]
-        (is (string? base-dir))
-        (is (fs/absolute? base-dir))
-        (is (= (str (fs/canonicalize (System/getProperty "user.dir"))) base-dir))))))
+(deftest resolve-tasks-dir-with-default
+  ;; Test that resolve-tasks-dir defaults to .mcp-tasks relative to config-dir
+  (testing "resolve-tasks-dir with default"
+    (let [config-dir (str (fs/canonicalize test-project-dir))
+          expected (str (fs/canonicalize (str test-project-dir "/.mcp-tasks")))]
+      (testing "returns .mcp-tasks when :tasks-dir not specified"
+        (is (= expected (sut/resolve-tasks-dir config-dir {}))))
+
+      (testing "returns .mcp-tasks even if directory doesn't exist"
+        ;; Default .mcp-tasks doesn't need to exist yet
+        (is (= expected (sut/resolve-tasks-dir config-dir {})))))))
+
+(deftest resolve-tasks-dir-with-relative-path
+  ;; Test that resolve-tasks-dir resolves relative paths from config-dir
+  (testing "resolve-tasks-dir with relative path"
+    (let [config-dir (str (fs/canonicalize test-project-dir))
+          tasks-subdir (str test-project-dir "/tasks")]
+      (fs/create-dirs tasks-subdir)
+      (testing "resolves relative path from config-dir"
+        (let [expected (str (fs/canonicalize tasks-subdir))
+              result (sut/resolve-tasks-dir config-dir {:tasks-dir "tasks"})]
+          (is (= expected result)))))))
+
+(deftest resolve-tasks-dir-with-absolute-path
+  ;; Test that resolve-tasks-dir handles absolute paths correctly
+  (testing "resolve-tasks-dir with absolute path"
+    (let [config-dir (str (fs/canonicalize test-project-dir))
+          absolute-dir (str (fs/create-temp-dir))]
+      (testing "uses absolute path as-is"
+        (let [result (sut/resolve-tasks-dir config-dir {:tasks-dir absolute-dir})]
+          (is (= (str (fs/canonicalize absolute-dir)) result))))
+      ;; Clean up
+      (fs/delete-tree absolute-dir))))
+
+(deftest resolve-tasks-dir-validates-explicit-path-exists
+  ;; Test that resolve-tasks-dir throws error when explicit :tasks-dir doesn't exist
+  (testing "resolve-tasks-dir validation"
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "throws error when explicit :tasks-dir doesn't exist"
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Configured :tasks-dir does not exist: nonexistent"
+              (sut/resolve-tasks-dir config-dir {:tasks-dir "nonexistent"}))))
+
+      (testing "includes error details in ex-data"
+        (try
+          (sut/resolve-tasks-dir config-dir {:tasks-dir "nonexistent"})
+          (is false "Should have thrown")
+          (catch clojure.lang.ExceptionInfo e
+            (is (= :invalid-config-value (:type (ex-data e))))
+            (is (= :tasks-dir (:key (ex-data e))))
+            (is (= "nonexistent" (:value (ex-data e))))
+            (is (string? (:resolved-path (ex-data e))))))))))
+
+(deftest resolve-tasks-dir-resolves-symlinks
+  ;; Test that resolve-tasks-dir resolves symlinks in paths
+  (testing "resolve-tasks-dir symlink resolution"
+    (let [config-dir (str (fs/canonicalize test-project-dir))
+          real-dir (str test-project-dir "/real-tasks")
+          link-path (str test-project-dir "/link-to-tasks")]
+      (fs/create-dirs real-dir)
+      ;; Create symlink with relative target (relative to link's directory)
+      (fs/create-sym-link link-path "real-tasks")
+      (testing "resolves symlinks to canonical path"
+        (let [result (sut/resolve-tasks-dir config-dir {:tasks-dir "link-to-tasks"})
+              expected (str (fs/canonicalize real-dir))]
+          (is (= expected result))))
+      ;; Clean up
+      (fs/delete link-path)
+      (fs/delete-tree real-dir))))
+
+(deftest resolve-config-includes-resolved-tasks-dir
+  ;; Test that resolve-config includes :resolved-tasks-dir in output
+  (testing "resolve-config includes :resolved-tasks-dir"
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "includes default .mcp-tasks path"
+        (let [result (sut/resolve-config config-dir {})
+              expected (str (fs/canonicalize (str test-project-dir "/.mcp-tasks")))]
+          (is (contains? result :resolved-tasks-dir))
+          (is (= expected (:resolved-tasks-dir result)))))
+
+      (testing "includes custom relative path"
+        (let [tasks-dir (str test-project-dir "/custom-tasks")]
+          (fs/create-dirs tasks-dir)
+          (let [result (sut/resolve-config config-dir {:tasks-dir "custom-tasks"})
+                expected (str (fs/canonicalize tasks-dir))]
+            (is (= expected (:resolved-tasks-dir result))))))
+
+      (testing "includes custom absolute path"
+        (let [absolute-dir (str (fs/create-temp-dir))
+              result (sut/resolve-config config-dir {:tasks-dir absolute-dir})
+              expected (str (fs/canonicalize absolute-dir))]
+          (is (= expected (:resolved-tasks-dir result)))
+          ;; Clean up
+          (fs/delete-tree absolute-dir))))))
 
 (deftest validate-git-repo-with-git-disabled
   ;; Test that validation passes when git mode is disabled
   (testing "validate-git-repo with git disabled"
-    (testing "returns nil when :use-git? is false"
-      (is (nil? (sut/validate-git-repo test-project-dir {:use-git? false}))))
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "returns nil when :use-git? is false"
+        (is (nil? (sut/validate-git-repo config-dir {:use-git? false}))))
 
-    (testing "returns nil when :use-git? is not present"
-      (is (nil? (sut/validate-git-repo test-project-dir {}))))))
+      (testing "returns nil when :use-git? is not present"
+        (is (nil? (sut/validate-git-repo config-dir {})))))))
 
 (deftest validate-git-repo-with-git-enabled
   ;; Test that validation checks for git repository when git mode is enabled
   (testing "validate-git-repo with git enabled"
-    (testing "returns nil when git repo exists"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (nil? (sut/validate-git-repo test-project-dir {:use-git? true}))))
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "returns nil when git repo exists"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (nil? (sut/validate-git-repo config-dir {:use-git? true}))))
 
-    (testing "throws clear error when git repo missing"
-      (cleanup-test-project)
-      (setup-test-project)
-      (is (thrown-with-msg?
-            clojure.lang.ExceptionInfo
-            #"Git mode enabled but \.mcp-tasks/\.git not found"
-            (sut/validate-git-repo test-project-dir {:use-git? true}))))
+      (testing "throws clear error when git repo missing"
+        (cleanup-test-project)
+        (setup-test-project)
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Git mode enabled but \.mcp-tasks/\.git not found"
+              (sut/validate-git-repo config-dir {:use-git? true}))))
 
-    (testing "includes error details in ex-data"
-      (cleanup-test-project)
-      (setup-test-project)
-      (try
-        (sut/validate-git-repo test-project-dir {:use-git? true})
-        (is false "Should have thrown")
-        (catch clojure.lang.ExceptionInfo e
-          (is (= :git-repo-missing (:type (ex-data e))))
-          (is (= test-project-dir (:project-dir (ex-data e))))
-          (is (string? (:git-dir (ex-data e)))))))))
+      (testing "includes error details in ex-data"
+        (cleanup-test-project)
+        (setup-test-project)
+        (try
+          (sut/validate-git-repo config-dir {:use-git? true})
+          (is false "Should have thrown")
+          (catch clojure.lang.ExceptionInfo e
+            (is (= :git-repo-missing (:type (ex-data e))))
+            (is (= config-dir (:config-dir (ex-data e))))
+            (is (string? (:git-dir (ex-data e))))))))))
 
 (deftest validate-startup-passes-with-valid-config
   ;; Test that startup validation passes with valid configurations
   (testing "validate-startup"
-    (testing "passes with git disabled and no git repo"
-      (is (nil? (sut/validate-startup test-project-dir {:use-git? false}))))
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "passes with git disabled and no git repo"
+        (is (nil? (sut/validate-startup config-dir {:use-git? false}))))
 
-    (testing "passes with git disabled and git repo present"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (nil? (sut/validate-startup test-project-dir {:use-git? false}))))
+      (testing "passes with git disabled and git repo present"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (nil? (sut/validate-startup config-dir {:use-git? false}))))
 
-    (testing "passes with git enabled and git repo present"
-      (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
-      (is (nil? (sut/validate-startup test-project-dir {:use-git? true}))))))
+      (testing "passes with git enabled and git repo present"
+        (fs/create-dirs (str test-project-dir "/.mcp-tasks/.git"))
+        (is (nil? (sut/validate-startup config-dir {:use-git? true})))))))
 
 (deftest validate-startup-fails-with-invalid-config
   ;; Test that startup validation fails with invalid configurations
   (testing "validate-startup"
-    (testing "fails when git enabled but repo missing"
-      (is (thrown-with-msg?
-            clojure.lang.ExceptionInfo
-            #"Git mode enabled but \.mcp-tasks/\.git not found"
-            (sut/validate-startup test-project-dir {:use-git? true}))))))
+    (let [config-dir (str (fs/canonicalize test-project-dir))]
+      (testing "fails when git enabled but repo missing"
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Git mode enabled but \.mcp-tasks/\.git not found"
+              (sut/validate-startup config-dir {:use-git? true})))))))

@@ -58,38 +58,70 @@
                       {:type :invalid-config-value
                        :key :base-branch
                        :value base-branch}))))
+  (when-let [tasks-dir (:tasks-dir config)]
+    (when-not (string? tasks-dir)
+      (throw (ex-info (str "Expected string for :tasks-dir, got " (type tasks-dir))
+                      {:type :invalid-config-type
+                       :key :tasks-dir
+                       :value tasks-dir
+                       :expected 'string?}))))
   config)
 
+(defn find-config-file
+  "Searches for .mcp-tasks.edn by traversing up the directory tree from start-dir.
+  Returns {:config-file <path> :config-dir <dir>} when found, nil otherwise.
+  Resolves symlinks in paths using fs/canonicalize.
+  
+  Parameters:
+  - start-dir (optional): Directory to start search from. Defaults to CWD."
+  ([]
+   (find-config-file (System/getProperty "user.dir")))
+  ([start-dir]
+   (loop [dir (fs/canonicalize start-dir)]
+     (when dir
+       (let [config-file (fs/file dir ".mcp-tasks.edn")]
+         (if (fs/exists? config-file)
+           {:config-file (str (fs/canonicalize config-file))
+            :config-dir (str dir)}
+           (recur (fs/parent dir))))))))
+
 (defn read-config
-  "Reads and validates .mcp-tasks.edn from project directory.
-  Returns nil if file doesn't exist.
-  Returns validated config map if file exists and is valid.
-  Throws ex-info with clear message for malformed EDN or invalid schema."
-  [project-dir]
-  (let [config-file (str project-dir "/.mcp-tasks.edn")]
-    (if (fs/exists? config-file)
-      (try
-        (let [config (edn/read-string (slurp config-file))]
-          (validate-config config))
-        (catch clojure.lang.ExceptionInfo e
-          ;; Re-throw validation errors as-is
-          (throw e))
-        (catch Exception e
-          ;; Wrap EDN parsing errors with context
-          (throw (ex-info (str "Failed to parse .mcp-tasks.edn: " (.getMessage e))
-                          {:type :malformed-edn
-                           :file config-file
-                           :cause e}
-                          e))))
-      nil)))
+  "Searches for and reads .mcp-tasks.edn from current directory or parent directories.
+  Returns map with :raw-config and :config-dir.
+  If no config file found, returns {:raw-config {} :config-dir <start-dir>}.
+  Throws ex-info with clear message for malformed EDN or invalid schema.
+  
+  Parameters:
+  - start-dir (optional): Directory to start search from. Defaults to CWD."
+  ([]
+   (read-config (System/getProperty "user.dir")))
+  ([start-dir]
+   (if-let [{:keys [config-file config-dir]} (find-config-file start-dir)]
+     (try
+       (let [config (edn/read-string (slurp config-file))]
+         {:raw-config (validate-config config)
+          :config-dir config-dir})
+       (catch clojure.lang.ExceptionInfo e
+         ;; Re-throw validation errors as-is
+         (throw e))
+       (catch Exception e
+         ;; Wrap EDN parsing errors with context
+         (throw (ex-info (str "Failed to parse .mcp-tasks.edn: " (.getMessage e))
+                         {:type :malformed-edn
+                          :file config-file
+                          :cause e}
+                         e))))
+     ;; No config file found, use defaults
+     {:raw-config {}
+      :config-dir (str (fs/canonicalize start-dir))})))
 
 ;; Git auto-detection
 
 (defn git-repo-exists?
-  "Checks if .mcp-tasks/.git directory exists in the project directory.
+  "Checks if .mcp-tasks/.git directory exists in the config directory.
   Returns true if the git repository exists, false otherwise."
-  [project-dir]
-  (let [git-dir (str project-dir "/.mcp-tasks/.git")]
+  [config-dir]
+  (let [git-dir (str config-dir "/.mcp-tasks/.git")]
     (fs/exists? git-dir)))
 
 (defn determine-git-mode
@@ -99,21 +131,56 @@
   Precedence:
   1. Explicit config value (:use-git?) if present
   2. Auto-detected presence of .mcp-tasks/.git directory"
-  [project-dir config]
+  [config-dir config]
   (if (contains? config :use-git?)
     (:use-git? config)
-    (git-repo-exists? project-dir)))
+    (git-repo-exists? config-dir)))
+
+(defn resolve-tasks-dir
+  "Resolves :tasks-dir to an absolute canonical path.
+  
+  Resolution logic:
+  - If :tasks-dir is absolute → canonicalize and use as-is
+  - If :tasks-dir is relative → resolve relative to config-dir
+  - If :tasks-dir not specified → default to .mcp-tasks relative to config-dir
+  
+  Validates that explicitly specified :tasks-dir exists.
+  Default .mcp-tasks doesn't need to exist yet."
+  [config-dir config]
+  (let [tasks-dir (:tasks-dir config ".mcp-tasks")
+        resolved-path (if (fs/absolute? tasks-dir)
+                        tasks-dir
+                        (str config-dir "/" tasks-dir))]
+    ;; Validate explicitly specified paths exist
+    (when (and (contains? config :tasks-dir)
+               (not (fs/exists? resolved-path)))
+      (throw (ex-info (str "Configured :tasks-dir does not exist: " tasks-dir "\n\n"
+                           "Resolved path: " resolved-path "\n"
+                           "Config directory: " config-dir "\n\n"
+                           "Suggestions:\n"
+                           "  - Create the directory if this path is intended\n"
+                           "  - Check for typos in the :tasks-dir value\n"
+                           "  - Note: relative paths are resolved from the config file directory, not CWD")
+                      {:type :invalid-config-value
+                       :key :tasks-dir
+                       :value tasks-dir
+                       :resolved-path resolved-path
+                       :config-dir config-dir})))
+    ;; Return canonical path if it exists, otherwise return resolved path
+    (if (fs/exists? resolved-path)
+      (str (fs/canonicalize resolved-path))
+      resolved-path)))
 
 (defn resolve-config
-  "Returns final config map with :use-git? and :base-dir resolved.
+  "Returns final config map with :use-git?, :base-dir, and :resolved-tasks-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
-  repo presence.  Base directory is canonicalized to an absolute path.
+  repo presence. Base directory is set to the config directory (canonicalized).
   
   When :worktree-management? is true, automatically enables :branch-management?.
   When :worktree-prefix is not set, defaults to :project-name."
-  [project-dir config]
-  (let [raw-base-dir (or project-dir (System/getProperty "user.dir"))
-        base-dir (str (fs/canonicalize raw-base-dir))
+  [config-dir config]
+  (let [base-dir (str (fs/canonicalize config-dir))
+        resolved-tasks-dir (resolve-tasks-dir config-dir config)
         config-with-branch-mgmt (if (:worktree-management? config)
                                   (assoc config :branch-management? true)
                                   config)
@@ -121,8 +188,9 @@
                                config-with-branch-mgmt
                                (assoc config-with-branch-mgmt :worktree-prefix :project-name))]
     (assoc config-with-defaults
-           :use-git? (determine-git-mode project-dir config)
-           :base-dir base-dir)))
+           :use-git? (determine-git-mode config-dir config)
+           :base-dir base-dir
+           :resolved-tasks-dir resolved-tasks-dir)))
 
 ;; Startup validation
 
@@ -130,19 +198,19 @@
   "Validates that git repository exists when git mode is enabled.
   Returns nil on success.
   Throws ex-info with clear message if validation fails."
-  [project-dir config]
+  [config-dir config]
   (when (:use-git? config)
-    (when-not (git-repo-exists? project-dir)
+    (when-not (git-repo-exists? config-dir)
       (throw (ex-info "Git mode enabled but .mcp-tasks/.git not found"
                       {:type :git-repo-missing
-                       :project-dir project-dir
-                       :git-dir (str project-dir "/.mcp-tasks/.git")}))))
+                       :config-dir config-dir
+                       :git-dir (str config-dir "/.mcp-tasks/.git")}))))
   nil)
 
 (defn validate-startup
   "Performs all startup validation (config + git repo).
   Returns nil on success.
   Throws ex-info with clear message if any validation fails."
-  [project-dir config]
-  (validate-git-repo project-dir config)
+  [config-dir config]
+  (validate-git-repo config-dir config)
   nil)

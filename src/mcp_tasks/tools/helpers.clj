@@ -12,32 +12,30 @@
   (fs/exists? file-path))
 
 (defn task-path
-  "Construct .mcp-tasks paths with base-dir handling.
+  "Construct task directory paths using resolved tasks directory from config.
 
   Parameters:
-  - config: Configuration map containing optional :base-dir
+  - config: Configuration map containing :resolved-tasks-dir
 
   - path-segments: Vector of path segments
-                   (e.g., [\"story\" \"stories\" \"foo.md\"])
+                   (e.g., [\"tasks.ednl\"] or [\"story\" \"stories\" \"foo.md\"])
 
   Returns map with:
   - :absolute - Full filesystem path
-  - :relative - Path relative to .mcp-tasks root (for git operations)
+  - :relative - Path relative to tasks directory root (for git operations)
 
   Examples:
-    (task-path {} [\"tasks.ednl\"])
-    => {:absolute \".mcp-tasks/tasks.ednl\"
+    (task-path {:resolved-tasks-dir \"/home/user/.mcp-tasks\"} [\"tasks.ednl\"])
+    => {:absolute \"/home/user/.mcp-tasks/tasks.ednl\"
         :relative \"tasks.ednl\"}
 
-    (task-path {:base-dir \"/home/user\"} [\"complete.ednl\"])
-    => {:absolute \"/home/user/.mcp-tasks/complete.ednl\"
+    (task-path {:resolved-tasks-dir \"/custom/tasks\"} [\"complete.ednl\"])
+    => {:absolute \"/custom/tasks/complete.ednl\"
         :relative \"complete.ednl\"}"
   [config path-segments]
-  (let [base-dir (:base-dir config)
+  (let [resolved-tasks-dir (:resolved-tasks-dir config)
         relative-path (str/join "/" path-segments)
-        absolute-path (if base-dir
-                        (str base-dir "/.mcp-tasks/" relative-path)
-                        (str ".mcp-tasks/" relative-path))]
+        absolute-path (str resolved-tasks-dir "/" relative-path)]
     {:absolute absolute-path
      :relative relative-path}))
 

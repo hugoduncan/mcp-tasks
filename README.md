@@ -421,6 +421,100 @@ This is useful for managing tasks across multiple projects from a single locatio
 
 ## Configuration
 
+### Config File Discovery
+
+mcp-tasks automatically discovers configuration by searching up the directory tree from your current working directory. This enables hierarchical project structures where you can place `.mcp-tasks.edn` in your project root and invoke the server from any subdirectory.
+
+**How It Works:**
+
+1. Starting from the current working directory (CWD)
+2. Check for `.mcp-tasks.edn` in the current directory
+3. If not found, move to the parent directory and repeat
+4. Stop at the first `.mcp-tasks.edn` found or at filesystem root
+5. Use the directory containing `.mcp-tasks.edn` as the config base directory
+6. Symlinks are resolved during traversal
+
+**Example Project Layout:**
+
+```
+my-project/                    # Project root
+├── .mcp-tasks.edn            # Config discovered from any subdirectory
+├── .mcp-tasks/               # Default task storage location
+│   ├── tasks.ednl
+│   ├── complete.ednl
+│   └── prompts/
+│       └── feature.md
+├── src/
+│   └── core.clj
+└── test/
+    └── core_test.clj
+
+# Works from any directory:
+cd my-project/src              # Server finds ../mcp-tasks.edn
+cd my-project/test             # Server finds ../mcp-tasks.edn
+cd my-project                  # Server finds ./.mcp-tasks.edn
+```
+
+**Custom Task Storage Location:**
+
+Use the `:tasks-dir` config key to store tasks in a non-standard location:
+
+```clojure
+;; .mcp-tasks.edn in project root
+{:tasks-dir ".mcp-tasks"}           ; Relative to config file (default)
+{:tasks-dir "../shared-tasks"}      ; Relative path to shared location
+{:tasks-dir "/home/user/.mcp-tasks/my-project"}  ; Absolute path
+```
+
+**Path Resolution Rules:**
+
+- **Absolute paths**: Used as-is (e.g., `/home/user/.mcp-tasks/project`)
+- **Relative paths**: Resolved relative to the config file's directory, not CWD
+- **Default**: `.mcp-tasks` relative to config file directory when `:tasks-dir` not specified
+- **Validation**: Explicitly specified `:tasks-dir` must exist or server will error
+
+**Benefits of Config Discovery:**
+
+1. **Work from anywhere**: Invoke server from subdirectories without path juggling
+2. **Shared tasks**: Store tasks outside project (e.g., `~/.mcp-tasks/my-project/`)
+3. **Monorepo support**: Single config at root, tasks accessible from all subprojects
+4. **Consistent paths**: All relative paths resolve from config location, not CWD
+
+**When to Use Config Discovery:**
+
+✓ **Use hierarchical structure when:**
+- Working in deep directory hierarchies
+- Managing tasks for a monorepo with multiple subprojects
+- Storing tasks separately from project code
+- Multiple team members invoking from different subdirectories
+
+✓ **Use single directory setup when:**
+- Simple project structure with all work in one directory
+- Tasks are tightly coupled to specific subdirectories
+- Each subdirectory needs independent task management
+
+**Example: Shared Task Storage**
+
+```clojure
+;; Store all project tasks in a central location
+;; ~/projects/my-app/.mcp-tasks.edn
+{:tasks-dir "/home/user/.mcp-tasks/my-app"
+ :use-git? true}
+
+;; Directory structure:
+;; ~/projects/my-app/              # Project code
+;; ~/.mcp-tasks/my-app/            # Centralized task storage
+;;   ├── .git/
+;;   ├── tasks.ednl
+;;   ├── complete.ednl
+;;   └── prompts/
+```
+
+This setup keeps task history separate from project code, useful for:
+- Version controlling tasks independently
+- Sharing tasks across multiple project clones
+- Keeping task history when recreating project environments
+
 ### Git Integration
 
 mcp-tasks supports two workflows:

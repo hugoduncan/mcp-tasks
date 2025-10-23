@@ -17,6 +17,7 @@ task tracking.
 {:worktree-management? true}   ; Enable automatic worktree management (implies :branch-management? true)
 {:worktree-prefix :project-name}  ; Include project name in worktree directory (default)
 {:worktree-prefix :none}          ; Omit project name prefix from worktree directory
+{:tasks-dir ".mcp-tasks"}         ; Directory for task storage (default: .mcp-tasks relative to config file)
 ```
 
 **File location:**
@@ -68,6 +69,68 @@ Task title: "Fix bug #123"
 Task title: "!!!" (empty after sanitization, task-id=45)
 → Branch name: "task-45"
 ```
+
+### Task Storage Directory
+
+The `:tasks-dir` configuration option specifies where task files (`tasks.ednl`, `complete.ednl`, `prompts/`, etc.) are stored.
+
+**Default behavior:** When `:tasks-dir` is not specified, it defaults to `.mcp-tasks` relative to the config file's directory.
+
+**Path resolution rules:**
+
+All paths are resolved relative to the directory containing `.mcp-tasks.edn`, **not** the current working directory. This ensures consistent behavior regardless of where the MCP server is invoked from.
+
+- **Absolute paths**: Used as-is after canonicalization (symlink resolution)
+- **Relative paths**: Resolved relative to the config file's directory
+- **Default (not specified)**: Defaults to `.mcp-tasks` relative to config file's directory
+
+**Validation:**
+
+- If `:tasks-dir` is explicitly specified in the config, the path **must exist** or server startup will fail
+- If `:tasks-dir` is not specified (using default), the `.mcp-tasks` directory will be created if it doesn't exist
+
+**Examples:**
+
+*Absolute path example:*
+```clojure
+;; Store tasks in a centralized location
+{:tasks-dir "/home/user/.mcp-tasks/my-project"}
+```
+
+*Relative path example (sibling directory):*
+```clojure
+;; Store tasks in a sibling directory
+{:tasks-dir "../shared-tasks"}
+```
+
+*Relative path example (subdirectory):*
+```clojure
+;; Store tasks in a subdirectory
+{:tasks-dir "tasks"}
+```
+
+*Default behavior (no :tasks-dir specified):*
+```clojure
+;; Defaults to .mcp-tasks relative to config file
+{:use-git? true}
+;; Equivalent to:
+{:use-git? true
+ :tasks-dir ".mcp-tasks"}
+```
+
+**Error behavior:**
+
+If you explicitly specify a `:tasks-dir` that doesn't exist, the server will fail at startup with a clear error message:
+
+```
+Configured :tasks-dir does not exist: ../nonexistent-path
+```
+
+**Use cases:**
+
+- **Centralized task tracking**: Use an absolute path like `/home/user/.mcp-tasks/my-project/` to keep all project tasks in one location
+- **Shared task storage**: Use a relative path like `../shared-tasks` to share tasks across multiple related projects
+- **Custom organization**: Use any directory structure that fits your workflow
 
 ### Worktree Management
 

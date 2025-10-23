@@ -66,9 +66,9 @@
   "Load config for test, using test-project-dir as the config path"
   []
   (let [dir (test-project-dir)
-        raw-config (config/read-config dir)
-        resolved-config (config/resolve-config dir (or raw-config {}))]
-    (config/validate-startup dir resolved-config)
+        {:keys [raw-config config-dir]} (config/read-config dir)
+        resolved-config (config/resolve-config config-dir raw-config)]
+    (config/validate-startup config-dir resolved-config)
     resolved-config))
 
 (defn create-test-server-and-client

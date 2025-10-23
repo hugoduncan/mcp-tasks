@@ -1,28 +1,27 @@
 {
     "mcpServers": {
-	"clojure-mcp": {
-	    "type": "stdio",
-	    "command": "/bin/zsh",
-	    "args": [
-		"-c",
-		"clj -X:mcp-hd"
-	    ],
-	    "env": {}
-	},
-	"clj-kondo": {
-	    "command": "npx",
-	    "args": ["clj-kondo-mcp"],
-	    "disabled": false,
-	    "autoApprove": []
-	},
-	"mcp-tasks": {
-	    "type": "stdio",
-	    "command": "/bin/zsh",
-	    "args": [
-		"-c",
-		"clojure -X:run"
-	    ],
-	    "env": {}
-	}
+        "clojure-mcp": {
+            "type": "stdio",
+            "command": "/bin/zsh",
+            "args": [
+                "-c",
+                "clj -X:mcp-hd"
+            ],
+            "env": {}
+        },
+        "clj-kondo": {
+            "command": "npx",
+            "args": ["clj-kondo-mcp"],
+            "disabled": false,
+            "autoApprove": []
+        },
+        "mcp-tasks": {
+            "type": "stdio",
+            "command": "/usr/local/bin/clojure",
+            "args": [
+                "-X:mcp-tasks"
+            ],
+            "env": {}
+        }
     }
 }

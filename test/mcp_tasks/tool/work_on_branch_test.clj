@@ -60,7 +60,7 @@
                                                            (is (= "add-new-feature" branch-name))
                                                            {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -95,7 +95,7 @@
                                                (is (= "fix-bug" branch-name))
                                                {:success true :exists? true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -119,7 +119,7 @@
             ;; Mock git operations - already on correct branch
             (with-redefs [git/get-current-branch (fn [_] {:success true :branch "optimize-performance" :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -151,7 +151,7 @@
                                                            (is (= "update-documentation" branch-name))
                                                            {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -176,7 +176,7 @@
             (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                           git/check-uncommitted-changes (fn [_] {:success true :has-changes? true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -203,7 +203,7 @@
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 ;; Should succeed despite failed pull
@@ -228,7 +228,7 @@
                           git/checkout-branch (fn [_ _] {:success false :error "Failed to checkout branch"})
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -241,8 +241,8 @@
               add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
               task-id (get-in add-response [:task :id])]
 
-          ;; Mock config/read-config to simulate invalid config that returns default (empty map)
-          (with-redefs [mcp-tasks.config/read-config (fn [_] {})]
+          ;; Mock config/read-config to simulate missing config - returns empty raw-config
+          (with-redefs [mcp-tasks.config/read-config (fn [_] {:raw-config {} :config-dir test-dir})]
             (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
                   response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
@@ -298,7 +298,7 @@
                               :relations []}]
                             []))
                         git/get-current-branch (fn [_] {:success true :branch "main" :error nil})]
-            (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+            (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                   response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
               (is (false? (:isError result)))
@@ -331,7 +331,7 @@
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -358,7 +358,7 @@
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -395,7 +395,7 @@
                                             {:success true :pulled? true :error nil})
                           git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true :base-branch "develop") nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -426,7 +426,7 @@
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ _] {:success true :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -449,7 +449,7 @@
                                                  {:success true :exists? false :error nil}
                                                  {:success true :exists? true :error nil}))]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true :base-branch "nonexistent") nil {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))

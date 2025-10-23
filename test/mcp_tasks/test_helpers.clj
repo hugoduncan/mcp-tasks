@@ -36,14 +36,18 @@
   (vreset! tasks/next-id 1))
 
 (defn test-config
-  "Returns test config with git disabled."
+  "Returns test config with git disabled and resolved-tasks-dir set."
   [test-dir]
-  {:base-dir test-dir :use-git? false})
+  {:base-dir test-dir
+   :use-git? false
+   :resolved-tasks-dir (str test-dir "/.mcp-tasks")})
 
 (defn git-test-config
-  "Returns test config with git enabled."
+  "Returns test config with git enabled and resolved-tasks-dir set."
   [test-dir]
-  {:base-dir test-dir :use-git? true})
+  {:base-dir test-dir
+   :use-git? true
+   :resolved-tasks-dir (str test-dir "/.mcp-tasks")})
 
 (defn init-git-repo
   "Initialize a git repository in the test .mcp-tasks directory."

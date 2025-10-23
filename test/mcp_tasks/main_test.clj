@@ -4,6 +4,7 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.config :as config]
     [mcp-tasks.main :as sut]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.tools :as tools])
@@ -96,6 +97,26 @@
             (is (false? (:use-git? config))))
           (finally
             (fs/delete config-file)
+            (fs/delete temp-dir)))))
+
+    (testing "finds config in parent directory"
+      (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+            _ (fs/delete temp-dir)
+            _ (.mkdirs temp-dir)
+            sub-dir (io/file temp-dir "subdir")
+            _ (.mkdirs sub-dir)
+            config-file (io/file temp-dir ".mcp-tasks.edn")]
+        (try
+          (spit config-file "{:use-git? false}")
+          ;; Load config starting from subdirectory
+          (let [config (#'sut/load-and-validate-config (.getPath sub-dir))]
+            (is (map? config))
+            (is (false? (:use-git? config)))
+            ;; Config dir should be the parent, not the subdirectory
+            (is (= (str (fs/canonicalize temp-dir)) (:base-dir config))))
+          (finally
+            (fs/delete config-file)
+            (fs/delete sub-dir)
             (fs/delete temp-dir)))))
 
     (testing "throws on invalid config"
@@ -191,10 +212,12 @@
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
             _ (.mkdirs prompts-dir)
-            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")]
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
+            config-dir (.getPath temp-dir)
+            raw-config {:use-git? true}
+            resolved-config (config/resolve-config config-dir raw-config)]
         (try
-          (let [config {:use-git? true :base-dir (.getPath temp-dir)}
-                prompt-map (prompts/prompts config)
+          (let [prompt-map (prompts/prompts resolved-config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (map? prompt-map))
             (is (map? simple-prompt))
@@ -215,10 +238,12 @@
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
             prompts-dir (io/file mcp-tasks-dir "prompts")
             _ (.mkdirs prompts-dir)
-            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")]
+            _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
+            config-dir (.getPath temp-dir)
+            raw-config {:use-git? false}
+            resolved-config (config/resolve-config config-dir raw-config)]
         (try
-          (let [config {:use-git? false :base-dir (.getPath temp-dir)}
-                prompt-map (prompts/prompts config)
+          (let [prompt-map (prompts/prompts resolved-config)
                 simple-prompt (get prompt-map "next-simple")]
             (is (map? prompt-map))
             (is (map? simple-prompt))
@@ -291,9 +316,11 @@
             prompts-dir (io/file mcp-tasks-dir "prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
-            config {:use-git? false :base-dir (.getPath temp-dir)}
+            config-dir (.getPath temp-dir)
+            raw-config {:use-git? false}
+            resolved-config (config/resolve-config config-dir raw-config)
             transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)]
+            server-config (sut/create-server-config resolved-config transport)]
         (try
           (is (map? (:prompts server-config)))
           (is (contains? (:prompts server-config) "create-story-tasks"))
@@ -316,9 +343,11 @@
             prompts-dir (io/file mcp-tasks-dir "prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
-            config {:use-git? false :base-dir (.getPath temp-dir)}
+            config-dir (.getPath temp-dir)
+            raw-config {:use-git? false}
+            resolved-config (config/resolve-config config-dir raw-config)
             transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)]
+            server-config (sut/create-server-config resolved-config transport)]
         (try
           (is (map? (:prompts server-config)))
           (is (contains? (:prompts server-config) "next-simple"))
@@ -337,9 +366,11 @@
             prompts-dir (io/file mcp-tasks-dir "prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
-            config {:use-git? false :base-dir (.getPath temp-dir)}
+            config-dir (.getPath temp-dir)
+            raw-config {:use-git? false}
+            resolved-config (config/resolve-config config-dir raw-config)
             transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)]
+            server-config (sut/create-server-config resolved-config transport)]
         (try
           (let [prompt (get (:prompts server-config) "review-story-implementation")]
             (is (map? prompt))
@@ -365,9 +396,11 @@
             prompts-dir (io/file mcp-tasks-dir "prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
-            config {:use-git? false :base-dir (.getPath temp-dir)}
+            config-dir (.getPath temp-dir)
+            raw-config {:use-git? false}
+            resolved-config (config/resolve-config config-dir raw-config)
             transport {:type :in-memory}
-            server-config (sut/create-server-config config transport)]
+            server-config (sut/create-server-config resolved-config transport)]
         (try
           (let [prompt (get (:prompts server-config) "create-story-pr")]
             (is (map? prompt))

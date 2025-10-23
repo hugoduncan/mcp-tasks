@@ -58,7 +58,7 @@
                           {:success true :error nil})]
 
             (let [result (#'sut/work-on-impl
-                          (h/test-config test-dir)
+                          (assoc (h/test-config test-dir) :worktree-management? true)
                           nil
                           {:task-id task-id})
                   response (json/read-str
@@ -129,7 +129,10 @@
                              :worktree {:path expected-worktree-path :branch "add-feature"}
                              :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl
+                            (assoc (h/test-config test-dir) :worktree-management? true)
+                            nil
+                            {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -162,7 +165,10 @@
                                                   :worktree {:path expected-worktree-path :branch "clean-task"}
                                                   :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl
+                            (assoc (h/test-config test-dir) :worktree-management? true)
+                            nil
+                            {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -198,7 +204,10 @@
                                                 :worktree {:path expected-worktree-path :branch "wrong-branch"}
                                                 :error nil})]
 
-            (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+            (let [result (#'sut/work-on-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id task-id})
                   response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
               ;; Since we're not in the worktree, we get the "switch directory" message
@@ -234,7 +243,10 @@
                                                 :worktree {:path expected-worktree-path :branch "switch-dir-task"}
                                                 :error nil})]
 
-            (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+            (let [result (#'sut/work-on-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id task-id})
                   response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
               (is (false? (:isError result)))
@@ -266,7 +278,10 @@
                                                                      :branch "reuse-worktree"}
                                                           :error nil})]
 
-              (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              (let [result (#'sut/work-on-impl
+                            (assoc (h/test-config test-dir) :worktree-management? true)
+                            nil
+                            {:task-id task-id})
                     response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
 
                 (is (false? (:isError result)))
@@ -322,7 +337,7 @@
                                                  {:success true :error nil}))]
 
               (let [result (#'sut/work-on-impl
-                            (h/test-config test-dir)
+                            (assoc (h/test-config test-dir) :worktree-management? true)
                             nil
                             {:task-id task-id})
                     response (json/read-str
@@ -363,14 +378,14 @@
                                                           :error nil})]
 
               ;; First task should find existing worktree
-              (let [result1 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task1-id})
+              (let [result1 (#'sut/work-on-impl (assoc (h/test-config test-dir) :worktree-management? true) nil {:task-id task1-id})
                     response1 (json/read-str (get-in result1 [:content 0 :text]) :key-fn keyword)]
                 (is (false? (:isError result1)))
                 (is (= story-worktree-path (:worktree-path response1)))
                 (is (false? (:worktree-created? response1))))
 
               ;; Second task should also find the same worktree
-              (let [result2 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task2-id})
+              (let [result2 (#'sut/work-on-impl (assoc (h/test-config test-dir) :worktree-management? true) nil {:task-id task2-id})
                     response2 (json/read-str (get-in result2 [:content 0 :text]) :key-fn keyword)]
                 (is (false? (:isError result2)))
                 (is (= story-worktree-path (:worktree-path response2)))
@@ -402,7 +417,7 @@
                              :error nil})]
 
               (let [result (#'sut/work-on-impl
-                            (h/test-config test-dir)
+                            (assoc (h/test-config test-dir) :worktree-management? true)
                             nil
                             {:task-id task-id})
                     response (json/read-str

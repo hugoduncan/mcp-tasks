@@ -12,7 +12,6 @@
   (:require
     [babashka.fs :as fs]
     [clojure.data.json :as json]
-    [mcp-tasks.config :as config]
     [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.response :as response]
     [mcp-tasks.tasks :as tasks]
@@ -523,11 +522,11 @@
 
     ;; Load task, story, config, and setup base directory
     (let [{:keys [task parent-story]} (load-task-and-story cfg task-id)
-          user-config (config/read-config (:base-dir cfg))
+
           base-dir (:base-dir cfg)
-          worktree-mgmt-enabled? (:worktree-management? user-config)
+          worktree-mgmt-enabled? (:worktree-management? cfg)
           branch-mgmt-enabled? (or worktree-mgmt-enabled?
-                                   (:branch-management? user-config))
+                                   (:branch-management? cfg))
 
           ;; Calculate branch name and title once for use in branch/worktree
           ;; management
@@ -542,7 +541,7 @@
                                                   base-dir
                                                   title
                                                   branch-name
-                                                  user-config)]
+                                                  cfg)]
                             (when-not (:success worktree-result)
                               (throw
                                 (ex-info
@@ -558,7 +557,7 @@
                         (let [branch-result (manage-branch
                                               base-dir
                                               branch-name
-                                              user-config)]
+                                              cfg)]
                           (when-not (:success branch-result)
                             (throw
                               (ex-info

@@ -24,7 +24,7 @@
       (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Two"})
       (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Three"})
 
-      (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
+      (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= 3 (count (:tasks response))))
@@ -46,7 +46,7 @@
       (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task 5"})
 
       (testing "returns up to limit tasks"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 3})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 3})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 3 (count (:tasks response))))
@@ -57,7 +57,7 @@
                  (map :title (:tasks response))))))
 
       (testing "uses default limit of 5"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 5 (count (:tasks response))))
@@ -72,7 +72,7 @@
       (testing "returns task when exactly one matches"
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Unique Task"})
 
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :unique true})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :unique true})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
@@ -81,7 +81,7 @@
           (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
 
       (testing "returns empty when no matches"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "nonexistent" :unique true})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "nonexistent" :unique true})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 0 (count (:tasks response))))
@@ -92,7 +92,7 @@
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task One"})
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Two"})
 
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :unique true})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :unique true})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
@@ -104,7 +104,7 @@
     ;; Test parameter validation errors
     (testing "select-tasks validation errors"
       (testing "non-positive limit returns error"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit 0})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit 0})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
@@ -112,14 +112,14 @@
           (is (= 0 (get-in response [:metadata :provided-limit])))))
 
       (testing "negative limit returns error"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit -5})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit -5})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "positive integer"))))
 
       (testing "limit > 1 with unique true returns error"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit 5 :unique true})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:limit 5 :unique true})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
@@ -131,7 +131,7 @@
   (h/with-test-setup [test-dir]
     ;; Test empty results return empty tasks vector
     (testing "select-tasks empty results"
-      (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "nonexistent"})
+      (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "nonexistent"})
             response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
         (is (false? (:isError result)))
         (is (= [] (:tasks response)))
@@ -149,14 +149,14 @@
       (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "other" :title "Task C"})
 
       (testing "metadata reflects filtering and limiting"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 1})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 1})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (= 1 (get-in response [:metadata :count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))))
 
       (testing "metadata when not limited"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 10})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 10})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (= 2 (get-in response [:metadata :count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
@@ -173,7 +173,7 @@
       (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Another task" :type "task"})
 
       (testing "filters by type task"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "task"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "task"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 2 (count (:tasks response))))
@@ -181,14 +181,14 @@
                  (map :title (:tasks response))))))
 
       (testing "filters by type bug"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "bug"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "bug"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= "Bug fix" (get-in response [:tasks 0 :title])))))
 
       (testing "filters by type feature"
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "feature"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:type "feature"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
@@ -197,7 +197,7 @@
       (testing "combines type filter with category filter"
         (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "other" :title "Other bug" :type "bug"})
 
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :type "bug"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :type "bug"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
@@ -216,7 +216,7 @@
         (#'complete-task/complete-task-impl (h/test-config test-dir) nil {:title "To be closed"})
 
         ;; Without status filter, should only return open tasks
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 2 (count (:tasks response))))
@@ -233,7 +233,7 @@
         (#'complete-task/complete-task-impl (h/test-config test-dir) nil {:title "To close"})
 
         ;; Explicitly filter by open status
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "open"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "open"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
@@ -254,7 +254,7 @@
            {:id 3 :parent-id nil :title "In progress task 2" :description "" :design "" :category "test" :type :task :status :in-progress :meta {} :relations []}])
 
         ;; Filter by in-progress status
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "in-progress"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "in-progress"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 2 (count (:tasks response))))
@@ -273,7 +273,7 @@
         (#'complete-task/complete-task-impl (h/test-config test-dir) nil {:title "Test to close"})
 
         ;; Filter by category test and status open
-        (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :status "open"})
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :status "open"})
               response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
@@ -284,20 +284,20 @@
     ;; Test :task-id parameter filters tasks by ID
     (testing "select-tasks :task-id filter"
       ;; Add tasks
-      (let [task1      (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task One"})
+      (let [task1 (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task One"})
             task1-data (json/read-str (get-in task1 [:content 1 :text]) :key-fn keyword)
-            task1-id   (get-in task1-data [:task :id])
+            task1-id (get-in task1-data [:task :id])
 
-            task2      (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Two"})
+            task2 (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "test" :title "Task Two"})
             task2-data (json/read-str (get-in task2 [:content 1 :text]) :key-fn keyword)
-            task2-id   (get-in task2-data [:task :id])
+            task2-id (get-in task2-data [:task :id])
 
-            task3      (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "other" :title "Task Three"})
+            task3 (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "other" :title "Task Three"})
             task3-data (json/read-str (get-in task3 [:content 1 :text]) :key-fn keyword)
-            task3-id   (get-in task3-data [:task :id])]
+            task3-id (get-in task3-data [:task :id])]
 
         (testing "filters by task-id to return single task"
-          (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task1-id})
+          (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task1-id})
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 1 (count (:tasks response))))
@@ -305,7 +305,7 @@
             (is (= "Task One" (get-in response [:tasks 0 :title])))))
 
         (testing "returns empty when task-id does not exist"
-          (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id 99999})
+          (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id 99999})
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 0 (count (:tasks response))))
@@ -315,13 +315,13 @@
         (testing "combines task-id filter with category filter"
           ;; Task 2 has category "test", task 3 has category "other"
           ;; Filtering by task3-id and category "test" should return empty
-          (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task3-id :category "test"})
+          (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task3-id :category "test"})
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 0 (count (:tasks response)))))
 
           ;; Filtering by task3-id and category "other" should return task 3
-          (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task3-id :category "other"})
+          (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task3-id :category "other"})
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 1 (count (:tasks response))))
@@ -329,7 +329,7 @@
             (is (= "Task Three" (get-in response [:tasks 0 :title])))))
 
         (testing "task-id filter works with unique constraint"
-          (let [result   (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task2-id :unique true})
+          (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:task-id task2-id :unique true})
                 response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
             (is (false? (:isError result)))
             (is (= 1 (count (:tasks response))))
@@ -341,56 +341,56 @@
     ;; Test that select-tasks with parent-id filter returns the first incomplete child task
     (testing "select-tasks with parent-id filter"
       (testing "returns first incomplete child task"
-        (let [story             {:id          1
-                                 :type        :story
-                                 :title       "test-story"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              completed-task {:id 2
+                              :parent-id 1
+                              :type :task
+                              :title "Already done"
+                              :description ""
+                              :design ""
+                              :category "simple"
+                              :status :closed
+                              :meta {}
+                              :relations []}
+              first-incomplete {:id 3
+                                :parent-id 1
+                                :type :task
+                                :title "First incomplete"
+                                :description "With details"
+                                :design ""
+                                :category "medium"
+                                :status :open
+                                :meta {}
+                                :relations []}
+              second-incomplete {:id 4
+                                 :parent-id 1
+                                 :type :task
+                                 :title "Second incomplete"
                                  :description ""
-                                 :design      ""
-                                 :category    "story"
-                                 :status      :open
-                                 :meta        {}
-                                 :relations   []}
-              completed-task    {:id          2
-                                 :parent-id   1
-                                 :type        :task
-                                 :title       "Already done"
-                                 :description ""
-                                 :design      ""
-                                 :category    "simple"
-                                 :status      :closed
-                                 :meta        {}
-                                 :relations   []}
-              first-incomplete  {:id          3
-                                 :parent-id   1
-                                 :type        :task
-                                 :title       "First incomplete"
-                                 :description "With details"
-                                 :design      ""
-                                 :category    "medium"
-                                 :status      :open
-                                 :meta        {}
-                                 :relations   []}
-              second-incomplete {:id          4
-                                 :parent-id   1
-                                 :type        :task
-                                 :title       "Second incomplete"
-                                 :description ""
-                                 :design      ""
-                                 :category    "simple"
-                                 :status      :open
-                                 :meta        {}
-                                 :relations   []}]
+                                 :design ""
+                                 :category "simple"
+                                 :status :open
+                                 :meta {}
+                                 :relations []}]
           (write-tasks-ednl
             test-dir
             [story completed-task first-incomplete second-incomplete])
-          (let [config {:base-dir test-dir :use-git? false}
+          (let [config (h/test-config test-dir)
                 result (#'sut/select-tasks-impl
                         config
                         nil
                         {:parent-id 1 :limit 1})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
-                  task     (first (:tasks response))]
+                  task (first (:tasks response))]
               (is (= "First incomplete" (:title task)))
               (is (= "With details" (:description task)))
               (is (= "medium" (:category task)))
@@ -402,27 +402,27 @@
     ;; incomplete children
     (testing "select-tasks with parent-id filter"
       (testing "returns empty tasks when no incomplete children"
-        (let [story          {:id          1
-                              :type        :story
-                              :title       "test-story"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              completed-task {:id 2
+                              :parent-id 1
+                              :type :task
+                              :title "Already done"
                               :description ""
-                              :design      ""
-                              :category    "story"
-                              :status      :open
-                              :meta        {}
-                              :relations   []}
-              completed-task {:id          2
-                              :parent-id   1
-                              :type        :task
-                              :title       "Already done"
-                              :description ""
-                              :design      ""
-                              :category    "simple"
-                              :status      :closed
-                              :meta        {}
-                              :relations   []}]
+                              :design ""
+                              :category "simple"
+                              :status :closed
+                              :meta {}
+                              :relations []}]
           (write-tasks-ednl test-dir [story completed-task])
-          (let [config {:base-dir test-dir :use-git? false}
+          (let [config (h/test-config test-dir)
                 result (#'sut/select-tasks-impl
                         config
                         nil
@@ -436,33 +436,33 @@
     ;; Test that select-tasks with title-pattern can find story tasks
     (testing "select-tasks with title-pattern filter"
       (testing "finds story by title pattern"
-        (let [story      {:id          1
-                          :type        :story
-                          :title       "test-story"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              other-task {:id 2
+                          :type :task
+                          :title "Some other task"
                           :description ""
-                          :design      ""
-                          :category    "story"
-                          :status      :open
-                          :meta        {}
-                          :relations   []}
-              other-task {:id          2
-                          :type        :task
-                          :title       "Some other task"
-                          :description ""
-                          :design      ""
-                          :category    "simple"
-                          :status      :open
-                          :meta        {}
-                          :relations   []}]
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :meta {}
+                          :relations []}]
           (write-tasks-ednl test-dir [story other-task])
-          (let [config {:base-dir test-dir :use-git? false}
+          (let [config (h/test-config test-dir)
                 result (#'sut/select-tasks-impl
                         config
                         nil
                         {:title-pattern "test-story" :limit 1})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
-                  task     (first (:tasks response))]
+                  task (first (:tasks response))]
               (is (= "test-story" (:title task)))
               (is (= "story" (:category task)))
               (is (= 1 (:id task))))))))))
@@ -472,44 +472,44 @@
     ;; Test that select-tasks can combine parent-id and category filters
     (testing "select-tasks with multiple filters"
       (testing "combines parent-id and category filters"
-        (let [story       {:id          1
-                           :type        :story
-                           :title       "test-story"
+        (let [story {:id 1
+                     :type :story
+                     :title "test-story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              simple-task {:id 2
+                           :parent-id 1
+                           :type :task
+                           :title "Simple task"
                            :description ""
-                           :design      ""
-                           :category    "story"
-                           :status      :open
-                           :meta        {}
-                           :relations   []}
-              simple-task {:id          2
-                           :parent-id   1
-                           :type        :task
-                           :title       "Simple task"
+                           :design ""
+                           :category "simple"
+                           :status :open
+                           :meta {}
+                           :relations []}
+              medium-task {:id 3
+                           :parent-id 1
+                           :type :task
+                           :title "Medium task"
                            :description ""
-                           :design      ""
-                           :category    "simple"
-                           :status      :open
-                           :meta        {}
-                           :relations   []}
-              medium-task {:id          3
-                           :parent-id   1
-                           :type        :task
-                           :title       "Medium task"
-                           :description ""
-                           :design      ""
-                           :category    "medium"
-                           :status      :open
-                           :meta        {}
-                           :relations   []}]
+                           :design ""
+                           :category "medium"
+                           :status :open
+                           :meta {}
+                           :relations []}]
           (write-tasks-ednl test-dir [story simple-task medium-task])
-          (let [config {:base-dir test-dir :use-git? false}
+          (let [config (h/test-config test-dir)
                 result (#'sut/select-tasks-impl
                         config
                         nil
                         {:parent-id 1 :category "medium" :limit 1})]
             (is (false? (:isError result)))
             (let [response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
-                  task     (first (:tasks response))]
+                  task (first (:tasks response))]
               (is (= "Medium task" (:title task)))
               (is (= "medium" (:category task)))
               (is (= 3 (:id task))))))))))

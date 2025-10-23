@@ -25,6 +25,9 @@
   (let [mcp-tasks-dir (io/file test-project-dir ".mcp-tasks")
         prompts-dir (io/file mcp-tasks-dir "prompts")]
     (.mkdirs prompts-dir)
+    ;; Create .mcp-tasks.edn so config discovery finds it
+    (spit (io/file test-project-dir ".mcp-tasks.edn")
+          "{}")
     ;; Create category prompt files so resources are available
     (spit (io/file prompts-dir "simple.md")
           "---\ndescription: Execute simple tasks with basic workflow\n---\n\n- Analyze the task\n- Implement solution\n- Test")
@@ -43,9 +46,9 @@
 
 (defn- load-test-config
   []
-  (let [raw-config (config/read-config test-project-dir)
-        resolved-config (config/resolve-config test-project-dir (or raw-config {}))]
-    (config/validate-startup test-project-dir resolved-config)
+  (let [{:keys [raw-config config-dir]} (config/read-config test-project-dir)
+        resolved-config (config/resolve-config config-dir raw-config)]
+    (config/validate-startup config-dir resolved-config)
     resolved-config))
 
 (defn- create-test-server-and-client

@@ -83,14 +83,21 @@
 (defn- load-and-validate-config
   "Loads, resolves, and validates configuration.
 
-  Returns resolved config map with :use-git? set.
-  Throws ex-info if validation fails."
-  [config-path]
-  (let [path (str config-path)
-        raw-config (config/read-config path)
-        resolved-config (config/resolve-config path (or raw-config {}))]
-    (config/validate-startup path resolved-config)
-    resolved-config))
+  Searches for .mcp-tasks.edn starting from start-dir (or CWD) and traversing up.
+  Returns resolved config map with :use-git? and :base-dir set.
+  Throws ex-info if validation fails.
+  
+  Parameters:
+  - start-dir (optional): Directory to start search from. Defaults to CWD."
+  ([]
+   (load-and-validate-config nil))
+  ([start-dir]
+   (let [{:keys [raw-config config-dir]} (if start-dir
+                                           (config/read-config start-dir)
+                                           (config/read-config))
+         resolved-config (config/resolve-config config-dir raw-config)]
+     (config/validate-startup config-dir resolved-config)
+     resolved-config)))
 
 (defn- block-forever
   "Blocks the current thread forever.
@@ -133,13 +140,12 @@
 
 (defn start
   "Start stdio MCP server (uses stdin/stdout).
-
-  Options:
-  - :config-path - Path to directory containing .mcp-tasks.edn (default: '.')
-                   Can be a string or symbol (for clj -X compatibility)"
-  [{:keys [config-path] :or {config-path "."}}]
+  
+  Searches for .mcp-tasks.edn starting from current working directory,
+  traversing up the directory tree until found or reaching filesystem root."
+  []
   (try
-    (let [config (load-and-validate-config config-path)
+    (let [config (load-and-validate-config)
           server-config (create-server-config config {:type :stdio})]
       (log/info :stdio-server {:msg "Starting MCP Tasks server"})
       (with-open [server (mcp-server/create-server server-config)]
@@ -170,15 +176,12 @@
     --install-prompts [names]: Install prompts (comma-separated or all
                                if omitted)
 
-    --config-path <path>: Path to directory containing
-                          .mcp-tasks.edn (default: '.')
-  No args: Start the MCP server"
+  No args: Start the MCP server
+  
+  The server automatically searches for .mcp-tasks.edn starting from the current
+  working directory and traversing up the directory tree."
   [& args]
-  (let [args-vec (vec args)
-        config-path-idx (index-of args-vec "--config-path")
-        config-path (when (>= config-path-idx 0)
-                      (when (< (inc config-path-idx) (count args-vec))
-                        (nth args-vec (inc config-path-idx))))]
+  (let [args-vec (vec args)]
     (cond
       ;; --list-prompts flag
       (some #{"--list-prompts"} args)
@@ -197,6 +200,4 @@
 
       ;; Default: start server
       :else
-      (start (if config-path
-               {:config-path config-path}
-               {})))))
+      (start))))
