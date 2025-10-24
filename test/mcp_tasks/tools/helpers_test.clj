@@ -3,6 +3,7 @@
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.test-helpers :as h]
+    [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as sut]))
 
 (deftest with-task-lock-successful-execution-test
@@ -111,3 +112,75 @@
                        (fn [] :ok))]
           ;; Just verify it works with custom timeout config
           (is (= :ok result)))))))
+
+(deftest sync-and-prepare-task-file-test
+  ;; Tests git pull synchronization and task file preparation
+  ;; Verifies error type detection and appropriate handling for different scenarios
+
+  (testing "sync-and-prepare-task-file"
+    (testing "succeeds when pull works"
+      (with-redefs [git/get-current-branch (fn [_] "main")
+                    git/pull-latest (fn [_dir branch]
+                                      (is (= "main" branch))
+                                      {:success true
+                                       :pulled? true
+                                       :error nil
+                                       :error-type nil})
+                    sut/prepare-task-file (fn [config]
+                                            (is (map? config))
+                                            "/test/.mcp-tasks/tasks.ednl")]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
+
+    (testing "succeeds when no remote configured (local-only repo)"
+      (with-redefs [git/get-current-branch (fn [_] "main")
+                    git/pull-latest (fn [_ _]
+                                      {:success true
+                                       :pulled? false
+                                       :error nil
+                                       :error-type :no-remote})
+                    sut/prepare-task-file (fn [_]
+                                            "/test/.mcp-tasks/tasks.ednl")]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
+
+    (testing "returns error map on merge conflicts"
+      (with-redefs [git/get-current-branch (fn [_] "main")
+                    git/pull-latest (fn [_ _]
+                                      {:success false
+                                       :pulled? false
+                                       :error "CONFLICT (content): Merge conflict in tasks.ednl"
+                                       :error-type :conflict})]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (false? (:success result)))
+          (is (= "CONFLICT (content): Merge conflict in tasks.ednl" (:error result)))
+          (is (= :conflict (:error-type result))))))
+
+    (testing "returns error map on network errors"
+      (with-redefs [git/get-current-branch (fn [_] "main")
+                    git/pull-latest (fn [_ _]
+                                      {:success false
+                                       :pulled? false
+                                       :error "fatal: Could not resolve host: github.com"
+                                       :error-type :network})]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (false? (:success result)))
+          (is (= "fatal: Could not resolve host: github.com" (:error result)))
+          (is (= :network (:error-type result))))))
+
+    (testing "returns error map on other errors"
+      (with-redefs [git/get-current-branch (fn [_] "main")
+                    git/pull-latest (fn [_ _]
+                                      {:success false
+                                       :pulled? false
+                                       :error "fatal: some other error"
+                                       :error-type :other})]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (false? (:success result)))
+          (is (= "fatal: some other error" (:error result)))
+          (is (= :other (:error-type result))))))))

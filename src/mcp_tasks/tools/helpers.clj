@@ -5,7 +5,8 @@
     [cheshire.core :as json]
     [clojure.string :as str]
     [mcp-clj.log :as log]
-    [mcp-tasks.tasks :as tasks])
+    [mcp-tasks.tasks :as tasks]
+    [mcp-tasks.tools.git :as git])
   (:import
     (java.io
       RandomAccessFile)))
@@ -72,6 +73,36 @@
     (when (file-exists? tasks-file)
       (tasks/load-tasks! tasks-file :complete-file complete-file))
     tasks-file))
+
+(defn sync-and-prepare-task-file
+  "Synchronizes with git remote and prepares task file for modification.
+
+  Pulls latest changes from remote, then loads tasks into memory.
+  Returns the tasks file path on success, or error map on failure.
+
+  Parameters:
+  - config: Configuration map with :resolved-tasks-dir
+
+  Returns:
+  - Success: String path to tasks.ednl file
+  - Failure: {:success false :error \"...\" :error-type :conflict|:network|:other}
+
+  Error handling:
+  - No remote configured: Continues normally (local-only repo is acceptable)
+  - Pull conflicts: Returns error map with :error-type :conflict
+  - Network errors: Returns error map with :error-type :network
+  - Other errors: Returns error map with :error-type :other"
+  [config]
+  (let [tasks-dir (:resolved-tasks-dir config)
+        current-branch (git/get-current-branch tasks-dir)
+        pull-result (git/pull-latest tasks-dir current-branch)]
+    (if (:success pull-result)
+      ;; Pull succeeded or no remote configured - proceed with loading tasks
+      (prepare-task-file config)
+      ;; Pull failed - return error map
+      {:success false
+       :error (:error pull-result)
+       :error-type (:error-type pull-result)})))
 
 (defn truncate-title
   "Truncate a title to a maximum length, adding ellipsis if needed.
