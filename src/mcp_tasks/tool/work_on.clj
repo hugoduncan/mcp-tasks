@@ -212,10 +212,13 @@
   "Manages git worktree for task execution.
 
   Parameters:
-  - base-dir: Base directory of the git repository
+  - base-dir: Base directory (current working directory, may be a worktree)
   - title: The title to use for deriving the worktree path
   - branch-name: The sanitized branch name to use
-  - config: Configuration map from read-config
+  - config: Configuration map from read-config (must include :main-repo-dir)
+
+  Uses :main-repo-dir from config for repository-wide worktree operations.
+  Uses base-dir for context-specific operations in the current directory.
 
   Returns a map with:
   - :success - boolean indicating if operation succeeded
@@ -255,12 +258,15 @@
   ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
   [base-dir title branch-name config]
   (try
-    (let [;; Get current working directory (canonical path)
+    (let [;; Extract main-repo-dir for worktree operations
+          main-repo-dir (:main-repo-dir config)
+
+          ;; Get current working directory (canonical path)
           current-dir (current-working-directory)
 
-          ;; Check if branch already exists in any worktree
+          ;; Check if branch already exists in any worktree (uses main-repo-dir)
           find-result (git/ensure-git-success!
-                        (git/find-worktree-for-branch base-dir branch-name)
+                        (git/find-worktree-for-branch main-repo-dir branch-name)
                         "find-worktree-for-branch")
           existing-worktree (:worktree find-result)]
 
@@ -294,15 +300,15 @@
 
         ;; Branch not in any worktree - proceed with deriving path and
         ;; creating/checking worktree
-        (let [;; Derive worktree path
+        (let [;; Derive worktree path (uses main-repo-dir)
               path-result (git/ensure-git-success!
-                            (git/derive-worktree-path base-dir title config)
+                            (git/derive-worktree-path main-repo-dir title config)
                             "derive-worktree-path")
               worktree-path (:path path-result)
 
-              ;; Check if worktree exists at the derived path
+              ;; Check if worktree exists at the derived path (uses main-repo-dir)
               exists-result (git/ensure-git-success!
-                              (git/worktree-exists? base-dir worktree-path)
+                              (git/worktree-exists? main-repo-dir worktree-path)
                               "worktree-exists?")
               worktree-exists? (:exists? exists-result)
               branch-exists? (:exists? (git/ensure-git-success!
@@ -310,12 +316,12 @@
                                          "branch-exists?"))]
 
           (cond
-            ;; Worktree doesn't exist - create it
+            ;; Worktree doesn't exist - create it (uses main-repo-dir)
             (worktree-needs-creation? worktree-exists?)
             (do
               (git/ensure-git-success!
                 (git/create-worktree
-                  base-dir
+                  main-repo-dir
                   worktree-path
                   branch-name
                   (when-not branch-exists?

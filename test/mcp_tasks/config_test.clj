@@ -402,6 +402,7 @@
         (let [result (sut/resolve-config canonical-base-dir {})]
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-timeout-ms result)))
@@ -412,6 +413,7 @@
         (let [result (sut/resolve-config canonical-base-dir {})]
           (is (= true (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -421,6 +423,7 @@
         (let [result (sut/resolve-config canonical-base-dir {:use-git? true})]
           (is (= true (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -443,6 +446,7 @@
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= "value" (:other-key result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -458,6 +462,7 @@
           (is (= true (:branch-management? result)))
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -470,6 +475,7 @@
           (is (= false (:branch-management? result)))
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -482,6 +488,7 @@
           (is (= true (:branch-management? result)))
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -507,6 +514,71 @@
         (is (string? base-dir))
         (is (fs/absolute? base-dir))
         (is (= (str (fs/canonicalize test-project-dir)) base-dir))))))
+
+(deftest in-worktree-detection
+  ;; Test detection of git worktree environments
+  (testing "in-worktree?"
+    (testing "returns false when .git is a directory (main repo)"
+      (fs/create-dirs (str test-project-dir "/.git"))
+      (is (false? (sut/in-worktree? test-project-dir))))
+
+    (testing "returns true when .git is a file (worktree)"
+      (cleanup-test-project)
+      (setup-test-project)
+      (spit (str test-project-dir "/.git") "gitdir: /some/path/.git/worktrees/test")
+      (is (true? (sut/in-worktree? test-project-dir))))
+
+    (testing "returns false when .git does not exist"
+      (cleanup-test-project)
+      (setup-test-project)
+      (is (false? (sut/in-worktree? test-project-dir))))))
+
+(deftest find-main-repo-from-worktree
+  ;; Test extraction of main repository path from worktree .git file
+  (testing "find-main-repo"
+    (testing "extracts main repo path from .git file"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        (fs/create-dirs gitdir-path)
+        (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+        (let [result (sut/find-main-repo test-project-dir)]
+          (is (= (str (fs/canonicalize main-repo-path)) result)))
+        (fs/delete-tree main-repo-path)))
+
+    (testing "handles paths with spaces"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "main repo with spaces-"}))
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        (fs/create-dirs gitdir-path)
+        (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+        (let [result (sut/find-main-repo test-project-dir)]
+          (is (= (str (fs/canonicalize main-repo-path)) result)))
+        (fs/delete-tree main-repo-path)))))
+
+(deftest resolve-config-includes-main-repo-dir
+  ;; Test that resolve-config includes :main-repo-dir field
+  (testing "resolve-config includes :main-repo-dir"
+    (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
+      (testing "sets :main-repo-dir equal to :base-dir when not in worktree"
+        (let [result (sut/resolve-config canonical-base-dir {})]
+          (is (contains? result :main-repo-dir))
+          (is (= canonical-base-dir (:main-repo-dir result)))
+          (is (= (:base-dir result) (:main-repo-dir result)))))
+
+      (testing "sets :main-repo-dir to main repo path when in worktree"
+        (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+              worktree-name "test-worktree"
+              gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+          (fs/create-dirs gitdir-path)
+          (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+          (let [result (sut/resolve-config canonical-base-dir {})
+                expected-main-repo (str (fs/canonicalize main-repo-path))]
+            (is (contains? result :main-repo-dir))
+            (is (= expected-main-repo (:main-repo-dir result)))
+            (is (= canonical-base-dir (:base-dir result)))
+            (is (not= (:base-dir result) (:main-repo-dir result))))
+          (fs/delete-tree main-repo-path))))))
 
 (deftest resolve-tasks-dir-with-default
   ;; Test that resolve-tasks-dir defaults to .mcp-tasks relative to config-dir

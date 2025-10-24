@@ -1,9 +1,108 @@
 (ns mcp-tasks.tools.git
-  "Git-related helper functions for task management"
+  "Git-related helper functions for task management.
+
+  ## Directory Parameters
+
+  Functions in this namespace accept directory parameters that determine where
+  git operations are executed. Understanding the difference is crucial when
+  working with git worktrees.
+
+  ### Main Repository Directory (:main-repo-dir)
+
+  Use for repository-wide operations that must run from the main repository:
+  - list-worktrees - Lists all worktrees in the repository
+  - find-worktree-for-branch - Searches for a branch across all worktrees
+  - worktree-exists? - Checks if a worktree path exists
+  - create-worktree - Creates a new worktree
+  - remove-worktree - Removes a worktree
+  - derive-worktree-path - Derives the path for a new worktree
+  - derive-project-name - Gets the project name from main repository
+
+  ### Base Directory (:base-dir)
+
+  Use for context-specific operations in the current working directory:
+  - get-current-branch - Gets the branch in current directory
+  - check-uncommitted-changes - Checks changes in current directory
+  - branch-exists? - Checks if a branch exists (works from any directory)
+  - checkout-branch - Checks out a branch in current directory
+  - create-and-checkout-branch - Creates and checks out branch in current directory
+  - pull-latest - Pulls latest changes in current directory
+  - get-default-branch - Gets default branch (works from any directory)
+  - commit-task-changes - Commits changes in current directory
+
+  ### Worktree-Specific
+
+  - worktree-branch - Uses provided worktree path parameter (not base-dir)"
   (:require
     [babashka.fs :as fs]
     [clojure.java.shell :as sh]
     [clojure.string :as str]))
+
+;; Worktree Detection
+
+(defn in-worktree?
+  "Returns true if dir is a git worktree (not the main repository).
+  
+  In a worktree, .git is a file pointing to the main repo's worktree metadata.
+  In the main repo, .git is a directory containing the actual git database.
+  
+  Parameters:
+  - dir: Path to check (string or File)
+  
+  Returns:
+  - true if dir is a worktree
+  - false if dir is a main repository or not a git directory"
+  [dir]
+  (let [git-file (fs/file dir ".git")]
+    (and (fs/exists? git-file)
+         (fs/regular-file? git-file))))
+
+(defn find-main-repo
+  "Extracts the main repository path from a worktree's .git file.
+  
+  The .git file in a worktree contains a line like:
+  gitdir: /path/to/main/.git/worktrees/name
+  
+  This function parses that line and resolves to the main repo root.
+  
+  Parameters:
+  - worktree-dir: Path to the worktree directory
+  
+  Returns the absolute path to the main repository root directory."
+  [worktree-dir]
+  {:pre [(in-worktree? worktree-dir)]}
+  (let [git-file (fs/file worktree-dir ".git")
+        content (slurp git-file)
+        ;; Extract the gitdir path from "gitdir: /path/to/.git/worktrees/name"
+        gitdir-match (re-find #"gitdir:\s*(.+)" content)]
+    (when-not gitdir-match
+      (throw (ex-info "Invalid .git file format in worktree"
+                      {:worktree-dir worktree-dir
+                       :content content})))
+    (let [gitdir-path (second gitdir-match)
+          ;; The gitdir points to .git/worktrees/name
+          ;; We need to go up to .git, then up to the main repo root
+          main-git-dir (-> gitdir-path
+                           fs/file
+                           fs/parent ; Go from .git/worktrees/name to .git/worktrees
+                           fs/parent) ; Go from .git/worktrees to .git
+          main-repo-dir (fs/parent main-git-dir)]
+      (str (fs/canonicalize main-repo-dir)))))
+
+(defn get-main-repo-dir
+  "Returns the main repository directory for the given path.
+  
+  If the path is a worktree, returns the main repository path.
+  If the path is already the main repository, returns it unchanged.
+  
+  Parameters:
+  - dir: Path to check (can be worktree or main repo)
+  
+  Returns the absolute path to the main repository root directory."
+  [dir]
+  (if (in-worktree? dir)
+    (find-main-repo dir)
+    (str (fs/canonicalize dir))))
 
 (defn ensure-git-success!
   "Throws ex-info if git operation failed. Returns result on success.
@@ -551,12 +650,12 @@
                            branch-name))]
        (if (zero? (:exit result))
          {:success true
-          :error   nil}
+          :error nil}
          {:success false
-          :error   (str/trim (:err result))}))
+          :error (str/trim (:err result))}))
      (catch Exception e
        {:success false
-        :error   (.getMessage e)}))))
+        :error (.getMessage e)}))))
 
 (defn remove-worktree
   "Removes a git worktree.

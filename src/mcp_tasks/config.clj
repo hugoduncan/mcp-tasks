@@ -195,10 +195,38 @@
       (str (fs/canonicalize resolved-path))
       resolved-path)))
 
+(defn in-worktree?
+  "Returns true if dir is a git worktree (not main repo).
+  In worktrees, .git is a file pointing to the main repo, not a directory."
+  [dir]
+  (let [git-file (fs/file dir ".git")]
+    (and (fs/exists? git-file)
+         (not (fs/directory? git-file)))))
+
+(defn find-main-repo
+  "Extracts main repo path from .git file in worktree.
+  The .git file contains: gitdir: /path/to/main/.git/worktrees/name
+  Returns the main repository root directory."
+  [worktree-dir]
+  (let [git-file (fs/file worktree-dir ".git")
+        content (slurp git-file)
+        ;; Extract path from "gitdir: /path/to/main/.git/worktrees/name"
+        gitdir-match (re-find #"gitdir:\s*(.+)" content)]
+    (when gitdir-match
+      (let [gitdir-path (second gitdir-match)
+            ;; Navigate from .git/worktrees/name to main repo root
+            ;; .git/worktrees/name -> .git/worktrees -> .git -> main-repo-root
+            main-git-dir (-> gitdir-path
+                             fs/parent ; .git/worktrees
+                             fs/parent) ; .git
+            main-repo-root (fs/parent main-git-dir)]
+        (str (fs/canonicalize main-repo-root))))))
+
 (defn resolve-config
-  "Returns final config map with :use-git?, :base-dir, and :resolved-tasks-dir resolved.
+  "Returns final config map with :use-git?, :base-dir, :main-repo-dir, and :resolved-tasks-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence. Base directory is set to the config directory (canonicalized).
+  Main repo directory is set to the main repository root (same as base-dir if not in a worktree).
 
   When :worktree-management? is true, automatically enables :branch-management?.
   When :worktree-prefix is not set, defaults to :project-name.
@@ -209,6 +237,9 @@
   - :lock-poll-interval-ms defaults to 100 (100 milliseconds) if not set"
   [config-dir config]
   (let [base-dir (str (fs/canonicalize config-dir))
+        main-repo-dir (if (in-worktree? base-dir)
+                        (find-main-repo base-dir)
+                        base-dir)
         resolved-tasks-dir (resolve-tasks-dir config-dir config)
         config-with-branch-mgmt (if (:worktree-management? config)
                                   (assoc config :branch-management? true)
@@ -225,6 +256,7 @@
     (assoc config-with-defaults
            :use-git? (determine-git-mode config-dir config)
            :base-dir base-dir
+           :main-repo-dir main-repo-dir
            :resolved-tasks-dir resolved-tasks-dir)))
 
 ;; Startup validation
