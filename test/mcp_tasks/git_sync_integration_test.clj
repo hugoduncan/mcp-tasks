@@ -89,71 +89,42 @@
     (testing "sync-and-prepare-task-file error handling"
       (testing "handles pull conflicts appropriately"
         (let [tasks-dir (str test-dir "/.mcp-tasks")
-              config (h/git-test-config test-dir)
-              tasks-file (:absolute (helpers/task-path config ["tasks.ednl"]))]
+              config (h/git-test-config test-dir)]
 
-          ;; Initialize git repo and create initial commit
+          ;; Initialize git repo with an initial task
           (h/init-git-repo test-dir)
-          ;; Create empty tasks file before initial commit
-          (h/write-ednl-test-file test-dir "tasks.ednl" [])
+          (h/write-ednl-test-file test-dir "tasks.ednl"
+                                  [{:id 1 :parent-id nil :title "Initial Task" :description "" :design ""
+                                    :category "simple" :type :task :status :open :meta {} :relations []}])
           (sh/sh "git" "add" "." :dir tasks-dir)
-          (sh/sh "git" "commit" "-m" "Initial commit" :dir tasks-dir)
+          (sh/sh "git" "commit" "-m" "Initial commit with task" :dir tasks-dir)
 
-          ;; Create a "remote" by cloning to another directory
+          ;; Create a "remote" by cloning
           (let [remote-dir (str test-dir "-remote")
                 _ (sh/sh "git" "clone" tasks-dir remote-dir)
-                ;; Set up the original as remote of the clone
-                _ (sh/sh "git" "remote" "add" "origin" tasks-dir :dir remote-dir)
-                ;; Also set up the clone as remote of the original
                 _ (sh/sh "git" "remote" "add" "origin" remote-dir :dir tasks-dir)]
 
-            ;; Make conflicting changes in original
-            (helpers/with-task-lock
-              config
-              (fn []
-                (helpers/prepare-task-file config)
-                (tasks/add-task {:id 1
-                                 :title "Task A"
-                                 :description "From original"
-                                 :design ""
-                                 :category "simple"
-                                 :type :task
-                                 :status :open
-                                 :meta {}
-                                 :relations []})
-                (tasks/save-tasks! tasks-file)))
-
+            ;; Make conflicting change in original - modify the SAME task
+            (h/write-ednl-test-file test-dir "tasks.ednl"
+                                    [{:id 1 :parent-id nil :title "Modified in Original" :description "Changed A" :design ""
+                                      :category "simple" :type :task :status :open :meta {} :relations []}])
             (sh/sh "git" "add" "." :dir tasks-dir)
-            (sh/sh "git" "commit" "-m" "Add Task A" :dir tasks-dir)
+            (sh/sh "git" "commit" "-m" "Modify task in original" :dir tasks-dir)
 
-            ;; Make different changes in remote and push
-            (let [remote-config (assoc config :resolved-tasks-dir remote-dir)
-                  remote-tasks-file (:absolute (helpers/task-path remote-config ["tasks.ednl"]))]
-              (helpers/prepare-task-file remote-config)
-              (tasks/add-task {:id 1
-                               :title "Task B"
-                               :description "From remote"
-                               :design ""
-                               :category "simple"
-                               :type :task
-                               :status :open
-                               :meta {}
-                               :relations []})
-              (tasks/save-tasks! remote-tasks-file))
-
+            ;; Make DIFFERENT conflicting change in remote - modify the SAME task differently
+            (h/write-ednl-test-file (str test-dir "-remote") "tasks.ednl"
+                                    [{:id 1 :parent-id nil :title "Modified in Remote" :description "Changed B" :design ""
+                                      :category "simple" :type :task :status :open :meta {} :relations []}])
             (sh/sh "git" "add" "." :dir remote-dir)
-            (sh/sh "git" "commit" "-m" "Add Task B" :dir remote-dir)
+            (sh/sh "git" "commit" "-m" "Modify task in remote" :dir remote-dir)
 
-            ;; Push from remote to original (this will work)
-            (sh/sh "git" "push" "origin" "master" :dir remote-dir)
-
-            ;; Now try to sync in original - should detect we're behind
-            ;; Since we have local commits that differ from remote, pull will fail
+            ;; Now try to sync in original - should detect divergent histories
+            ;; and fail when attempting to merge
             (let [result (helpers/with-task-lock
                            config
                            (fn []
                              (helpers/sync-and-prepare-task-file config)))]
-              ;; Should get an error result
+              ;; Should get an error result from the conflicting pull
               (cond
                 ;; If sync returns error map directly
                 (and (map? result) (false? (:success result)))
@@ -161,9 +132,9 @@
                   (is (contains? result :error))
                   (is (contains? result :error-type)))
 
-                ;; If with-task-lock wraps it in tool error response
+                ;; If with-task-lock wraps it in tool error response  
                 (and (map? result) (:isError result))
-                (is (string? (:content (first (:content result)))))
+                (is (string? (-> result :content first :text)))
 
                 ;; Otherwise unexpected result
                 :else
