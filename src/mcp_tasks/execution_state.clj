@@ -29,7 +29,7 @@
 
 (def execution-state-explainer
   "Compiled explainer for ExecutionState schema."
-  (delay ((requiring-resolve 'malli.core/explain) ExecutionState)))
+  (delay ((requiring-resolve 'malli.core/explainer) ExecutionState)))
 
 (defn valid-execution-state?
   "Validate an execution state map against the ExecutionState schema."
