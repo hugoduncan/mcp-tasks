@@ -1,37 +1,49 @@
 {:paths ["src" "resources"]
 
  :deps {org.hugpduncan/mcp-clj-server
-        {:git/url "https://github.com/hugoduncan/mcp-clj"
-         :git/sha "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
+        {:git/url   "https://github.com/hugoduncan/mcp-clj"
+         :git/sha   "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
          :deps/root "projects/server"}
-        metosin/malli {:mvn/version "0.16.4"}
+        metosin/malli     {:mvn/version "0.16.4"}
         cheshire/cheshire {:mvn/version "5.13.0"}
-        babashka/fs {:mvn/version "0.5.22"}
-        org.babashka/cli {:mvn/version "0.8.61"}}
+        babashka/fs       {:mvn/version "0.5.22"}
+        org.babashka/cli  {:mvn/version "0.8.61"}}
 
  :tasks
  {:requires ([mcp-tasks.cli :as cli])
 
-  cli {:doc "Run mcp-tasks CLI"
+  cli {:doc  "Run mcp-tasks CLI"
        :task (apply cli/-main *command-line-args*)}
 
-  list {:doc "List tasks"
+  list {:doc  "List tasks"
         :task (apply cli/-main (cons "list" *command-line-args*))}
 
-  add {:doc "Add a task"
+  add {:doc  "Add a task"
        :task (apply cli/-main (cons "add" *command-line-args*))}
 
-  show {:doc "Show task details"
+  show {:doc  "Show task details"
         :task (apply cli/-main (cons "show" *command-line-args*))}
 
-  complete {:doc "Complete a task"
+  complete {:doc  "Complete a task"
             :task (apply cli/-main (cons "complete" *command-line-args*))}
 
-  update {:doc "Update a task"
+  update {:doc  "Update a task"
           :task (apply cli/-main (cons "update" *command-line-args*))}
 
-  delete {:doc "Delete a task"
+  delete {:doc  "Delete a task"
           :task (apply cli/-main (cons "delete" *command-line-args*))}
 
-  test {:doc "Run tests via JVM (babashka doesn't support test dependencies). Use: clojure -M:test --focus :unit"
-        :task (println "Tests must be run via JVM. Use: clojure -M:test --focus :unit")}}}
+  test {:doc  "Run tests via JVM (babashka doesn't support test dependencies). Use: clojure -M:test --focus :unit"
+        :task (println "Tests must be run via JVM. Use: clojure -M:test --focus :unit")}
+
+  build-uberscript
+  {:doc  "Build standalone babashka executable (output: mcp-tasks)"
+   :task (do
+           (println "Building mcp-tasks uberscript...")
+           (shell "rm -f mcp-tasks-temp")
+           (shell "bb uberscript mcp-tasks-temp script/uberscript-main.clj")
+           (println "Adding shebang and making executable...")
+           (spit "mcp-tasks" (str "#!/usr/bin/env bb\n" (slurp "mcp-tasks-temp")))
+           (shell "rm mcp-tasks-temp")
+           (shell "chmod +x mcp-tasks")
+           (println "✓ Created executable: ./mcp-tasks"))}}}
