@@ -108,8 +108,8 @@
 
 (defn- add-task-description
   "Build description for add-task tool with available categories and their descriptions."
-  []
-  (let [category-descs (prompts/category-descriptions)
+  [config]
+  (let [category-descs (prompts/category-descriptions config)
         categories (sort (keys category-descs))]
     [categories
      (if (seq categories)
@@ -157,7 +157,7 @@
 
   Accepts config parameter for future git-aware functionality."
   [config]
-  (let [[categories description] (add-task-description)]
+  (let [[categories description] (add-task-description config)]
     {:name "add-task"
      :description description
      :inputSchema

@@ -33,16 +33,16 @@
    :relations []})
 
 (def task-list-response
-  {:tasks [sample-task minimal-task]
+  {:tasks    [sample-task minimal-task]
    :metadata {:open-task-count 2 :total-matches 5 :limited? true}})
 
 (def single-task-response
   {:tasks [sample-task]
-   :metadata {:open-task-count 1 :total-matches 1 :limited? false}})
+   :metadata {:count 1 :total-matches 1 :limited? false}})
 
 (def empty-task-response
   {:tasks []
-   :metadata {:open-task-count 0 :total-matches 0 :limited? false}})
+   :metadata {:count 0 :total-matches 0 :limited? false}})
 
 (def error-response
   {:error "Task not found"
