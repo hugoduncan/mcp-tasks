@@ -18,7 +18,7 @@
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tools.helpers :as helpers]))
 
-(deftest ^:integ sync-with-sequential-operations-test
+(deftest ^:integration sync-with-sequential-operations-test
   ;; Verifies that sequential operations each sync with git before modification.
   ;; Each operation should pull latest changes, ensuring all operations work
   ;; with current state.
@@ -83,7 +83,7 @@
             (is (= #{"Task 1" "Task 2"}
                    (set (map :title all-tasks))))))))))
 
-(deftest ^:integ sync-error-handling-with-conflicts-test
+(deftest ^:integration sync-error-handling-with-conflicts-test
   ;; Verifies proper error handling when git pull encounters conflicts.
   ;; The operation should fail with appropriate error information.
   (h/with-test-setup [test-dir]
@@ -170,7 +170,7 @@
                 :else
                 (is false "Expected error result from conflicting pull")))))))))
 
-(deftest ^:integ sync-with-local-only-repo-test
+(deftest ^:integration sync-with-local-only-repo-test
   ;; Verifies that sync works correctly with local-only repos (no remote).
   ;; This is an acceptable configuration - should continue normally.
   (h/with-test-setup [test-dir]
@@ -209,7 +209,7 @@
           (helpers/prepare-task-file config)
           (is (= 1 (count (tasks/get-tasks)))))))))
 
-(deftest ^:integ file-locking-prevents-corruption-with-sync-test
+(deftest ^:integration file-locking-prevents-corruption-with-sync-test
   ;; Verifies that file locking prevents corruption even when sync is involved.
   ;; Sequential operations should each complete successfully with proper locking.
   (h/with-test-setup [test-dir]
