@@ -12,7 +12,6 @@
   these tests verify sequential operations rather than true concurrency."
   (:require
     [clojure.java.shell :as sh]
-    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.test-helpers :as h]

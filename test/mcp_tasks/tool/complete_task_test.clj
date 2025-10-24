@@ -5,7 +5,8 @@
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.test-helpers :as h]
-    [mcp-tasks.tool.complete-task :as sut]))
+    [mcp-tasks.tool.complete-task :as sut]
+    [mcp-tasks.tools.helpers]))
 
 ;; Git helper functions
 
