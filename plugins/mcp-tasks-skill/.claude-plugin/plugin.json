@@ -1,0 +1,8 @@
+{
+  "name": "mcp-tasks-skill",
+  "description": "Guidance for using the mcp-tasks MCP server for task and story management",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hugo Duncan"
+  }
+}
