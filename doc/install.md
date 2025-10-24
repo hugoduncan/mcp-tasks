@@ -51,6 +51,40 @@ scoop install babashka
 
 After installing Babashka, the mcp-tasks project includes a `bb.edn` configuration file that enables CLI usage. No additional setup is required - just use `bb` commands instead of `clojure` commands.
 
+**Performance:**
+
+Babashka provides dramatically faster startup times compared to JVM Clojure:
+- **JVM Clojure:** ~6.2 seconds
+- **Babashka:** ~0.15 seconds
+- **Improvement:** ~40x faster startup
+
+This makes babashka ideal for CLI operations, scripting, and interactive task management.
+
+**Usage Examples:**
+
+```bash
+# List available babashka tasks
+bb tasks
+
+# Use CLI commands with bb prefix
+bb list --category simple
+bb add --category simple --title "New task"
+bb show --task-id 42
+bb complete --task-id 42
+bb update --task-id 42 --status in-progress
+bb delete --task-id 42
+
+# Or use the main CLI entry point
+bb cli list --format json
+bb cli add --category feature --title "Add endpoint"
+```
+
+**When to Use Babashka vs JVM:**
+- **Babashka:** CLI operations, scripting, interactive task management
+- **JVM Clojure:** MCP server (requires JVM), development/testing with full Clojure toolchain
+
+**Important:** The MCP server requires JVM Clojure (`clojure -X:mcp-tasks`). Babashka support is for CLI operations only.
+
 **JSON Library Choice:**
 
 The mcp-tasks CLI uses `cheshire.core` for JSON parsing and serialization. This choice enables babashka compatibility:
