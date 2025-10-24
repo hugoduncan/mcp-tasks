@@ -53,9 +53,10 @@ clojure -M:cli complete --task-id 1
 The CLI can run under [Babashka](https://babashka.org/) for dramatically faster startup times—ideal for scripting and interactive use.
 
 **Performance Comparison:**
-- JVM Clojure: ~6.2 seconds
-- Babashka: ~0.15 seconds
-- **~40x faster startup**
+- JVM Clojure: ~2.2 seconds
+- Babashka (help commands): ~66ms (0.066 seconds)
+- Babashka (with validation): ~390ms first run, ~330ms cached
+- **~33x faster for help commands**
 
 **Prerequisites:**
 ```bash
@@ -108,6 +109,37 @@ bb cli add --category feature --title "Add endpoint"
 
 **Testing with Babashka:**
 A `bb test` task is available in `bb.edn`, but currently blocked by a dependency incompatibility. The mcp-clj-server test-dep variant requires clojure.data.json, which doesn't work in babashka. Until this is resolved, use JVM Clojure for testing: `clojure -M:dev:test --focus :unit`
+
+### Standalone Executable (Uberscript)
+
+For distribution or system-wide installation, you can build a standalone executable that bundles all dependencies:
+
+```bash
+# Build the executable (from the mcp-tasks source directory)
+bb build-uberscript
+
+# This creates a 48KB executable: ./mcp-tasks
+# Use it directly
+./mcp-tasks list --category simple
+./mcp-tasks add --title "New task" --category simple
+
+# Install system-wide (optional)
+sudo cp mcp-tasks /usr/local/bin/
+mcp-tasks list --format human
+```
+
+**Uberscript Benefits:**
+- **Single file distribution** - No need to install source code or dependencies
+- **Fast startup** - Same ~66ms performance as `bb` commands
+- **Portable** - Copy to any system with babashka installed
+- **No classpath setup** - All dependencies bundled in the executable
+
+**Performance:**
+The uberscript maintains the same optimized performance as running via `bb`:
+- Help commands: ~63ms
+- Commands with validation: ~390ms first run, ~330ms cached
+
+**Note:** The uberscript requires babashka to be installed on the target system (`/usr/bin/env bb` shebang).
 
 ---
 
