@@ -46,6 +46,97 @@ Task relationships are defined as:
 - Depends on local `mcp-clj` server library at `../mcp-clj/projects/server`
 - Ensure the sibling mcp-clj repository is available for development
 
+## Git Synchronization Strategy
+
+The system provides git synchronization to ensure agents work with the latest task state when making modifications. This is implemented as a separate concern from file locking.
+
+**Two Helper Functions:**
+
+1. **`sync-and-prepare-task-file`** (in `src/mcp_tasks/tools/helpers.clj`)
+   - **Use for**: Tools that MODIFY tasks.ednl (add/update/delete operations)
+   - **Behavior**: Pulls latest changes from git remote (if configured), then loads tasks
+   - **When**: Called inside `with-task-lock` after acquiring lock, before modification
+   - **Trade-offs**: 
+     - ✅ Agents always work with latest remote state
+     - ✅ Reduces merge conflicts
+     - ❌ Slightly slower due to network round-trip
+     - ❌ Requires network connectivity (or fails gracefully if no remote)
+
+2. **`prepare-task-file`** (in `src/mcp_tasks/tools/helpers.clj`)
+   - **Use for**: Read-only operations (e.g., `select-tasks`, `work-on`)
+   - **Behavior**: Loads tasks from local filesystem without git operations
+   - **When**: Any operation that doesn't modify tasks.ednl
+   - **Trade-offs**:
+     - ✅ Fast and predictable
+     - ✅ No network dependency
+     - ❌ May work with stale data if remote has updates
+
+**When to Use Each Function:**
+
+| Tool Type | Function to Use | Rationale |
+|-----------|----------------|-----------|
+| `add-task` | `sync-and-prepare-task-file` | Modifies tasks.ednl - needs latest state |
+| `update-task` | `sync-and-prepare-task-file` | Modifies tasks.ednl - needs latest state |
+| `delete-task` | `sync-and-prepare-task-file` | Modifies tasks.ednl - needs latest state |
+| `complete-task` | `sync-and-prepare-task-file` | Modifies tasks.ednl - needs latest state |
+| `select-tasks` | Direct load (neither) | Read-only - no sync needed |
+| `work-on` | Direct load (neither) | Read-only - no sync needed |
+
+**Sync Behavior:**
+
+The sync process handles various git states gracefully:
+- **Not a git repository**: Skips sync, loads tasks normally (local-only repo)
+- **Empty git repository**: Skips sync, loads tasks normally (no commits yet)
+- **No remote configured**: Skips sync, loads tasks normally (acceptable)
+- **Pull succeeds**: Reloads tasks with latest changes
+- **Pull conflicts**: Returns error map - operation must be aborted
+- **Network errors**: Returns error map - operation must be aborted
+
+**Relationship with File Locking:**
+
+Git sync and file locking are **separate concerns** that work together:
+- **File locking** (via `with-task-lock`): Prevents concurrent file modifications
+- **Git sync** (via `sync-and-prepare-task-file`): Ensures latest remote state
+
+Typical workflow for modification tools:
+```clojure
+(helpers/with-task-lock config
+  (fn []
+    ;; 1. Acquire lock (prevents concurrent file access)
+    ;; 2. Sync with remote + reload tasks
+    (let [sync-result (helpers/sync-and-prepare-task-file config)]
+      (if (and (map? sync-result) (false? (:success sync-result)))
+        ;; Handle sync error
+        (build-error-response ...)
+        ;; 3. Perform modification with latest state
+        (let [tasks-file sync-result]
+          ;; ... modify tasks ...
+          (tasks/save-tasks! tasks-file)
+          ;; Return result for git commit outside lock
+          {...})))))
+;; 4. Release lock
+;; 5. Git commit (outside lock - last writer wins)
+```
+
+**Git Operations and Locking:**
+
+- Git operations (pull/commit/push) are **NOT locked**
+- Last writer wins for git commits and pushes
+- This is acceptable because:
+  - File locking prevents file corruption
+  - Git can handle concurrent commits naturally
+  - Pull conflicts are detected and fail the operation
+
+**Adoption Strategy:**
+
+The system currently uses `sync-and-prepare-task-file` for all modification tools:
+- ✅ `add-task` - integrated
+- ✅ `update-task` - integrated
+- ✅ `delete-task` - integrated
+- ✅ `complete-task` - integrated
+
+Read-only operations continue to load tasks directly without sync overhead.
+
 ## Execution State Tracking
 
 The system tracks which story and task are currently being executed, making this information discoverable from outside the agent.

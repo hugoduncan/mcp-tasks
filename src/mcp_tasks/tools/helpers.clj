@@ -61,10 +61,45 @@
      :relative relative-path}))
 
 (defn prepare-task-file
-  "Prepare task file for adding a task.
+  "Prepare task file for operations WITHOUT git sync.
 
-  Loads tasks from tasks.ednl into memory.
-  Returns the absolute file path."
+  **When to use this function:**
+  - Read-only operations (e.g., select-tasks) that only query tasks
+  - Operations that don't modify tasks.ednl
+  - When you explicitly want local-only behavior without network dependency
+  - Called internally by `sync-and-prepare-task-file` after successful pull
+
+  **When NOT to use this function:**
+  - Tools that MODIFY tasks.ednl - use `sync-and-prepare-task-file` instead
+  - Operations where you need the latest remote state before proceeding
+
+  **What it does:**
+  1. Loads tasks from tasks.ednl into memory (from local filesystem)
+  2. Returns the absolute file path to tasks.ednl
+
+  **Behavior:**
+  - No git operations performed
+  - Always works with the current local state
+  - Fast and predictable (no network dependency)
+
+  **File locking:**
+  Read-only operations typically don't need file locking. However, if this
+  is called as part of a modification workflow, ensure it's inside a
+  `with-task-lock` block.
+
+  **Parameters:**
+  - config: Configuration map
+
+  **Returns:**
+  - String: Absolute path to tasks.ednl file
+
+  **Trade-offs:**
+  - Pros: Fast, no network dependency, simple behavior
+  - Cons: May work with stale data if remote has updates
+  - Alternative: Use `sync-and-prepare-task-file` for modification operations
+
+  See also: `sync-and-prepare-task-file` for the syncing version used by
+  modification tools."
   [config]
   (let [tasks-path (task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
@@ -77,23 +112,65 @@
 (defn sync-and-prepare-task-file
   "Synchronizes with git remote and prepares task file for modification.
 
-  Pulls latest changes from remote, then loads tasks into memory.
-  Returns the tasks file path on success, or error map on failure.
+  **When to use this function:**
+  Use this for tools that MODIFY tasks.ednl (add/update/delete operations).
+  Ensures the agent works with the latest git state when starting modifications.
 
-  Parameters:
+  **When NOT to use this function:**
+  - Read-only operations (e.g., select-tasks, work-on) - these can load tasks directly
+  - Operations that don't modify tasks.ednl
+
+  **What it does:**
+  1. Pulls latest changes from the git remote (if configured)
+  2. Loads tasks from tasks.ednl into memory
+  3. Returns the tasks file path for subsequent operations
+
+  **Git sync behavior:**
+  - Not a git repository: Skips sync, loads tasks normally (local-only repo)
+  - Empty git repository: Skips sync, loads tasks normally (no commits yet)
+  - No remote configured: Skips sync, loads tasks normally (acceptable)
+  - Pull succeeds: Reloads tasks with latest changes
+  - Pull conflicts: Returns error map - operation must be aborted
+  - Network errors: Returns error map - operation must be aborted
+
+  **File locking:**
+  This function should be called INSIDE a `with-task-lock` block to prevent
+  concurrent file modifications. The git pull happens after lock acquisition
+  but before modification. Git operations themselves are NOT locked - last
+  writer wins for commits/pushes.
+
+  **Parameters:**
   - config: Configuration map with :resolved-tasks-dir
 
-  Returns:
+  **Returns:**
   - Success: String path to tasks.ednl file
   - Failure: {:success false :error \"...\" :error-type :conflict|:network|:other}
 
-  Error handling:
-  - Not a git repository: Continues normally (skips git sync, like local-only repo)
-  - Empty git repository (no commits): Continues normally (skips git sync)
-  - No remote configured: Continues normally (local-only repo is acceptable)
-  - Pull conflicts: Returns error map with :error-type :conflict
-  - Network errors: Returns error map with :error-type :network
-  - Other errors: Returns error map with :error-type :other"
+  **Error handling:**
+  Tools should check if the return value is a map with `:success false`:
+  ```clojure
+  (let [sync-result (helpers/sync-and-prepare-task-file config)]
+    (if (and (map? sync-result) (false? (:success sync-result)))
+      ;; Handle error - return tool error response
+      (helpers/build-tool-error-response
+        (case (:error-type sync-result)
+          :conflict (str \"Pull failed with conflicts. Resolve manually in \" tasks-dir)
+          :network (str \"Pull failed: \" (:error sync-result))
+          (str \"Pull failed: \" (:error sync-result)))
+        \"tool-name\"
+        {:error-type (:error-type sync-result)})
+      ;; Success - sync-result is the tasks-file path
+      (let [tasks-file sync-result]
+        ;; ... continue with modification ...
+        )))
+  ```
+
+  **Trade-offs:**
+  - Pros: Agents always work with latest state, reduces conflicts
+  - Cons: Slightly slower due to network round-trip, requires network connectivity
+  - Alternative: Use `prepare-task-file` for faster local-only operations
+
+  See also: `prepare-task-file` for the simpler non-syncing version."
   [config]
   (let [tasks-dir (:resolved-tasks-dir config)
         branch-result (git/get-current-branch tasks-dir)]
