@@ -76,36 +76,35 @@
               add-response (json/read-str
                              (get-in add-result [:content 1 :text])
                              :key-fn keyword)
-              task-id (get-in add-response [:task :id])]
+              task-id (get-in add-response [:task :id])
+              ;; Call work-on tool
+              result (#'sut/work-on-impl
+                      (assoc (h/git-test-config base-dir)
+                             :worktree-management? true
+                             :main-repo-dir base-dir)
+                      nil
+                      {:task-id task-id})
+              response (json/read-str
+                         (get-in result [:content 0 :text])
+                         :key-fn keyword)
+              actual-worktree-path (:worktree-path response)]
 
-          ;; Call work-on tool
-          (let [result (#'sut/work-on-impl
-                        (assoc (h/git-test-config base-dir)
-                               :worktree-management? true
-                               :main-repo-dir base-dir)
-                        nil
-                        {:task-id task-id})
-                response (json/read-str
-                           (get-in result [:content 0 :text])
-                           :key-fn keyword)
-                actual-worktree-path (:worktree-path response)]
+          ;; Verify response indicates worktree creation
+          (is (false? (:isError result))
+              "work-on should succeed")
+          (is (true? (:worktree-created? response))
+              "Response should indicate worktree was created")
+          (is (some? actual-worktree-path)
+              "Response should include worktree path")
 
-            ;; Verify response indicates worktree creation
-            (is (false? (:isError result))
-                "work-on should succeed")
-            (is (true? (:worktree-created? response))
-                "Response should indicate worktree was created")
-            (is (some? actual-worktree-path)
-                "Response should include worktree path")
+          ;; Verify worktree actually exists on filesystem
+          (is (worktree-exists? actual-worktree-path)
+              "Worktree directory should exist with .git file")
 
-            ;; Verify worktree actually exists on filesystem
-            (is (worktree-exists? actual-worktree-path)
-                "Worktree directory should exist with .git file")
-
-            ;; Verify worktree is listed in git worktree list
-            (let [worktree-list (list-worktrees base-dir)]
-              (is (str/includes? worktree-list actual-worktree-path)
-                  "Worktree should appear in git worktree list"))))))))
+          ;; Verify worktree is listed in git worktree list
+          (let [worktree-list (list-worktrees base-dir)]
+            (is (str/includes? worktree-list actual-worktree-path)
+                "Worktree should appear in git worktree list")))))))
 
 (deftest work-on-from-within-worktree
   (h/with-test-setup [test-dir]
@@ -144,55 +143,55 @@
               add-response2 (json/read-str
                               (get-in add-result2 [:content 1 :text])
                               :key-fn keyword)
-              task2-id (get-in add-response2 [:task :id])]
+              task2-id (get-in add-response2 [:task :id])
 
-          ;; Create first worktree using work-on
-          (let [result1 (#'sut/work-on-impl
-                         (assoc (h/git-test-config base-dir)
-                                :worktree-management? true
-                                :main-repo-dir base-dir)
-                         nil
-                         {:task-id task1-id})
-                response1 (json/read-str
-                            (get-in result1 [:content 0 :text])
-                            :key-fn keyword)
-                worktree1-path (:worktree-path response1)]
+              ;; Create first worktree using work-on
+              result1 (#'sut/work-on-impl
+                       (assoc (h/git-test-config base-dir)
+                              :worktree-management? true
+                              :main-repo-dir base-dir)
+                       nil
+                       {:task-id task1-id})
+              response1 (json/read-str
+                          (get-in result1 [:content 0 :text])
+                          :key-fn keyword)
+              worktree1-path (:worktree-path response1)
 
-            ;; Verify first worktree was created
-            (is (true? (:worktree-created? response1))
-                "First worktree should be created")
-            (is (worktree-exists? worktree1-path)
-                "First worktree should exist")
+              ;; Verify first worktree was created
+              _ (is (true? (:worktree-created? response1))
+                    "First worktree should be created")
+              _ (is (worktree-exists? worktree1-path)
+                    "First worktree should exist")
 
-            ;; Copy config to first worktree so it can be used as base-dir
-            (fs/copy config-file (str worktree1-path "/.mcp-tasks.edn"))
+              ;; Copy config to first worktree so it can be used as base-dir
+              _ (fs/copy config-file (str worktree1-path "/.mcp-tasks.edn"))
 
-            ;; Call work-on from within first worktree for second task
-            ;; This simulates the scenario where the MCP server is running
-            ;; from within a worktree directory
-            (let [result2 (#'sut/work-on-impl
-                           (assoc (h/git-test-config worktree1-path)
-                                  :worktree-management? true
-                                  :base-dir worktree1-path
-                                  :main-repo-dir base-dir)
-                           nil
-                           {:task-id task2-id})
-                  response2 (json/read-str
-                              (get-in result2 [:content 0 :text])
-                              :key-fn keyword)
-                  worktree2-path (:worktree-path response2)]
+              ;; Call work-on from within first worktree for second task
+              ;; This simulates the scenario where the MCP server is running
+              ;; from within a worktree directory
+              result2 (#'sut/work-on-impl
+                       (assoc (h/git-test-config worktree1-path)
+                              :worktree-management? true
+                              :base-dir worktree1-path
+                              :main-repo-dir base-dir)
+                       nil
+                       {:task-id task2-id})
+              response2 (json/read-str
+                          (get-in result2 [:content 0 :text])
+                          :key-fn keyword)
+              worktree2-path (:worktree-path response2)]
 
-              ;; Verify the tool works correctly from within a worktree
-              (is (false? (:isError result2))
-                  "work-on should succeed when called from worktree")
-              (is (true? (:worktree-created? response2))
-                  "Should create second worktree")
-              (is (some? worktree2-path)
-                  "Should return worktree path")
+          ;; Verify the tool works correctly from within a worktree
+          (is (false? (:isError result2))
+              "work-on should succeed when called from worktree")
+          (is (true? (:worktree-created? response2))
+              "Should create second worktree")
+          (is (some? worktree2-path)
+              "Should return worktree path")
 
-              ;; Verify second worktree actually exists
-              (is (worktree-exists? worktree2-path)
-                  "Second worktree should exist on filesystem"))))))))
+          ;; Verify second worktree actually exists
+          (is (worktree-exists? worktree2-path)
+              "Second worktree should exist on filesystem"))))))
 
 (deftest work-on-detects-worktree-environment
   (h/with-test-setup [test-dir]
@@ -220,50 +219,50 @@
               add-response (json/read-str
                              (get-in add-result [:content 1 :text])
                              :key-fn keyword)
-              task-id (get-in add-response [:task :id])]
+              task-id (get-in add-response [:task :id])
 
-          ;; Create worktree using work-on from main repo
-          (let [result1 (#'sut/work-on-impl
-                         (assoc (h/git-test-config base-dir)
-                                :worktree-management? true
-                                :main-repo-dir base-dir)
-                         nil
-                         {:task-id task-id})
-                response1 (json/read-str
-                            (get-in result1 [:content 0 :text])
-                            :key-fn keyword)
-                worktree-path (:worktree-path response1)]
+              ;; Create worktree using work-on from main repo
+              result1 (#'sut/work-on-impl
+                       (assoc (h/git-test-config base-dir)
+                              :worktree-management? true
+                              :main-repo-dir base-dir)
+                       nil
+                       {:task-id task-id})
+              response1 (json/read-str
+                          (get-in result1 [:content 0 :text])
+                          :key-fn keyword)
+              worktree-path (:worktree-path response1)
 
-            ;; Verify worktree was created
-            (is (true? (:worktree-created? response1))
-                "Worktree should be created")
-            (is (worktree-exists? worktree-path)
-                "Worktree should exist")
+              ;; Verify worktree was created
+              _ (is (true? (:worktree-created? response1))
+                    "Worktree should be created")
+              _ (is (worktree-exists? worktree-path)
+                    "Worktree should exist")
 
-            ;; Copy config to worktree
-            (fs/copy config-file (str worktree-path "/.mcp-tasks.edn"))
+              ;; Copy config to worktree
+              _ (fs/copy config-file (str worktree-path "/.mcp-tasks.edn"))
 
-            ;; Call work-on from within the worktree for the same task
-            ;; (simulating continuing work in the same worktree)
-            (let [result2 (#'sut/work-on-impl
-                           (assoc (h/git-test-config worktree-path)
-                                  :worktree-management? true
-                                  :base-dir worktree-path
-                                  :main-repo-dir base-dir)
-                           nil
-                           {:task-id task-id})
-                  response2 (json/read-str
-                              (get-in result2 [:content 0 :text])
-                              :key-fn keyword)
-                  response-worktree-path (:worktree-path response2)]
+              ;; Call work-on from within the worktree for the same task
+              ;; (simulating continuing work in the same worktree)
+              result2 (#'sut/work-on-impl
+                       (assoc (h/git-test-config worktree-path)
+                              :worktree-management? true
+                              :base-dir worktree-path
+                              :main-repo-dir base-dir)
+                       nil
+                       {:task-id task-id})
+              response2 (json/read-str
+                          (get-in result2 [:content 0 :text])
+                          :key-fn keyword)
+              response-worktree-path (:worktree-path response2)]
 
-              ;; Should recognize we're already in the correct worktree
-              ;; Note: paths may differ in canonical form (/var vs /private/var on macOS)
-              ;; so we canonicalize both for comparison
-              (is (false? (:isError result2))
-                  "work-on should succeed")
-              (is (false? (:worktree-created? response2))
-                  "Should not create new worktree")
-              (is (= (str (fs/canonicalize worktree-path))
-                     (str (fs/canonicalize response-worktree-path)))
-                  "Should recognize current worktree"))))))))
+          ;; Should recognize we're already in the correct worktree
+          ;; Note: paths may differ in canonical form (/var vs /private/var on macOS)
+          ;; so we canonicalize both for comparison
+          (is (false? (:isError result2))
+              "work-on should succeed")
+          (is (false? (:worktree-created? response2))
+              "Should not create new worktree")
+          (is (= (str (fs/canonicalize worktree-path))
+                 (str (fs/canonicalize response-worktree-path)))
+              "Should recognize current worktree"))))))

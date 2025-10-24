@@ -322,7 +322,7 @@
                              candidates)]
       (when (seq main-repos)
         ;; Return first match, canonicalized
-        (str (fs/canonicalize (first main-repos)))))))
+        (fs/canonicalize (first main-repos))))))
 
 (defn resolve-config
   "Returns final config map with :use-git?, :base-dir, :main-repo-dir, and :resolved-tasks-dir resolved.

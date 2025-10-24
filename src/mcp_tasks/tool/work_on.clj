@@ -262,7 +262,7 @@
   ;; In worktree, wrong branch (error)
   (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
-  [base-dir title branch-name config]
+  [_base-dir title branch-name config]
   (try
     (let [;; Extract main-repo-dir for worktree operations
           main-repo-dir (:main-repo-dir config)
