@@ -146,6 +146,22 @@
               result (sut/sync-and-prepare-task-file config)]
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
+    (testing "succeeds when directory is not a git repository"
+      (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: not a git repository"})
+                    sut/prepare-task-file (fn [_]
+                                            "/test/.mcp-tasks/tasks.ednl")]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
+
+    (testing "succeeds when git repository is empty (no commits)"
+      (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree."})
+                    sut/prepare-task-file (fn [_]
+                                            "/test/.mcp-tasks/tasks.ednl")]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
+
     (testing "returns error map on merge conflicts"
       (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                     git/pull-latest (fn [_ _]
@@ -185,10 +201,10 @@
           (is (= "fatal: some other error" (:error result)))
           (is (= :other (:error-type result))))))
 
-    (testing "returns error map when get-current-branch fails"
-      (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "not a git repository"})]
+    (testing "returns error map when get-current-branch fails with other git errors"
+      (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: corrupt git repository"})]
         (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
               result (sut/sync-and-prepare-task-file config)]
           (is (false? (:success result)))
-          (is (= "not a git repository" (:error result)))
+          (is (= "fatal: corrupt git repository" (:error result)))
           (is (= :other (:error-type result))))))))

@@ -88,6 +88,8 @@
   - Failure: {:success false :error \"...\" :error-type :conflict|:network|:other}
 
   Error handling:
+  - Not a git repository: Continues normally (skips git sync, like local-only repo)
+  - Empty git repository (no commits): Continues normally (skips git sync)
   - No remote configured: Continues normally (local-only repo is acceptable)
   - Pull conflicts: Returns error map with :error-type :conflict
   - Network errors: Returns error map with :error-type :network
@@ -96,10 +98,16 @@
   (let [tasks-dir (:resolved-tasks-dir config)
         branch-result (git/get-current-branch tasks-dir)]
     (if-not (:success branch-result)
-      ;; Failed to get current branch - return error
-      {:success false
-       :error (:error branch-result)
-       :error-type :other}
+      ;; Failed to get current branch - check if it's an acceptable condition
+      (let [error-msg (:error branch-result)]
+        (if (or (str/includes? error-msg "not a git repository")
+                (str/includes? error-msg "unknown revision"))
+          ;; Not a git repository or empty git repository - skip git sync and just load tasks
+          (prepare-task-file config)
+          ;; Other git error - return error map
+          {:success false
+           :error error-msg
+           :error-type :other}))
       ;; Got branch name - proceed with pull
       (let [pull-result (git/pull-latest tasks-dir (:branch branch-result))]
         (if (:success pull-result)
