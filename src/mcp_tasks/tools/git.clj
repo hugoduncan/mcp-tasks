@@ -353,6 +353,91 @@
       {:success false
        :error (.getMessage e)})))
 
+(defn- conflict-pattern?
+  "Returns true if stderr contains conflict indicators"
+  [stderr]
+  (or (str/includes? stderr "CONFLICT")
+      (str/includes? stderr "Automatic merge failed")
+      (str/includes? stderr "fix conflicts")
+      (str/includes? stderr "unresolved conflict")
+      (str/includes? stderr "unmerged files")))
+
+(defn- no-remote-pattern?
+  "Returns true if stderr indicates no remote is configured"
+  [stderr]
+  (or (str/includes? stderr "does not appear to be a git repository")
+      (str/includes? stderr "No configured push destination")
+      (str/includes? stderr "No remote repository specified")
+      (re-find #"repository '.*' not found" stderr)))
+
+(defn- network-pattern?
+  "Returns true if stderr indicates network connectivity issues"
+  [stderr]
+  (or (str/includes? stderr "Could not resolve host")
+      (str/includes? stderr "Connection refused")
+      (str/includes? stderr "Failed to connect")
+      (str/includes? stderr "timed out")
+      (str/includes? stderr "Network is unreachable")
+      (str/includes? stderr "unable to access")
+      (str/includes? stderr "The requested URL returned error")))
+
+(defn- detect-by-pattern
+  "Fallback pattern matching for unknown exit codes"
+  [stderr]
+  (cond
+    (conflict-pattern? stderr) :conflict
+    (no-remote-pattern? stderr) :no-remote
+    (network-pattern? stderr) :network
+    :else :other))
+
+(defn- detect-exit-1-error
+  "Exit 1 is typically conflicts, but could be other errors"
+  [stderr]
+  (cond
+    (conflict-pattern? stderr) :conflict
+    (no-remote-pattern? stderr) :no-remote
+    (network-pattern? stderr) :network
+    :else :other))
+
+(defn- detect-fatal-error
+  "Exit 128 indicates fatal errors"
+  [stderr]
+  (cond
+    (no-remote-pattern? stderr) :no-remote
+    (network-pattern? stderr) :network
+    :else :other))
+
+(defn- detect-error-type
+  "Detects error type using exit code and stderr patterns.
+  
+  Uses a multi-layered approach:
+  - Exit code 1: typically conflicts, check patterns to confirm
+  - Exit code 128: fatal errors (no remote, network issues)
+  - Other codes: fall back to pattern matching"
+  [exit-code stderr]
+  (let [error-type (cond
+                     (= 1 exit-code)
+                     (detect-exit-1-error stderr)
+
+                     (= 128 exit-code)
+                     (detect-fatal-error stderr)
+
+                     :else
+                     (detect-by-pattern stderr))]
+
+    ;; Log unrecognized patterns to stderr for debugging
+    (when (and (= error-type :other)
+               (not (str/blank? stderr)))
+      (binding [*out* *err*]
+        (println "Unrecognized git pull error pattern:"
+                 "exit-code:" exit-code
+                 "stderr:" stderr)))
+
+    ;; Build response
+    (if (= error-type :no-remote)
+      {:success true :pulled? false :error nil :error-type :no-remote}
+      {:success false :pulled? false :error stderr :error-type error-type})))
+
 (defn pull-latest
   "Pulls the latest changes from remote.
 
@@ -381,32 +466,8 @@
          :pulled? true
          :error nil
          :error-type nil}
-        ;; Non-zero exit - determine error type
-        (let [error-type (cond
-                           (or (str/includes? stderr "does not appear to be a git repository")
-                               (str/includes? stderr "No configured push destination"))
-                           :no-remote
-
-                           (str/includes? stderr "CONFLICT")
-                           :conflict
-
-                           (or (str/includes? stderr "Could not resolve host")
-                               (str/includes? stderr "Connection refused"))
-                           :network
-
-                           :else
-                           :other)]
-          (if (= error-type :no-remote)
-            ;; Local-only repo is acceptable
-            {:success true
-             :pulled? false
-             :error nil
-             :error-type :no-remote}
-            ;; Other errors are failures
-            {:success false
-             :pulled? false
-             :error stderr
-             :error-type error-type}))))
+        ;; Non-zero exit - use multi-layered error detection
+        (detect-error-type exit-code stderr)))
     (catch Exception e
       {:success false
        :pulled? false
