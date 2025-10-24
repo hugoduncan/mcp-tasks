@@ -1,6 +1,6 @@
 (ns mcp-tasks.cli.format
   "Output formatters for the CLI.
-  
+
   Supports EDN, JSON, and human-readable formats."
   (:require
     [clojure.data.json :as json]
@@ -10,7 +10,7 @@
 
 (defn kebab->camel
   "Convert a kebab-case keyword to camelCase string.
-  
+
   Examples:
     :task-id => \"taskId\"
     :parent-id => \"parentId\"
@@ -25,7 +25,7 @@
 
 (defn transform-keys
   "Recursively transform all keys in a map using the provided function.
-  
+
   Handles nested maps, vectors of maps, and preserves other data types."
   [m key-fn]
   (cond
@@ -52,7 +52,7 @@
 
 (defn format-relations
   "Format relations vector to human-readable string.
-  
+
   Examples:
     [{:as-type :blocked-by :relates-to 4}] => \"blocked-by->#4\"
     [{:as-type :related :relates-to 5} {:as-type :blocked-by :relates-to 6}]
@@ -78,7 +78,7 @@
 
 (defn format-meta
   "Format meta map for table display.
-  
+
   Returns a string representation, using '-' for empty meta."
   [meta]
   (if (seq meta)
@@ -100,7 +100,7 @@
 
 (defn format-table
   "Format a vector of tasks as an ASCII table.
-  
+
   Columns: ID, Parent, Status, Category, Meta, Title (truncated)"
   [tasks]
   (if (empty? tasks)
@@ -192,7 +192,7 @@
 
 (defmulti render
   "Render data in the specified format.
-  
+
   Dispatches on format-type (:edn, :json, or :human).
   Returns formatted string output."
   (fn [format-type _data] format-type))
@@ -227,7 +227,10 @@
                          (when (and metadata (pos? task-count))
                            (str "Total: " (:total-matches metadata)
                                 (when (:limited? metadata)
-                                  (str " (showing " (:count metadata) ")"))))])))
+                                  (str
+                                    " (showing "
+                                    (:open-task-count metadata)
+                                    ")"))))])))
 
     ;; Single task response (for add/update/complete operations)
     (:task data)

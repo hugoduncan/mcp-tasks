@@ -79,7 +79,7 @@
 (deftest parse-list-test
   (testing "parse-list"
     (testing "parses basic arguments"
-      (is (= {:limit 5}
+      (is (= {:limit 30}
              (sut/parse-list []))))
 
     (testing "parses all filter options"
@@ -103,11 +103,11 @@
                               "--format" "json"]))))
 
     (testing "uses aliases"
-      (is (= {:status :closed :category "large" :type :bug :parent-id 5 :limit 5}
+      (is (= {:status :closed :category "large" :type :bug :parent-id 5 :limit 30}
              (sut/parse-list ["-s" "closed" "-c" "large" "-t" "bug" "-p" "5"]))))
 
     (testing "uses defaults"
-      (is (= {:limit 5}
+      (is (= {:limit 30}
              (sut/parse-list []))))
 
     (testing "coerces types correctly"

@@ -1,6 +1,6 @@
 (ns mcp-tasks.cli.parse
   "Argument parsing for the CLI.
-  
+
   Uses babashka.cli to parse command-line arguments."
   (:require
     [babashka.cli :as cli]
@@ -30,18 +30,18 @@ GLOBAL OPTIONS:
 
 CONFIG DISCOVERY:
   Configuration is discovered automatically - no --config-path option needed.
-  
+
   The CLI searches for .mcp-tasks.edn starting from the current directory
   and traversing up the directory tree until found or reaching the filesystem
   root. This allows you to invoke the CLI from any subdirectory within your
   project.
-  
+
   Example:
     # Your project structure:
     # /project/.mcp-tasks.edn
     # /project/src/
     # /project/test/
-    
+
     # You can run from any directory:
     cd /project/src
     clojure -M:cli list    # Finds /project/.mcp-tasks.edn automatically
@@ -70,7 +70,7 @@ OPTIONS:
   --parent-id, -p <id>          Filter by parent task ID
   --task-id <id>                Filter by specific task ID
   --title-pattern, --title <pattern>  Filter by title pattern (regex or substring)
-  --limit <n>                   Maximum tasks to return (default: 5)
+  --limit <n>                   Maximum tasks to return (default: 30)
   --unique                      Enforce 0 or 1 match (error if >1)
   --format <format>             Output format: edn, json, human (default: edn)
 
@@ -185,7 +185,7 @@ EXAMPLES:
 
 (defn coerce-json-map
   "Parse JSON string to Clojure map for :meta field.
-  
+
   Returns the parsed map or an error map."
   [s]
   (try
@@ -200,7 +200,7 @@ EXAMPLES:
 
 (defn coerce-json-array
   "Parse JSON string to Clojure vector for :relations field.
-  
+
   Returns the parsed vector or an error map."
   [s]
   (try
@@ -215,12 +215,12 @@ EXAMPLES:
 
 (defn coerce-parent-id
   "Coerce parent-id value, handling 'null' string as nil.
-  
+
   Accepts:
   - String \"null\" -> nil
   - Numeric string -> parsed long
   - Number -> long
-  
+
   Returns the coerced value or throws exception on invalid input."
   [v]
   (cond
@@ -232,7 +232,7 @@ EXAMPLES:
 
 (defn resolve-alias
   "Resolve an aliased key from parsed map.
-  
+
   Returns the value of primary-key if present, otherwise tries alias-key.
   If both are absent, returns nil."
   [parsed-map primary-key alias-key]
@@ -267,7 +267,7 @@ EXAMPLES:
 
 (defn validate-at-least-one
   "Validate that at least one of the specified keys is present in the parsed map.
-  
+
   Returns {:valid? true} or {:valid? false :error \"...\" :details {...}}"
   [parsed-map required-keys field-names]
   (let [present-keys (filter #(contains? parsed-map %) required-keys)]
@@ -279,7 +279,7 @@ EXAMPLES:
 
 (defn validate-format
   "Validate that the format is one of the allowed values.
-  
+
   Returns {:valid? true} or {:valid? false :error \"...\" :details {...}}"
   [parsed-map]
   (if-let [fmt (:format parsed-map)]
@@ -295,18 +295,18 @@ EXAMPLES:
 
 (def list-spec
   "Spec for the list command.
-  
+
   Validates and coerces arguments for querying tasks with filters.
-  
+
   Coercion rules:
   - :status -> keyword (open, closed, in-progress, blocked)
   - :type -> keyword (task, bug, feature, story, chore)
   - :parent-id -> long integer
   - :task-id -> long integer
-  - :limit -> long integer (default: 5)
+  - :limit -> long integer (default: 30)
   - :unique -> boolean
   - :format -> keyword (edn, json, human)
-  
+
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)"
   {:status {:coerce :keyword
@@ -325,7 +325,7 @@ EXAMPLES:
    :title-pattern {:alias :title
                    :desc "Filter by title pattern (regex or substring)"}
    :limit {:coerce :long
-           :default 5
+           :default 30
            :desc "Maximum number of tasks to return"}
    :unique {:coerce :boolean
             :desc "Enforce that 0 or 1 task matches (error if >1)"}
@@ -334,13 +334,13 @@ EXAMPLES:
 
 (def show-spec
   "Spec for the show command.
-  
+
   Validates and coerces arguments for displaying a single task.
-  
+
   Coercion rules:
   - :task-id -> long integer
   - :format -> keyword (edn, json, human)
-  
+
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)
   - Requires :task-id to be present"
@@ -352,15 +352,15 @@ EXAMPLES:
 
 (def add-spec
   "Spec for the add command.
-  
+
   Validates and coerces arguments for creating new tasks.
-  
+
   Coercion rules:
   - :type -> keyword (task, bug, feature, story, chore), default: :task
   - :parent-id -> long integer
   - :prepend -> boolean
   - :format -> keyword (edn, json, human)
-  
+
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)
   - Requires both :category and :title to be present"
@@ -383,13 +383,13 @@ EXAMPLES:
 
 (def complete-spec
   "Spec for the complete command.
-  
+
   Validates and coerces arguments for marking tasks complete.
-  
+
   Coercion rules:
   - :task-id -> long integer
   - :format -> keyword (edn, json, human)
-  
+
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)
   - Requires at least one of :task-id or :title
@@ -411,9 +411,9 @@ EXAMPLES:
 
 (def update-spec
   "Spec for the update command.
-  
+
   Validates and coerces arguments for updating task fields.
-  
+
   Coercion rules:
   - :task-id -> long integer
   - :status -> keyword (open, closed, in-progress, blocked)
@@ -422,7 +422,7 @@ EXAMPLES:
   - :meta -> parsed from JSON string to Clojure map
   - :relations -> parsed from JSON array to Clojure vector
   - :format -> keyword (edn, json, human)
-  
+
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)
   - Requires :task-id to be present"
@@ -451,13 +451,13 @@ EXAMPLES:
 
 (def delete-spec
   "Spec for the delete command.
-  
+
   Validates and coerces arguments for deleting tasks.
-  
+
   Coercion rules:
   - :task-id -> long integer
   - :format -> keyword (edn, json, human)
-  
+
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)
   - Requires at least one of :task-id or :title-pattern"
