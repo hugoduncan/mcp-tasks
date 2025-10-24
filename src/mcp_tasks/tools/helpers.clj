@@ -121,11 +121,14 @@
   - Operations that don't modify tasks.ednl
 
   **What it does:**
-  1. Pulls latest changes from the git remote (if configured)
-  2. Loads tasks from tasks.ednl into memory
-  3. Returns the tasks file path for subsequent operations
+  1. Checks if git sync is enabled via :enable-git-sync? config
+  2. If disabled, immediately returns prepare-task-file (skips git operations)
+  3. If enabled, pulls latest changes from the git remote (if configured)
+  4. Loads tasks from tasks.ednl into memory
+  5. Returns the tasks file path for subsequent operations
 
   **Git sync behavior:**
+  - Sync disabled (:enable-git-sync? false): Skips all git operations, loads tasks directly
   - Not a git repository: Skips sync, loads tasks normally (local-only repo)
   - Empty git repository: Skips sync, loads tasks normally (no commits yet)
   - No remote configured: Skips sync, loads tasks normally (acceptable)
@@ -140,7 +143,7 @@
   writer wins for commits/pushes.
 
   **Parameters:**
-  - config: Configuration map with :resolved-tasks-dir
+  - config: Configuration map with :resolved-tasks-dir and :enable-git-sync?
 
   **Returns:**
   - Success: String path to tasks.ednl file
@@ -161,8 +164,10 @@
         {:error-type (:error-type sync-result)})
       ;; Success - sync-result is the tasks-file path
       (let [tasks-file sync-result]
-        ;; ... continue with modification ...
-        )))
+        ;; ... modify tasks ...
+        (tasks/save-tasks! tasks-file)
+        ;; Return result for git commit outside lock
+        {...})))))
   ```
 
   **Trade-offs:**
@@ -172,28 +177,33 @@
 
   See also: `prepare-task-file` for the simpler non-syncing version."
   [config]
-  (let [tasks-dir (:resolved-tasks-dir config)
-        branch-result (git/get-current-branch tasks-dir)]
-    (if-not (:success branch-result)
-      ;; Failed to get current branch - check if it's an acceptable condition
-      (let [error-msg (:error branch-result)]
-        (if (or (str/includes? error-msg "not a git repository")
-                (str/includes? error-msg "unknown revision"))
-          ;; Not a git repository or empty git repository - skip git sync and just load tasks
-          (prepare-task-file config)
-          ;; Other git error - return error map
-          {:success false
-           :error error-msg
-           :error-type :other}))
-      ;; Got branch name - proceed with pull
-      (let [pull-result (git/pull-latest tasks-dir (:branch branch-result))]
-        (if (:success pull-result)
-          ;; Pull succeeded or no remote configured - proceed with loading tasks
-          (prepare-task-file config)
-          ;; Pull failed - return error map
-          {:success false
-           :error (:error pull-result)
-           :error-type (:error-type pull-result)})))))
+  ;; Check if git sync is enabled
+  (if-not (:enable-git-sync? config)
+    ;; Sync disabled - skip git operations and just load tasks
+    (prepare-task-file config)
+    ;; Sync enabled - proceed with git pull
+    (let [tasks-dir (:resolved-tasks-dir config)
+          branch-result (git/get-current-branch tasks-dir)]
+      (if-not (:success branch-result)
+        ;; Failed to get current branch - check if it's an acceptable condition
+        (let [error-msg (:error branch-result)]
+          (if (or (str/includes? error-msg "not a git repository")
+                  (str/includes? error-msg "unknown revision"))
+            ;; Not a git repository or empty git repository - skip git sync and just load tasks
+            (prepare-task-file config)
+            ;; Other git error - return error map
+            {:success false
+             :error error-msg
+             :error-type :other}))
+        ;; Got branch name - proceed with pull
+        (let [pull-result (git/pull-latest tasks-dir (:branch branch-result))]
+          (if (:success pull-result)
+            ;; Pull succeeded or no remote configured - proceed with loading tasks
+            (prepare-task-file config)
+            ;; Pull failed - return error map
+            {:success false
+             :error (:error pull-result)
+             :error-type (:error-type pull-result)}))))))
 
 (defn truncate-title
   "Truncate a title to a maximum length, adding ellipsis if needed.

@@ -11,6 +11,8 @@ task tracking.
 ```clojure
 {:use-git? true}   ; Enable git mode
 {:use-git? false}  ; Disable git mode
+{:enable-git-sync? true}   ; Enable git sync before modifications (default: same as :use-git?)
+{:enable-git-sync? false}  ; Disable git sync (faster for local-only workflows)
 {:branch-management? false}  ; Disable branch management (default when key is absent)
 {:branch-management? true}   ; Enable branch management for both story tasks and standalone tasks
 {:worktree-management? false}  ; Disable worktree management (default when key is absent)
@@ -197,6 +199,52 @@ Project: "mcp-tasks", Task: "Fix parser bug"
 - Worktree creation fails → stop, don't execute task
 - Worktree already exists at path but not tracked → stop with error
 - Invalid story/task name for path → stop with error
+
+### Git Sync Before Modifications
+
+The `:enable-git-sync?` configuration option controls whether modification tools (add-task, update-task, delete-task, complete-task) automatically pull the latest changes from the git remote before making changes.
+
+**Default behavior:** When `:enable-git-sync?` is not specified, it defaults to the value of `:use-git?`. This means git sync is automatically enabled when git mode is enabled, and disabled when git mode is disabled.
+
+**When to disable sync:**
+- **Local-only workflows**: If you're working entirely locally without pushing to a remote, disabling sync avoids unnecessary git operations
+- **Performance**: Skipping git pull reduces latency, especially on slower networks
+- **Offline work**: When working without network connectivity
+
+**When to keep sync enabled (default):**
+- **Multi-agent workflows**: When multiple agents or developers might be modifying tasks simultaneously
+- **Remote collaboration**: When tasks are pushed to a shared remote repository
+- **Conflict prevention**: Sync reduces the likelihood of merge conflicts by ensuring agents work with the latest state
+
+**Behavior with sync enabled:**
+1. Tool acquires file lock
+2. Pulls latest changes from git remote (if configured)
+3. Reloads tasks with latest state
+4. Performs modification
+5. Saves changes and commits
+
+**Behavior with sync disabled:**
+1. Tool acquires file lock
+2. Loads tasks from local filesystem (no git pull)
+3. Performs modification
+4. Saves changes and commits
+
+**Examples:**
+```clojure
+;; Disable sync for faster local-only development
+{:use-git? true
+ :enable-git-sync? false}
+
+;; Enable sync for multi-agent collaboration (default)
+{:use-git? true
+ :enable-git-sync? true}
+
+;; Explicit false when git mode is disabled (redundant but clear)
+{:use-git? false
+ :enable-git-sync? false}
+```
+
+**Note:** Disabling sync does not affect git commits. Changes are still committed to the `.mcp-tasks` git repository; only the automatic pull before modifications is skipped.
 
 ### Auto-Detection Mechanism
 
