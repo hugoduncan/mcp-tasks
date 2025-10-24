@@ -49,11 +49,11 @@
 
 (def relation-explainer
   "Compiled explainer for Relation schema."
-  (delay ((requiring-resolve 'malli.core/explain) Relation)))
+  (delay ((requiring-resolve 'malli.core/explainer) Relation)))
 
 (def task-explainer
   "Compiled explainer for Task schema."
-  (delay ((requiring-resolve 'malli.core/explain) Task)))
+  (delay ((requiring-resolve 'malli.core/explainer) Task)))
 
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
