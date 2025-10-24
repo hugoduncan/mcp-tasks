@@ -111,8 +111,8 @@
 
 (defn read-config
   "Searches for and reads .mcp-tasks.edn from current directory or parent directories.
-  Returns map with :raw-config and :config-dir.
-  If no config file found, returns {:raw-config {} :config-dir <start-dir>}.
+  Returns map with :raw-config, :config-dir, and :start-dir.
+  If no config file found, returns {:raw-config {} :config-dir <start-dir> :start-dir <start-dir>}.
   Throws ex-info with clear message for malformed EDN or invalid schema.
 
   Parameters:
@@ -120,24 +120,27 @@
   ([]
    (read-config (System/getProperty "user.dir")))
   ([start-dir]
-   (if-let [{:keys [config-file config-dir]} (find-config-file start-dir)]
-     (try
-       (let [config (edn/read-string (slurp config-file))]
-         {:raw-config (validate-config config)
-          :config-dir config-dir})
-       (catch clojure.lang.ExceptionInfo e
-         ;; Re-throw validation errors as-is
-         (throw e))
-       (catch Exception e
-         ;; Wrap EDN parsing errors with context
-         (throw (ex-info (str "Failed to parse .mcp-tasks.edn: " (.getMessage e))
-                         {:type :malformed-edn
-                          :file config-file
-                          :cause e}
-                         e))))
-     ;; No config file found, use defaults
-     {:raw-config {}
-      :config-dir (str (fs/canonicalize start-dir))})))
+   (let [canonical-start-dir (str (fs/canonicalize start-dir))]
+     (if-let [{:keys [config-file config-dir]} (find-config-file start-dir)]
+       (try
+         (let [config (edn/read-string (slurp config-file))]
+           {:raw-config (validate-config config)
+            :config-dir config-dir
+            :start-dir canonical-start-dir})
+         (catch clojure.lang.ExceptionInfo e
+           ;; Re-throw validation errors as-is
+           (throw e))
+         (catch Exception e
+           ;; Wrap EDN parsing errors with context
+           (throw (ex-info (str "Failed to parse .mcp-tasks.edn: " (.getMessage e))
+                           {:type :malformed-edn
+                            :file config-file
+                            :cause e}
+                           e))))
+       ;; No config file found, use defaults
+       {:raw-config {}
+        :config-dir canonical-start-dir
+        :start-dir canonical-start-dir}))))
 
 ;; Git auto-detection
 
@@ -206,27 +209,66 @@
 (defn find-main-repo
   "Extracts main repo path from .git file in worktree.
   The .git file contains: gitdir: /path/to/main/.git/worktrees/name
-  Returns the main repository root directory."
+  Returns the main repository root directory.
+  
+  Throws ex-info if:
+  - The .git file format is malformed
+  - The extracted path doesn't exist
+  - The path isn't a valid git repository"
   [worktree-dir]
   (let [git-file (fs/file worktree-dir ".git")
         content (slurp git-file)
         ;; Extract path from "gitdir: /path/to/main/.git/worktrees/name"
         gitdir-match (re-find #"gitdir:\s*(.+)" content)]
-    (when gitdir-match
+    (if gitdir-match
       (let [gitdir-path (second gitdir-match)
             ;; Navigate from .git/worktrees/name to main repo root
             ;; .git/worktrees/name -> .git/worktrees -> .git -> main-repo-root
             main-git-dir (-> gitdir-path
                              fs/parent ; .git/worktrees
                              fs/parent) ; .git
-            main-repo-root (fs/parent main-git-dir)]
-        (str (fs/canonicalize main-repo-root))))))
+            main-repo-root (fs/parent main-git-dir)
+            canonical-path (str (fs/canonicalize main-repo-root))]
+
+        ;; Validate that the path exists
+        (when-not (fs/exists? main-repo-root)
+          (throw (ex-info
+                   (str "Main repository path does not exist: " canonical-path)
+                   {:worktree-dir worktree-dir
+                    :extracted-path canonical-path
+                    :git-file (str git-file)})))
+
+        ;; Validate that it's a valid git repository
+        (when-not (fs/exists? (fs/file main-repo-root ".git"))
+          (throw (ex-info
+                   (str "Path is not a valid git repository (missing .git): " canonical-path)
+                   {:worktree-dir worktree-dir
+                    :extracted-path canonical-path
+                    :git-file (str git-file)})))
+
+        canonical-path)
+      ;; Malformed .git file - provide helpful error message
+      (throw (ex-info
+               (str "Malformed .git file in worktree. Expected format: 'gitdir: /path/to/.git/worktrees/name'")
+               {:worktree-dir worktree-dir
+                :git-file (str git-file)
+                :content content})))))
 
 (defn resolve-config
   "Returns final config map with :use-git?, :base-dir, :main-repo-dir, and :resolved-tasks-dir resolved.
   Uses explicit config value if present, otherwise auto-detects from git
   repo presence. Base directory is set to the config directory (canonicalized).
-  Main repo directory is set to the main repository root (same as base-dir if not in a worktree).
+  Main repo directory is determined by checking worktree status.
+
+  Main repo resolution logic:
+  1. If base-dir is a worktree → find main repo from base-dir
+  2. Else if start-dir != base-dir AND start-dir is a worktree → find main repo from start-dir
+  3. Else → use base-dir as main repo
+
+  This handles cases where:
+  - Config file is in the current directory (worktree or not)
+  - Config file is in a parent directory while start-dir is a worktree
+  - Normal non-worktree repositories
 
   When :worktree-management? is true, automatically enables :branch-management?.
   When :worktree-prefix is not set, defaults to :project-name.
@@ -234,30 +276,50 @@
   Defaults:
   - :worktree-prefix defaults to :project-name if not set
   - :lock-timeout-ms defaults to 30000 (30 seconds) if not set
-  - :lock-poll-interval-ms defaults to 100 (100 milliseconds) if not set"
-  [config-dir config]
-  (let [base-dir (str (fs/canonicalize config-dir))
-        main-repo-dir (if (in-worktree? base-dir)
-                        (find-main-repo base-dir)
-                        base-dir)
-        resolved-tasks-dir (resolve-tasks-dir config-dir config)
-        config-with-branch-mgmt (if (:worktree-management? config)
-                                  (assoc config :branch-management? true)
-                                  config)
-        config-with-defaults (cond-> config-with-branch-mgmt
-                               (not (contains? config-with-branch-mgmt :worktree-prefix))
-                               (assoc :worktree-prefix :project-name)
+  - :lock-poll-interval-ms defaults to 100 (100 milliseconds) if not set
+  
+  Parameters:
+  - config-dir: Directory where config file was found
+  - config: Raw configuration map
+  - start-dir (optional): Directory where config search started. Defaults to config-dir."
+  ([config-dir config]
+   (resolve-config config-dir config config-dir))
+  ([config-dir config start-dir]
+   (let [base-dir (str (fs/canonicalize config-dir))
+         search-start (str (fs/canonicalize start-dir))
+         ;; Determine main repo directory
+         main-repo-dir (cond
+                         ;; Base-dir is a worktree - use it
+                         (in-worktree? base-dir)
+                         (find-main-repo base-dir)
 
-                               (not (contains? config-with-branch-mgmt :lock-timeout-ms))
-                               (assoc :lock-timeout-ms 30000)
+                         ;; Start-dir is different from base-dir and start-dir is a worktree
+                         ;; (config was inherited from parent directory)
+                         (and (not= search-start base-dir)
+                              (in-worktree? search-start))
+                         (find-main-repo search-start)
 
-                               (not (contains? config-with-branch-mgmt :lock-poll-interval-ms))
-                               (assoc :lock-poll-interval-ms 100))]
-    (assoc config-with-defaults
-           :use-git? (determine-git-mode config-dir config)
-           :base-dir base-dir
-           :main-repo-dir main-repo-dir
-           :resolved-tasks-dir resolved-tasks-dir)))
+                         ;; Default: use base-dir
+                         :else
+                         base-dir)
+         resolved-tasks-dir (resolve-tasks-dir config-dir config)
+         config-with-branch-mgmt (if (:worktree-management? config)
+                                   (assoc config :branch-management? true)
+                                   config)
+         config-with-defaults (cond-> config-with-branch-mgmt
+                                (not (contains? config-with-branch-mgmt :worktree-prefix))
+                                (assoc :worktree-prefix :project-name)
+
+                                (not (contains? config-with-branch-mgmt :lock-timeout-ms))
+                                (assoc :lock-timeout-ms 30000)
+
+                                (not (contains? config-with-branch-mgmt :lock-poll-interval-ms))
+                                (assoc :lock-poll-interval-ms 100))]
+     (assoc config-with-defaults
+            :use-git? (determine-git-mode config-dir config)
+            :base-dir base-dir
+            :main-repo-dir main-repo-dir
+            :resolved-tasks-dir resolved-tasks-dir))))
 
 ;; Startup validation
 

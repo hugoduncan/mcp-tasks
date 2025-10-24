@@ -140,6 +140,70 @@ Story execution includes automatic branch management:
 - `select-tasks` - Get tasks with optional filtering (use `parent-id` for story tasks)
 - `complete-task` - Mark any task (including story tasks) as complete
 
+## Git Worktree Support
+
+The system fully supports working with git worktrees, allowing you to isolate different tasks or stories in separate working directories while sharing the same repository.
+
+**How It Works:**
+
+When the MCP server starts from within a git worktree:
+- Config discovery searches up from the worktree directory to find `.mcp-tasks.edn`
+- The system automatically detects the worktree environment
+- Repository-wide operations (like `git worktree list`) use the main repository path
+- Context-specific operations (like `git status`) use the current worktree path
+
+**Automatic Detection:**
+
+The config resolution automatically handles worktree environments:
+1. If the config directory is a worktree → uses main repo for repository operations
+2. If the current directory is a worktree → uses main repo for repository operations  
+3. Works seamlessly whether config is in the worktree or inherited from parent
+
+**Configuration:**
+
+Enable worktree management in `.mcp-tasks.edn`:
+```clojure
+{:worktree-management? true
+ :worktree-prefix :project-name  ;; or :none
+ :base-branch "main"}
+```
+
+When `:worktree-management?` is enabled, the `work-on` tool automatically:
+- Creates a worktree for the task/story if it doesn't exist
+- Switches to the appropriate worktree
+- Manages branches within the worktree
+
+**Common Scenarios:**
+
+1. **Config in main repo, working in worktree:**
+   - Place `.mcp-tasks.edn` in the main repository directory
+   - Start MCP server from any worktree
+   - Config is inherited, main repo detected automatically
+
+2. **Shared config across worktrees:**
+   - Place `.mcp-tasks.edn` in a common parent directory
+   - All worktrees inherit the same configuration
+   - Each worktree maintains its own execution state
+
+3. **Manual worktree usage:**
+   - Create worktrees manually with `git worktree add`
+   - Start MCP server from the worktree
+   - All operations work seamlessly
+
+**Troubleshooting:**
+
+If you encounter worktree-related issues:
+- **"fatal: not a git repository"**: Ensure the main repository exists and is accessible
+- **Execution state not found**: Check that `.mcp-tasks-current.edn` exists in the worktree root
+- **Config not found**: Verify `.mcp-tasks.edn` exists in the worktree or a parent directory
+- **Branch conflicts**: Ensure the worktree is on the expected branch for the task
+
+**Limitations:**
+
+- Worktree paths must be accessible from the main repository
+- The main repository's `.git` directory must exist and be valid
+- Concurrent operations in different worktrees should coordinate via execution state
+
 ## If you see a problem that needs fixing
 
 If you see something that is a problem, or could be improved, that is
