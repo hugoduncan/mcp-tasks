@@ -1,7 +1,8 @@
 (ns mcp-tasks.schema
-  "Malli schemas for task management system."
-  (:require
-    [malli.core :as m]))
+  "Malli schemas for task management system.
+  
+  Uses lazy-loading via requiring-resolve and compiled validators with delays
+  to avoid loading Malli at namespace load time.")
 
 ;; Schema Definitions
 
@@ -32,27 +33,49 @@
 
 ;; Validation Helpers
 
+;; Lazy-loaded Malli functions
+;; Using requiring-resolve to avoid loading malli.core at namespace load time
+
+;; Compiled validators using delays
+;; Both requiring-resolve AND validator compilation happen lazily
+
+(def relation-validator
+  "Compiled validator for Relation schema."
+  (delay ((requiring-resolve 'malli.core/validator) Relation)))
+
+(def task-validator
+  "Compiled validator for Task schema."
+  (delay ((requiring-resolve 'malli.core/validator) Task)))
+
+(def relation-explainer
+  "Compiled explainer for Relation schema."
+  (delay ((requiring-resolve 'malli.core/explain) Relation)))
+
+(def task-explainer
+  "Compiled explainer for Task schema."
+  (delay ((requiring-resolve 'malli.core/explain) Task)))
+
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
   [relation]
-  (m/validate Relation relation))
+  (@relation-validator relation))
 
 (defn valid-task?
   "Validate a task map against the Task schema."
   [task]
-  (m/validate Task task))
+  (@task-validator task))
 
 (defn explain-relation
   "Explain why a relation map is invalid.
   Returns nil if valid, explanation map if invalid."
   [relation]
-  (m/explain Relation relation))
+  (@relation-explainer relation))
 
 (defn explain-task
   "Explain why a task map is invalid.
   Returns nil if valid, explanation map if invalid."
   [task]
-  (m/explain Task task))
+  (@task-explainer task))
 
 ;; Example Data
 

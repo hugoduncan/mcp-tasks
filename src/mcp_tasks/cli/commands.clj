@@ -1,14 +1,12 @@
 (ns mcp-tasks.cli.commands
   "Command implementations for the CLI.
   
-  Thin wrappers around mcp-tasks.tools functions."
+  Thin wrappers around mcp-tasks.tools functions.
+  
+  Uses lazy-loading via requiring-resolve to only load the tool namespaces
+  that are actually used, improving startup time for simple commands."
   (:require
-    [cheshire.core :as json]
-    [mcp-tasks.tool.add-task :as add-task]
-    [mcp-tasks.tool.complete-task :as complete-task]
-    [mcp-tasks.tool.delete-task :as delete-task]
-    [mcp-tasks.tool.select-tasks :as select-tasks]
-    [mcp-tasks.tool.update-task :as update-task]))
+    [cheshire.core :as json]))
 
 (defn- parse-tool-response
   "Parse JSON response from tool *-impl functions.
@@ -35,16 +33,20 @@
     (apply merge {} json-items)))
 
 (def ^:private tool-map
-  "Map of command names to their corresponding tool functions."
-  {:list select-tasks/select-tasks-tool
-   :show select-tasks/select-tasks-tool
-   :add add-task/add-task-tool
-   :complete complete-task/complete-task-tool
-   :update update-task/update-task-tool
-   :delete delete-task/delete-task-tool})
+  "Map of command names to their tool function symbols.
+  
+  Uses symbols instead of direct references to enable lazy loading via requiring-resolve."
+  {:list 'mcp-tasks.tool.select-tasks/select-tasks-tool
+   :show 'mcp-tasks.tool.select-tasks/select-tasks-tool
+   :add 'mcp-tasks.tool.add-task/add-task-tool
+   :complete 'mcp-tasks.tool.complete-task/complete-task-tool
+   :update 'mcp-tasks.tool.update-task/update-task-tool
+   :delete 'mcp-tasks.tool.delete-task/delete-task-tool})
 
 (defn- execute-command
   "Execute a command by calling its corresponding tool implementation.
+  
+  Uses requiring-resolve to lazily load only the tool namespace needed for this command.
   
   Parameters:
   - config: The loaded configuration map
@@ -59,7 +61,8 @@
    (let [tool-args (-> parsed-args
                        (dissoc :format)
                        arg-transform-fn)
-         tool-fn (get tool-map command-key)
+         tool-fn-sym (get tool-map command-key)
+         tool-fn (requiring-resolve tool-fn-sym)
          tool (tool-fn config)
          impl-fn (:implementation tool)
          response (impl-fn nil tool-args)]
