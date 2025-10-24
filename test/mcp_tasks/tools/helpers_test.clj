@@ -129,7 +129,8 @@
                     sut/prepare-task-file (fn [config]
                                             (is (map? config))
                                             "/test/.mcp-tasks/tasks.ednl")]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
@@ -142,7 +143,8 @@
                                        :error-type :no-remote})
                     sut/prepare-task-file (fn [_]
                                             "/test/.mcp-tasks/tasks.ednl")]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
@@ -150,7 +152,8 @@
       (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: not a git repository"})
                     sut/prepare-task-file (fn [_]
                                             "/test/.mcp-tasks/tasks.ednl")]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
@@ -158,7 +161,8 @@
       (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree."})
                     sut/prepare-task-file (fn [_]
                                             "/test/.mcp-tasks/tasks.ednl")]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
@@ -169,7 +173,8 @@
                                        :pulled? false
                                        :error "CONFLICT (content): Merge conflict in tasks.ednl"
                                        :error-type :conflict})]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (false? (:success result)))
           (is (= "CONFLICT (content): Merge conflict in tasks.ednl" (:error result)))
@@ -182,7 +187,8 @@
                                        :pulled? false
                                        :error "fatal: Could not resolve host: github.com"
                                        :error-type :network})]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (false? (:success result)))
           (is (= "fatal: Could not resolve host: github.com" (:error result)))
@@ -195,7 +201,8 @@
                                        :pulled? false
                                        :error "fatal: some other error"
                                        :error-type :other})]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (false? (:success result)))
           (is (= "fatal: some other error" (:error result)))
@@ -203,7 +210,8 @@
 
     (testing "returns error map when get-current-branch fails with other git errors"
       (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: corrupt git repository"})]
-        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
+                      :enable-git-sync? true}
               result (sut/sync-and-prepare-task-file config)]
           (is (false? (:success result)))
           (is (= "fatal: corrupt git repository" (:error result)))

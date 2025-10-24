@@ -12,7 +12,7 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
@@ -123,11 +123,11 @@
           {:content [{:type "text"
                       :text msg-text}
                      {:type "text"
-                      :text (json/write-str {:deleted updated-task
-                                             :metadata {:count 1
-                                                        :status "deleted"}})}
+                      :text (json/generate-string {:deleted updated-task
+                                                   :metadata {:count 1
+                                                              :status "deleted"}})}
                      {:type "text"
-                      :text (json/write-str
+                      :text (json/generate-string
                               (cond-> {:git-status (if (:success git-result)
                                                      "success"
                                                      "error")
@@ -138,9 +138,9 @@
           {:content [{:type "text"
                       :text msg-text}
                      {:type "text"
-                      :text (json/write-str {:deleted updated-task
-                                             :metadata {:count 1
-                                                        :status "deleted"}})}]
+                      :text (json/generate-string {:deleted updated-task
+                                                   :metadata {:count 1
+                                                              :status "deleted"}})}]
            :isError false})))))
 
 (defn delete-task-tool

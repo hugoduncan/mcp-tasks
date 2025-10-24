@@ -47,6 +47,7 @@
   [test-dir]
   {:base-dir test-dir
    :use-git? true
+   :enable-git-sync? true
    :resolved-tasks-dir (str test-dir "/.mcp-tasks")})
 
 (defn init-git-repo
