@@ -53,7 +53,7 @@
 (deftest work-on-creates-real-worktree
   (h/with-test-setup [test-dir]
     ;; Test that work-on actually creates a real git worktree
-    (testing "work-on creates a real git worktree"
+    (testing "creates a real git worktree"
       (let [base-dir (str test-dir)
             config-file (str base-dir "/.mcp-tasks.edn")]
 
@@ -110,7 +110,7 @@
 (deftest work-on-from-within-worktree
   (h/with-test-setup [test-dir]
     ;; Test that work-on works correctly when called from within a worktree
-    (testing "work-on tool works when called from within a worktree"
+    (testing "works when called from within a worktree"
       (let [base-dir (str test-dir)
             config-file (str base-dir "/.mcp-tasks.edn")]
 
@@ -197,7 +197,7 @@
 (deftest work-on-detects-worktree-environment
   (h/with-test-setup [test-dir]
     ;; Test that work-on correctly detects when it's running in a worktree
-    (testing "work-on detects worktree environment correctly"
+    (testing "detects worktree environment correctly"
       (let [base-dir (str test-dir)
             config-file (str base-dir "/.mcp-tasks.edn")]
 
