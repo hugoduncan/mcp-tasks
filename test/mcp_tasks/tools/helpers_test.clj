@@ -119,7 +119,7 @@
 
   (testing "sync-and-prepare-task-file"
     (testing "succeeds when pull works"
-      (with-redefs [git/get-current-branch (fn [_] "main")
+      (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                     git/pull-latest (fn [_dir branch]
                                       (is (= "main" branch))
                                       {:success true
@@ -134,7 +134,7 @@
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
     (testing "succeeds when no remote configured (local-only repo)"
-      (with-redefs [git/get-current-branch (fn [_] "main")
+      (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                     git/pull-latest (fn [_ _]
                                       {:success true
                                        :pulled? false
@@ -147,7 +147,7 @@
           (is (= "/test/.mcp-tasks/tasks.ednl" result)))))
 
     (testing "returns error map on merge conflicts"
-      (with-redefs [git/get-current-branch (fn [_] "main")
+      (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                     git/pull-latest (fn [_ _]
                                       {:success false
                                        :pulled? false
@@ -160,7 +160,7 @@
           (is (= :conflict (:error-type result))))))
 
     (testing "returns error map on network errors"
-      (with-redefs [git/get-current-branch (fn [_] "main")
+      (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                     git/pull-latest (fn [_ _]
                                       {:success false
                                        :pulled? false
@@ -173,7 +173,7 @@
           (is (= :network (:error-type result))))))
 
     (testing "returns error map on other errors"
-      (with-redefs [git/get-current-branch (fn [_] "main")
+      (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
                     git/pull-latest (fn [_ _]
                                       {:success false
                                        :pulled? false
@@ -183,4 +183,12 @@
               result (sut/sync-and-prepare-task-file config)]
           (is (false? (:success result)))
           (is (= "fatal: some other error" (:error result)))
+          (is (= :other (:error-type result))))))
+
+    (testing "returns error map when get-current-branch fails"
+      (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "not a git repository"})]
+        (let [config {:resolved-tasks-dir "/test/.mcp-tasks"}
+              result (sut/sync-and-prepare-task-file config)]
+          (is (false? (:success result)))
+          (is (= "not a git repository" (:error result)))
           (is (= :other (:error-type result))))))))

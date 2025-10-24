@@ -94,15 +94,21 @@
   - Other errors: Returns error map with :error-type :other"
   [config]
   (let [tasks-dir (:resolved-tasks-dir config)
-        current-branch (git/get-current-branch tasks-dir)
-        pull-result (git/pull-latest tasks-dir current-branch)]
-    (if (:success pull-result)
-      ;; Pull succeeded or no remote configured - proceed with loading tasks
-      (prepare-task-file config)
-      ;; Pull failed - return error map
+        branch-result (git/get-current-branch tasks-dir)]
+    (if-not (:success branch-result)
+      ;; Failed to get current branch - return error
       {:success false
-       :error (:error pull-result)
-       :error-type (:error-type pull-result)})))
+       :error (:error branch-result)
+       :error-type :other}
+      ;; Got branch name - proceed with pull
+      (let [pull-result (git/pull-latest tasks-dir (:branch branch-result))]
+        (if (:success pull-result)
+          ;; Pull succeeded or no remote configured - proceed with loading tasks
+          (prepare-task-file config)
+          ;; Pull failed - return error map
+          {:success false
+           :error (:error pull-result)
+           :error-type (:error-type pull-result)})))))
 
 (defn truncate-title
   "Truncate a title to a maximum length, adding ellipsis if needed.
