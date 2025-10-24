@@ -161,23 +161,52 @@ Test installation on different platforms:
 
 ## Test Results Summary
 
+### Pre-Installation Verification
+- **Status**: ✓ Completed
+- **Date**: 2025-10-23
+- **Results**:
+  - ✓ Plugin structure verified (all required files present)
+  - ✓ plugin.json manifest validated
+  - ✓ SKILL.md content verified (6526 bytes)
+  - ✓ README.md present with installation instructions
+  - ✓ LICENSE file present (EPL-2.0)
+  - ✓ Branch pushed to GitHub: `convert-story-and-tasks-skill-to-marketplace-plugin`
+  - ✓ Repository: `hugoduncan/mcp-tasks`
+
 ### Local Installation Test
-- **Status**: Pending manual testing
+- **Status**: Requires manual testing in separate Claude Code session
 - **Expected Result**: ✓ Plugin installs and skill is accessible
-- **Actual Result**: _To be filled in after testing_
-- **Issues Found**: _To be documented_
+- **Installation Path**: `/Users/duncan/projects/hugoduncan/mcp-tasks/plugins/mcp-tasks-skill`
+- **Installation Command**: `/plugin install /Users/duncan/projects/hugoduncan/mcp-tasks/plugins/mcp-tasks-skill`
+- **Actual Result**: Cannot test from within Claude Code session
+- **Notes**: Testing must be performed in a separate Claude Code instance
 
 ### GitHub Installation Test
-- **Status**: Pending manual testing
-- **Expected Result**: May require root marketplace.json
-- **Actual Result**: _To be filled in after testing_
-- **Issues Found**: _To be documented_
+- **Status**: Requires manual testing
+- **Expected Result**: May require root marketplace.json configuration
+- **GitHub URL**: `https://github.com/hugoduncan/mcp-tasks/tree/convert-story-and-tasks-skill-to-marketplace-plugin/plugins/mcp-tasks-skill`
+- **Installation Commands**:
+  ```bash
+  # Option 1: Direct subdirectory (may not work)
+  /plugin install hugoduncan/mcp-tasks/plugins/mcp-tasks-skill
+
+  # Option 2: If marketplace.json added at root
+  /plugin marketplace add hugoduncan/mcp-tasks
+  /plugin install mcp-tasks-skill@hugoduncan/mcp-tasks
+  ```
+- **Actual Result**: Requires manual testing
+- **Notes**: GitHub installation from subdirectory may not be supported without root marketplace.json
 
 ### Skill Functionality Test
-- **Status**: Pending manual testing
+- **Status**: Requires manual testing after installation
 - **Expected Result**: ✓ All tools and prompts work as documented
-- **Actual Result**: _To be filled in after testing_
-- **Issues Found**: _To be documented_
+- **Verification Items**:
+  - Skill appears in `/skill` list
+  - Content displays correctly with `/skill story-and-tasks`
+  - All MCP tools documented are accessible
+  - All prompts documented are accessible
+- **Actual Result**: Requires manual testing
+- **Notes**: Depends on successful plugin installation and mcp-tasks MCP server configuration
 
 ## Configuration Requirements
 
@@ -209,9 +238,23 @@ The plugin requires the mcp-tasks MCP server to be installed and configured. Use
 
 ## Next Steps
 
-1. Push branch to GitHub
-2. Execute manual testing following the procedures above
-3. Document actual results in this file
-4. Address any issues found during testing
-5. Update README.md based on test findings
-6. Consider marketplace.json at root if GitHub installation fails
+1. ✓ ~~Push branch to GitHub~~ (Completed: 2025-10-23)
+2. Execute manual testing following the procedures above:
+   - Test local file path installation in a separate Claude Code instance
+   - Test GitHub installation (may require root marketplace.json)
+   - Verify skill functionality after installation
+3. Document actual results in this file:
+   - Update "Actual Result" fields in Test Results Summary
+   - Document any issues or unexpected behaviors
+4. Address any issues found during testing:
+   - Fix plugin structure if needed
+   - Add root marketplace.json if GitHub installation requires it
+   - Update documentation based on findings
+5. Update README.md based on test findings:
+   - Add troubleshooting section if needed
+   - Document known limitations
+   - Clarify installation steps based on test results
+6. Consider marketplace.json at root if GitHub installation fails:
+   - Create `.claude-plugin/marketplace.json` at repository root
+   - Reference subdirectory plugin in marketplace configuration
+   - Test installation via marketplace approach
