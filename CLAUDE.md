@@ -156,8 +156,49 @@ When the MCP server starts from within a git worktree:
 
 The config resolution automatically handles worktree environments:
 1. If the config directory is a worktree → uses main repo for repository operations
-2. If the current directory is a worktree → uses main repo for repository operations  
+2. If the current directory is a worktree → uses main repo for repository operations
 3. Works seamlessly whether config is in the worktree or inherited from parent
+
+**Advanced: The `start-dir` Parameter:**
+
+The `resolve-config` function accepts an optional `start-dir` parameter that represents the directory where configuration search started. This is distinct from `config-dir` (where the config file was found):
+
+- **`config-dir`**: The directory containing `.mcp-tasks.edn`
+- **`start-dir`**: The directory where the search for `.mcp-tasks.edn` began (defaults to `config-dir`)
+
+This distinction matters in the **inherited configuration scenario**:
+
+**Example scenario:**
+```
+/Users/duncan/projects/mcp-tasks/              # Main repo with .mcp-tasks.edn
+/Users/duncan/projects/mcp-tasks-fix-bug/      # Worktree (no .mcp-tasks.edn)
+```
+
+When starting the MCP server from the worktree:
+1. Config search starts in `/Users/duncan/projects/mcp-tasks-fix-bug/` (`start-dir`)
+2. Config is found in parent `/Users/duncan/projects/mcp-tasks/` (`config-dir`)
+3. `resolve-config` detects that `start-dir` is a worktree even though `config-dir` is not
+4. Main repo path is correctly resolved from the worktree's `.git` file
+
+**Resolution logic:**
+```clojure
+;; Simplified from src/mcp_tasks/config.clj
+(cond
+  ;; Config dir itself is a worktree
+  (in-worktree? base-dir)
+  (find-main-repo base-dir)
+
+  ;; Start dir is different from config dir AND is a worktree (inherited config)
+  (and (not= start-dir base-dir)
+       (in-worktree? start-dir))
+  (find-main-repo start-dir)
+
+  ;; Default: not a worktree
+  :else
+  base-dir)
+```
+
+This ensures worktree detection works correctly whether the config file is in the worktree itself or inherited from a parent directory.
 
 **Configuration:**
 
