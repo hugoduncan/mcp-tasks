@@ -5,7 +5,7 @@
   through task lifecycle including worktree isolation."
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -47,7 +47,7 @@
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)
-                state (json/read-str text :key-fn keyword)]
+                state (json/parse-string text keyword)]
             (is (not (:isError read-response)))
             (is (= 177 (:story-id state)))
             (is (= 181 (:task-id state)))
@@ -90,7 +90,7 @@
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
                 text (-> read-response :contents first :text)
-                state (json/read-str text :key-fn keyword)]
+                state (json/parse-string text keyword)]
             (is (not (:isError read-response)))
             (is (nil? (:story-id state)))
             (is (= 42 (:task-id state)))

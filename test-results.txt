@@ -1,0 +1,309 @@
+[(...................................................................................................................)(......................................................................................................)(...[31mF[m[31mF[m............................................................[31mF[m................)(....................................................................................[31mF[m......................................................................................)(.............................)(......................................................................)(...........................)(..........................................................................................)(..............................................................................................................................................................................................................................................)(........................................................................................)(..............)(....................................)(........................)(..................................................................................................................................)(.....................................................................................)(........................................................................................................................................)(..............................................................................................................)(................................................................................................................)(.....................................................)(.............................................................................)(....................................................)(..............[31mF[m[31mF[m[31mE[m..........[31mF[m[31mF[m......[31mF[m[31mF[m[31mF[m[31mE[m[31mE[m.....................)(.......................................................................................................................................................................)(.......................)][(.....................................................................................)(......................................)(..................................................................)(..............................................................................................................................................................)(.....................................................................................................................................................................)(.........................................)(...............)(.............................................................................................)]
+
+[31mFAIL[m in mcp-tasks.cli.parse-test/coerce-json-array-test (parse_test.clj:36)
+coerce-json-array returns error for non-array JSON
+Expected:
+  [1;35m"Expected JSON array for --relations"[0m
+Actual:
+  [31m-"Expected JSON array for --relations"[0m [32m+nil[0m
+
+[31mFAIL[m in mcp-tasks.cli.parse-test/coerce-json-array-test (parse_test.clj:37)
+coerce-json-array returns error for non-array JSON
+Expected:
+  [1;35m"{\"foo\":\"bar\"}"[0m
+Actual:
+  [31m-"{\"foo\":\"bar\"}"[0m [32m+nil[0m
+
+[31mFAIL[m in mcp-tasks.cli.parse-test/parse-update-test (parse_test.clj:273)
+parse-update returns error for non-array relations
+Expected:
+  [1;35m"Expected JSON array for --relations"[0m
+Actual:
+  [31m-"Expected JSON array for --relations"[0m [32m+nil[0m
+
+[31mFAIL[m in mcp-tasks.cli-integration-test/error-scenarios-test (cli_integration_test.clj:300)
+error-scenarios invalid JSON in --relations non-array JSON returns error
+expected: (str/includes? (:err result) "Expected JSON array")
+  actual: (not (str/includes? "Error: Invalid task field values: relations.[0].id failed validation: {:path [:relations 0 :id], :in [:relations 0 :id], :schema :int, :value nil}; relations.[0].relates-to failed validation: {:path [:relations 0 :relates-to], :in [:relations 0 :relates-to], :schema :int, :value nil}; relations.[0].as-type failed validation: {:path [:relations 0 :as-type], :in [:relations 0 :as-type], :schema [:enum :blocked-by :related :discovered-during], :value nil}\n  attempted-operation: update-task\n  task-id: 1\n  validation-errors: {:schema [:map [:id :int] [:parent-id {:optional true} [:maybe :int]] [:status [:enum :open :closed :in-progress :blocked :deleted]] [:title :string] [:description :string] [:design :string] [:category :string] [:type [:enum :task :bug :feature :story :chore]] [:meta [:map-of :string :string]] [:relations [:vector [:map [:id :int] [:relates-to :int] [:as-type [:enum :blocked-by :related :discovered-during]]]]]], :value {:description \"\", :category \"simple\", :meta {}, :relations [{:id nil, :relates-to nil, :as-type nil}], :type :task, :title \"Test task\", :status :open, :id 1, :design \"\"}, :errors ({:path [:relations 0 :id], :in [:relations 0 :id], :schema :int, :value nil} {:path [:relations 0 :relates-to], :in [:relations 0 :relates-to], :schema :int, :value nil} {:path [:relations 0 :as-type], :in [:relations 0 :as-type], :schema [:enum :blocked-by :related :discovered-during], :value nil})}\n  file: /var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-cli-integration-9013017694933040016/.mcp-tasks/tasks.ednl\n" "Expected JSON array"))
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-branch-discovery (work_on_worktree_test.clj:333)
+work-on discovers existing worktree for branch creates new worktree when branch not in any worktree
+Expected:
+  [1;35m"/var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-new-worktree"[0m
+Actual:
+  [31m-"/var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-new-worktree"[0m [32m+nil[0m
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-branch-discovery (work_on_worktree_test.clj:334)
+work-on discovers existing worktree for branch creates new worktree when branch not in any worktree
+expected: (true? (:worktree-created? response))
+  actual: (not (true? nil))
+
+[31mERROR[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-branch-discovery (string.clj:377)
+work-on discovers existing worktree for branch creates new worktree when branch not in any worktree
+Exception: java.lang.NullPointerException: Cannot invoke "Object.toString()" because "s" is null
+ at clojure.string$includes_QMARK_.invokeStatic (string.clj:377)
+    clojure.string$includes_QMARK_.invoke (string.clj:373)
+    ...
+    mcp_tasks.tool.work_on_worktree_test$fn__25797$fn__25798$fn__25831$fn__25868$fn__25881.invoke (work_on_worktree_test.clj:335)
+    mcp_tasks.tool.work_on_worktree_test$fn__25797$fn__25798$fn__25831$fn__25868.invoke (work_on_worktree_test.clj:335)
+    ...
+    mcp_tasks.tool.work_on_worktree_test$fn__25797$fn__25798$fn__25831.invoke (work_on_worktree_test.clj:289)
+    mcp_tasks.tool.work_on_worktree_test$fn__25797$fn__25798.invoke (work_on_worktree_test.clj:279)
+    mcp_tasks.test_helpers$with_test_setup_STAR_.invokeStatic (test_helpers.clj:100)
+    mcp_tasks.test_helpers$with_test_setup_STAR_.invoke (test_helpers.clj:94)
+    mcp_tasks.tool.work_on_worktree_test$fn__25797.invokeStatic (work_on_worktree_test.clj:249)
+    mcp_tasks.tool.work_on_worktree_test/fn (work_on_worktree_test.clj:248)
+    kaocha.type.var$test_var.invokeStatic (var.clj:24)
+    kaocha.type.var$test_var.invoke (var.clj:20)
+    kaocha.type.var$eval26927$fn__26929$wrapped_test__26932.invoke (var.clj:36)
+    kaocha.plugin.capture_output$capture_output_pre_test_hook$fn__2257$fn__2258.invoke (capture_output.cljc:97)
+    kaocha.type.var$eval26927$fn__26929.invoke (var.clj:38)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.type.ns$run_tests$fn__4432.invoke (ns.clj:21)
+    ...
+    kaocha.type.ns$run_tests.invokeStatic (ns.clj:21)
+    kaocha.type.ns$run_tests.invoke (ns.clj:16)
+    kaocha.type.ns$eval4450$fn__4451.invoke (ns.clj:61)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.test_suite$run.invokeStatic (test_suite.clj:7)
+    kaocha.test_suite$run.invoke (test_suite.clj:5)
+    kaocha.type.clojure.test$eval5861$fn__5862.invoke (test.clj:18)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.api$run$fn__4030$fn__4034$fn__4035.invoke (api.clj:159)
+    ...
+    kaocha.api$run$fn__4030$fn__4034.invoke (api.clj:133)
+    ...
+    kaocha.api$run$fn__4030.invoke (api.clj:132)
+    ...
+    kaocha.api$run.invokeStatic (api.clj:110)
+    kaocha.api$run.invoke (api.clj:97)
+    kaocha.runner$run$fn__4093.invoke (runner.clj:131)
+    ...
+    kaocha.runner$run.invokeStatic (runner.clj:129)
+    kaocha.runner$run.invoke (runner.clj:72)
+    kaocha.runner$_main_STAR_.invokeStatic (runner.clj:165)
+    kaocha.runner$_main_STAR_.doInvoke (runner.clj:143)
+    ...
+    kaocha.runner$_main.invokeStatic (runner.clj:176)
+    kaocha.runner$_main.doInvoke (runner.clj:174)
+    ...
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-branch-discovery (work_on_worktree_test.clj:416)
+work-on discovers existing worktree for branch handles branch in main repository working directory
+Expected:
+  [1;35m"/var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-test-15303059038322705032"[0m
+Actual:
+  [31m-"/var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-test-15303059038322705032"[0m [32m+nil[0m
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-branch-discovery (work_on_worktree_test.clj:417)
+work-on discovers existing worktree for branch handles branch in main repository working directory
+expected: (false? (:worktree-created? response))
+  actual: (not (false? nil))
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-creates-worktree (work_on_worktree_test.clj:69)
+work-on creates worktree on first execution
+Expected:
+  [1;35m"/var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-fix-parser-bug"[0m
+Actual:
+  [31m-"/var/folders/pq/q3q7tfqd7x1g567w2xxy67x00000gn/T/mcp-tasks-fix-parser-bug"[0m [32m+nil[0m
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-creates-worktree (work_on_worktree_test.clj:70)
+work-on creates worktree on first execution
+expected: (true? (:worktree-created? response))
+  actual: (not (true? nil))
+
+[31mFAIL[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-creates-worktree (work_on_worktree_test.clj:71)
+work-on creates worktree on first execution
+Expected:
+  [1;35m"fix-parser-bug"[0m
+Actual:
+  [31m-"fix-parser-bug"[0m [32m+nil[0m
+
+[31mERROR[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-creates-worktree (string.clj:377)
+work-on creates worktree on first execution
+Exception: java.lang.NullPointerException: Cannot invoke "Object.toString()" because "s" is null
+ at clojure.string$includes_QMARK_.invokeStatic (string.clj:377)
+    clojure.string$includes_QMARK_.invoke (string.clj:373)
+    ...
+    mcp_tasks.tool.work_on_worktree_test$fn__25551$fn__25552$fn__25597$fn__25614.invoke (work_on_worktree_test.clj:72)
+    mcp_tasks.tool.work_on_worktree_test$fn__25551$fn__25552$fn__25597.invoke (work_on_worktree_test.clj:72)
+    ...
+    mcp_tasks.tool.work_on_worktree_test$fn__25551$fn__25552.invoke (work_on_worktree_test.clj:26)
+    mcp_tasks.test_helpers$with_test_setup_STAR_.invokeStatic (test_helpers.clj:100)
+    mcp_tasks.test_helpers$with_test_setup_STAR_.invoke (test_helpers.clj:94)
+    mcp_tasks.tool.work_on_worktree_test$fn__25551.invokeStatic (work_on_worktree_test.clj:13)
+    mcp_tasks.tool.work_on_worktree_test/fn (work_on_worktree_test.clj:12)
+    kaocha.type.var$test_var.invokeStatic (var.clj:24)
+    kaocha.type.var$test_var.invoke (var.clj:20)
+    kaocha.type.var$eval26927$fn__26929$wrapped_test__26932.invoke (var.clj:36)
+    kaocha.plugin.capture_output$capture_output_pre_test_hook$fn__2257$fn__2258.invoke (capture_output.cljc:97)
+    kaocha.type.var$eval26927$fn__26929.invoke (var.clj:38)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.type.ns$run_tests$fn__4432.invoke (ns.clj:21)
+    ...
+    kaocha.type.ns$run_tests.invokeStatic (ns.clj:21)
+    kaocha.type.ns$run_tests.invoke (ns.clj:16)
+    kaocha.type.ns$eval4450$fn__4451.invoke (ns.clj:61)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.test_suite$run.invokeStatic (test_suite.clj:7)
+    kaocha.test_suite$run.invoke (test_suite.clj:5)
+    kaocha.type.clojure.test$eval5861$fn__5862.invoke (test.clj:18)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.api$run$fn__4030$fn__4034$fn__4035.invoke (api.clj:159)
+    ...
+    kaocha.api$run$fn__4030$fn__4034.invoke (api.clj:133)
+    ...
+    kaocha.api$run$fn__4030.invoke (api.clj:132)
+    ...
+    kaocha.api$run.invokeStatic (api.clj:110)
+    kaocha.api$run.invoke (api.clj:97)
+    kaocha.runner$run$fn__4093.invoke (runner.clj:131)
+    ...
+    kaocha.runner$run.invokeStatic (runner.clj:129)
+    kaocha.runner$run.invoke (runner.clj:72)
+    kaocha.runner$_main_STAR_.invokeStatic (runner.clj:165)
+    kaocha.runner$_main_STAR_.doInvoke (runner.clj:143)
+    ...
+    kaocha.runner$_main.invokeStatic (runner.clj:176)
+    kaocha.runner$_main.doInvoke (runner.clj:174)
+    ...
+
+[31mERROR[m in mcp-tasks.tool.work-on-worktree-test/work-on-worktree-creates-worktree (string.clj:377)
+work-on creates worktree on first execution
+Exception: java.lang.NullPointerException: Cannot invoke "Object.toString()" because "s" is null
+ at clojure.string$includes_QMARK_.invokeStatic (string.clj:377)
+    clojure.string$includes_QMARK_.invoke (string.clj:373)
+    ...
+    mcp_tasks.tool.work_on_worktree_test$fn__25551$fn__25552$fn__25597$fn__25618.invoke (work_on_worktree_test.clj:73)
+    mcp_tasks.tool.work_on_worktree_test$fn__25551$fn__25552$fn__25597.invoke (work_on_worktree_test.clj:73)
+    ...
+    mcp_tasks.tool.work_on_worktree_test$fn__25551$fn__25552.invoke (work_on_worktree_test.clj:26)
+    mcp_tasks.test_helpers$with_test_setup_STAR_.invokeStatic (test_helpers.clj:100)
+    mcp_tasks.test_helpers$with_test_setup_STAR_.invoke (test_helpers.clj:94)
+    mcp_tasks.tool.work_on_worktree_test$fn__25551.invokeStatic (work_on_worktree_test.clj:13)
+    mcp_tasks.tool.work_on_worktree_test/fn (work_on_worktree_test.clj:12)
+    kaocha.type.var$test_var.invokeStatic (var.clj:24)
+    kaocha.type.var$test_var.invoke (var.clj:20)
+    kaocha.type.var$eval26927$fn__26929$wrapped_test__26932.invoke (var.clj:36)
+    kaocha.plugin.capture_output$capture_output_pre_test_hook$fn__2257$fn__2258.invoke (capture_output.cljc:97)
+    kaocha.type.var$eval26927$fn__26929.invoke (var.clj:38)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.type.ns$run_tests$fn__4432.invoke (ns.clj:21)
+    ...
+    kaocha.type.ns$run_tests.invokeStatic (ns.clj:21)
+    kaocha.type.ns$run_tests.invoke (ns.clj:16)
+    kaocha.type.ns$eval4450$fn__4451.invoke (ns.clj:61)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.test_suite$run.invokeStatic (test_suite.clj:7)
+    kaocha.test_suite$run.invoke (test_suite.clj:5)
+    kaocha.type.clojure.test$eval5861$fn__5862.invoke (test.clj:18)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249$fn__2250.invoke (capture_output.cljc:88)
+    ...
+    kaocha.plugin.capture_output$capture_output_wrap_run_hook$fn__2249.doInvoke (capture_output.cljc:88)
+    ...
+    kaocha.testable$run.invokeStatic (testable.clj:129)
+    kaocha.testable$run.invoke (testable.clj:120)
+    kaocha.testable$run_testable.invokeStatic (testable.clj:211)
+    kaocha.testable$run_testable.invoke (testable.clj:158)
+    kaocha.testable$run_testables.invokeStatic (testable.clj:224)
+    kaocha.testable$run_testables.invoke (testable.clj:214)
+    kaocha.api$run$fn__4030$fn__4034$fn__4035.invoke (api.clj:159)
+    ...
+    kaocha.api$run$fn__4030$fn__4034.invoke (api.clj:133)
+    ...
+    kaocha.api$run$fn__4030.invoke (api.clj:132)
+    ...
+    kaocha.api$run.invokeStatic (api.clj:110)
+    kaocha.api$run.invoke (api.clj:97)
+    kaocha.runner$run$fn__4093.invoke (runner.clj:131)
+    ...
+    kaocha.runner$run.invokeStatic (runner.clj:129)
+    kaocha.runner$run.invoke (runner.clj:72)
+    kaocha.runner$_main_STAR_.invokeStatic (runner.clj:165)
+    kaocha.runner$_main_STAR_.doInvoke (runner.clj:143)
+    ...
+    kaocha.runner$_main.invokeStatic (runner.clj:176)
+    kaocha.runner$_main.doInvoke (runner.clj:174)
+    ...
+[31m304 tests, 2753 assertions, 3 errors, 11 failures.[m

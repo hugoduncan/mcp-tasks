@@ -1,9 +1,11 @@
 (ns mcp-tasks.execution-state
-  "Management of current execution state for stories and tasks."
+  "Management of current execution state for stories and tasks.
+  
+  Uses lazy-loading via requiring-resolve and compiled validators with delays
+  to avoid loading Malli at namespace load time."
   (:require
     [babashka.fs :as fs]
-    [clojure.edn :as edn]
-    [malli.core :as m]))
+    [clojure.edn :as edn]))
 
 ;; Schema
 
@@ -18,16 +20,27 @@
 
 ;; Validation
 
+;; Compiled validators using delays
+;; Both requiring-resolve AND validator compilation happen lazily
+
+(def execution-state-validator
+  "Compiled validator for ExecutionState schema."
+  (delay ((requiring-resolve 'malli.core/validator) ExecutionState)))
+
+(def execution-state-explainer
+  "Compiled explainer for ExecutionState schema."
+  (delay ((requiring-resolve 'malli.core/explainer) ExecutionState)))
+
 (defn valid-execution-state?
   "Validate an execution state map against the ExecutionState schema."
   [state]
-  (m/validate ExecutionState state))
+  (@execution-state-validator state))
 
 (defn explain-execution-state
   "Explain why an execution state map is invalid.
   Returns nil if valid, explanation map if invalid."
   [state]
-  (m/explain ExecutionState state))
+  (@execution-state-explainer state))
 
 ;; File Path
 

@@ -1,3 +1,4 @@
 /.mcp-tasks/
 /target/
 .mcp-tasks-current.edn
+/mcp-tasks

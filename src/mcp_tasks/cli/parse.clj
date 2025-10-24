@@ -4,7 +4,7 @@
   Uses babashka.cli to parse command-line arguments."
   (:require
     [babashka.cli :as cli]
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]))
 
 ;; Help Text
@@ -189,7 +189,7 @@ EXAMPLES:
   Returns the parsed map or an error map."
   [s]
   (try
-    (let [parsed (json/read-str s :key-fn keyword)]
+    (let [parsed (json/parse-string s keyword)]
       (if (map? parsed)
         parsed
         {:error "Expected JSON object for --meta"
@@ -204,9 +204,9 @@ EXAMPLES:
   Returns the parsed vector or an error map."
   [s]
   (try
-    (let [parsed (json/read-str s :key-fn keyword)]
-      (if (vector? parsed)
-        parsed
+    (let [parsed (json/parse-string s keyword)]
+      (if (sequential? parsed)
+        (vec parsed)
         {:error "Expected JSON array for --relations"
          :provided s}))
     (catch Exception e

@@ -6,7 +6,7 @@
    edge cases, and worktree creation scenarios."
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
@@ -390,7 +390,7 @@
               ;; Verify response is not an error
               (is (false? (:isError tool-response)))
 
-              (let [response-data (json/read-str response-text :key-fn keyword)]
+              (let [response-data (json/parse-string response-text keyword)]
                 (is (= 1 (:task-id response-data)))
                 (is (= "Fix Parser Bug" (:title response-data)))
                 (is (true? (:worktree-created? response-data)))
@@ -474,7 +474,7 @@
 
           ;; First call - creates worktree
           (let [first-response @(mcp-client/call-tool client "work-on" {:task-id 1})
-                first-data (json/read-str (get-in first-response [:content 0 :text]) :key-fn keyword)
+                first-data (json/parse-string (get-in first-response [:content 0 :text]) keyword)
                 worktree-path (:worktree-path first-data)]
 
             (is (true? (:worktree-created? first-data)))
@@ -482,7 +482,7 @@
 
             ;; Second call - reuses worktree
             (let [second-response @(mcp-client/call-tool client "work-on" {:task-id 1})
-                  second-data (json/read-str (get-in second-response [:content 0 :text]) :key-fn keyword)]
+                  second-data (json/parse-string (get-in second-response [:content 0 :text]) keyword)]
 
               (is (false? (:isError second-response)))
               ;; Canonicalize paths for comparison (handles /var vs /private/var on macOS)
@@ -548,7 +548,7 @@
               ;; Verify response is not an error
               (is (false? (:isError tool-response)))
 
-              (let [response-data (json/read-str response-text :key-fn keyword)]
+              (let [response-data (json/parse-string response-text keyword)]
                 (is (= 1 (:task-id response-data)))
                 (is (= "Fix Parser Bug" (:title response-data)))
                 (is (true? (:worktree-created? response-data)))

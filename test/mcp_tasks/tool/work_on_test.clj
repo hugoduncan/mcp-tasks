@@ -1,6 +1,6 @@
 (ns mcp-tasks.tool.work-on-test
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.execution-state :as execution-state]
@@ -14,14 +14,14 @@
     (testing "work-on parameter validation"
       (testing "validates task-id is required"
         (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "task-id parameter is required"))))
 
       (testing "validates task-id is an integer"
         (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id "not-an-int"})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "task-id must be an integer"))
@@ -30,7 +30,7 @@
 
       (testing "validates task exists"
         (let [result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id 99999})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (contains? response :error))
           (is (str/includes? (:error response) "No task found"))
@@ -43,12 +43,12 @@
     (testing "work-on returns task details"
       ;; Add a task
       (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Test Task" :type "task"})
-            add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+            add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
             task-id (get-in add-response [:task :id])
 
             ;; Call work-on with the task-id
             result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-            response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+            response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
         (is (false? (:isError result)))
         (is (= task-id (:task-id response)))
@@ -64,11 +64,11 @@
     (testing "work-on handles different task types"
       (testing "works with bug type"
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Bug Fix" :type "bug"})
-              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
 
               result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
           (is (false? (:isError result)))
           (is (= "Bug Fix" (:title response)))
@@ -76,11 +76,11 @@
 
       (testing "works with feature type"
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "medium" :title "New Feature" :type "feature"})
-              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
 
               result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
           (is (false? (:isError result)))
           (is (= "New Feature" (:title response)))
@@ -89,11 +89,11 @@
 
       (testing "works with story type"
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "User Story" :type "story"})
-              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
 
               result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)]
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
           (is (false? (:isError result)))
           (is (= "User Story" (:title response)))
@@ -105,11 +105,11 @@
     (testing "work-on writes execution state"
       (testing "writes execution state for standalone task"
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Standalone Task" :type "task"})
-              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
 
               result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)
 
               ;; Read execution state
               base-dir (:base-dir (h/test-config test-dir))
@@ -129,16 +129,16 @@
       (testing "writes execution state for story task"
         ;; Create a story
         (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Test Story" :type "story"})
-              story-response (json/read-str (get-in story-result [:content 1 :text]) :key-fn keyword)
+              story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
               story-id (get-in story-response [:task :id])
 
               ;; Create a task with parent-id
               task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Story Task" :type "task" :parent-id story-id})
-              task-response (json/read-str (get-in task-result [:content 1 :text]) :key-fn keyword)
+              task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
               task-id (get-in task-response [:task :id])
 
               result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response (json/read-str (get-in result [:content 0 :text]) :key-fn keyword)
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)
 
               ;; Read execution state
               base-dir (:base-dir (h/test-config test-dir))
@@ -159,13 +159,13 @@
     (testing "work-on is idempotent"
       (testing "calling multiple times updates execution state timestamp"
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Idempotent Task" :type "task"})
-              add-response (json/read-str (get-in add-result [:content 1 :text]) :key-fn keyword)
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
               base-dir (:base-dir (h/test-config test-dir))
 
               ;; First call
               result1 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response1 (json/read-str (get-in result1 [:content 0 :text]) :key-fn keyword)
+              response1 (json/parse-string (get-in result1 [:content 0 :text]) keyword)
               state1 (execution-state/read-execution-state base-dir)
               timestamp1 (:started-at state1)
               _ (is (false? (:isError result1)))
@@ -176,7 +176,7 @@
 
               ;; Second call
               result2 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
-              response2 (json/read-str (get-in result2 [:content 0 :text]) :key-fn keyword)
+              response2 (json/parse-string (get-in result2 [:content 0 :text]) keyword)
               state2 (execution-state/read-execution-state base-dir)
               timestamp2 (:started-at state2)]
 
@@ -189,11 +189,11 @@
 
       (testing "calling with different task-ids updates execution state"
         (let [add-result1 (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task One" :type "task"})
-              add-response1 (json/read-str (get-in add-result1 [:content 1 :text]) :key-fn keyword)
+              add-response1 (json/parse-string (get-in add-result1 [:content 1 :text]) keyword)
               task-id1 (get-in add-response1 [:task :id])
 
               add-result2 (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task Two" :type "task"})
-              add-response2 (json/read-str (get-in add-result2 [:content 1 :text]) :key-fn keyword)
+              add-response2 (json/parse-string (get-in add-result2 [:content 1 :text]) keyword)
               task-id2 (get-in add-response2 [:task :id])
               base-dir (:base-dir (h/test-config test-dir))]
 

@@ -12,7 +12,7 @@
   Part of the refactored tool architecture where each tool lives in its own
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [mcp-tasks.prompts :as prompts]
     [mcp-tasks.tasks :as tasks]
@@ -82,7 +82,7 @@
                            (git/commit-task-changes (:base-dir config)
                                                     [tasks-rel-path]
                                                     (str "Add task #" (:id created-task) ": " truncated-title))))
-            task-data-json (json/write-str
+            task-data-json (json/generate-string
                              {:task (select-keys
                                       created-task
                                       [:id
@@ -102,7 +102,7 @@
                      {:type "text"
                       :text task-data-json}
                      {:type "text"
-                      :text (json/write-str
+                      :text (json/generate-string
                               (cond-> {:git-status (if (:success git-result)
                                                      "success"
                                                      "error")

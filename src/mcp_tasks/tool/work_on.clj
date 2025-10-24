@@ -11,7 +11,7 @@
   manual workflow preparation, and external tool integration."
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.response :as response]
     [mcp-tasks.tasks :as tasks]
@@ -493,7 +493,7 @@
                                :worktree-clean? (:clean? worktree-info))
                         response-with-branch)]
     {:content [{:type "text"
-                :text (json/write-str response-data)}]
+                :text (json/generate-string response-data)}]
      :isError false}))
 
 (defn- work-on-impl
@@ -579,7 +579,7 @@
                              :branch-name (:branch-name worktree-info)
                              :message (:message worktree-info)}]
           {:content [{:type "text"
-                      :text (json/write-str response-data)}]
+                      :text (json/generate-string response-data)}]
            :isError false})
 
         ;; Otherwise proceed with execution state and normal response
@@ -596,7 +596,7 @@
       ;; Handle validation errors with structured response
       (if-let [response-data (:response (ex-data e))]
         {:content [{:type "text"
-                    :text (json/write-str response-data)}]
+                    :text (json/generate-string response-data)}]
          :isError false}
         (response/error-response e)))
 

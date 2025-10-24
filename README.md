@@ -48,6 +48,101 @@ clojure -M:cli complete --task-id 1
 
 ---
 
+### Using with Babashka (Faster Startup)
+
+The CLI can run under [Babashka](https://babashka.org/) for dramatically faster startup times—ideal for scripting and interactive use.
+
+**Performance Comparison:**
+- JVM Clojure: ~2.2 seconds
+- Babashka (help commands): ~66ms (0.066 seconds)
+- Babashka (with validation): ~390ms first run, ~330ms cached
+- **~33x faster for help commands**
+
+**Prerequisites:**
+```bash
+# Install babashka (if not already installed)
+# macOS
+brew install babashka/brew/babashka
+
+# Linux
+bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+
+# Or see https://github.com/babashka/babashka#installation
+```
+
+**Usage:**
+
+The project includes a `bb.edn` configuration with task aliases for all CLI commands:
+
+```bash
+# List available babashka tasks
+bb tasks
+
+# Use CLI commands with bb prefix
+bb list --category simple
+bb add --category simple --title "New task"
+bb show --task-id 42
+bb complete --task-id 42
+bb update --task-id 42 --status in-progress
+bb delete --task-id 42
+
+# Or use the main CLI entry point
+bb cli list --format json
+bb cli add --category feature --title "Add endpoint"
+```
+
+**Side-by-Side Comparison:**
+
+| Operation | JVM Clojure | Babashka |
+|-----------|-------------|----------|
+| List tasks | `clojure -M:cli list` | `bb list` |
+| Add task | `clojure -M:cli add --category simple --title "..."` | `bb add --category simple --title "..."` |
+| Show task | `clojure -M:cli show --task-id 42` | `bb show --task-id 42` |
+| Complete task | `clojure -M:cli complete --task-id 42` | `bb complete --task-id 42` |
+| Update task | `clojure -M:cli update --task-id 42 --status in-progress` | `bb update --task-id 42 --status in-progress` |
+
+**When to Use Babashka vs JVM:**
+- **Babashka**: CLI operations, scripting, interactive task management
+- **JVM Clojure**: MCP server (requires JVM), development/testing with full Clojure toolchain
+
+**Note:** The MCP server still requires JVM Clojure (`clojure -X:mcp-tasks`). Babashka support is for CLI operations only.
+
+**Testing with Babashka:**
+A `bb test` task is available in `bb.edn`, but currently blocked by a dependency incompatibility. The mcp-clj-server test-dep variant requires clojure.data.json, which doesn't work in babashka. Until this is resolved, use JVM Clojure for testing: `clojure -M:dev:test --focus :unit`
+
+### Standalone Executable (Uberscript)
+
+For distribution or system-wide installation, you can build a standalone executable that bundles all dependencies:
+
+```bash
+# Build the executable (from the mcp-tasks source directory)
+bb build-uberscript
+
+# This creates a 48KB executable: ./mcp-tasks
+# Use it directly
+./mcp-tasks list --category simple
+./mcp-tasks add --title "New task" --category simple
+
+# Install system-wide (optional)
+sudo cp mcp-tasks /usr/local/bin/
+mcp-tasks list --format human
+```
+
+**Uberscript Benefits:**
+- **Single file distribution** - No need to install source code or dependencies
+- **Fast startup** - Same ~66ms performance as `bb` commands
+- **Portable** - Copy to any system with babashka installed
+- **No classpath setup** - All dependencies bundled in the executable
+
+**Performance:**
+The uberscript maintains the same optimized performance as running via `bb`:
+- Help commands: ~63ms
+- Commands with validation: ~390ms first run, ~330ms cached
+
+**Note:** The uberscript requires babashka to be installed on the target system (`/usr/bin/env bb` shebang).
+
+---
+
 ## What & Why
 
 mcp-tasks enables you to manage development tasks in markdown files and have AI agents execute them. Unlike todo tools, mcp-tasks integrates task planning with execution—agents don't just track tasks, they complete them.
