@@ -362,7 +362,10 @@
       (str/includes? stderr "unresolved conflict")
       (str/includes? stderr "unmerged files")
       ;; Git 2.51+ returns this for divergent branches before attempting merge
-      (str/includes? stderr "Not possible to fast-forward")))
+      (str/includes? stderr "Not possible to fast-forward")
+      ;; Rebase conflict patterns
+      (str/includes? stderr "could not apply")
+      (str/includes? stderr "Resolve all conflicts manually")))
 
 (defn- no-remote-pattern?
   "Returns true if stderr indicates no remote is configured"
