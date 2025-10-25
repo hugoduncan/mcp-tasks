@@ -10,16 +10,26 @@
   ;; Verifies correct identification of worktree environments
 
   (testing "in-worktree?"
-    (testing "returns true when .git is a regular file"
-      ;; This test runs in a worktree, so current dir should be detected as worktree
-      (let [current-dir (System/getProperty "user.dir")]
-        (is (true? (sut/in-worktree? current-dir)))))
-
-    (testing "returns false when .git is a directory"
-      ;; The main repo has .git as a directory
+    (testing "detects current directory type correctly"
+      ;; Test works whether running in worktree or regular repo
+      ;; Just verify the function returns a boolean based on .git structure
       (let [current-dir (System/getProperty "user.dir")
-            main-repo (sut/get-main-repo-dir current-dir)]
-        (is (false? (sut/in-worktree? main-repo)))))))
+            git-file (io/file current-dir ".git")
+            is-worktree (.isFile git-file)
+            is-directory (.isDirectory git-file)]
+
+        ;; Should return true if .git is a file, false if .git is a directory
+        (if is-worktree
+          (is (true? (sut/in-worktree? current-dir))
+              "Should detect worktree when .git is a file")
+          (when is-directory
+            (is (false? (sut/in-worktree? current-dir))
+                "Should detect non-worktree when .git is a directory")))))
+
+    (testing "returns false when .git does not exist"
+      ;; Test with a directory that has no .git
+      (let [temp-dir (System/getProperty "java.io.tmpdir")]
+        (is (false? (sut/in-worktree? temp-dir)))))))
 
 (deftest find-main-repo-test
   ;; Tests extraction of main repository path from worktree .git file
