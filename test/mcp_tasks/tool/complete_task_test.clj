@@ -457,9 +457,9 @@
           (let [error-data (json/parse-string (get-in result [:content 1 :text]) keyword)]
             (is (= "Cannot complete story: 2 child tasks still are not closed" (:error error-data)))
             (is (= 30 (get-in error-data [:metadata :task-id])))
-            (is (= 2 (count (get-in error-data [:metadata :unclosed-children]))))
+            (is (= 2 (count (get-in error-data [:metadata :blocking-children]))))
             ;; Verify unclosed children details
-            (let [unclosed (get-in error-data [:metadata :unclosed-children])]
+            (let [unclosed (get-in error-data [:metadata :blocking-children])]
               (is (some #(= 31 (:id %)) unclosed))
               (is (some #(= 33 (:id %)) unclosed))
               (is (every? #(not= :closed (:status %)) unclosed))))
@@ -515,6 +515,56 @@
             ;; Verify children follow
             (is (= 41 (:id (second completed-tasks))))
             (is (= 42 (:id (nth completed-tasks 2)))))
+
+          ;; Verify tasks.ednl is now empty
+          (is (empty? (h/read-ednl-test-file test-dir "tasks.ednl"))))))))
+
+(deftest completes-story-with-deleted-children
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing a story with deleted children succeeds
+    ;; Deleted children should not block story completion
+    (testing "complete-task"
+      (testing "archives story when children include deleted status"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 50 :parent-id nil :title "Story with Deleted Children" :description "Story desc" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+           {:id 51 :parent-id 50 :title "Closed Child" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}
+           {:id 52 :parent-id 50 :title "Deleted Child" :description "" :design "" :category "simple" :type :task :status :deleted :meta {} :relations []}])
+
+        (let [result (#'sut/complete-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 50})]
+          ;; Verify success response
+          (is (false? (:isError result)))
+          (is (= 2 (count (:content result))))
+
+          ;; First content item: completion message
+          (let [msg (get-in result [:content 0 :text])]
+            (is (str/includes? msg "Story 50 completed and archived"))
+            (is (str/includes? msg "with 2 child tasks")))
+
+          ;; Second content item: task data as JSON
+          (let [json-content (second (:content result))
+                data (json/parse-string (:text json-content) keyword)]
+            (is (= "text" (:type json-content)))
+            (is (map? (:task data)))
+            (is (= 50 (get-in data [:task :id])))
+            (is (= "closed" (get-in data [:task :status]))))
+
+          ;; Verify all tasks moved to complete.ednl
+          (let [completed-tasks (h/read-ednl-test-file test-dir "complete.ednl")]
+            (is (= 3 (count completed-tasks)))
+            ;; Verify story is first
+            (is (= 50 (:id (first completed-tasks))))
+            (is (= :story (:type (first completed-tasks))))
+            (is (= :closed (:status (first completed-tasks))))
+            ;; Verify children follow (both closed and deleted)
+            (is (= 51 (:id (second completed-tasks))))
+            (is (= :closed (:status (second completed-tasks))))
+            (is (= 52 (:id (nth completed-tasks 2))))
+            (is (= :deleted (:status (nth completed-tasks 2)))))
 
           ;; Verify tasks.ednl is now empty
           (is (empty? (h/read-ednl-test-file test-dir "tasks.ednl"))))))))

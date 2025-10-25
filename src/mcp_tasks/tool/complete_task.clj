@@ -18,6 +18,7 @@
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [mcp-tasks.execution-state :as exec-state]
+    [mcp-tasks.schema :as schema]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
@@ -118,18 +119,20 @@
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context
         children (tasks/get-children (:id task))
-        unclosed-children (filterv #(not= :closed (:status %)) children)]
-    (if (seq unclosed-children)
+        ;; Only open, in-progress, and blocked tasks prevent completion
+        ;; Closed and deleted tasks are considered resolved
+        blocking-children (filterv #(schema/blocking-statuses (:status %)) children)]
+    (if (seq blocking-children)
       ;; Error: unclosed children exist
       (helpers/build-tool-error-response
-        (str "Cannot complete story: " (count unclosed-children)
-             " child task" (when (> (count unclosed-children) 1) "s")
-             " still " (if (= 1 (count unclosed-children)) "is" "are")
+        (str "Cannot complete story: " (count blocking-children)
+             " child task" (when (> (count blocking-children) 1) "s")
+             " still " (if (= 1 (count blocking-children)) "is" "are")
              " not closed")
         "complete-task"
         {:task-id (:id task)
          :title (:title task)
-         :unclosed-children (mapv #(select-keys % [:id :title :status]) unclosed-children)
+         :blocking-children (mapv #(select-keys % [:id :title :status]) blocking-children)
          :file tasks-file})
 
       ;; All children closed - proceed with atomic archival
