@@ -118,7 +118,7 @@
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context
         children (tasks/get-children (:id task))
-        unclosed-children (filterv #(not= :closed (:status %)) children)]
+        unclosed-children (filterv #(#{:open :in-progress :blocked} (:status %)) children)]
     (if (seq unclosed-children)
       ;; Error: unclosed children exist
       (helpers/build-tool-error-response

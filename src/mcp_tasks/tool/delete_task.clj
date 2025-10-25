@@ -81,7 +81,7 @@
                                                                 ;; Check for non-closed children
                                                                 :else
                                                                 (let [children (tasks/get-children (:id task))
-                                                                      non-closed-children (filterv #(not= :closed (:status %)) children)]
+                                                                      non-closed-children (filterv #(#{:open :in-progress :blocked} (:status %)) children)]
                                                                   (if (seq non-closed-children)
                                                                     ;; Error: non-closed children exist
                                                                     (helpers/build-tool-error-response
