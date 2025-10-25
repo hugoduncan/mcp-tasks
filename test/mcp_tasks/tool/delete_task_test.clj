@@ -212,6 +212,36 @@
             (is (= 2 (count tasks)))
             (is (every? #(= 1 (:parent-id %)) tasks))))))))
 
+(deftest delete-task-allows-deletion-with-deleted-children
+  (h/with-test-setup [test-dir]
+    ;; Tests that delete-task-impl allows deletion of parent when children include deleted status
+    ;; Deleted children should not block parent deletion
+    (testing "delete-task"
+      (testing "allows deletion of parent with deleted children"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "parent" :description "" :design "" :category "test" :type :story :status :open :meta {} :relations []}
+           {:id 2 :parent-id 1 :title "closed child" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}
+           {:id 3 :parent-id 1 :title "deleted child" :description "" :design "" :category "test" :type :task :status :deleted :meta {} :relations []}])
+        (let [result (#'sut/delete-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1})]
+          (is (false? (:isError result)))
+          ;; Verify parent was deleted
+          (let [complete-tasks (h/read-ednl-test-file test-dir "complete.ednl")]
+            (is (= 1 (count complete-tasks)))
+            (is (= 1 (:id (first complete-tasks))))
+            (is (= :deleted (:status (first complete-tasks)))))
+          ;; Verify children remain in tasks.ednl
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")]
+            (is (= 2 (count tasks)))
+            (is (every? #(= 1 (:parent-id %)) tasks))
+            ;; Verify statuses are preserved
+            (is (= :closed (:status (first tasks))))
+            (is (= :deleted (:status (second tasks))))))))))
+
 (deftest delete-task-allows-deletion-with-no-children
   (h/with-test-setup [test-dir]
     ;; Tests that delete-task-impl allows deletion of task with no children
