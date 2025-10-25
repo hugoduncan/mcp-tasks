@@ -402,6 +402,7 @@
         (let [result (sut/resolve-config canonical-base-dir {})]
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-timeout-ms result)))
@@ -412,6 +413,7 @@
         (let [result (sut/resolve-config canonical-base-dir {})]
           (is (= true (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -421,6 +423,7 @@
         (let [result (sut/resolve-config canonical-base-dir {:use-git? true})]
           (is (= true (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -443,6 +446,7 @@
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
           (is (= :project-name (:worktree-prefix result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= "value" (:other-key result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -458,6 +462,7 @@
           (is (= true (:branch-management? result)))
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -470,6 +475,7 @@
           (is (= false (:branch-management? result)))
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -482,6 +488,7 @@
           (is (= true (:branch-management? result)))
           (is (= false (:use-git? result)))
           (is (= canonical-base-dir (:base-dir result)))
+          (is (= canonical-base-dir (:main-repo-dir result)))
           (is (= :project-name (:worktree-prefix result)))
           (is (string? (:resolved-tasks-dir result)))
           (is (int? (:lock-poll-interval-ms result)))
@@ -507,6 +514,314 @@
         (is (string? base-dir))
         (is (fs/absolute? base-dir))
         (is (= (str (fs/canonicalize test-project-dir)) base-dir))))))
+
+(deftest in-worktree-detection
+  ;; Test detection of git worktree environments
+  (testing "in-worktree?"
+    (testing "returns false when .git is a directory (main repo)"
+      (fs/create-dirs (str test-project-dir "/.git"))
+      (is (false? (sut/in-worktree? test-project-dir))))
+
+    (testing "returns true when .git is a file (worktree)"
+      (cleanup-test-project)
+      (setup-test-project)
+      (spit (str test-project-dir "/.git") "gitdir: /some/path/.git/worktrees/test")
+      (is (true? (sut/in-worktree? test-project-dir))))
+
+    (testing "returns false when .git does not exist"
+      (cleanup-test-project)
+      (setup-test-project)
+      (is (false? (sut/in-worktree? test-project-dir))))))
+
+(deftest validate-git-repository-path-with-valid-repo
+  ;; Test that validation passes for valid git repositories
+  (testing "validate-git-repository-path"
+    (testing "returns nil for valid git repository"
+      (fs/create-dirs (str test-project-dir "/.git"))
+      (is (nil? (sut/validate-git-repository-path test-project-dir))))
+
+    (testing "returns nil when context-info is provided"
+      (fs/create-dirs (str test-project-dir "/.git"))
+      (is (nil? (sut/validate-git-repository-path test-project-dir {:some :context}))))))
+
+(deftest validate-git-repository-path-with-nonexistent-path
+  ;; Test error handling when path doesn't exist
+  (testing "validate-git-repository-path with nonexistent path"
+    (testing "throws error when path doesn't exist"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Repository path does not exist:"
+            (sut/validate-git-repository-path "/nonexistent/path"))))
+
+    (testing "includes context in error data"
+      (try
+        (sut/validate-git-repository-path "/nonexistent/path" {:worktree-dir "test"})
+        (is false "Should have thrown")
+        (catch clojure.lang.ExceptionInfo e
+          (is (string? (:extracted-path (ex-data e))))
+          (is (= "test" (:worktree-dir (ex-data e)))))))))
+
+(deftest validate-git-repository-path-with-missing-git-dir
+  ;; Test error handling when .git is missing
+  (testing "validate-git-repository-path with missing .git"
+    (testing "throws error when .git doesn't exist"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Path is not a valid git repository \(missing \.git\):"
+            (sut/validate-git-repository-path test-project-dir))))
+
+    (testing "includes error details in ex-data"
+      (try
+        (sut/validate-git-repository-path test-project-dir {:git-file "test.git"})
+        (is false "Should have thrown")
+        (catch clojure.lang.ExceptionInfo e
+          (is (string? (:extracted-path (ex-data e))))
+          (is (= "test.git" (:git-file (ex-data e)))))))))
+
+(deftest validate-git-repository-path-with-worktree
+  ;; Test error handling when .git is a file (worktree) instead of directory
+  (testing "validate-git-repository-path with worktree"
+    (testing "throws error when .git is a file"
+      (spit (str test-project-dir "/.git") "gitdir: /some/path")
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Path is a nested worktree \(expected \.git directory, found file\):"
+            (sut/validate-git-repository-path test-project-dir))))
+
+    (testing "includes git-path in error data"
+      (spit (str test-project-dir "/.git") "gitdir: /some/path")
+      (try
+        (sut/validate-git-repository-path test-project-dir {:context "test"})
+        (is false "Should have thrown")
+        (catch clojure.lang.ExceptionInfo e
+          (is (string? (:extracted-path (ex-data e))))
+          (is (string? (:git-path (ex-data e))))
+          (is (= "test" (:context (ex-data e)))))))))
+
+(deftest find-main-repo-from-worktree
+  ;; Test extraction of main repository path from worktree .git file
+  (testing "find-main-repo"
+    (testing "extracts main repo path from .git file"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        (fs/create-dirs gitdir-path)
+        (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+        (let [result (sut/find-main-repo test-project-dir)]
+          (is (= (str (fs/canonicalize main-repo-path)) result)))
+        (fs/delete-tree main-repo-path)))
+
+    (testing "handles paths with spaces"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "main repo with spaces-"}))
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        (fs/create-dirs gitdir-path)
+        (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+        (let [result (sut/find-main-repo test-project-dir)]
+          (is (= (str (fs/canonicalize main-repo-path)) result)))
+        (fs/delete-tree main-repo-path)))))
+
+(deftest find-main-repo-with-malformed-git-file
+  ;; Test that find-main-repo provides clear error message for malformed .git files
+  (testing "throws clear error when missing gitdir line"
+    (spit (str test-project-dir "/.git") "this is malformed content")
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"Malformed \.git file in worktree\. Expected format: 'gitdir: /path/to/\.git/worktrees/name'"
+          (sut/find-main-repo test-project-dir))))
+
+  (testing "includes error details in ex-data"
+    (spit (str test-project-dir "/.git") "invalid content")
+    (try
+      (sut/find-main-repo test-project-dir)
+      (is false "Should have thrown")
+      (catch clojure.lang.ExceptionInfo e
+        (is (string? (:worktree-dir (ex-data e))))
+        (is (string? (:git-file (ex-data e))))
+        (is (= "invalid content" (:content (ex-data e)))))))
+
+  (testing "throws clear error for empty file"
+    (spit (str test-project-dir "/.git") "")
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"Malformed \.git file in worktree\. Expected format:"
+          (sut/find-main-repo test-project-dir))))
+
+  (testing "throws clear error when gitdir keyword present but malformed"
+    (spit (str test-project-dir "/.git") "gitdir /missing/colon")
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"Malformed \.git file in worktree\. Expected format:"
+          (sut/find-main-repo test-project-dir)))))
+
+(deftest find-main-repo-rejects-nested-worktrees
+  ;; Test that find-main-repo detects nested worktrees (when .git is a file, not a directory)
+  (testing "find-main-repo with nested worktrees"
+    (testing "throws error when extracted path has .git file instead of directory"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "nested-worktree-"}))
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        ;; First create the directory structure
+        (fs/create-dirs gitdir-path)
+        ;; Then delete .git directory and recreate as file (nested worktree)
+        (fs/delete-tree (str main-repo-path "/.git"))
+        (spit (str main-repo-path "/.git") "gitdir: /some/other/path")
+        (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+
+        (is (thrown-with-msg?
+              clojure.lang.ExceptionInfo
+              #"Path is a nested worktree \(expected \.git directory, found file\):"
+              (sut/find-main-repo test-project-dir)))
+        (fs/delete-tree main-repo-path)))
+
+    (testing "includes detailed error information in ex-data"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "nested-worktree-"}))
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        ;; First create the directory structure
+        (fs/create-dirs gitdir-path)
+        ;; Then delete .git directory and recreate as file (nested worktree)
+        (fs/delete-tree (str main-repo-path "/.git"))
+        (spit (str main-repo-path "/.git") "gitdir: /some/other/path")
+        (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+
+        (try
+          (sut/find-main-repo test-project-dir)
+          (is false "Should have thrown")
+          (catch clojure.lang.ExceptionInfo e
+            (let [data (ex-data e)]
+              (is (string? (:worktree-dir data)))
+              (is (string? (:extracted-path data)))
+              (is (string? (:git-file data)))
+              (is (string? (:git-path data)))
+              (is (= test-project-dir (:worktree-dir data))))))
+        (fs/delete-tree main-repo-path)))))
+
+(deftest resolve-config-includes-main-repo-dir
+  ;; Test that resolve-config includes :main-repo-dir field
+  (testing "resolve-config includes :main-repo-dir"
+    (let [canonical-base-dir (str (fs/canonicalize test-project-dir))]
+      (testing "sets :main-repo-dir equal to :base-dir when not in worktree"
+        ;; Explicitly pass start-dir=base-dir to avoid using actual CWD
+        (let [result (sut/resolve-config canonical-base-dir {} canonical-base-dir)]
+          (is (contains? result :main-repo-dir))
+          (is (= canonical-base-dir (:main-repo-dir result)))
+          (is (= (:base-dir result) (:main-repo-dir result)))))
+
+      (testing "sets :main-repo-dir to main repo path when start-dir is in worktree"
+        (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+              worktree-name "test-worktree"
+              gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+          (try
+            (fs/create-dirs gitdir-path)
+            (spit (str test-project-dir "/.git") (str "gitdir: " gitdir-path))
+            ;; Pass test-project-dir as both config-dir and start-dir
+            (let [result (sut/resolve-config canonical-base-dir {} canonical-base-dir)
+                  expected-main-repo (str (fs/canonicalize main-repo-path))]
+              (is (contains? result :main-repo-dir))
+              (is (= expected-main-repo (:main-repo-dir result)))
+              ;; base-dir now equals start-dir (which is the worktree)
+              (is (= canonical-base-dir (:base-dir result)))
+              (is (not= (:base-dir result) (:main-repo-dir result))))
+            (finally
+              ;; Clean up .git file before deleting temp dir
+              (fs/delete-if-exists (str test-project-dir "/.git"))
+              (fs/delete-tree main-repo-path)))))
+
+      (testing "sets :main-repo-dir from start-dir when start-dir is worktree but config-dir is not"
+        ;; This tests the case where:
+        ;; - Config file is in a parent directory that is NOT a worktree
+        ;; - start-dir is a worktree
+        ;; - resolve-config should detect start-dir's worktree status and find main repo
+        (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+              worktree-dir (str test-project-dir "/worktree-subdir")
+              worktree-name "start-dir-worktree"
+              gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+          (try
+            (fs/create-dirs gitdir-path)
+            (fs/create-dirs worktree-dir)
+            (spit (str worktree-dir "/.git") (str "gitdir: " gitdir-path))
+
+            ;; Pass canonical-base-dir as config-dir, worktree-dir as start-dir
+            (let [result (sut/resolve-config canonical-base-dir {} worktree-dir)
+                  expected-main-repo (str (fs/canonicalize main-repo-path))
+                  canonical-worktree (str (fs/canonicalize worktree-dir))]
+              (is (contains? result :main-repo-dir))
+              (is (= expected-main-repo (:main-repo-dir result)))
+              ;; base-dir now equals start-dir (the worktree)
+              (is (= canonical-worktree (:base-dir result)))
+              (is (not= (:base-dir result) (:main-repo-dir result))))
+            (finally
+              (fs/delete-tree main-repo-path))))))))
+
+(deftest resolve-config-with-symlinked-worktree
+  ;; Test that resolve-config correctly handles worktrees accessed via symlinks
+  (testing "resolve-config with symlinked worktree"
+    (testing "resolves main-repo-dir correctly when worktree is accessed via symlink"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+            worktree-real-path (str (fs/create-temp-dir {:prefix "worktree-"}))
+            worktree-symlink (str test-project-dir "/worktree-symlink")
+            worktree-name "test-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)]
+        (try
+          ;; Create main repo structure
+          (fs/create-dirs gitdir-path)
+
+          ;; Create .git file in real worktree path
+          (spit (str worktree-real-path "/.git") (str "gitdir: " gitdir-path))
+
+          ;; Create symlink to worktree
+          (fs/create-sym-link worktree-symlink worktree-real-path)
+
+          ;; Write config to symlinked worktree
+          (spit (str worktree-symlink "/.mcp-tasks.edn") "{}")
+
+          ;; resolve-config should canonicalize the symlink and detect worktree
+          (let [result (sut/resolve-config worktree-symlink {} worktree-symlink)
+                expected-main-repo (str (fs/canonicalize main-repo-path))
+                canonical-worktree (str (fs/canonicalize worktree-real-path))]
+            ;; base-dir should be canonicalized (resolving symlink) and equal to start-dir
+            (is (= canonical-worktree (:base-dir result)))
+            ;; main-repo-dir should be correctly extracted from the .git file
+            (is (= expected-main-repo (:main-repo-dir result)))
+            ;; They should be different
+            (is (not= (:base-dir result) (:main-repo-dir result))))
+          (finally
+            (fs/delete-if-exists worktree-symlink)
+            (fs/delete-tree main-repo-path)
+            (fs/delete-tree worktree-real-path)))))
+
+    (testing "handles symlink when config is in parent and start-dir is symlinked worktree"
+      (let [main-repo-path (str (fs/create-temp-dir {:prefix "main-repo-"}))
+            worktree-real-path (str (fs/create-temp-dir {:prefix "worktree-"}))
+            worktree-symlink (str test-project-dir "/worktree-link")
+            worktree-name "linked-worktree"
+            gitdir-path (str main-repo-path "/.git/worktrees/" worktree-name)
+            canonical-base-dir (str (fs/canonicalize test-project-dir))]
+        (try
+          ;; Create main repo structure
+          (fs/create-dirs gitdir-path)
+
+          ;; Create .git file in real worktree path
+          (spit (str worktree-real-path "/.git") (str "gitdir: " gitdir-path))
+
+          ;; Create symlink to worktree
+          (fs/create-sym-link worktree-symlink worktree-real-path)
+
+          ;; Config is in parent (test-project-dir), start from symlinked worktree
+          (let [result (sut/resolve-config canonical-base-dir {} worktree-symlink)
+                expected-main-repo (str (fs/canonicalize main-repo-path))
+                canonical-worktree (str (fs/canonicalize worktree-real-path))]
+            ;; base-dir now equals start-dir (the canonicalized worktree)
+            (is (= canonical-worktree (:base-dir result)))
+            ;; main-repo-dir should be correctly extracted from start-dir's .git file
+            (is (= expected-main-repo (:main-repo-dir result)))
+            ;; They should be different
+            (is (not= (:base-dir result) (:main-repo-dir result))))
+          (finally
+            (fs/delete-if-exists worktree-symlink)
+            (fs/delete-tree main-repo-path)
+            (fs/delete-tree worktree-real-path)))))))
 
 (deftest resolve-tasks-dir-with-default
   ;; Test that resolve-tasks-dir defaults to .mcp-tasks relative to config-dir

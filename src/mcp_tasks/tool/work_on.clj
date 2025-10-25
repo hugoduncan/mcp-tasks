@@ -49,11 +49,11 @@
     (util/sanitize-branch-name title branch-source-id)))
 
 (defn- calculate-base-branch
-  [configured-base-branch base-dir]
+  [configured-base-branch main-repo-dir]
   (if configured-base-branch
     ;; Use configured base branch
     (let [branch-check (git/ensure-git-success!
-                         (git/branch-exists? base-dir configured-base-branch)
+                         (git/branch-exists? main-repo-dir configured-base-branch)
                          (str "branch-exists? " configured-base-branch))]
       (when-not (:exists? branch-check)
         (throw (ex-info (str "Configured base branch " configured-base-branch " does not exist")
@@ -62,16 +62,19 @@
       configured-base-branch)
     ;; Auto-detect default branch
     (:branch (git/ensure-git-success!
-               (git/get-default-branch base-dir)
+               (git/get-default-branch main-repo-dir)
                "get-default-branch"))))
 
 (defn- manage-branch
   "Manages git branch for task execution.
 
   Parameters:
-  - base-dir: Base directory of the git repository
+  - base-dir: Base directory (for context-specific operations like checking uncommitted changes)
   - branch-name: The sanitized branch name to use
-  - config: Configuration map from read-config
+  - config: Configuration map from read-config (must include :main-repo-dir)
+
+  Uses :main-repo-dir from config for repository-wide branch operations.
+  Uses base-dir for context-specific operations in the current directory.
 
   Returns a map with:
   - :success - boolean indicating if operation succeeded
@@ -94,7 +97,10 @@
   ;; => {:success true :branch-name \"my-task\" :branch-created? false :branch-switched? false}"
   [base-dir branch-name config]
   (try
-    (let [;; Get current branch
+    (let [;; Extract main-repo-dir for repository operations
+          main-repo-dir (:main-repo-dir config)
+
+          ;; Get current branch (uses base-dir for current context)
           current-branch (:branch (git/ensure-git-success!
                                     (git/get-current-branch base-dir)
                                     "get-current-branch"))]
@@ -107,7 +113,7 @@
          :branch-switched? false
          :error nil}
 
-        ;; Need to switch branches - check for uncommitted changes first
+        ;; Need to switch branches - check for uncommitted changes first (uses base-dir)
         (if (:has-changes? (git/ensure-git-success!
                              (git/check-uncommitted-changes base-dir)
                              "check-uncommitted-changes"))
@@ -117,25 +123,25 @@
            :metadata {:current-branch current-branch
                       :target-branch branch-name}}
 
-          ;; Get base branch (from config or auto-detect)
+          ;; Get base branch (from config or auto-detect, uses main-repo-dir)
           (let [configured-base-branch (:base-branch config)
                 base-branch (calculate-base-branch
                               configured-base-branch
-                              base-dir)]
+                              main-repo-dir)]
 
-            ;; Checkout base branch
+            ;; Checkout base branch (uses base-dir for checkout)
             (git/ensure-git-success!
               (git/checkout-branch base-dir base-branch)
               (str "checkout-branch " base-branch))
 
-            ;; Pull latest (ignore errors for local-only repos)
+            ;; Pull latest (ignore errors for local-only repos, uses base-dir)
             (git/pull-latest base-dir base-branch)
 
-            ;; Check if target branch exists and act accordingly
+            ;; Check if target branch exists (uses main-repo-dir)
             (if (:exists? (git/ensure-git-success!
-                            (git/branch-exists? base-dir branch-name)
+                            (git/branch-exists? main-repo-dir branch-name)
                             (str "branch-exists? " branch-name)))
-              ;; Branch exists, checkout
+              ;; Branch exists, checkout (uses base-dir)
               (do
                 (git/ensure-git-success!
                   (git/checkout-branch base-dir branch-name)
@@ -146,7 +152,7 @@
                  :branch-switched? true
                  :error nil})
 
-              ;; Branch doesn't exist, create and checkout
+              ;; Branch doesn't exist, create and checkout (uses base-dir)
               (do
                 (git/ensure-git-success!
                   (git/create-and-checkout-branch base-dir branch-name)
@@ -212,10 +218,13 @@
   "Manages git worktree for task execution.
 
   Parameters:
-  - base-dir: Base directory of the git repository
+  - base-dir: Base directory (current working directory, may be a worktree)
   - title: The title to use for deriving the worktree path
   - branch-name: The sanitized branch name to use
-  - config: Configuration map from read-config
+  - config: Configuration map from read-config (must include :main-repo-dir)
+
+  Uses :main-repo-dir from config for repository-wide worktree operations.
+  Uses base-dir for context-specific operations in the current directory.
 
   Returns a map with:
   - :success - boolean indicating if operation succeeded
@@ -253,14 +262,17 @@
   ;; In worktree, wrong branch (error)
   (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
   ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
-  [base-dir title branch-name config]
+  [_base-dir title branch-name config]
   (try
-    (let [;; Get current working directory (canonical path)
+    (let [;; Extract main-repo-dir for worktree operations
+          main-repo-dir (:main-repo-dir config)
+
+          ;; Get current working directory (canonical path)
           current-dir (current-working-directory)
 
-          ;; Check if branch already exists in any worktree
+          ;; Check if branch already exists in any worktree (uses main-repo-dir)
           find-result (git/ensure-git-success!
-                        (git/find-worktree-for-branch base-dir branch-name)
+                        (git/find-worktree-for-branch main-repo-dir branch-name)
                         "find-worktree-for-branch")
           existing-worktree (:worktree find-result)]
 
@@ -294,34 +306,34 @@
 
         ;; Branch not in any worktree - proceed with deriving path and
         ;; creating/checking worktree
-        (let [;; Derive worktree path
+        (let [;; Derive worktree path (uses main-repo-dir)
               path-result (git/ensure-git-success!
-                            (git/derive-worktree-path base-dir title config)
+                            (git/derive-worktree-path main-repo-dir title config)
                             "derive-worktree-path")
               worktree-path (:path path-result)
 
-              ;; Check if worktree exists at the derived path
+              ;; Check if worktree exists at the derived path (uses main-repo-dir)
               exists-result (git/ensure-git-success!
-                              (git/worktree-exists? base-dir worktree-path)
+                              (git/worktree-exists? main-repo-dir worktree-path)
                               "worktree-exists?")
               worktree-exists? (:exists? exists-result)
               branch-exists? (:exists? (git/ensure-git-success!
-                                         (git/branch-exists? base-dir branch-name)
+                                         (git/branch-exists? main-repo-dir branch-name)
                                          "branch-exists?"))]
 
           (cond
-            ;; Worktree doesn't exist - create it
+            ;; Worktree doesn't exist - create it (uses main-repo-dir)
             (worktree-needs-creation? worktree-exists?)
             (do
               (git/ensure-git-success!
                 (git/create-worktree
-                  base-dir
+                  main-repo-dir
                   worktree-path
                   branch-name
                   (when-not branch-exists?
                     (calculate-base-branch
                       (:base-branch config)
-                      base-dir)))
+                      main-repo-dir)))
                 (str "create-worktree " worktree-path " " branch-name))
               {:success true
                :worktree-path worktree-path
@@ -473,25 +485,22 @@
   Returns:
   - MCP response map with :content and :isError keys"
   [task branch-info worktree-info state-file-path]
-  (let [base-response {:task-id (:id task)
-                       :title (:title task)
-                       :category (:category task)
-                       :type (:type task)
-                       :status (:status task)
-                       :execution-state-file state-file-path
-                       :message "Task validated successfully and execution state written"}
-        response-with-branch (if branch-info
-                               (assoc base-response
-                                      :branch-name (:branch-name branch-info)
-                                      :branch-created? (:branch-created? branch-info)
-                                      :branch-switched? (:branch-switched? branch-info))
-                               base-response)
-        response-data (if worktree-info
-                        (assoc response-with-branch
-                               :worktree-path (:worktree-path worktree-info)
+  (let [response-data (cond-> {:task-id (:id task)
+                               :title (:title task)
+                               :category (:category task)
+                               :type (:type task)
+                               :status (:status task)
+                               :execution-state-file state-file-path
+                               :message "Task validated successfully and execution state written"}
+                        branch-info
+                        (assoc :branch-name (:branch-name branch-info)
+                               :branch-created? (:branch-created? branch-info)
+                               :branch-switched? (:branch-switched? branch-info))
+
+                        worktree-info
+                        (assoc :worktree-path (:worktree-path worktree-info)
                                :worktree-created? (:worktree-created? worktree-info)
-                               :worktree-clean? (:clean? worktree-info))
-                        response-with-branch)]
+                               :worktree-clean? (:clean? worktree-info)))]
     {:content [{:type "text"
                 :text (json/generate-string response-data)}]
      :isError false}))

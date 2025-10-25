@@ -112,8 +112,8 @@
           (let [config (#'sut/load-and-validate-config (.getPath sub-dir))]
             (is (map? config))
             (is (false? (:use-git? config)))
-            ;; Config dir should be the parent, not the subdirectory
-            (is (= (str (fs/canonicalize temp-dir)) (:base-dir config))))
+            ;; base-dir should be start-dir (subdirectory where we started), not config-dir
+            (is (= (str (fs/canonicalize sub-dir)) (:base-dir config))))
           (finally
             (fs/delete config-file)
             (fs/delete sub-dir)

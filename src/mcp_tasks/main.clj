@@ -92,10 +92,10 @@
   ([]
    (load-and-validate-config nil))
   ([start-dir]
-   (let [{:keys [raw-config config-dir]} (if start-dir
-                                           (config/read-config start-dir)
-                                           (config/read-config))
-         resolved-config (config/resolve-config config-dir raw-config)]
+   (let [{:keys [raw-config config-dir start-dir]} (if start-dir
+                                                     (config/read-config start-dir)
+                                                     (config/read-config))
+         resolved-config (config/resolve-config config-dir raw-config start-dir)]
      (config/validate-startup config-dir resolved-config)
      resolved-config)))
 

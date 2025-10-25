@@ -1,8 +1,81 @@
 (ns mcp-tasks.tools.git-test
   (:require
+    [clojure.java.io :as io]
     [clojure.java.shell :as shell]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.tools.git :as sut]))
+
+(deftest in-worktree-test
+  ;; Tests worktree detection by checking .git file vs directory
+  ;; Verifies correct identification of worktree environments
+
+  (testing "in-worktree?"
+    (testing "detects current directory type correctly"
+      ;; Test works whether running in worktree or regular repo
+      ;; Just verify the function returns a boolean based on .git structure
+      (let [current-dir (System/getProperty "user.dir")
+            git-file (io/file current-dir ".git")
+            is-worktree (.isFile git-file)
+            is-directory (.isDirectory git-file)]
+
+        ;; Should return true if .git is a file, false if .git is a directory
+        (if is-worktree
+          (is (true? (sut/in-worktree? current-dir))
+              "Should detect worktree when .git is a file")
+          (when is-directory
+            (is (false? (sut/in-worktree? current-dir))
+                "Should detect non-worktree when .git is a directory")))))
+
+    (testing "returns false when .git does not exist"
+      ;; Test with a directory that has no .git
+      (let [temp-dir (System/getProperty "java.io.tmpdir")]
+        (is (false? (sut/in-worktree? temp-dir)))))))
+
+(deftest find-main-repo-test
+  ;; Tests extraction of main repository path from worktree .git file
+  ;; Verifies correct parsing and path resolution
+
+  (testing "find-main-repo"
+    (testing "extracts main repo path from worktree"
+      (let [current-dir (System/getProperty "user.dir")]
+        ;; Only run this test if we're in a worktree
+        (when (sut/in-worktree? current-dir)
+          (let [main-repo (sut/find-main-repo current-dir)]
+            (is (string? main-repo))
+            (is (not (sut/in-worktree? main-repo)))
+            ;; Verify the main repo has a .git directory
+            (is (.isDirectory (io/file main-repo ".git")))))))
+
+    (testing "throws when called on non-worktree"
+      (let [current-dir (System/getProperty "user.dir")
+            main-repo (sut/get-main-repo-dir current-dir)]
+        ;; Should throw because precondition fails
+        (is (thrown? AssertionError
+              (sut/find-main-repo main-repo)))))))
+
+(deftest get-main-repo-dir-test
+  ;; Tests unified main repo directory resolution
+  ;; Verifies correct handling of both worktree and main repo paths
+
+  (testing "get-main-repo-dir"
+    (testing "returns main repo path when given worktree"
+      (let [current-dir (System/getProperty "user.dir")]
+        (when (sut/in-worktree? current-dir)
+          (let [main-repo (sut/get-main-repo-dir current-dir)]
+            (is (string? main-repo))
+            (is (not (sut/in-worktree? main-repo)))))))
+
+    (testing "returns same path when given main repo"
+      (let [current-dir (System/getProperty "user.dir")
+            main-repo (sut/get-main-repo-dir current-dir)
+            result (sut/get-main-repo-dir main-repo)]
+        (is (= main-repo result))))
+
+    (testing "normalizes path to canonical form"
+      (let [current-dir (System/getProperty "user.dir")
+            main-repo (sut/get-main-repo-dir current-dir)]
+        ;; Result should be absolute path
+        (is (.isAbsolute (io/file main-repo)))))))
 
 (deftest get-current-branch-test
   ;; Tests git rev-parse --abbrev-ref HEAD behavior
