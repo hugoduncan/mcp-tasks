@@ -93,11 +93,12 @@
 
           ;; Initialize git repo with an initial task
           (h/init-git-repo test-dir)
+          ;; Configure git user for commits (required in CI environments)
+          (sh/sh "git" "config" "user.name" "Test User" :dir tasks-dir)
+          (sh/sh "git" "config" "user.email" "test@example.com" :dir tasks-dir)
           ;; Set pull.ff=only for consistent test behavior across git versions
           ;; (uses local git config - doesn't affect developer environment)
           (sh/sh "git" "config" "pull.ff" "only" :dir tasks-dir)
-          ;; Ensure we're on master branch
-          (sh/sh "git" "checkout" "-b" "master" :dir tasks-dir)
           (h/write-ednl-test-file test-dir "tasks.ednl"
                                   [{:id 1 :parent-id nil :title "Initial Task" :description "" :design ""
                                     :category "simple" :type :task :status :open :meta {} :relations []}])
@@ -107,34 +108,24 @@
           ;; Create a "remote" by cloning
           (let [remote-dir (str test-dir "-remote")
                 _ (sh/sh "git" "clone" tasks-dir remote-dir)
-                ;; Ensure clone is on master branch
-                _ (sh/sh "git" "checkout" "master" :dir remote-dir)
-                _ (sh/sh "git" "remote" "add" "origin" remote-dir :dir tasks-dir)
-                ;; Verify git log shows commit
-                log-before (sh/sh "git" "log" "--oneline" "-1" :dir tasks-dir)
-                _ (println "DEBUG: Git log before divergence (original):" log-before)]
+                ;; Configure git user in remote too (required for commits)
+                _ (sh/sh "git" "config" "user.name" "Test User" :dir remote-dir)
+                _ (sh/sh "git" "config" "user.email" "test@example.com" :dir remote-dir)
+                _ (sh/sh "git" "remote" "add" "origin" remote-dir :dir tasks-dir)]
 
             ;; Make conflicting change in original - modify the SAME task
             (h/write-ednl-test-file test-dir "tasks.ednl"
                                     [{:id 1 :parent-id nil :title "Modified in Original" :description "Changed A" :design ""
                                       :category "simple" :type :task :status :open :meta {} :relations []}])
             (sh/sh "git" "add" "." :dir tasks-dir)
-            (let [commit-result (sh/sh "git" "commit" "-m" "Modify task in original" :dir tasks-dir)]
-              (println "DEBUG: Commit in original:" commit-result))
+            (sh/sh "git" "commit" "-m" "Modify task in original" :dir tasks-dir)
 
             ;; Make DIFFERENT conflicting change in remote - modify the SAME task differently
             (h/write-ednl-test-file (str test-dir "-remote") "tasks.ednl"
                                     [{:id 1 :parent-id nil :title "Modified in Remote" :description "Changed B" :design ""
                                       :category "simple" :type :task :status :open :meta {} :relations []}])
             (sh/sh "git" "add" "." :dir remote-dir)
-            (let [commit-result (sh/sh "git" "commit" "-m" "Modify task in remote" :dir remote-dir)]
-              (println "DEBUG: Commit in remote:" commit-result))
-
-            ;; Verify branches have diverged
-            (let [log-original (sh/sh "git" "log" "--oneline" "-2" :dir tasks-dir)
-                  log-remote (sh/sh "git" "log" "--oneline" "-2" :dir remote-dir)]
-              (println "DEBUG: Log original (2 commits):" log-original)
-              (println "DEBUG: Log remote (2 commits):" log-remote))
+            (sh/sh "git" "commit" "-m" "Modify task in remote" :dir remote-dir)
 
             ;; Now try to sync in original - should detect divergent histories
             ;; and fail when attempting to merge
@@ -156,9 +147,7 @@
 
                 ;; Otherwise unexpected result
                 :else
-                (do
-                  (println "DEBUG: Unexpected result from conflicting pull:" result)
-                  (is false (str "Expected error result from conflicting pull, got: " (pr-str result))))))))))))
+                (is false "Expected error result from conflicting pull")))))))))
 
 (deftest ^:integ sync-with-local-only-repo-test
   ;; Verifies that sync works correctly with local-only repos (no remote).
