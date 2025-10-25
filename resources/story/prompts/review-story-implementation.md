@@ -39,7 +39,7 @@ The story can be specified in multiple ways:
 2. Analyze the current branch against the description of the story:
    - Does the code implement the story correctly?
    - Does it have extra functionality that was not requested?
-   0 Could the logic be simplified while remaining clear?
+   - Could the logic be simplified while remaining clear?
 
 3. Analyze the quality of the code in the implementation:
    - Is it as simple as possible? Is there unnecessary complexity?
@@ -66,7 +66,7 @@ The story can be specified in multiple ways:
      a) For each selected suggestion, use the `add-task` tool for each task:
         - Use the `add-task` tool with these parameters:
           - `category`: pick an appropriate category based on the task complexity
-          - `title`: "STORY: <story-name> - <task description>"
+          - `title`: "REVIEW: <task description>"
           - `description`: the task description (can span multiple lines)
           - `parent-id`: the story's task ID from step 1
           - `prepend`: false (to append tasks)
@@ -75,7 +75,7 @@ The story can be specified in multiple ways:
         ```
         add-task(
           category="medium",
-          title="STORY: my-story - Add error handling for edge cases",
+          title="REVIEW: Add error handling for edge cases",
           description="throw exceptions if edge cases not supported",
           parent-id=42,
           prepend=false
