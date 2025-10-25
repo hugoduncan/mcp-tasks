@@ -119,6 +119,8 @@
   [config context task completion-comment]
   (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context
         children (tasks/get-children (:id task))
+        ;; Only open, in-progress, and blocked tasks prevent completion
+        ;; Closed and deleted tasks are considered resolved
         blocking-children (filterv #(schema/blocking-statuses (:status %)) children)]
     (if (seq blocking-children)
       ;; Error: unclosed children exist

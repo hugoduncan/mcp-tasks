@@ -82,6 +82,8 @@
                                                                 ;; Check for non-closed children
                                                                 :else
                                                                 (let [children (tasks/get-children (:id task))
+                                                                      ;; Only open, in-progress, and blocked tasks prevent deletion
+                                                                      ;; Closed and deleted tasks are considered resolved
                                                                       non-closed-children (filterv #(schema/blocking-statuses (:status %)) children)]
                                                                   (if (seq non-closed-children)
                                                                     ;; Error: non-closed children exist
