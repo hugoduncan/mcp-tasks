@@ -457,9 +457,9 @@
           (let [error-data (json/parse-string (get-in result [:content 1 :text]) keyword)]
             (is (= "Cannot complete story: 2 child tasks still are not closed" (:error error-data)))
             (is (= 30 (get-in error-data [:metadata :task-id])))
-            (is (= 2 (count (get-in error-data [:metadata :unclosed-children]))))
+            (is (= 2 (count (get-in error-data [:metadata :blocking-children]))))
             ;; Verify unclosed children details
-            (let [unclosed (get-in error-data [:metadata :unclosed-children])]
+            (let [unclosed (get-in error-data [:metadata :blocking-children])]
               (is (some #(= 31 (:id %)) unclosed))
               (is (some #(= 33 (:id %)) unclosed))
               (is (every? #(not= :closed (:status %)) unclosed))))
