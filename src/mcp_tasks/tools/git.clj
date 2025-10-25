@@ -360,7 +360,9 @@
       (str/includes? stderr "Automatic merge failed")
       (str/includes? stderr "fix conflicts")
       (str/includes? stderr "unresolved conflict")
-      (str/includes? stderr "unmerged files")))
+      (str/includes? stderr "unmerged files")
+      ;; Git 2.51+ returns this for divergent branches before attempting merge
+      (str/includes? stderr "Not possible to fast-forward")))
 
 (defn- no-remote-pattern?
   "Returns true if stderr indicates no remote is configured"
@@ -403,6 +405,8 @@
   "Exit 128 indicates fatal errors"
   [stderr]
   (cond
+    ;; Check for conflicts first - newer git (2.51+) uses exit 128 for divergent branches
+    (conflict-pattern? stderr) :conflict
     (no-remote-pattern? stderr) :no-remote
     (network-pattern? stderr) :network
     :else :other))
