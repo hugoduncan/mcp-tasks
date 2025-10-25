@@ -13,6 +13,7 @@
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [cheshire.core :as json]
+    [mcp-tasks.schema :as schema]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
@@ -81,7 +82,7 @@
                                                                 ;; Check for non-closed children
                                                                 :else
                                                                 (let [children (tasks/get-children (:id task))
-                                                                      non-closed-children (filterv #(#{:open :in-progress :blocked} (:status %)) children)]
+                                                                      non-closed-children (filterv #(schema/blocking-statuses (:status %)) children)]
                                                                   (if (seq non-closed-children)
                                                                     ;; Error: non-closed children exist
                                                                     (helpers/build-tool-error-response
