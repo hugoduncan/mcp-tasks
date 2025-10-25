@@ -5,7 +5,7 @@
   end-to-end behavior without mocks."
   (:require
     [babashka.fs :as fs]
-    [clojure.data.json :as json]
+    [cheshire.core :as json]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -50,7 +50,7 @@
     (when (zero? (:exit result))
       (:out result))))
 
-(deftest work-on-creates-real-worktree
+(deftest ^:integration work-on-creates-real-worktree
   (h/with-test-setup [test-dir]
     ;; Test that work-on actually creates a real git worktree
     (testing "creates a real git worktree"
@@ -73,9 +73,9 @@
                           {:category "simple"
                            :title "Test Worktree Task"
                            :type "task"})
-              add-response (json/read-str
+              add-response (json/parse-string
                              (get-in add-result [:content 1 :text])
-                             :key-fn keyword)
+                             keyword)
               task-id (get-in add-response [:task :id])
               ;; Call work-on tool
               result (#'sut/work-on-impl
@@ -84,9 +84,9 @@
                              :main-repo-dir base-dir)
                       nil
                       {:task-id task-id})
-              response (json/read-str
+              response (json/parse-string
                          (get-in result [:content 0 :text])
-                         :key-fn keyword)
+                         keyword)
               actual-worktree-path (:worktree-path response)]
 
           ;; Verify response indicates worktree creation
@@ -106,7 +106,7 @@
             (is (str/includes? worktree-list actual-worktree-path)
                 "Worktree should appear in git worktree list")))))))
 
-(deftest work-on-from-within-worktree
+(deftest ^:integration work-on-from-within-worktree
   (h/with-test-setup [test-dir]
     ;; Test that work-on works correctly when called from within a worktree
     (testing "works when called from within a worktree"
@@ -129,9 +129,9 @@
                            {:category "simple"
                             :title "First Task"
                             :type "task"})
-              add-response1 (json/read-str
+              add-response1 (json/parse-string
                               (get-in add-result1 [:content 1 :text])
-                              :key-fn keyword)
+                              keyword)
               task1-id (get-in add-response1 [:task :id])
 
               add-result2 (#'add-task/add-task-impl
@@ -140,9 +140,9 @@
                            {:category "simple"
                             :title "Second Task"
                             :type "task"})
-              add-response2 (json/read-str
+              add-response2 (json/parse-string
                               (get-in add-result2 [:content 1 :text])
-                              :key-fn keyword)
+                              keyword)
               task2-id (get-in add-response2 [:task :id])
 
               ;; Create first worktree using work-on
@@ -152,9 +152,9 @@
                               :main-repo-dir base-dir)
                        nil
                        {:task-id task1-id})
-              response1 (json/read-str
+              response1 (json/parse-string
                           (get-in result1 [:content 0 :text])
-                          :key-fn keyword)
+                          keyword)
               worktree1-path (:worktree-path response1)
 
               ;; Verify first worktree was created
@@ -176,9 +176,9 @@
                               :main-repo-dir base-dir)
                        nil
                        {:task-id task2-id})
-              response2 (json/read-str
+              response2 (json/parse-string
                           (get-in result2 [:content 0 :text])
-                          :key-fn keyword)
+                          keyword)
               worktree2-path (:worktree-path response2)]
 
           ;; Verify the tool works correctly from within a worktree
@@ -193,7 +193,7 @@
           (is (worktree-exists? worktree2-path)
               "Second worktree should exist on filesystem"))))))
 
-(deftest work-on-detects-worktree-environment
+(deftest ^:integration work-on-detects-worktree-environment
   (h/with-test-setup [test-dir]
     ;; Test that work-on correctly detects when it's running in a worktree
     (testing "detects worktree environment correctly"
@@ -216,9 +216,9 @@
                           {:category "simple"
                            :title "Detect Test"
                            :type "task"})
-              add-response (json/read-str
+              add-response (json/parse-string
                              (get-in add-result [:content 1 :text])
-                             :key-fn keyword)
+                             keyword)
               task-id (get-in add-response [:task :id])
 
               ;; Create worktree using work-on from main repo
@@ -228,9 +228,9 @@
                               :main-repo-dir base-dir)
                        nil
                        {:task-id task-id})
-              response1 (json/read-str
+              response1 (json/parse-string
                           (get-in result1 [:content 0 :text])
-                          :key-fn keyword)
+                          keyword)
               worktree-path (:worktree-path response1)
 
               ;; Verify worktree was created
@@ -251,9 +251,9 @@
                               :main-repo-dir base-dir)
                        nil
                        {:task-id task-id})
-              response2 (json/read-str
+              response2 (json/parse-string
                           (get-in result2 [:content 0 :text])
-                          :key-fn keyword)
+                          keyword)
               response-worktree-path (:worktree-path response2)]
 
           ;; Should recognize we're already in the correct worktree
