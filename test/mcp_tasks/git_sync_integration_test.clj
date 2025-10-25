@@ -93,6 +93,9 @@
 
           ;; Initialize git repo with an initial task
           (h/init-git-repo test-dir)
+          ;; Set pull.ff=only for consistent test behavior across git versions
+          ;; (uses local git config - doesn't affect developer environment)
+          (sh/sh "git" "config" "pull.ff" "only" :dir tasks-dir)
           (h/write-ednl-test-file test-dir "tasks.ednl"
                                   [{:id 1 :parent-id nil :title "Initial Task" :description "" :design ""
                                     :category "simple" :type :task :status :open :meta {} :relations []}])
