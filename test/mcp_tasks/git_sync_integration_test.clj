@@ -141,7 +141,9 @@
 
                 ;; Otherwise unexpected result
                 :else
-                (is false "Expected error result from conflicting pull")))))))))
+                (do
+                  (println "DEBUG: Unexpected result from conflicting pull:" result)
+                  (is false (str "Expected error result from conflicting pull, got: " (pr-str result))))))))))))
 
 (deftest ^:integ sync-with-local-only-repo-test
   ;; Verifies that sync works correctly with local-only repos (no remote).
