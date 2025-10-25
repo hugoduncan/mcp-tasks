@@ -452,3 +452,5 @@ See `doc/dev/changelog.md` for setup details.
   logical content of the PR, not all the interim work used to implement
   it.
 - the git repo in ~/.mcp-tasks does not have a remote
+- Use clojure-mcp edit tools for Clojure files to avoid syntax errors
+- Always configure git user identity in test repositories for CI compatibilit
