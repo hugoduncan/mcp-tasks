@@ -183,50 +183,66 @@
   ;; Perform file operations inside lock
   (let [locked-result (helpers/with-task-lock config
                                               (fn []
-                                                ;; Setup common context and load tasks
-                                                (let [context (helpers/setup-completion-context config "complete-task")]
-                                                  (if (:isError context)
-                                                    context
+                                                ;; Sync with remote and load tasks
+                                                (let [sync-result (helpers/sync-and-prepare-task-file config)]
+                                                  (if (and (map? sync-result) (false? (:success sync-result)))
+                                                    ;; sync-result is an error map
+                                                    (let [{:keys [error error-type]} sync-result
+                                                          tasks-dir (:resolved-tasks-dir config)]
+                                                      (helpers/build-tool-error-response
+                                                        (case error-type
+                                                          :conflict (str "Pull failed with conflicts. Resolve manually in " tasks-dir)
+                                                          :network (str "Pull failed: " error)
+                                                          (str "Pull failed: " error))
+                                                        "complete-task"
+                                                        {:error-type error-type
+                                                         :error-details error
+                                                         :tasks-dir tasks-dir}))
 
-                                                    (let [{:keys [tasks-file]} context
-                                                          ;; Find task using shared helper
-                                                          task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
+                                                    ;; sync-result is the tasks-file path - proceed
+                                                    (let [context (helpers/setup-completion-context config "complete-task")]
+                                                      (if (:isError context)
+                                                        context
 
-                                                      ;; Check if task-result is an error response
-                                                      (if (:isError task-result)
-                                                        task-result
+                                                        (let [{:keys [tasks-file]} context
+                                                              ;; Find task using shared helper
+                                                              task-result (validation/find-task-by-identifiers task-id title "complete-task" tasks-file)]
 
-                                                        ;; task-result is the actual task - proceed with validations
-                                                        (let [task task-result]
-                                                          ;; Verify category if provided (for backwards compatibility)
-                                                          (cond
-                                                            (and category (not= (:category task) category))
-                                                            (helpers/build-tool-error-response
-                                                              "Task category does not match"
-                                                              "complete-task"
-                                                              {:expected-category category
-                                                               :actual-category (:category task)
-                                                               :task-id (:id task)
-                                                               :file tasks-file})
+                                                          ;; Check if task-result is an error response
+                                                          (if (:isError task-result)
+                                                            task-result
 
-                                                            ;; Verify task is not already closed
-                                                            (= (:status task) :closed)
-                                                            (helpers/build-tool-error-response
-                                                              "Task is already closed"
-                                                              "complete-task"
-                                                              {:task-id (:id task)
-                                                               :title (:title task)
-                                                               :file tasks-file})
+                                                            ;; task-result is the actual task - proceed with validations
+                                                            (let [task task-result]
+                                                              ;; Verify category if provided (for backwards compatibility)
+                                                              (cond
+                                                                (and category (not= (:category task) category))
+                                                                (helpers/build-tool-error-response
+                                                                  "Task category does not match"
+                                                                  "complete-task"
+                                                                  {:expected-category category
+                                                                   :actual-category (:category task)
+                                                                   :task-id (:id task)
+                                                                   :file tasks-file})
 
-                                                            ;; All validations passed - dispatch to appropriate completion function
-                                                            (= (:type task) :story)
-                                                            (complete-story-task- config context task completion-comment)
+                                                                ;; Verify task is not already closed
+                                                                (= (:status task) :closed)
+                                                                (helpers/build-tool-error-response
+                                                                  "Task is already closed"
+                                                                  "complete-task"
+                                                                  {:task-id (:id task)
+                                                                   :title (:title task)
+                                                                   :file tasks-file})
 
-                                                            (some? (:parent-id task))
-                                                            (complete-child-task- config context task completion-comment)
+                                                                ;; All validations passed - dispatch to appropriate completion function
+                                                                (= (:type task) :story)
+                                                                (complete-story-task- config context task completion-comment)
 
-                                                            :else
-                                                            (complete-regular-task- config context task completion-comment)))))))))]
+                                                                (some? (:parent-id task))
+                                                                (complete-child-task- config context task completion-comment)
+
+                                                                :else
+                                                                (complete-regular-task- config context task completion-comment)))))))))))]
     ;; Check if locked section returned an error
     (if (:isError locked-result)
       locked-result

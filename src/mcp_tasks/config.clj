@@ -346,6 +346,7 @@
   - :worktree-prefix defaults to :project-name if not set
   - :lock-timeout-ms defaults to 30000 (30 seconds) if not set
   - :lock-poll-interval-ms defaults to 100 (100 milliseconds) if not set
+  - :enable-git-sync? defaults to :use-git? value if not set
   
   Parameters:
   - config-dir: Directory where config file was found
@@ -403,6 +404,7 @@
          config-with-branch-mgmt (if (:worktree-management? config)
                                    (assoc config :branch-management? true)
                                    config)
+         use-git-value (determine-git-mode config-dir config)
          config-with-defaults (cond-> config-with-branch-mgmt
                                 (not (contains? config-with-branch-mgmt :worktree-prefix))
                                 (assoc :worktree-prefix :project-name)
@@ -411,9 +413,12 @@
                                 (assoc :lock-timeout-ms 30000)
 
                                 (not (contains? config-with-branch-mgmt :lock-poll-interval-ms))
-                                (assoc :lock-poll-interval-ms 100))]
+                                (assoc :lock-poll-interval-ms 100)
+
+                                (not (contains? config-with-branch-mgmt :enable-git-sync?))
+                                (assoc :enable-git-sync? use-git-value))]
      (assoc config-with-defaults
-            :use-git? (determine-git-mode config-dir config)
+            :use-git? use-git-value
             :base-dir base-dir
             :main-repo-dir main-repo-dir
             :resolved-tasks-dir resolved-tasks-dir))))

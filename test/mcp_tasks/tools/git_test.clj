@@ -279,7 +279,7 @@
 
 (deftest pull-latest-test
   ;; Tests pulling latest changes from remote
-  ;; Verifies handling of both remote-connected and local-only repos
+  ;; Verifies error type detection for different failure scenarios
 
   (testing "pull-latest"
     (testing "succeeds when pull works"
@@ -291,25 +291,223 @@
         (let [result (sut/pull-latest "/test/dir" "main")]
           (is (true? (:success result)))
           (is (true? (:pulled? result)))
-          (is (nil? (:error result))))))
+          (is (nil? (:error result)))
+          (is (nil? (:error-type result))))))
 
-    (testing "handles local-only repo gracefully"
-      (with-redefs [clojure.java.shell/sh (fn [& _]
-                                            {:exit 1
-                                             :out ""
-                                             :err "fatal: 'origin' does not appear to be a git repository\n"})]
-        (let [result (sut/pull-latest "/test/dir" "main")]
-          (is (true? (:success result)))
-          (is (false? (:pulled? result)))
-          (is (nil? (:error result))))))
+    (testing "no-remote error detection"
+      (testing "handles local-only repo gracefully (no remote configured)"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 1
+                                               :out ""
+                                               :err "fatal: 'origin' does not appear to be a git repository\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (true? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (nil? (:error result)))
+            (is (= :no-remote (:error-type result))))))
 
-    (testing "handles exceptions gracefully"
-      (with-redefs [clojure.java.shell/sh (fn [& _]
-                                            (throw (Exception. "Network error")))]
-        (let [result (sut/pull-latest "/test/dir" "main")]
-          (is (true? (:success result)))
-          (is (false? (:pulled? result)))
-          (is (nil? (:error result))))))))
+      (testing "handles local-only repo with 'No configured push destination' message"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 1
+                                               :out ""
+                                               :err "fatal: No configured push destination\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (true? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (nil? (:error result)))
+            (is (= :no-remote (:error-type result))))))
+
+      (testing "detects 'No remote repository specified' with exit 128"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: No remote repository specified\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (true? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (nil? (:error result)))
+            (is (= :no-remote (:error-type result))))))
+
+      (testing "detects repository not found pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: repository 'https://github.com/user/repo.git' not found\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (true? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (nil? (:error result)))
+            (is (= :no-remote (:error-type result)))))))
+
+    (testing "conflict detection"
+      (testing "detects merge conflicts with CONFLICT pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 1
+                                               :out ""
+                                               :err "CONFLICT (content): Merge conflict in file.txt\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "CONFLICT (content): Merge conflict in file.txt" (:error result)))
+            (is (= :conflict (:error-type result))))))
+
+      (testing "detects conflicts with 'Automatic merge failed' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 1
+                                               :out ""
+                                               :err "Automatic merge failed; fix conflicts and then commit the result.\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "Automatic merge failed; fix conflicts and then commit the result." (:error result)))
+            (is (= :conflict (:error-type result))))))
+
+      (testing "detects conflicts with 'fix conflicts' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 1
+                                               :out ""
+                                               :err "error: Pulling is not possible because you have unmerged files.\nhint: Fix them up in the work tree, and then use 'git add/rm <file>'\nhint: as appropriate to mark resolution and make a commit.\nfatal: Exiting because of an unresolved conflict.\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :conflict (:error-type result)))))))
+
+    (testing "network error detection"
+      (testing "detects network errors - could not resolve host with exit 128"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: Could not resolve host: github.com\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "fatal: Could not resolve host: github.com" (:error result)))
+            (is (= :network (:error-type result))))))
+
+      (testing "detects network errors - connection refused with exit 128"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: Connection refused\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "fatal: Connection refused" (:error result)))
+            (is (= :network (:error-type result))))))
+
+      (testing "detects 'Failed to connect' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: Failed to connect to github.com\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :network (:error-type result))))))
+
+      (testing "detects 'timed out' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: unable to access 'https://github.com/user/repo.git/': Operation timed out\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :network (:error-type result))))))
+
+      (testing "detects 'Network is unreachable' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: Network is unreachable\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :network (:error-type result))))))
+
+      (testing "detects 'unable to access' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: unable to access 'https://github.com/user/repo.git/': Could not resolve host: github.com\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :network (:error-type result))))))
+
+      (testing "detects 'The requested URL returned error' pattern"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "error: The requested URL returned error: 503\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :network (:error-type result)))))))
+
+    (testing "other error types"
+      (testing "detects other errors with exit 1"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 1
+                                               :out ""
+                                               :err "fatal: some other error\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "fatal: some other error" (:error result)))
+            (is (= :other (:error-type result))))))
+
+      (testing "detects other errors with exit 128"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 128
+                                               :out ""
+                                               :err "fatal: unexpected error\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "fatal: unexpected error" (:error result)))
+            (is (= :other (:error-type result))))))
+
+      (testing "handles exceptions"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              (throw (Exception. "Network error")))]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= "Network error" (:error result)))
+            (is (= :other (:error-type result)))))))
+
+    (testing "fallback pattern matching for unknown exit codes"
+      (testing "detects conflict with unknown exit code"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 99
+                                               :out ""
+                                               :err "CONFLICT (content): Merge conflict\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :conflict (:error-type result))))))
+
+      (testing "detects no-remote with unknown exit code"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 99
+                                               :out ""
+                                               :err "fatal: No configured push destination\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (true? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (nil? (:error result)))
+            (is (= :no-remote (:error-type result))))))
+
+      (testing "detects network error with unknown exit code"
+        (with-redefs [clojure.java.shell/sh (fn [& _]
+                                              {:exit 99
+                                               :out ""
+                                               :err "fatal: Connection refused\n"})]
+          (let [result (sut/pull-latest "/test/dir" "main")]
+            (is (false? (:success result)))
+            (is (false? (:pulled? result)))
+            (is (= :network (:error-type result)))))))))
 
 (deftest derive-project-name-test
   ;; Tests project name extraction from directory paths

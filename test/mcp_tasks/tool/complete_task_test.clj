@@ -5,7 +5,8 @@
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.test-helpers :as h]
-    [mcp-tasks.tool.complete-task :as sut]))
+    [mcp-tasks.tool.complete-task :as sut]
+    [mcp-tasks.tools.helpers]))
 
 ;; Git helper functions
 
@@ -743,3 +744,107 @@
           ;; Verify execution state file was cleared
           (let [state-file (fs/file test-dir ".mcp-tasks-current.edn")]
             (is (not (fs/exists? state-file)))))))))
+
+(deftest ^:integration complete-task-syncs-with-git-pull
+  ;; Integration test verifying complete-task calls sync-and-prepare-task-file
+  ;; to pull latest changes before modification
+  (testing "complete-task with git sync"
+    (h/with-test-setup [test-dir]
+      (testing "syncs with remote before completing task"
+        (h/init-git-repo test-dir)
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 70 :parent-id nil :title "sync test task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+        ;; Track whether sync-and-prepare-task-file was called
+        (let [sync-called (atom false)
+              original-prepare @#'mcp-tasks.tools.helpers/prepare-task-file]
+          (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
+                        (fn [config]
+                          (reset! sync-called true)
+                          ;; Simulate successful sync by calling prepare-task-file
+                          (original-prepare config))]
+            (let [result (#'sut/complete-task-impl
+                          (h/git-test-config test-dir)
+                          nil
+                          {:task-id 70})]
+              (is (false? (:isError result)))
+              (is @sync-called "sync-and-prepare-task-file should be called")
+
+              ;; Verify task was completed
+              (let [complete-tasks (h/read-ednl-test-file test-dir "complete.ednl")]
+                (is (= 1 (count complete-tasks)))
+                (is (= 70 (:id (first complete-tasks))))
+                (is (= :closed (:status (first complete-tasks))))))))
+
+        (testing "returns error on pull conflicts"
+          (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
+                        (fn [_config]
+                          {:success false
+                           :error "CONFLICT (content): Merge conflict in tasks.ednl"
+                           :error-type :conflict})]
+            (h/write-ednl-test-file
+              test-dir
+              "tasks.ednl"
+              [{:id 71 :parent-id nil :title "conflict test" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+            (let [result (#'sut/complete-task-impl
+                          (h/git-test-config test-dir)
+                          nil
+                          {:task-id 71})]
+              (is (:isError result))
+              (let [error-text (-> result :content first :text)]
+                (is (str/includes? error-text "Pull failed with conflicts")))
+
+              ;; Verify task was NOT completed due to sync error
+              (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")]
+                (is (= 1 (count tasks)))
+                (is (= 71 (:id (first tasks))))
+                (is (= :open (:status (first tasks))))))))
+
+        (testing "returns error on network failure"
+          (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
+                        (fn [_config]
+                          {:success false
+                           :error "fatal: Could not resolve host: github.com"
+                           :error-type :network})]
+            (h/write-ednl-test-file
+              test-dir
+              "tasks.ednl"
+              [{:id 72 :parent-id nil :title "network test" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+            (let [result (#'sut/complete-task-impl
+                          (h/git-test-config test-dir)
+                          nil
+                          {:task-id 72})]
+              (is (:isError result))
+              (let [error-text (-> result :content first :text)]
+                (is (str/includes? error-text "Pull failed")))
+
+              ;; Verify task was NOT completed due to sync error
+              (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")]
+                (is (= 1 (count tasks)))
+                (is (= 72 (:id (first tasks))))
+                (is (= :open (:status (first tasks))))))))
+
+        (testing "continues normally when no remote configured"
+          (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
+                        (fn [config]
+                          ;; Simulate no-remote scenario - still returns path
+                          (@#'mcp-tasks.tools.helpers/prepare-task-file config))]
+            (h/write-ednl-test-file
+              test-dir
+              "tasks.ednl"
+              [{:id 73 :parent-id nil :title "no-remote test" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+            (let [result (#'sut/complete-task-impl
+                          (h/git-test-config test-dir)
+                          nil
+                          {:task-id 73})]
+              (is (false? (:isError result)))
+
+              ;; Verify task was completed normally
+              (let [complete-tasks (h/read-ednl-test-file test-dir "complete.ednl")]
+                (is (some #(= 73 (:id %)) complete-tasks))
+                (is (some #(= :closed (:status %)) complete-tasks))))))))))

@@ -353,39 +353,133 @@
       {:success false
        :error (.getMessage e)})))
 
+(defn- conflict-pattern?
+  "Returns true if stderr contains conflict indicators"
+  [stderr]
+  (or (str/includes? stderr "CONFLICT")
+      (str/includes? stderr "Automatic merge failed")
+      (str/includes? stderr "fix conflicts")
+      (str/includes? stderr "unresolved conflict")
+      (str/includes? stderr "unmerged files")
+      ;; Git 2.51+ returns this for divergent branches before attempting merge
+      (str/includes? stderr "Not possible to fast-forward")
+      ;; Rebase conflict patterns
+      (str/includes? stderr "could not apply")
+      (str/includes? stderr "Resolve all conflicts manually")))
+
+(defn- no-remote-pattern?
+  "Returns true if stderr indicates no remote is configured"
+  [stderr]
+  (or (str/includes? stderr "does not appear to be a git repository")
+      (str/includes? stderr "No configured push destination")
+      (str/includes? stderr "No remote repository specified")
+      (re-find #"repository '.*' not found" stderr)))
+
+(defn- network-pattern?
+  "Returns true if stderr indicates network connectivity issues"
+  [stderr]
+  (or (str/includes? stderr "Could not resolve host")
+      (str/includes? stderr "Connection refused")
+      (str/includes? stderr "Failed to connect")
+      (str/includes? stderr "timed out")
+      (str/includes? stderr "Network is unreachable")
+      (str/includes? stderr "unable to access")
+      (str/includes? stderr "The requested URL returned error")))
+
+(defn- detect-by-pattern
+  "Fallback pattern matching for unknown exit codes"
+  [stderr]
+  (cond
+    (conflict-pattern? stderr) :conflict
+    (no-remote-pattern? stderr) :no-remote
+    (network-pattern? stderr) :network
+    :else :other))
+
+(defn- detect-exit-1-error
+  "Exit 1 is typically conflicts, but could be other errors"
+  [stderr]
+  (cond
+    (conflict-pattern? stderr) :conflict
+    (no-remote-pattern? stderr) :no-remote
+    (network-pattern? stderr) :network
+    :else :other))
+
+(defn- detect-fatal-error
+  "Exit 128 indicates fatal errors"
+  [stderr]
+  (cond
+    ;; Check for conflicts first - newer git (2.51+) uses exit 128 for divergent branches
+    (conflict-pattern? stderr) :conflict
+    (no-remote-pattern? stderr) :no-remote
+    (network-pattern? stderr) :network
+    :else :other))
+
+(defn- detect-error-type
+  "Detects error type using exit code and stderr patterns.
+  
+  Uses a multi-layered approach:
+  - Exit code 1: typically conflicts, check patterns to confirm
+  - Exit code 128: fatal errors (no remote, network issues)
+  - Other codes: fall back to pattern matching"
+  [exit-code stderr]
+  (let [error-type (cond
+                     (= 1 exit-code)
+                     (detect-exit-1-error stderr)
+
+                     (= 128 exit-code)
+                     (detect-fatal-error stderr)
+
+                     :else
+                     (detect-by-pattern stderr))]
+
+    ;; Log unrecognized patterns to stderr for debugging
+    (when (and (= error-type :other)
+               (not (str/blank? stderr)))
+      (binding [*out* *err*]
+        (println "Unrecognized git pull error pattern:"
+                 "exit-code:" exit-code
+                 "stderr:" stderr)))
+
+    ;; Build response
+    (if (= error-type :no-remote)
+      {:success true :pulled? false :error nil :error-type :no-remote}
+      {:success false :pulled? false :error stderr :error-type error-type})))
+
 (defn pull-latest
   "Pulls the latest changes from remote.
 
-  Gracefully handles local-only repos by ignoring pull errors.
+  Distinguishes between different failure types to enable appropriate handling.
 
   Parameters:
   - base-dir: Base directory of the git repository
   - branch-name: Name of the branch to pull
 
   Returns a map with:
-  - :success - boolean indicating if operation succeeded
-  - :pulled? - boolean indicating if changes were pulled (false for local-only repos)
-  - :error - error message string (or nil if successful/local-only)"
+  - :success - boolean indicating if operation succeeded (true for exit 0 or :no-remote)
+  - :pulled? - boolean indicating if changes were pulled (true only for exit 0)
+  - :error - error message string (or nil if successful/no-remote)
+  - :error-type - keyword indicating error type (:no-remote | :conflict | :network | :other, or nil if successful)"
   [base-dir branch-name]
   {:pre [(string? base-dir)
          (not (clojure.string/blank? base-dir))
          (string? branch-name)
          (not (clojure.string/blank? branch-name))]}
   (try
-    (let [result (sh/sh "git" "-C" base-dir "pull" "origin" branch-name)]
-      (if (zero? (:exit result))
+    (let [result (sh/sh "git" "-C" base-dir "pull" "origin" branch-name)
+          stderr (str/trim (:err result))
+          exit-code (:exit result)]
+      (if (zero? exit-code)
         {:success true
          :pulled? true
-         :error nil}
-        ;; Pull failed - likely local-only repo, which is fine
-        {:success true
-         :pulled? false
-         :error nil}))
-    (catch Exception _
-      ;; Exception during pull - treat as local-only repo
-      {:success true
+         :error nil
+         :error-type nil}
+        ;; Non-zero exit - use multi-layered error detection
+        (detect-error-type exit-code stderr)))
+    (catch Exception e
+      {:success false
        :pulled? false
-       :error nil})))
+       :error (.getMessage e)
+       :error-type :other})))
 
 (defn derive-project-name
   "Extracts the project name from a project directory path.

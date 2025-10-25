@@ -41,35 +41,52 @@
   ;; Perform file operations inside lock
   (let [locked-result (helpers/with-task-lock config
                                               (fn []
-                                                (let [tasks-file (helpers/prepare-task-file config)]
-                                                  ;; Validate parent-id exists if provided
-                                                  (or (when parent-id
-                                                        (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
-                                                                                              :additional-metadata {:title title :category category}))
+                                                ;; Sync with remote and load tasks
+                                                (let [sync-result (helpers/sync-and-prepare-task-file config)]
+                                                  (if (and (map? sync-result) (false? (:success sync-result)))
+                                                    ;; sync-result is an error map
+                                                    (let [{:keys [error error-type]} sync-result
+                                                          tasks-dir (:resolved-tasks-dir config)]
+                                                      (helpers/build-tool-error-response
+                                                        (case error-type
+                                                          :conflict (str "Pull failed with conflicts. Resolve manually in " tasks-dir)
+                                                          :network (str "Pull failed: " error)
+                                                          (str "Pull failed: " error))
+                                                        "add-task"
+                                                        {:error-type error-type
+                                                         :error-details error
+                                                         :tasks-dir tasks-dir}))
 
-                                                      ;; All validations passed - create task
-                                                      (let [task-map (cond-> {:title title
-                                                                              :description (or description "")
-                                                                              :design ""
-                                                                              :category category
-                                                                              :status :open
-                                                                              :type (keyword (or type "task"))
-                                                                              :meta {}
-                                                                              :relations []}
-                                                                       parent-id (assoc :parent-id parent-id))
-                                                            ;; Add task to in-memory state and get the complete task with ID
-                                                            created-task (tasks/add-task task-map :prepend? (boolean prepend))
-                                                            ;; Get path info for git operations
-                                                            tasks-path (helpers/task-path config ["tasks.ednl"])
-                                                            tasks-rel-path (:relative tasks-path)]
+                                                    ;; sync-result is the tasks-file path - proceed
+                                                    (let [tasks-file sync-result]
+                                                      ;; Validate parent-id exists if provided
+                                                      (or (when parent-id
+                                                            (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
+                                                                                                  :additional-metadata {:title title :category category}))
 
-                                                        ;; Save to EDNL file
-                                                        (tasks/save-tasks! tasks-file)
+                                                          ;; All validations passed - create task
+                                                          (let [task-map (cond-> {:title title
+                                                                                  :description (or description "")
+                                                                                  :design ""
+                                                                                  :category category
+                                                                                  :status :open
+                                                                                  :type (keyword (or type "task"))
+                                                                                  :meta {}
+                                                                                  :relations []}
+                                                                           parent-id (assoc :parent-id parent-id))
+                                                                ;; Add task to in-memory state and get the complete task with ID
+                                                                created-task (tasks/add-task task-map :prepend? (boolean prepend))
+                                                                ;; Get path info for git operations
+                                                                tasks-path (helpers/task-path config ["tasks.ednl"])
+                                                                tasks-rel-path (:relative tasks-path)]
 
-                                                        ;; Return intermediate data for git operations
-                                                        {:created-task created-task
-                                                         :tasks-file tasks-file
-                                                         :tasks-rel-path tasks-rel-path})))))]
+                                                            ;; Save to EDNL file
+                                                            (tasks/save-tasks! tasks-file)
+
+                                                            ;; Return intermediate data for git operations
+                                                            {:created-task created-task
+                                                             :tasks-file tasks-file
+                                                             :tasks-rel-path tasks-rel-path})))))))]
     ;; Check if locked section returned an error
     (if (:isError locked-result)
       locked-result
