@@ -227,10 +227,7 @@
                          (when (and metadata (pos? task-count))
                            (str "Total: " (:total-matches metadata)
                                 (when (:limited? metadata)
-                                  (str
-                                    " (showing "
-                                    (:open-task-count metadata)
-                                    ")"))))])))
+                                  (str " (showing " (:returned-count metadata) ")"))))])))
 
     ;; Single task response (for add/update/complete operations)
     (:task data)

@@ -33,8 +33,8 @@
    :relations []})
 
 (def task-list-response
-  {:tasks    [sample-task minimal-task]
-   :metadata {:open-task-count 2 :total-matches 5 :limited? true}})
+  {:tasks [sample-task minimal-task]
+   :metadata {:open-task-count 5 :returned-count 2 :total-matches 5 :limited? true}})
 
 (def single-task-response
   {:tasks [sample-task]
