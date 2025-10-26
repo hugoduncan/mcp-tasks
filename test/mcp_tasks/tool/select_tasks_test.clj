@@ -29,6 +29,7 @@
         (is (false? (:isError result)))
         (is (= 3 (count (:tasks response))))
         (is (= 3 (get-in response [:metadata :open-task-count])))
+        (is (= 3 (get-in response [:metadata :returned-count])))
         (is (= 3 (get-in response [:metadata :total-matches])))
         (is (false? (get-in response [:metadata :limited?])))
         (is (= ["Task One" "Task Two" "Task Three"]
@@ -50,7 +51,8 @@
               response (json/parse-string (get-in result [:content 0 :text]) keyword)]
           (is (false? (:isError result)))
           (is (= 3 (count (:tasks response))))
-          (is (= 3 (get-in response [:metadata :open-task-count])))
+          (is (= 5 (get-in response [:metadata :open-task-count])))
+          (is (= 3 (get-in response [:metadata :returned-count])))
           (is (= 5 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))
           (is (= ["Task 1" "Task 2" "Task 3"]
@@ -62,6 +64,7 @@
           (is (false? (:isError result)))
           (is (= 5 (count (:tasks response))))
           (is (= 5 (get-in response [:metadata :open-task-count])))
+          (is (= 5 (get-in response [:metadata :returned-count])))
           (is (= 5 (get-in response [:metadata :total-matches])))
           (is (false? (get-in response [:metadata :limited?]))))))))
 
@@ -77,6 +80,7 @@
           (is (false? (:isError result)))
           (is (= 1 (count (:tasks response))))
           (is (= 1 (get-in response [:metadata :open-task-count])))
+          (is (= 1 (get-in response [:metadata :returned-count])))
           (is (= 1 (get-in response [:metadata :total-matches])))
           (is (= "Unique Task" (get-in response [:tasks 0 :title])))))
 
@@ -86,6 +90,7 @@
           (is (false? (:isError result)))
           (is (= 0 (count (:tasks response))))
           (is (= 0 (get-in response [:metadata :open-task-count])))
+          (is (= 0 (get-in response [:metadata :returned-count])))
           (is (= 0 (get-in response [:metadata :total-matches])))))
 
       (testing "returns error when multiple tasks match"
@@ -151,7 +156,8 @@
       (testing "metadata reflects filtering and limiting"
         (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:category "test" :limit 1})
               response (json/parse-string (get-in result [:content 0 :text]) keyword)]
-          (is (= 1 (get-in response [:metadata :open-task-count])))
+          (is (= 2 (get-in response [:metadata :open-task-count])))
+          (is (= 1 (get-in response [:metadata :returned-count])))
           (is (= 2 (get-in response [:metadata :total-matches])))
           (is (true? (get-in response [:metadata :limited?])))))
 

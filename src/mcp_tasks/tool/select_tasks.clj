@@ -120,14 +120,16 @@
           ;; Multiple matches with unique is also an error
           (when (and unique (> total-matches 1))
             (let [response-data {:error "Multiple tasks matched but :unique was specified"
-                                 :metadata {:open-task-count result-count
+                                 :metadata {:open-task-count total-matches
+                                            :returned-count result-count
                                             :total-matches total-matches}}]
               (throw (ex-info "unique? constraint violated"
                               {:response response-data}))))
 
           ;; Build success response
           (let [response-data {:tasks limited-tasks
-                               :metadata (cond-> {:open-task-count result-count
+                               :metadata (cond-> {:open-task-count total-matches
+                                                  :returned-count result-count
                                                   :total-matches total-matches
                                                   :limited? (> total-matches result-count)}
                                            ;; Add completed-task-count only when parent-id was provided
