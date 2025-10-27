@@ -42,8 +42,9 @@
                         git/derive-project-name
                         (fn [_] {:success true :name "mcp-tasks" :error nil})
                         git/derive-worktree-path
-                        (fn [_ title task-id _config]
+                        (fn [_ title task-id* _config]
                           (is (= "Fix Parser Bug" title))
+                          (is (= task-id task-id*))
                           {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists?
                         (fn [_ path]
