@@ -56,7 +56,9 @@
         (is (= "simple" (:category response)))
         (is (= "task" (:type response)))
         (is (= "open" (:status response)))
-        (is (str/includes? (:message response) "validated successfully"))))))
+        (is (str/includes? (:message response) "validated successfully"))
+        ;; worktree-name should NOT be present when worktree management is disabled
+        (is (not (contains? response :worktree-name)))))))
 
 (deftest work-on-handles-different-task-types
   (h/with-test-setup [test-dir]
