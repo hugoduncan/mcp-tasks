@@ -121,7 +121,6 @@
           (when (and unique (> total-matches 1))
             (let [response-data {:error "Multiple tasks matched but :unique was specified"
                                  :metadata {:open-task-count total-matches
-                                            :returned-count result-count
                                             :total-matches total-matches}}]
               (throw (ex-info "unique? constraint violated"
                               {:response response-data}))))
