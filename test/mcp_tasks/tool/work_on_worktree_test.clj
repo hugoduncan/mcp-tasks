@@ -42,7 +42,7 @@
                         git/derive-project-name
                         (fn [_] {:success true :name "mcp-tasks" :error nil})
                         git/derive-worktree-path
-                        (fn [_ title _config]
+                        (fn [_ title task-id _config]
                           (is (= "Fix Parser Bug" title))
                           {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists?
@@ -119,7 +119,7 @@
                             {:success true :exists? true :error nil})
                           git/derive-worktree-path
                           (fn derive-worktree-path
-                            [_ _ _]
+                            [_ _ _ _]
                             {:success true
                              :path expected-worktree-path
                              :error nil})
@@ -161,7 +161,7 @@
                           git/checkout-branch (fn [_ _] {:success true :error nil})
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                          git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                          git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
                           git/worktree-exists? (fn [_ _]
                                                  {:success true :exists? true
                                                   :worktree {:path expected-worktree-path :branch "clean-task"}
@@ -201,7 +201,7 @@
                         git/checkout-branch (fn [_ _] {:success true :error nil})
                         git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                         git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                        git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                        git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists? (fn [_ _]
                                                {:success true :exists? true
                                                 :worktree {:path expected-worktree-path :branch "wrong-branch"}
@@ -240,7 +240,7 @@
                         git/checkout-branch (fn [_ _] {:success true :error nil})
                         git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                         git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                        git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                        git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists? (fn [_ _]
                                                {:success true :exists? true
                                                 :worktree {:path expected-worktree-path :branch "switch-dir-task"}
@@ -310,11 +310,12 @@
                                                          {:success true
                                                           :worktree nil
                                                           :error nil})
-                          git/derive-worktree-path (fn derive-worktree-path
-                                                     [_ _ _]
-                                                     {:success true
-                                                      :path expected-worktree-path
-                                                      :error nil})
+                          git/derive-worktree-path
+                          (fn derive-worktree-path
+                            [_ _ _ _]
+                            {:success true
+                             :path expected-worktree-path
+                             :error nil})
                           git/worktree-exists? (fn worktree-exists?
                                                  [_ path]
                                                  (is (= expected-worktree-path path))

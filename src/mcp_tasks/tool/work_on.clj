@@ -235,6 +235,7 @@
   Parameters:
   - base-dir: Base directory (current working directory, may be a worktree)
   - title: The title to use for deriving the worktree path
+  - task-id: The task or story ID number (used for worktree path generation)
   - branch-name: The sanitized branch name to use
   - config: Configuration map from read-config (must include :main-repo-dir)
 
@@ -253,31 +254,31 @@
 
   Examples:
   ;; Worktree doesn't exist, needs creation
-  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
-  ;; => {:success true :worktree-path \"../mcp-tasks-fix-bug\" :worktree-created? true
-  ;;     :needs-directory-switch? true :branch-name \"fix-bug\" :clean? nil
-  ;;     :message \"Worktree created at ../mcp-tasks-fix-bug. Please start a new Claude Code session in that directory.\"}
+  (manage-worktree \"/path\" \"Fix Bug\" 123 \"123-fix-bug\" config)
+  ;; => {:success true :worktree-path \"../mcp-tasks-123-fix-bug\" :worktree-created? true
+  ;;     :needs-directory-switch? true :branch-name \"123-fix-bug\" :clean? nil
+  ;;     :message \"Worktree created at ../mcp-tasks-123-fix-bug. Please start a new Claude Code session in that directory.\"}
 
   ;; Worktree exists but not in it
-  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
-  ;; => {:success true :worktree-path \"../mcp-tasks-fix-bug\" :worktree-created? false
-  ;;     :needs-directory-switch? true :branch-name \"fix-bug\" :clean? nil
-  ;;     :message \"Worktree exists at ../mcp-tasks-fix-bug. Please start a new Claude Code session in that directory.\"}
+  (manage-worktree \"/path\" \"Fix Bug\" 123 \"123-fix-bug\" config)
+  ;; => {:success true :worktree-path \"../mcp-tasks-123-fix-bug\" :worktree-created? false
+  ;;     :needs-directory-switch? true :branch-name \"123-fix-bug\" :clean? nil
+  ;;     :message \"Worktree exists at ../mcp-tasks-123-fix-bug. Please start a new Claude Code session in that directory.\"}
 
   ;; In worktree, correct branch, clean
-  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
+  (manage-worktree \"/path\" \"Fix Bug\" 123 \"123-fix-bug\" config)
   ;; => {:success true :worktree-path \"/path\" :worktree-created? false
-  ;;     :needs-directory-switch? false :branch-name \"fix-bug\" :clean? true}
+  ;;     :needs-directory-switch? false :branch-name \"123-fix-bug\" :clean? true}
 
   ;; In worktree, correct branch, dirty
-  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
+  (manage-worktree \"/path\" \"Fix Bug\" 123 \"123-fix-bug\" config)
   ;; => {:success true :worktree-path \"/path\" :worktree-created? false
-  ;;     :needs-directory-switch? false :branch-name \"fix-bug\" :clean? false}
+  ;;     :needs-directory-switch? false :branch-name \"123-fix-bug\" :clean? false}
 
   ;; In worktree, wrong branch (error)
-  (manage-worktree \"/path\" \"Fix Bug\" \"fix-bug\" config)
-  ;; => {:success false :error \"Worktree is on branch 'other' but expected 'fix-bug'\"}"
-  [_base-dir title branch-name config]
+  (manage-worktree \"/path\" \"Fix Bug\" 123 \"other-branch\" config)
+  ;; => {:success false :error \"Worktree is on branch 'other' but expected '123-fix-bug'\"}"
+  [_base-dir title task-id branch-name config]
   (try
     (let [;; Extract main-repo-dir for worktree operations
           main-repo-dir (:main-repo-dir config)
@@ -323,7 +324,7 @@
         ;; creating/checking worktree
         (let [;; Derive worktree path (uses main-repo-dir)
               path-result (git/ensure-git-success!
-                            (git/derive-worktree-path main-repo-dir title config)
+                            (git/derive-worktree-path main-repo-dir title task-id config)
                             "derive-worktree-path")
               worktree-path (:path path-result)
 
@@ -678,11 +679,14 @@
           branch-mgmt-enabled? (or worktree-mgmt-enabled?
                                    (:branch-management? cfg))
 
-          ;; Calculate branch name and title once for use in branch/worktree
+          ;; Calculate branch name, title, and ID once for use in branch/worktree
           ;; management
           title (if parent-story
                   (:title parent-story)
                   (:title task))
+          branch-source-id (if parent-story
+                             (:id parent-story)
+                             (:id task))
           branch-name (calculate-branch-name task parent-story cfg)
 
           ;; Handle worktree management if configured
@@ -690,6 +694,7 @@
                           (let [worktree-result (manage-worktree
                                                   base-dir
                                                   title
+                                                  branch-source-id
                                                   branch-name
                                                   cfg)]
                             (when-not (:success worktree-result)
