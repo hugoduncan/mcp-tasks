@@ -37,7 +37,21 @@
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
   - unique: If true, enforce that 0 or 1 task matches (error if >1)
 
-  Returns JSON-encoded response with tasks vector and metadata."
+  Returns JSON-encoded response with tasks vector and metadata.
+
+  Metadata semantics:
+  - :open-task-count - total number of matching tasks (before limit applied)
+  - :returned-count - number of tasks in the :tasks vector (after limit)
+  - :limited? - true when open-task-count > returned-count
+  - :completed-task-count - total completed children (only when parent-id provided)
+
+  Examples:
+  - Query 100 open tasks with limit=5:
+    {:open-task-count 100, :returned-count 5, :limited? true}
+  - Query parent with 3 open + 2 closed children, limit=2:
+    {:open-task-count 3, :completed-task-count 2, :returned-count 2, :limited? true}
+  - Query parent with 1 open + 5 closed children, no limit:
+    {:open-task-count 1, :completed-task-count 5, :returned-count 1, :limited? false}"
   [config _context {:keys [task-id category parent-id title-pattern type status limit unique]}]
   (try
     ;; Determine effective limit
