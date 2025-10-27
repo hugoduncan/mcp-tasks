@@ -2,6 +2,7 @@
   (:require
     [clojure.java.io :as io]
     [clojure.java.shell :as shell]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.tools.git :as sut]))
 
@@ -202,6 +203,97 @@
           (is (false? (:success result)))
           (is (nil? (:has-changes? result)))
           (is (= "fatal: error" (:error result))))))))
+
+(deftest check-all-pushed-test
+  ;; Tests verification that all commits are pushed to remote
+  ;; Verifies various scenarios: all pushed, unpushed commits, no remote, errors
+
+  (testing "check-all-pushed?"
+    (testing "returns true when all commits are pushed"
+      (with-redefs [clojure.java.shell/sh
+                    (fn [& args]
+                      (cond
+                        ;; Check for tracking branch
+                        (= ["git" "-C" "/test/dir" "rev-parse" "--abbrev-ref" "@{u}"] args)
+                        {:exit 0
+                         :out "origin/main\n"
+                         :err ""}
+                        ;; Check for unpushed commits
+                        (= ["git" "-C" "/test/dir" "rev-list" "@{u}..HEAD"] args)
+                        {:exit 0
+                         :out ""
+                         :err ""}))]
+        (let [result (sut/check-all-pushed? "/test/dir")]
+          (is (true? (:success result)))
+          (is (true? (:all-pushed? result)))
+          (is (= "All commits are pushed to remote" (:reason result))))))
+
+    (testing "returns false when unpushed commits exist"
+      (with-redefs [clojure.java.shell/sh
+                    (fn [& args]
+                      (cond
+                        (= ["git" "-C" "/test/dir" "rev-parse" "--abbrev-ref" "@{u}"] args)
+                        {:exit 0
+                         :out "origin/main\n"
+                         :err ""}
+                        (= ["git" "-C" "/test/dir" "rev-list" "@{u}..HEAD"] args)
+                        {:exit 0
+                         :out "abc123\ndef456\n"
+                         :err ""}))]
+        (let [result (sut/check-all-pushed? "/test/dir")]
+          (is (true? (:success result)))
+          (is (false? (:all-pushed? result)))
+          (is (= "Unpushed commits exist" (:reason result))))))
+
+    (testing "returns false when no remote tracking branch configured"
+      (with-redefs [clojure.java.shell/sh
+                    (fn [& args]
+                      (when (= ["git" "-C" "/test/dir" "rev-parse" "--abbrev-ref" "@{u}"] args)
+                        {:exit 128
+                         :out ""
+                         :err "fatal: no upstream configured for branch 'main'\n"}))]
+        (let [result (sut/check-all-pushed? "/test/dir")]
+          (is (true? (:success result)))
+          (is (false? (:all-pushed? result)))
+          (is (= "No remote tracking branch configured" (:reason result))))))
+
+    (testing "handles git error checking tracking branch"
+      (with-redefs [clojure.java.shell/sh
+                    (fn [& args]
+                      (when (= ["git" "-C" "/test/dir" "rev-parse" "--abbrev-ref" "@{u}"] args)
+                        {:exit 128
+                         :out ""
+                         :err "fatal: not a git repository\n"}))]
+        (let [result (sut/check-all-pushed? "/test/dir")]
+          (is (false? (:success result)))
+          (is (nil? (:all-pushed? result)))
+          (is (str/includes? (:reason result) "Failed to check tracking branch")))))
+
+    (testing "handles git error checking unpushed commits"
+      (with-redefs [clojure.java.shell/sh
+                    (fn [& args]
+                      (cond
+                        (= ["git" "-C" "/test/dir" "rev-parse" "--abbrev-ref" "@{u}"] args)
+                        {:exit 0
+                         :out "origin/main\n"
+                         :err ""}
+                        (= ["git" "-C" "/test/dir" "rev-list" "@{u}..HEAD"] args)
+                        {:exit 1
+                         :out ""
+                         :err "fatal: bad revision\n"}))]
+        (let [result (sut/check-all-pushed? "/test/dir")]
+          (is (false? (:success result)))
+          (is (nil? (:all-pushed? result)))
+          (is (str/includes? (:reason result) "Failed to check commits")))))
+
+    (testing "handles exceptions"
+      (with-redefs [clojure.java.shell/sh
+                    (fn [& _]
+                      (throw (Exception. "Network error")))]
+        (let [result (sut/check-all-pushed? "/test/dir")]
+          (is (false? (:success result)))
+          (is (nil? (:all-pushed? result)))
+          (is (str/includes? (:reason result) "Exception checking pushed status")))))))
 
 (deftest branch-exists-test
   ;; Tests branch existence checking via git rev-parse --verify

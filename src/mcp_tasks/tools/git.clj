@@ -23,6 +23,7 @@
   Use for context-specific operations in the current working directory:
   - get-current-branch - Gets the branch in current directory
   - check-uncommitted-changes - Checks changes in current directory
+  - check-all-pushed? - Checks if all commits are pushed to remote
   - branch-exists? - Checks if a branch exists (works from any directory)
   - checkout-branch - Checks out a branch in current directory
   - create-and-checkout-branch - Creates and checks out branch in current directory
@@ -275,6 +276,54 @@
       {:success false
        :has-changes? nil
        :error (.getMessage e)})))
+
+(defn check-all-pushed?
+  "Checks if all commits in the current branch are pushed to remote.
+
+  Uses git rev-list to compare local HEAD with remote tracking branch.
+  This ensures no local work will be lost if the worktree is removed.
+
+  Parameters:
+  - base-dir: Base directory of the git repository
+
+  Returns a map with:
+  - :success - boolean indicating if check succeeded
+  - :all-pushed? - boolean indicating if all commits are pushed (or nil if check failed)
+  - :reason - descriptive string explaining the result"
+  [base-dir]
+  {:pre [(string? base-dir)
+         (not (clojure.string/blank? base-dir))]}
+  (try
+    ;; First check if there's a tracking branch configured
+    (let [tracking-check (sh/sh "git" "-C" base-dir "rev-parse" "--abbrev-ref" "@{u}")]
+      (if (zero? (:exit tracking-check))
+        ;; Has tracking branch - check for unpushed commits
+        (let [result (sh/sh "git" "-C" base-dir "rev-list" "@{u}..HEAD")]
+          (if (zero? (:exit result))
+            (let [unpushed-commits (str/trim (:out result))]
+              (if (str/blank? unpushed-commits)
+                {:success true
+                 :all-pushed? true
+                 :reason "All commits are pushed to remote"}
+                {:success true
+                 :all-pushed? false
+                 :reason "Unpushed commits exist"}))
+            {:success false
+             :all-pushed? nil
+             :reason (str "Failed to check commits: " (str/trim (:err result)))}))
+        ;; No tracking branch configured
+        (let [stderr (str/trim (:err tracking-check))]
+          (if (str/includes? stderr "no upstream configured")
+            {:success true
+             :all-pushed? false
+             :reason "No remote tracking branch configured"}
+            {:success false
+             :all-pushed? nil
+             :reason (str "Failed to check tracking branch: " stderr)}))))
+    (catch Exception e
+      {:success false
+       :all-pushed? nil
+       :reason (str "Exception checking pushed status: " (.getMessage e))})))
 
 (defn branch-exists?
   "Checks if a branch exists.
