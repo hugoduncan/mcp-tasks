@@ -90,6 +90,18 @@
                       {:type :invalid-config-value
                        :key :lock-poll-interval-ms
                        :value poll-interval}))))
+  (when-let [branch-title-words (:branch-title-words config)]
+    (when-not (int? branch-title-words)
+      (throw (ex-info (str "Expected integer for :branch-title-words, got " (type branch-title-words))
+                      {:type :invalid-config-type
+                       :key :branch-title-words
+                       :value branch-title-words
+                       :expected 'int?})))
+    (when-not (pos? branch-title-words)
+      (throw (ex-info "Value for :branch-title-words must be positive"
+                      {:type :invalid-config-value
+                       :key :branch-title-words
+                       :value branch-title-words}))))
   config)
 
 (defn find-config-file

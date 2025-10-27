@@ -74,6 +74,18 @@
       (is (= {:lock-poll-interval-ms 50}
              (sut/validate-config {:lock-poll-interval-ms 50}))))
 
+    (testing "accepts config with :branch-title-words positive integer"
+      (is (= {:branch-title-words 1}
+             (sut/validate-config {:branch-title-words 1})))
+      (is (= {:branch-title-words 4}
+             (sut/validate-config {:branch-title-words 4})))
+      (is (= {:branch-title-words 100}
+             (sut/validate-config {:branch-title-words 100}))))
+
+    (testing "accepts config with :branch-title-words nil"
+      (is (= {}
+             (sut/validate-config {}))))
+
     (testing "accepts config with unknown keys for forward compatibility"
       (is (= {:use-git? true :unknown-key "value"}
              (sut/validate-config {:use-git? true :unknown-key "value"}))))))
@@ -170,7 +182,27 @@
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
             #"Value for :lock-poll-interval-ms must be positive"
-            (sut/validate-config {:lock-poll-interval-ms -100}))))))
+            (sut/validate-config {:lock-poll-interval-ms -100}))))
+
+    (testing "rejects non-integer :branch-title-words value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected integer for :branch-title-words, got .*String"
+            (sut/validate-config {:branch-title-words "4"})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Expected integer for :branch-title-words, got .*Double"
+            (sut/validate-config {:branch-title-words 100.5}))))
+
+    (testing "rejects non-positive :branch-title-words value"
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Value for :branch-title-words must be positive"
+            (sut/validate-config {:branch-title-words 0})))
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"Value for :branch-title-words must be positive"
+            (sut/validate-config {:branch-title-words -1}))))))
 
 (deftest validate-config-rejects-invalid-tasks-dir
   ;; Test that validate-config rejects non-string :tasks-dir values
