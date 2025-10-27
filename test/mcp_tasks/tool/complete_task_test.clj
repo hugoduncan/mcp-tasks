@@ -6,6 +6,8 @@
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.complete-task :as sut]
+    [mcp-tasks.tool.work-on]
+    [mcp-tasks.tools.git]
     [mcp-tasks.tools.helpers]))
 
 ;; Git helper functions
@@ -898,3 +900,212 @@
               (let [complete-tasks (h/read-ednl-test-file test-dir "complete.ednl")]
                 (is (some #(= 73 (:id %)) complete-tasks))
                 (is (some #(= :closed (:status %)) complete-tasks))))))))))
+
+(deftest completes-task-and-cleans-up-worktree
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing a task in a worktree triggers cleanup when worktree-management is enabled
+    (testing "complete-task with worktree cleanup"
+      (testing "removes worktree when in worktree with worktree-management enabled"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 80 :parent-id nil :title "worktree task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+        (let [main-repo-dir "/main/repo"
+              worktree-path test-dir
+              cleanup-called (atom false)
+              cleanup-args (atom nil)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] true)
+                        mcp-tasks.tools.git/get-main-repo-dir
+                        (fn [_] main-repo-dir)
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [main-repo worktree config]
+                          (reset! cleanup-called true)
+                          (reset! cleanup-args {:main-repo main-repo
+                                                :worktree worktree
+                                                :config config})
+                          {:success true
+                           :message (str "Worktree removed at " worktree)
+                           :error nil})]
+            (let [result (#'sut/complete-task-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id 80})]
+              (is (false? (:isError result)))
+              (is @cleanup-called "cleanup-worktree-after-completion should be called")
+              (is (= main-repo-dir (:main-repo @cleanup-args)))
+              (is (= worktree-path (:worktree @cleanup-args)))
+              (is (:worktree-management? (:config @cleanup-args)))
+
+              ;; Verify message includes cleanup success
+              (let [msg (get-in result [:content 0 :text])]
+                (is (str/includes? msg "Task 80 completed"))
+                (is (str/includes? msg "Worktree removed at"))
+                (is (str/includes? msg "switch directories to continue"))))))))))
+
+(deftest completes-task-without-cleanup-in-main-repo
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing a task in main repo does NOT trigger cleanup
+    (testing "complete-task without worktree cleanup"
+      (testing "does not attempt cleanup when not in worktree"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 81 :parent-id nil :title "main repo task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+        (let [cleanup-called (atom false)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] false)
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [_ _ _]
+                          (reset! cleanup-called true)
+                          {:success true :message "Should not be called" :error nil})]
+            (let [result (#'sut/complete-task-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id 81})]
+              (is (false? (:isError result)))
+              (is (not @cleanup-called) "cleanup should not be called in main repo")
+
+              ;; Verify message does not include cleanup text
+              (let [msg (get-in result [:content 0 :text])]
+                (is (str/includes? msg "Task 81 completed"))
+                (is (not (str/includes? msg "Worktree removed")))))))))))
+
+(deftest completes-task-without-cleanup-when-disabled
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing a task does NOT trigger cleanup when worktree-management is disabled
+    (testing "complete-task without worktree cleanup"
+      (testing "does not attempt cleanup when worktree-management disabled"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 82 :parent-id nil :title "worktree task no mgmt" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+        (let [cleanup-called (atom false)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] true)
+                        mcp-tasks.tools.git/get-main-repo-dir
+                        (fn [_] "/main/repo")
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [_ _ _]
+                          (reset! cleanup-called true)
+                          {:success true :message "Should not be called" :error nil})]
+            (let [result (#'sut/complete-task-impl
+                          (assoc (h/test-config test-dir) :worktree-management? false)
+                          nil
+                          {:task-id 82})]
+              (is (false? (:isError result)))
+              (is (not @cleanup-called) "cleanup should not be called when disabled")
+
+              ;; Verify message does not include cleanup text
+              (let [msg (get-in result [:content 0 :text])]
+                (is (str/includes? msg "Task 82 completed"))
+                (is (not (str/includes? msg "Worktree removed")))))))))))
+
+(deftest completes-task-despite-worktree-cleanup-failure
+  (h/with-test-setup [test-dir]
+    ;; Tests that task completion succeeds even when worktree cleanup fails
+    (testing "complete-task with worktree cleanup failure"
+      (testing "completes task successfully but warns about cleanup failure"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 83 :parent-id nil :title "cleanup fail task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+        (with-redefs [mcp-tasks.tools.git/in-worktree?
+                      (fn [_] true)
+                      mcp-tasks.tools.git/get-main-repo-dir
+                      (fn [_] "/main/repo")
+                      mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                      (fn [_ _ _]
+                        {:success false
+                         :message nil
+                         :error "Uncommitted changes exist in worktree"})]
+          (let [result (#'sut/complete-task-impl
+                        (assoc (h/test-config test-dir) :worktree-management? true)
+                        nil
+                        {:task-id 83})]
+            (is (false? (:isError result)) "Task completion should succeed")
+
+            ;; Verify task was actually completed
+            (let [complete-tasks (h/read-ednl-test-file test-dir "complete.ednl")]
+              (is (= 1 (count complete-tasks)))
+              (is (= 83 (:id (first complete-tasks))))
+              (is (= :closed (:status (first complete-tasks)))))
+
+            ;; Verify message includes cleanup failure warning
+            (let [msg (get-in result [:content 0 :text])]
+              (is (str/includes? msg "Task 83 completed"))
+              (is (str/includes? msg "Warning: Could not remove worktree"))
+              (is (str/includes? msg "Uncommitted changes exist in worktree")))))))))
+
+(deftest completes-story-child-with-worktree-cleanup
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing a story child task triggers worktree cleanup
+    (testing "complete-task child task with worktree cleanup"
+      (testing "removes worktree after completing child task"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 90 :parent-id nil :title "Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+           {:id 91 :parent-id 90 :title "Child" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+
+        (let [cleanup-called (atom false)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] true)
+                        mcp-tasks.tools.git/get-main-repo-dir
+                        (fn [_] "/main/repo")
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [_ _ _]
+                          (reset! cleanup-called true)
+                          {:success true
+                           :message "Worktree removed"
+                           :error nil})]
+            (let [result (#'sut/complete-task-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id 91})]
+              (is (false? (:isError result)))
+              (is @cleanup-called "cleanup should be called for child tasks")
+
+              ;; Verify message includes cleanup success
+              (let [msg (get-in result [:content 0 :text])]
+                (is (str/includes? msg "Task 91 completed"))
+                (is (str/includes? msg "Worktree removed"))))))))))
+
+(deftest completes-story-with-worktree-cleanup
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing a story triggers worktree cleanup
+    (testing "complete-task story with worktree cleanup"
+      (testing "removes worktree after completing story with all children closed"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 95 :parent-id nil :title "Complete Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+           {:id 96 :parent-id 95 :title "Child 1" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}
+           {:id 97 :parent-id 95 :title "Child 2" :description "" :design "" :category "simple" :type :task :status :closed :meta {} :relations []}])
+
+        (let [cleanup-called (atom false)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] true)
+                        mcp-tasks.tools.git/get-main-repo-dir
+                        (fn [_] "/main/repo")
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [_ _ _]
+                          (reset! cleanup-called true)
+                          {:success true
+                           :message "Worktree removed"
+                           :error nil})]
+            (let [result (#'sut/complete-task-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id 95})]
+              (is (false? (:isError result)))
+              (is @cleanup-called "cleanup should be called for story tasks")
+
+              ;; Verify message includes cleanup success
+              (let [msg (get-in result [:content 0 :text])]
+                (is (str/includes? msg "Story 95 completed and archived"))
+                (is (str/includes? msg "Worktree removed"))))))))))
