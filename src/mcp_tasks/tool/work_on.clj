@@ -429,29 +429,25 @@
   (let [uncommitted-result (git/check-uncommitted-changes worktree-path)
         pushed-result (git/check-all-pushed? worktree-path)]
 
-    (cond
-      ;; Check if uncommitted changes check failed
-      (not (:success uncommitted-result))
-      {:safe? false
-       :reason (str "Failed to check uncommitted changes: " (:error uncommitted-result))}
+    (or
+      ;; Return first failure found, or nil to continue to success case
+      (when-not (:success uncommitted-result)
+        {:safe? false
+         :reason (str "Failed to check uncommitted changes: " (:error uncommitted-result))})
 
-      ;; Check if there are uncommitted changes
-      (:has-changes? uncommitted-result)
-      {:safe? false
-       :reason "Uncommitted changes exist in worktree"}
+      (when (:has-changes? uncommitted-result)
+        {:safe? false
+         :reason "Uncommitted changes exist in worktree"})
 
-      ;; Check if push status check failed
-      (not (:success pushed-result))
-      {:safe? false
-       :reason (:reason pushed-result)}
+      (when-not (:success pushed-result)
+        {:safe? false
+         :reason (:reason pushed-result)})
 
-      ;; Check if not all commits are pushed
-      (not (:all-pushed? pushed-result))
-      {:safe? false
-       :reason (:reason pushed-result)}
+      (when-not (:all-pushed? pushed-result)
+        {:safe? false
+         :reason (:reason pushed-result)})
 
       ;; All checks passed
-      :else
       {:safe? true
        :reason "Worktree is clean and all commits are pushed"})))
 
