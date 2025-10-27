@@ -8,6 +8,18 @@
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.work-on :as sut]))
 
+(deftest extract-worktree-name-test
+  ;; Test the extract-worktree-name helper function
+  (testing "extract-worktree-name"
+    (testing "extracts final path component from absolute paths"
+      (is (= "mcp-tasks-fix-bug"
+             (#'sut/extract-worktree-name "/Users/duncan/projects/mcp-tasks-fix-bug")))
+      (is (= "mcp-tasks-fix-bug"
+             (#'sut/extract-worktree-name "/Users/duncan/projects/mcp-tasks-fix-bug/"))))
+
+    (testing "handles nil input"
+      (is (nil? (#'sut/extract-worktree-name nil))))))
+
 (deftest work-on-parameter-validation
   (h/with-test-setup [test-dir]
     ;; Test that work-on validates input parameters correctly
@@ -56,7 +68,9 @@
         (is (= "simple" (:category response)))
         (is (= "task" (:type response)))
         (is (= "open" (:status response)))
-        (is (str/includes? (:message response) "validated successfully"))))))
+        (is (str/includes? (:message response) "validated successfully"))
+        ;; worktree-name should NOT be present when worktree management is disabled
+        (is (not (contains? response :worktree-name)))))))
 
 (deftest work-on-handles-different-task-types
   (h/with-test-setup [test-dir]

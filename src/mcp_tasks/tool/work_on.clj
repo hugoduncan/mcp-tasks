@@ -168,9 +168,19 @@
        :error (:error (ex-data e) (.getMessage e))
        :metadata (dissoc (ex-data e) :error)})))
 
+(defn- extract-worktree-name
+  "Extract the worktree name from a worktree path.
+
+  Returns the final path component (directory name).
+
+  Example: /Users/duncan/projects/mcp-tasks-fix-bug/ -> mcp-tasks-fix-bug"
+  [worktree-path]
+  (when worktree-path
+    (fs/file-name worktree-path)))
+
 (defn- current-working-directory
   "Get the current working directory as a canonical path.
-  
+
   Extracted into a separate function to allow mocking in tests."
   []
   (fs/canonicalize (System/getProperty "user.dir")))
@@ -498,9 +508,11 @@
                                :branch-switched? (:branch-switched? branch-info))
 
                         worktree-info
-                        (assoc :worktree-path (:worktree-path worktree-info)
-                               :worktree-created? (:worktree-created? worktree-info)
-                               :worktree-clean? (:clean? worktree-info)))]
+                        (merge {:worktree-path (:worktree-path worktree-info)
+                                :worktree-created? (:worktree-created? worktree-info)
+                                :worktree-clean? (:clean? worktree-info)}
+                               (when-let [wt-path (:worktree-path worktree-info)]
+                                 {:worktree-name (extract-worktree-name wt-path)})))]
     {:content [{:type "text"
                 :text (json/generate-string response-data)}]
      :isError false}))
@@ -578,15 +590,18 @@
 
       ;; If worktree management requires directory switch, return early with message
       (if (and worktree-info (:needs-directory-switch? worktree-info))
-        (let [response-data {:task-id (:id task)
-                             :title (:title task)
-                             :category (:category task)
-                             :type (:type task)
-                             :status (:status task)
-                             :worktree-path (str (:worktree-path worktree-info))
-                             :worktree-created? (:worktree-created? worktree-info)
-                             :branch-name (:branch-name worktree-info)
-                             :message (:message worktree-info)}]
+        (let [worktree-path (:worktree-path worktree-info)
+              response-data (cond-> {:task-id (:id task)
+                                     :title (:title task)
+                                     :category (:category task)
+                                     :type (:type task)
+                                     :status (:status task)
+                                     :worktree-path (str worktree-path)
+                                     :worktree-created? (:worktree-created? worktree-info)
+                                     :branch-name (:branch-name worktree-info)
+                                     :message (:message worktree-info)}
+                              worktree-path
+                              (assoc :worktree-name (extract-worktree-name worktree-path)))]
           {:content [{:type "text"
                       :text (json/generate-string response-data)}]
            :isError false})

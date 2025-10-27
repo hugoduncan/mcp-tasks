@@ -63,6 +63,15 @@ The mcp-tasks MCP server provides:
   - Records execution state in `.mcp-tasks-current.edn`
   - Handles branch management (if configured)
   - Handles worktree management (if configured)
+- Returns:
+  - `:task-id`, `:category`, `:type`, `:title`, `:status` - Task information
+  - `:message` - Status message about the operation
+  - `:worktree-path` - Full path to the worktree (when in a worktree)
+  - `:worktree-name` - Worktree directory name (when `:worktree-path` is present)
+  - `:branch-name` - Current branch name (when branch management is active)
+  - `:worktree-clean?` - Whether the worktree has uncommitted changes
+  - `:execution-state-file` - Path to the execution state file
+  - `:worktree-created?` - Whether a new worktree was created
 
 **`execution-state`** - Manage execution state tracking
 - Actions:

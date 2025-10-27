@@ -69,6 +69,7 @@
               (is (= expected-worktree-path (:worktree-path response)))
               (is (true? (:worktree-created? response)))
               (is (= "fix-parser-bug" (:branch-name response)))
+              (is (= "mcp-tasks-fix-parser-bug" (:worktree-name response)))
               (is (str/includes? (:message response) "Worktree created"))
               (is (str/includes? (:message response) expected-worktree-path))
               ;; Should not have written execution state since directory switch needed
@@ -138,6 +139,7 @@
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
                 (is (false? (:worktree-created? response)))
+                (is (= "mcp-tasks-add-feature" (:worktree-name response)))
                 (is (str/includes? (:message response) "Please start a new Claude Code session"))
                 ;; Should not have written execution state since directory switch needed
                 (is (not (contains? response :execution-state-file))))))))
@@ -174,6 +176,7 @@
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
                 (is (false? (:worktree-created? response)))
+                (is (= "mcp-tasks-clean-task" (:worktree-name response)))
                 (is (str/includes? (:message response) "Please start a new Claude Code session"))
                 ;; Should not have written execution state since directory switch needed
                 (is (not (contains? response :execution-state-file)))))))))))
