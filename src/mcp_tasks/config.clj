@@ -278,7 +278,7 @@
         (validate-git-repository-path
           canonical-path
           {:worktree-dir worktree-dir
-           :git-file git-file})
+           :git-file (str git-file)})
 
         canonical-path)
       ;; Malformed .git file - provide helpful error message
