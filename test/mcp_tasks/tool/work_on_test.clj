@@ -8,6 +8,18 @@
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.work-on :as sut]))
 
+(deftest extract-worktree-name-test
+  ;; Test the extract-worktree-name helper function
+  (testing "extract-worktree-name"
+    (testing "extracts final path component from absolute paths"
+      (is (= "mcp-tasks-fix-bug"
+             (#'sut/extract-worktree-name "/Users/duncan/projects/mcp-tasks-fix-bug")))
+      (is (= "mcp-tasks-fix-bug"
+             (#'sut/extract-worktree-name "/Users/duncan/projects/mcp-tasks-fix-bug/"))))
+
+    (testing "handles nil input"
+      (is (nil? (#'sut/extract-worktree-name nil))))))
+
 (deftest work-on-parameter-validation
   (h/with-test-setup [test-dir]
     ;; Test that work-on validates input parameters correctly
