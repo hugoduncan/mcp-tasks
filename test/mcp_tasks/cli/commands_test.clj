@@ -14,12 +14,12 @@
       (testing "returns all tasks with no filters"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}
-           {:id       2        :status :open :title "Task Two" :description "" :design ""
-            :category "medium" :type   :task :meta  {}         :relations   []}
-           {:id       3       :status :open :title "Task Three" :description "" :design ""
-            :category "large" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Task Two" :description "" :design ""
+            :category "medium" :type :task :meta {} :relations []}
+           {:id 3 :status :open :title "Task Three" :description "" :design ""
+            :category "large" :type :task :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {})]
           (is (= 3 (count (:tasks result))))
@@ -36,14 +36,14 @@
       (testing "filters by status"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Open Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}          :relations   []}
-           {:id       2        :status :closed :title "Closed Task" :description "" :design ""
-            :category "simple" :type   :task   :meta  {}            :relations   []}
-           {:id       3        :status :in-progress :title "Active Task" :description "" :design ""
-            :category "simple" :type   :task        :meta  {}            :relations   []}
-           {:id       4        :status :blocked :title "Blocked Task" :description "" :design ""
-            :category "simple" :type   :task    :meta  {}             :relations   []}])
+          [{:id 1 :status :open :title "Open Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :closed :title "Closed Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 3 :status :in-progress :title "Active Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 4 :status :blocked :title "Blocked Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (testing "status :open"
           (let [result (sut/list-command (h/test-config test-dir) {:status :open})]
@@ -72,12 +72,12 @@
       (testing "filters by category"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Simple Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}            :relations   []}
-           {:id       2        :status :open :title "Medium Task" :description "" :design ""
-            :category "medium" :type   :task :meta  {}            :relations   []}
-           {:id       3       :status :open :title "Large Task" :description "" :design ""
-            :category "large" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Simple Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Medium Task" :description "" :design ""
+            :category "medium" :type :task :meta {} :relations []}
+           {:id 3 :status :open :title "Large Task" :description "" :design ""
+            :category "large" :type :task :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {:category "medium"})]
           (is (= 1 (count (:tasks result))))
@@ -91,16 +91,16 @@
       (testing "filters by type"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Regular Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}             :relations   []}
-           {:id       2        :status :open :title "Bug Fix" :description "" :design ""
-            :category "simple" :type   :bug  :meta  {}        :relations   []}
-           {:id       3        :status :open    :title "New Feature" :description "" :design ""
-            :category "simple" :type   :feature :meta  {}            :relations   []}
-           {:id       4        :status :open  :title "User Story" :description "" :design ""
-            :category "simple" :type   :story :meta  {}           :relations   []}
-           {:id       5        :status :open  :title "Chore Work" :description "" :design ""
-            :category "simple" :type   :chore :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Regular Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Bug Fix" :description "" :design ""
+            :category "simple" :type :bug :meta {} :relations []}
+           {:id 3 :status :open :title "New Feature" :description "" :design ""
+            :category "simple" :type :feature :meta {} :relations []}
+           {:id 4 :status :open :title "User Story" :description "" :design ""
+            :category "simple" :type :story :meta {} :relations []}
+           {:id 5 :status :open :title "Chore Work" :description "" :design ""
+            :category "simple" :type :chore :meta {} :relations []}])
 
         (testing "type :bug"
           (let [result (sut/list-command (h/test-config test-dir) {:type :bug})]
@@ -124,14 +124,14 @@
       (testing "filters by parent-id"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       10      :status :open  :title "Parent Story" :description "" :design ""
-            :category "large" :type   :story :meta  {}             :relations   []}
-           {:id       11       :status :open :title     "Child Task 1" :description "" :design    ""
-            :category "simple" :type   :task :parent-id 10             :meta        {} :relations []}
-           {:id       12       :status :open :title     "Child Task 2" :description "" :design    ""
-            :category "simple" :type   :task :parent-id 10             :meta        {} :relations []}
-           {:id       13       :status :open :title "Other Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}           :relations   []}])
+          [{:id 10 :status :open :title "Parent Story" :description "" :design ""
+            :category "large" :type :story :meta {} :relations []}
+           {:id 11 :status :open :title "Child Task 1" :description "" :design ""
+            :category "simple" :type :task :parent-id 10 :meta {} :relations []}
+           {:id 12 :status :open :title "Child Task 2" :description "" :design ""
+            :category "simple" :type :task :parent-id 10 :meta {} :relations []}
+           {:id 13 :status :open :title "Other Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {:parent-id 10})]
           (is (= 2 (count (:tasks result))))
@@ -146,12 +146,12 @@
       (testing "filters by task-id"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}
-           {:id       2        :status :open :title "Task Two" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}
-           {:id       3        :status :open :title "Task Three" :description "" :design ""
-            :category "simple" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Task Two" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 3 :status :open :title "Task Three" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {:task-id 2})]
           (is (= 1 (count (:tasks result))))
@@ -165,12 +165,12 @@
       (testing "filters by title-pattern"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Fix parser bug" :description "" :design ""
-            :category "simple" :type   :bug  :meta  {}               :relations   []}
-           {:id       2        :status :open :title "Fix render bug" :description "" :design ""
-            :category "simple" :type   :bug  :meta  {}               :relations   []}
-           {:id       3        :status :open    :title "Add new feature" :description "" :design ""
-            :category "medium" :type   :feature :meta  {}                :relations   []}])
+          [{:id 1 :status :open :title "Fix parser bug" :description "" :design ""
+            :category "simple" :type :bug :meta {} :relations []}
+           {:id 2 :status :open :title "Fix render bug" :description "" :design ""
+            :category "simple" :type :bug :meta {} :relations []}
+           {:id 3 :status :open :title "Add new feature" :description "" :design ""
+            :category "medium" :type :feature :meta {} :relations []}])
 
         (testing "substring match"
           (let [result (sut/list-command (h/test-config test-dir) {:title-pattern "bug"})]
@@ -190,20 +190,21 @@
       (testing "respects limit parameter"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task 1" :description "" :design ""
-            :category "simple" :type   :task :meta  {}       :relations   []}
-           {:id       2        :status :open :title "Task 2" :description "" :design ""
-            :category "simple" :type   :task :meta  {}       :relations   []}
-           {:id       3        :status :open :title "Task 3" :description "" :design ""
-            :category "simple" :type   :task :meta  {}       :relations   []}
-           {:id       4        :status :open :title "Task 4" :description "" :design ""
-            :category "simple" :type   :task :meta  {}       :relations   []}
-           {:id       5        :status :open :title "Task 5" :description "" :design ""
-            :category "simple" :type   :task :meta  {}       :relations   []}])
+          [{:id 1 :status :open :title "Task 1" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Task 2" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 3 :status :open :title "Task 3" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 4 :status :open :title "Task 4" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 5 :status :open :title "Task 5" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {:limit 3})]
           (is (= 3 (count (:tasks result))))
-          (is (= 3 (get-in result [:metadata :open-task-count])))
+          (is (= 5 (get-in result [:metadata :open-task-count])))
+          (is (= 3 (get-in result [:metadata :returned-count])))
           (is (= 5 (get-in result [:metadata :total-matches])))
           (is (true? (get-in result [:metadata :limited?]))))))))
 
@@ -214,10 +215,10 @@
       (testing "enforces unique constraint"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}
-           {:id       2        :status :open :title "Task Two" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Task Two" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (testing "succeeds with 0 matches"
           (let [result (sut/list-command (h/test-config test-dir) {:category "nonexistent" :unique true})]
@@ -241,18 +242,18 @@
       (testing "combines multiple filters"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Simple Bug" :description "" :design ""
-            :category "simple" :type   :bug  :meta  {}           :relations   []}
-           {:id       2        :status :closed :title "Simple Task" :description "" :design ""
-            :category "simple" :type   :task   :meta  {}            :relations   []}
-           {:id       3        :status :open :title "Medium Bug" :description "" :design ""
-            :category "medium" :type   :bug  :meta  {}           :relations   []}
-           {:id       4        :status :open    :title "Simple Feature" :description "" :design ""
-            :category "simple" :type   :feature :meta  {}               :relations   []}])
+          [{:id 1 :status :open :title "Simple Bug" :description "" :design ""
+            :category "simple" :type :bug :meta {} :relations []}
+           {:id 2 :status :closed :title "Simple Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 3 :status :open :title "Medium Bug" :description "" :design ""
+            :category "medium" :type :bug :meta {} :relations []}
+           {:id 4 :status :open :title "Simple Feature" :description "" :design ""
+            :category "simple" :type :feature :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {:category "simple"
-                                                                 :status   :open
-                                                                 :type     :bug})]
+                                                                 :status :open
+                                                                 :type :bug})]
           (is (= 1 (count (:tasks result))))
           (is (= "Simple Bug" (:title (first (:tasks result)))))
           (is (= "open" (:status (first (:tasks result)))))
@@ -266,8 +267,8 @@
       (testing "returns empty results"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/list-command (h/test-config test-dir) {:category "nonexistent"})]
           (is (= 0 (count (:tasks result))))
@@ -282,8 +283,8 @@
       (testing "strips format option"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         ;; Should not error even with :format in parsed-args
         (let [result (sut/list-command (h/test-config test-dir) {:format :human})]
@@ -299,15 +300,15 @@
       (testing "returns single task by task-id"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}
-           {:id       2        :status :open :title "Task Two" :description "" :design ""
-            :category "medium" :type   :bug  :meta  {}         :relations   []}
-           {:id       3       :status :closed  :title "Task Three" :description "" :design ""
-            :category "large" :type   :feature :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Task Two" :description "" :design ""
+            :category "medium" :type :bug :meta {} :relations []}
+           {:id 3 :status :closed :title "Task Three" :description "" :design ""
+            :category "large" :type :feature :meta {} :relations []}])
 
         (let [result (sut/show-command (h/test-config test-dir) {:task-id 2})
-              task   (:task result)]
+              task (:task result)]
           (is (some? task))
           (is (= "Task Two" (:title task)))
           (is (= 2 (:id task)))
@@ -323,12 +324,12 @@
       (testing "sets unique: true"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         ;; Even if unique is not in parsed-args, it should be set
         (let [result (sut/show-command (h/test-config test-dir) {:task-id 1})
-              task   (:task result)]
+              task (:task result)]
           (is (some? task))
           (is (= "Task One" (:title task)))
           ;; Should not have :tasks key
@@ -341,8 +342,8 @@
       (testing "errors when task not found"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/show-command (h/test-config test-dir) {:task-id 999})]
           (is (contains? result :error))
@@ -356,12 +357,12 @@
       (testing "strips format option"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task One" :description "" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         ;; Should not error even with :format in parsed-args
         (let [result (sut/show-command (h/test-config test-dir) {:task-id 1 :format :json})
-              task   (:task result)]
+              task (:task result)]
           (is (some? task))
           (is (= "Task One" (:title task)))
           ;; Should not have :tasks key
@@ -378,7 +379,7 @@
         (let [result (sut/add-command
                        (h/test-config test-dir)
                        {:category "simple"
-                        :title    "New task"})]
+                        :title "New task"})]
           (is (= "New task" (:title (:task result))))
           (is (= "simple" (:category (:task result))))
           (is (= "task" (:type (:task result))))
@@ -390,13 +391,13 @@
       (testing "creates child task with parent-id"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       50      :status :open  :title "Parent Task" :description "" :design ""
-            :category "large" :type   :story :meta  {}            :relations   []}])
+          [{:id 50 :status :open :title "Parent Task" :description "" :design ""
+            :category "large" :type :story :meta {} :relations []}])
 
         (let [result (sut/add-command
                        (h/test-config test-dir)
-                       {:category  "simple"
-                        :title     "Child task"
+                       {:category "simple"
+                        :title "Child task"
                         :parent-id 50})]
           (is (= "Child task" (:title (:task result))))
           (is (= 50 (:parent-id (:task result)))))))))
@@ -410,8 +411,8 @@
         (let [result (sut/add-command
                        (h/test-config test-dir)
                        {:category "simple"
-                        :title    "New task"
-                        :format   :json})]
+                        :title "New task"
+                        :format :json})]
           (is (= "New task" (:title (:task result)))))))))
 
 (deftest add-command-persists-to-file
@@ -422,12 +423,12 @@
 
         (sut/add-command
           (h/test-config test-dir)
-          {:category    "simple"
-           :title       "Persisted Task"
+          {:category "simple"
+           :title "Persisted Task"
            :description "Should be in file"})
 
         (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
-              tasks           (tasks-file/read-ednl tasks-file-path)]
+              tasks (tasks-file/read-ednl tasks-file-path)]
           (is (= 1 (count tasks)))
           (is (= "Persisted Task" (:title (first tasks)))))))))
 
@@ -439,13 +440,13 @@
       (testing "updates task title"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Old Title" :description "" :design ""
-            :category "simple" :type   :task :meta  {}          :relations   []}])
+          [{:id 1 :status :open :title "Old Title" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/update-command
                        (h/test-config test-dir)
                        {:task-id 1
-                        :title   "New Title"})]
+                        :title "New Title"})]
           (is (= "New Title" (:title (:task result))))
           (is (= 1 (:id (:task result)))))))))
 
@@ -455,17 +456,17 @@
       (testing "updates multiple fields at once"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Old Title" :description "Old desc" :design ""
-            :category "simple" :type   :task :meta  {}          :relations   []}])
+          [{:id 1 :status :open :title "Old Title" :description "Old desc" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/update-command
                        (h/test-config test-dir)
-                       {:task-id  1
-                        :title    "New Title"
-                        :status   :in-progress
+                       {:task-id 1
+                        :title "New Title"
+                        :status :in-progress
                         :category "medium"
-                        :type     :bug})
-              task   (:task result)]
+                        :type :bug})
+              task (:task result)]
           (is (= "New Title" (:title task)))
           (is (= "in-progress" (:status task)))
           (is (= "medium" (:category task)))
@@ -477,14 +478,14 @@
       (testing "strips format option"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}     :relations   []}])
+          [{:id 1 :status :open :title "Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/update-command
                        (h/test-config test-dir)
                        {:task-id 1
-                        :title   "Updated"
-                        :format  :json})]
+                        :title "Updated"
+                        :format :json})]
           (is (= "Updated" (:title (:task result)))))))))
 
 (deftest update-command-persists-to-file
@@ -493,18 +494,18 @@
       (testing "persists changes to tasks.ednl"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Original" :description "Original desc" :design ""
-            :category "simple" :type   :task :meta  {}         :relations   []}])
+          [{:id 1 :status :open :title "Original" :description "Original desc" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (sut/update-command
           (h/test-config test-dir)
-          {:task-id     1
-           :title       "Updated Title"
+          {:task-id 1
+           :title "Updated Title"
            :description "Updated description"
-           :status      :in-progress})
+           :status :in-progress})
 
         (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
-              tasks           (tasks-file/read-ednl tasks-file-path)]
+              tasks (tasks-file/read-ednl tasks-file-path)]
           (is (= 1 (count tasks)))
           (let [task (first tasks)]
             (is (= "Updated Title" (:title task)))
@@ -519,10 +520,10 @@
       (testing "completes task using task-id"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task to complete" :description "" :design ""
-            :category "simple" :type   :task :meta  {}                 :relations   []}
-           {:id       2        :status :open :title "Other task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task to complete" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Other task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/complete-command
                        (h/test-config test-dir)
@@ -537,8 +538,8 @@
       (testing "completes task using title"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Unique task title" :description "" :design ""
-            :category "simple" :type   :task :meta  {}                  :relations   []}])
+          [{:id 1 :status :open :title "Unique task title" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/complete-command
                        (h/test-config test-dir)
@@ -552,12 +553,12 @@
       (testing "appends completion comment to description"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task" :description "Original description" :design ""
-            :category "simple" :type   :task :meta  {}     :relations   []}])
+          [{:id 1 :status :open :title "Task" :description "Original description" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/complete-command
                        (h/test-config test-dir)
-                       {:task-id            1
+                       {:task-id 1
                         :completion-comment "Fixed via PR #42"})]
           (is (= "closed" (:status (:task result))))
           (is (re-find #"Fixed via PR #42" (:description (:task result)))))))))
@@ -568,13 +569,13 @@
       (testing "strips format option"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}     :relations   []}])
+          [{:id 1 :status :open :title "Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/complete-command
                        (h/test-config test-dir)
                        {:task-id 1
-                        :format  :json})]
+                        :format :json})]
           (is (= "closed" (:status (:task result)))))))))
 
 (deftest complete-command-persists-to-file
@@ -583,19 +584,19 @@
       (testing "moves completed task to complete.ednl"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task to complete" :description "" :design ""
-            :category "simple" :type   :task :meta  {}                 :relations   []}
-           {:id       2        :status :open :title "Other task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task to complete" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Other task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (sut/complete-command
           (h/test-config test-dir)
           {:task-id 1})
 
-        (let [tasks-file-path    (str test-dir "/.mcp-tasks/tasks.ednl")
+        (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
               complete-file-path (str test-dir "/.mcp-tasks/complete.ednl")
-              tasks              (tasks-file/read-ednl tasks-file-path)
-              complete           (tasks-file/read-ednl complete-file-path)]
+              tasks (tasks-file/read-ednl tasks-file-path)
+              complete (tasks-file/read-ednl complete-file-path)]
           ;; Task removed from tasks.ednl
           (is (= 1 (count tasks)))
           (is (= "Other task" (:title (first tasks))))
@@ -612,10 +613,10 @@
       (testing "deletes task using task-id"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task to delete" :description "" :design ""
-            :category "simple" :type   :task :meta  {}               :relations   []}
-           {:id       2        :status :open :title "Other task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task to delete" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Other task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/delete-command
                        (h/test-config test-dir)
@@ -630,8 +631,8 @@
       (testing "deletes task using title-pattern"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Unique task to delete" :description "" :design ""
-            :category "simple" :type   :task :meta  {}                      :relations   []}])
+          [{:id 1 :status :open :title "Unique task to delete" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/delete-command
                        (h/test-config test-dir)
@@ -645,10 +646,10 @@
       (testing "errors when task has non-closed children"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       10      :status :open  :title "Parent task" :description "" :design ""
-            :category "large" :type   :story :meta  {}            :relations   []}
-           {:id       11       :status :open :title     "Child task" :description "" :design    ""
-            :category "simple" :type   :task :parent-id 10           :meta        {} :relations []}])
+          [{:id 10 :status :open :title "Parent task" :description "" :design ""
+            :category "large" :type :story :meta {} :relations []}
+           {:id 11 :status :open :title "Child task" :description "" :design ""
+            :category "simple" :type :task :parent-id 10 :meta {} :relations []}])
 
         (let [result (sut/delete-command
                        (h/test-config test-dir)
@@ -663,13 +664,13 @@
       (testing "strips format option"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}     :relations   []}])
+          [{:id 1 :status :open :title "Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (let [result (sut/delete-command
                        (h/test-config test-dir)
                        {:task-id 1
-                        :format  :json})]
+                        :format :json})]
           (is (= "deleted" (:status (:deleted result)))))))))
 
 (deftest delete-command-persists-to-file
@@ -678,19 +679,19 @@
       (testing "moves deleted task to complete.ednl with :deleted status"
         (h/write-ednl-test-file
           test-dir "tasks.ednl"
-          [{:id       1        :status :open :title "Task to delete" :description "" :design ""
-            :category "simple" :type   :task :meta  {}               :relations   []}
-           {:id       2        :status :open :title "Other task" :description "" :design ""
-            :category "simple" :type   :task :meta  {}           :relations   []}])
+          [{:id 1 :status :open :title "Task to delete" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Other task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
 
         (sut/delete-command
           (h/test-config test-dir)
           {:task-id 1})
 
-        (let [tasks-file-path    (str test-dir "/.mcp-tasks/tasks.ednl")
+        (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
               complete-file-path (str test-dir "/.mcp-tasks/complete.ednl")
-              tasks              (tasks-file/read-ednl tasks-file-path)
-              complete           (tasks-file/read-ednl complete-file-path)]
+              tasks (tasks-file/read-ednl tasks-file-path)
+              complete (tasks-file/read-ednl complete-file-path)]
           ;; Task removed from tasks.ednl
           (is (= 1 (count tasks)))
           (is (= "Other task" (:title (first tasks))))

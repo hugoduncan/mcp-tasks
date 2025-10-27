@@ -41,12 +41,19 @@
 (defn init-test-git-repo
   "Initialize a real git repository in the test .mcp-tasks directory.
 
-  This ensures git commands stay isolated to the test directory."
+  This ensures git commands stay isolated to the test directory.
+  
+  Configures pull.rebase=false to prevent rebase-related failures when pulling
+  with unstaged changes (common in test scenarios). This overrides any global
+  git configuration that may have pull.rebase=true."
   []
   (let [git-dir (io/file (test-project-dir) ".mcp-tasks")]
     (sh/sh "git" "init" (.getAbsolutePath git-dir))
     (sh/sh "git" "-C" (.getAbsolutePath git-dir) "config" "user.email" "test@example.com")
-    (sh/sh "git" "-C" (.getAbsolutePath git-dir) "config" "user.name" "Test User")))
+    (sh/sh "git" "-C" (.getAbsolutePath git-dir) "config" "user.name" "Test User")
+    ;; Explicitly disable rebase to avoid "unstaged changes" errors in tests
+    ;; This overrides any global pull.rebase=true configuration
+    (sh/sh "git" "-C" (.getAbsolutePath git-dir) "config" "pull.rebase" "false")))
 
 (defn write-config-file
   [content]

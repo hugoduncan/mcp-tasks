@@ -38,8 +38,8 @@ The story can be specified in multiple ways:
    - Then use `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
    - The tool returns :tasks (a vector) and :metadata
    - use :open-task-count and :completed-task-count to show story progress,
-     like "2 of 5 tasks completed", where the total is
-	 (open-task-count + :completed-task-count)
+     like "2 of 5 tasks completed", where 2 is :completed-task-count
+     and 5 is (+ :open-task-count :completed-task-count)
    - If no tasks found,
 	  - if completed-task-count is positive:
          - inform the user that all tasks are complete
