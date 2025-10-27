@@ -218,6 +218,20 @@
       (str base-message ". " (build-cleanup-warning worktree-path (:error cleanup-result))))
     base-message))
 
+(defn- get-current-directory
+  "Returns the current working directory for worktree detection purposes.
+  
+  This is the directory that will be checked to determine if we're running
+  from within a worktree. Normally returns (:base-dir config), but can be
+  redef'd in tests to simulate running from within a specific worktree.
+  
+  Parameters:
+  - config: Configuration map containing :base-dir
+  
+  Returns: The directory path string to use for worktree detection"
+  [config]
+  (:base-dir config))
+
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
@@ -238,9 +252,10 @@
   [config _context {:keys [task-id title completion-comment category]}]
   ;; Detect worktree context before lock
   (let [base-dir (:base-dir config)
-        in-worktree? (git/in-worktree? base-dir)
-        worktree-path (when in-worktree? base-dir)
-        main-repo-dir (when in-worktree? (git/get-main-repo-dir base-dir))
+        current-dir (get-current-directory config)
+        in-worktree? (git/in-worktree? current-dir)
+        worktree-path (when in-worktree? current-dir)
+        main-repo-dir (when in-worktree? (git/get-main-repo-dir current-dir))
 
         ;; Perform file operations inside lock
         locked-result (helpers/with-task-lock config

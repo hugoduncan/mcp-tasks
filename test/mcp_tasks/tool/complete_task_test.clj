@@ -1109,3 +1109,96 @@
               (let [msg (get-in result [:content 0 :text])]
                 (is (str/includes? msg "Story 95 completed and archived"))
                 (is (str/includes? msg "Worktree removed"))))))))))
+
+(deftest completes-task-from-within-worktree-being-removed
+  ;; Integration test for self-removal scenario where complete-task is called
+  ;; from within the worktree being cleaned up
+  (testing "complete-task from within worktree being removed"
+    (testing "successfully removes worktree when called from within it"
+      (h/with-test-setup [test-dir]
+        ;; Create main repo with a remote
+        (let [remote-dir (fs/create-temp-dir {:prefix "mcp-tasks-remote-"})
+              ;; Initialize remote repo
+              _ (clojure.java.shell/sh "git" "init" "--bare" :dir (str remote-dir))
+
+              ;; Initialize local repo
+              _ (clojure.java.shell/sh "git" "init" :dir (str test-dir))
+              _ (clojure.java.shell/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+              _ (clojure.java.shell/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+              _ (clojure.java.shell/sh "git" "-C" (str test-dir) "remote" "add" "origin" (str remote-dir))
+
+              ;; Create initial commit in local
+              initial-file (str test-dir "/initial.txt")
+              _ (spit initial-file "initial")
+              _ (clojure.java.shell/sh "git" "-C" (str test-dir) "add" "initial.txt")
+              _ (clojure.java.shell/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+              ;; Push to remote
+              _ (clojure.java.shell/sh "git" "-C" (str test-dir) "push" "-u" "origin" "master")
+
+              ;; Create a worktree with a new branch based on master (which is pushed)
+              worktree-path (str test-dir "-worktree")
+              _ (clojure.java.shell/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+              ;; Add a task in the worktree
+              _ (h/write-ednl-test-file
+                  worktree-path
+                  "tasks.ednl"
+                  [{:id 100 :parent-id nil :title "worktree task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+
+              ;; Commit the task in the worktree
+              _ (clojure.java.shell/sh "git" "-C" worktree-path "add" ".mcp-tasks/tasks.ednl")
+              _ (clojure.java.shell/sh "git" "-C" worktree-path "commit" "-m" "Add test task")
+
+              ;; Push the branch from the worktree
+              _ (clojure.java.shell/sh "git" "-C" worktree-path "push" "-u" "origin" "test-branch")
+
+              ;; Track whether task was completed (capture before worktree removal)
+              task-completed (atom nil)
+
+              ;; Call complete-task with get-current-directory redef'd to simulate running from within worktree
+              ;; Wrap cleanup to push commits and capture task state before removal
+              config (assoc (h/git-test-config worktree-path) :worktree-management? true)
+              original-cleanup @#'mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+              result (with-redefs [mcp-tasks.tool.complete-task/get-current-directory
+                                   (fn [_] worktree-path)
+                                   mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                                   (fn [main-repo worktree cfg]
+                                     ;; Capture completed task state before worktree is removed
+                                     (reset! task-completed
+                                             (try
+                                               (let [tasks (h/read-ednl-test-file worktree "complete.ednl")]
+                                                 (first tasks))
+                                               (catch Exception _ nil)))
+                                     ;; Push any commits before cleanup (simulates real workflow)
+                                     (clojure.java.shell/sh "git" "-C" worktree "push")
+                                     ;; Call the original cleanup function
+                                     (original-cleanup main-repo worktree cfg))]
+                       (#'sut/complete-task-impl
+                        config
+                        nil
+                        {:task-id 100}))]
+
+          ;; Verify task completion succeeded
+          (is (false? (:isError result)) "Task completion should succeed")
+
+          ;; Verify task was actually completed (captured before removal)
+          (is (some? @task-completed) "Task should have been captured before removal")
+          (when @task-completed
+            (is (= 100 (:id @task-completed)))
+            (is (= :closed (:status @task-completed))))
+
+          ;; Verify worktree was actually removed
+          (is (not (fs/exists? worktree-path))
+              "Worktree should be removed from filesystem")
+
+          ;; Verify message includes self-removal warning
+          (let [msg (get-in result [:content 0 :text])]
+            (is (str/includes? msg "Task 100 completed"))
+            (is (str/includes? msg "Worktree removed at"))
+            (is (str/includes? msg worktree-path))
+            (is (str/includes? msg "switch directories to continue")
+                "Message should warn about needing to switch directories"))
+
+          ;; Cleanup
+          (fs/delete-tree remote-dir))))))
