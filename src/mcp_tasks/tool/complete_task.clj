@@ -167,6 +167,21 @@
                             (str " with " child-count " child task"
                                  (when (> child-count 1) "s"))))})))))
 
+(defn- build-cleanup-warning
+  "Builds a warning message for failed worktree cleanup.
+
+  Parameters:
+  - worktree-path: Path to the worktree that failed to be cleaned up
+  - error: Error message describing why cleanup failed
+
+  Returns: Warning message string
+
+  Example:
+  (build-cleanup-warning \"/path/to/worktree\" \"Uncommitted changes\")
+  => \"Warning: Could not remove worktree at /path/to/worktree: Uncommitted changes\""
+  [worktree-path error]
+  (str "Warning: Could not remove worktree at " worktree-path ": " error))
+
 (defn- enhance-message-with-worktree-cleanup
   "Enhances a completion message with worktree cleanup status.
 
@@ -200,8 +215,7 @@
     (if (:success cleanup-result)
       (str base-message ". Worktree removed at " worktree-path
            " (switch directories to continue)")
-      (str base-message ". Warning: Could not remove worktree at "
-           worktree-path ": " (:error cleanup-result)))
+      (str base-message ". " (build-cleanup-warning worktree-path (:error cleanup-result))))
     base-message))
 
 (defn- complete-task-impl
