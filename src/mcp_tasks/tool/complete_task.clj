@@ -251,7 +251,7 @@
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
   ;; Detect worktree context before lock
-  (let [base-dir (:base-dir config)
+  (let [_base-dir (:base-dir config)
         current-dir (get-current-directory config)
         in-worktree? (git/in-worktree? current-dir)
         worktree-path (when in-worktree? current-dir)

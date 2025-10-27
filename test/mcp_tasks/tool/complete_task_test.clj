@@ -2,6 +2,7 @@
   (:require
     [babashka.fs :as fs]
     [cheshire.core :as json]
+    [clojure.java.shell]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.test-helpers :as h]
