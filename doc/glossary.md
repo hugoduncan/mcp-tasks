@@ -59,6 +59,12 @@ EDN map with fields defined by the Task schema in
 
 **Audit Trail**: Historical record of completed tasks preserved in `complete.ednl` with full context.
 
+**Branch Naming Convention**: Branches are named using the format `<id>-<title-slug>` where:
+- `<id>` is the task or story ID (variable width, no padding)
+- `<title-slug>` is derived from the first N words of the title (default: 4, configurable via `:branch-title-words`)
+- Slugification process: lowercase → spaces to dashes → remove special characters
+- Example: Task 123 "Implement user authentication with OAuth" → `123-implement-user-authentication-with`
+
 **Execution Instructions**: The steps an agent follows when processing a task.
 
 **Prepend**: Adding a new task at the beginning of `tasks.ednl` rather than the end. Tasks are ordered, with earlier tasks having higher precedence.
@@ -66,5 +72,10 @@ EDN map with fields defined by the Task schema in
 **Task Lifecycle**: The progression of a task from creation → `:status :open` → `:status :closed` → archived in `complete.ednl`.
 
 **Worktree Cleanup**: Automatic removal of git worktrees after task completion when `:worktree-management?` is enabled. The `complete-task` tool performs safety checks (no uncommitted changes, all commits pushed) before removing the worktree. The branch is preserved after cleanup. Task completion succeeds even if cleanup fails, with a warning message indicating the reason.
+
+**Worktree Naming Convention**: Worktree directories are named based on the branch naming convention with an optional project prefix:
+- With `:worktree-prefix :project-name`: `<project>-<id>-<title-slug>`
+- With `:worktree-prefix :none`: `<id>-<title-slug>`
+- Example: Task 123 "Fix authentication bug" with project "mcp-tasks" → `mcp-tasks-123-fix-authentication-bug`
 
 **Worktree Workflow**: Using git worktrees to isolate task execution by category in separate directories.

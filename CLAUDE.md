@@ -223,7 +223,10 @@ Story tasks are retrieved using the `select-tasks` tool with `parent-id` filteri
 
 **Branch Management:**
 Story execution includes automatic branch management:
-- Creates `<story-name>` branch if not already on it (branch name is the story title lowercased, with spaces replaced by dashes, and all special characters removed)
+- Creates `<id>-<story-name>` branch if not already on it
+  - Format: `<story-id>-<title-slug>` (e.g., `123-implement-user-auth`)
+  - Title is limited to first N words (default: 4, configurable via `:branch-title-words`)
+  - Slugification: lowercase, spaces to dashes, special characters removed
 - Keeps all story tasks on the same branch
 - Manual merge/push after story completion
 
@@ -262,11 +265,11 @@ This distinction matters in the **inherited configuration scenario**:
 **Example scenario:**
 ```
 /Users/duncan/projects/mcp-tasks/              # Main repo with .mcp-tasks.edn
-/Users/duncan/projects/mcp-tasks-fix-bug/      # Worktree (no .mcp-tasks.edn)
+/Users/duncan/projects/mcp-tasks-123-fix-bug/  # Worktree (no .mcp-tasks.edn)
 ```
 
 When starting the MCP server from the worktree:
-1. Config search starts in `/Users/duncan/projects/mcp-tasks-fix-bug/` (`start-dir`)
+1. Config search starts in `/Users/duncan/projects/mcp-tasks-123-fix-bug/` (`start-dir`)
 2. Config is found in parent `/Users/duncan/projects/mcp-tasks/` (`config-dir`)
 3. `resolve-config` detects that `start-dir` is a worktree even though `config-dir` is not
 4. Main repo path is correctly resolved from the worktree's `.git` file
@@ -297,8 +300,21 @@ Enable worktree management in `.mcp-tasks.edn`:
 ```clojure
 {:worktree-management? true
  :worktree-prefix :project-name  ;; or :none
- :base-branch "main"}
+ :base-branch "main"
+ :branch-title-words 4}          ;; Default: 4, nil for unlimited
 ```
+
+**Configuration Options:**
+- `:worktree-management?` - Enable automatic worktree creation and management
+- `:worktree-prefix` - Prefix worktree directory names (`:project-name` or `:none`)
+- `:base-branch` - The base branch to create feature branches from
+- `:branch-title-words` - Number of words from title to use in branch/worktree names
+  - Default: `4`
+  - Set to `nil` for unlimited (use all words from title)
+  - Examples:
+    - With `4`: Task "Implement user authentication with OAuth support" → `123-implement-user-authentication-with`
+    - With `2`: Task "Implement user authentication with OAuth support" → `123-implement-user`
+    - With `nil`: Task "Implement user authentication with OAuth support" → `123-implement-user-authentication-with-oauth-support`
 
 When `:worktree-management?` is enabled, the `work-on` tool automatically:
 - Creates a worktree for the task/story if it doesn't exist
@@ -316,7 +332,10 @@ The `work-on` tool returns a map containing task and environment information:
 - `:message` - Status message about the operation
 - `:worktree-path` - Full path to the worktree (only present when in a worktree)
 - `:worktree-name` - The worktree directory name (only present when `:worktree-path` is present)
-  - Extracted as the final path component (e.g., `/Users/duncan/projects/mcp-tasks-fix-bug/` → `mcp-tasks-fix-bug`)
+  - Extracted as the final path component (e.g., `/Users/duncan/projects/mcp-tasks-123-fix-bug/` → `mcp-tasks-123-fix-bug`)
+  - Format depends on `:worktree-prefix` config:
+    - With `:project-name`: `<project>-<id>-<title-slug>`
+    - With `:none`: `<id>-<title-slug>`
 - `:branch-name` - The current branch name (only present when branch management is active)
 - `:worktree-clean?` - Boolean indicating if the worktree has uncommitted changes
 - `:execution-state-file` - Path to the execution state file
