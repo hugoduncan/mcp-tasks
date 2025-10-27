@@ -104,10 +104,18 @@ This tool automatically:
 
 After calling the work-on tool, display the working environment context:
 - If the response includes `:worktree-name` and `:worktree-path`, display:
-  "Working in worktree: <worktree-name> at <worktree-path>"
+    Worktree: <worktree-name>
+    Directory: <worktree-path>
 - If the response includes `:branch-name`, display:
-  "On branch: <branch-name>"
+  "Branch: <branch-name>"
 - Format this as a clear header before proceeding with task execution
+
+Example output:
+```
+Worktree: mcp-tasks-fix-bug
+Directory: /Users/duncan/projects/mcp-tasks-fix-bug
+Branch: fix-bug
+```
 
 ### 5. Execute the Task
 
