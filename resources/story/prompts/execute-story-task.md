@@ -61,6 +61,12 @@ The story can be specified in multiple ways:
        - Write execution state with story-id and timestamp
        - Handle branch management if configured
        - Handle worktree management if configured
+   - After calling the work-on tool, display the working environment context:
+     - If the response includes `:worktree-name` and `:worktree-path`, display:
+       "Working in worktree: <worktree-name> at <worktree-path>"
+     - If the response includes `:branch-name`, display:
+       "On branch: <branch-name>"
+     - Format this as a clear header before proceeding with task execution
    - Then execute the task using the category workflow:
      - Do NOT check the refinement status of the task
      - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server

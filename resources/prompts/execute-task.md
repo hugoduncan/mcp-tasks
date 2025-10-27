@@ -102,6 +102,13 @@ This tool automatically:
 - Handles optional worktree management (creates/switches to task worktree if configured)
 - Returns task details for confirmation
 
+After calling the work-on tool, display the working environment context:
+- If the response includes `:worktree-name` and `:worktree-path`, display:
+  "Working in worktree: <worktree-name> at <worktree-path>"
+- If the response includes `:branch-name`, display:
+  "On branch: <branch-name>"
+- Format this as a clear header before proceeding with task execution
+
 ### 5. Execute the Task
 
 Follow the category-specific instructions retrieved in step 3 to execute
