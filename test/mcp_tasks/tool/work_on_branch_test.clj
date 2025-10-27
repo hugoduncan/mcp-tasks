@@ -33,14 +33,14 @@
   (h/with-test-setup [test-dir]
     ;; Test branch management for tasks with parent-id (story tasks)
     (testing "work-on manages branches for story tasks when enabled"
-      (testing "creates new branch from story title when not on correct branch"
+      (testing "creates new branch from story title with ID prefix and word limit"
         ;; Create .mcp-tasks.edn with branch-management enabled
         (let [base-dir (:base-dir (h/test-config test-dir))
               config-file (str base-dir "/.mcp-tasks.edn")]
           (spit config-file "{:branch-management? true}")
 
-          ;; Create a story
-          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Add New Feature" :type "story"})
+          ;; Create a story with a long title to test word limiting
+          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Add New Feature With Multiple Additional Words" :type "story"})
                 story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
                 story-id (get-in story-response [:task :id])
 
@@ -57,14 +57,48 @@
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ branch-name]
-                                                           (is (= "add-new-feature" branch-name))
+                                                           ;; Verify ID prefix and word limit (default 4 words)
+                                                           (is (= (str story-id "-add-new-feature-with") branch-name))
                                                            {:success true :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "add-new-feature" (:branch-name response)))
+                (is (= (str story-id "-add-new-feature-with") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response))))))))
+
+      (testing "respects custom word limit configuration"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true :branch-title-words 2}")
+
+          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Fix Critical Production Bug" :type "story"})
+                story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
+                story-id (get-in story-response [:task :id])
+
+                task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Fix Issue" :type "task" :parent-id story-id})
+                task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
+                task-id (get-in task-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           ;; Verify only 2 words used
+                                                           (is (= (str story-id "-fix-critical") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true :branch-title-words 2) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str story-id "-fix-critical") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -87,19 +121,19 @@
                           git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
                           git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
                           git/checkout-branch (fn [_ branch-name]
-                                                (when (= branch-name "fix-bug")
+                                                (when (= branch-name (str story-id "-fix-bug"))
                                                   (is true "Checking out existing branch"))
                                                 {:success true :error nil})
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ branch-name]
-                                               (is (= "fix-bug" branch-name))
+                                               (is (= (str story-id "-fix-bug") branch-name))
                                                {:success true :exists? true :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "fix-bug" (:branch-name response)))
+                (is (= (str story-id "-fix-bug") (:branch-name response)))
                 (is (false? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -117,21 +151,120 @@
                 task-id (get-in task-response [:task :id])]
 
             ;; Mock git operations - already on correct branch
-            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "optimize-performance" :error nil})]
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch (str story-id "-optimize-performance") :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "optimize-performance" (:branch-name response)))
+                (is (= (str story-id "-optimize-performance") (:branch-name response)))
                 (is (false? (:branch-created? response)))
-                (is (false? (:branch-switched? response)))))))))))
+                (is (false? (:branch-switched? response))))))))
+
+      (testing "handles titles with fewer words than limit"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true :branch-title-words 4}")
+
+          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Fix Bug" :type "story"})
+                story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
+                story-id (get-in story-response [:task :id])
+
+                task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task" :type "task" :parent-id story-id})
+                task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
+                task-id (get-in task-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           ;; Should use all available words when fewer than limit
+                                                           (is (= (str story-id "-fix-bug") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true :branch-title-words 4) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str story-id "-fix-bug") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response))))))))
+
+      (testing "handles unlimited words when word-limit is nil"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true :branch-title-words nil}")
+
+          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Complete Remaining Work For EDN Storage Migration" :type "story"})
+                story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
+                story-id (get-in story-response [:task :id])
+
+                task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task" :type "task" :parent-id story-id})
+                task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
+                task-id (get-in task-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           ;; Should use all words
+                                                           (is (= (str story-id "-complete-remaining-work-for-edn-storage-migration") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true :branch-title-words nil) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str story-id "-complete-remaining-work-for-edn-storage-migration") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response))))))))
+
+      (testing "handles special characters in title"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true}")
+
+          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Fix Bug #123 (Critical)" :type "story"})
+                story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
+                story-id (get-in story-response [:task :id])
+
+                task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task" :type "task" :parent-id story-id})
+                task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
+                task-id (get-in task-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           ;; Special chars removed
+                                                           (is (= (str story-id "-fix-bug-123-critical") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str story-id "-fix-bug-123-critical") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response)))))))))))
 
 (deftest work-on-branch-management-for-standalone-tasks
   (h/with-test-setup [test-dir]
     ;; Test branch management for tasks without parent-id (standalone tasks)
     (testing "work-on manages branches for standalone tasks when enabled"
-      (testing "uses task title for branch name"
+      (testing "uses task title with ID prefix for branch name"
         (let [base-dir (:base-dir (h/test-config test-dir))
               config-file (str base-dir "/.mcp-tasks.edn")]
           (spit config-file "{:branch-management? true}")
@@ -148,14 +281,100 @@
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ branch-name]
-                                                           (is (= "update-documentation" branch-name))
+                                                           (is (= (str task-id "-update-documentation") branch-name))
                                                            {:success true :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "update-documentation" (:branch-name response)))
+                (is (= (str task-id "-update-documentation") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response))))))))
+
+      (testing "respects word limit for standalone tasks"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true :branch-title-words 3}")
+
+          (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Implement User Authentication With OAuth Support" :type "task"})
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
+                task-id (get-in add-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           ;; Only 3 words
+                                                           (is (= (str task-id "-implement-user-authentication") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true :branch-title-words 3) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str task-id "-implement-user-authentication") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response))))))))
+
+      (testing "handles single-word titles"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true}")
+
+          (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Refactor" :type "task"})
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
+                task-id (get-in add-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           (is (= (str task-id "-refactor") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str task-id "-refactor") (:branch-name response)))
+                (is (true? (:branch-created? response)))
+                (is (true? (:branch-switched? response))))))))
+
+      (testing "handles special characters and numbers"
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")]
+          (spit config-file "{:branch-management? true}")
+
+          (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Fix Issue #42 (High Priority!)" :type "task"})
+                add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
+                task-id (get-in add-response [:task :id])]
+
+            ;; Mock git operations
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/create-and-checkout-branch (fn [_ branch-name]
+                                                           ;; Special chars and parens removed, numbers kept
+                                                           (is (= (str task-id "-fix-issue-42-high") branch-name))
+                                                           {:success true :error nil})]
+
+              (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+                (is (false? (:isError result)))
+                (is (= (str task-id "-fix-issue-42-high") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response)))))))))))
 
@@ -183,7 +402,7 @@
                 (is (contains? response :error))
                 (is (str/includes? (:error response) "uncommitted changes"))
                 (is (= "main" (get-in response [:metadata :current-branch])))
-                (is (= "test-task" (get-in response [:metadata :target-branch]))))))))
+                (is (= (str task-id "-test-task") (get-in response [:metadata :target-branch]))))))))
 
       (testing "handles local-only repo gracefully"
         (let [base-dir (:base-dir (h/test-config test-dir))
@@ -208,7 +427,7 @@
 
                 ;; Should succeed despite failed pull
                 (is (false? (:isError result)))
-                (is (= "local-task" (:branch-name response)))
+                (is (= (str task-id "-local-task") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -335,7 +554,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "test-fallback" (:branch-name response)))
+                (is (= (str task-id "-test-fallback") (:branch-name response)))
                 (is (true? (:branch-created? response))))))))
 
       (testing "falls back to 'master' when main not found"
@@ -362,7 +581,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "test-master" (:branch-name response)))
+                (is (= (str task-id "-test-master") (:branch-name response)))
                 (is (true? (:branch-created? response)))))))))))
 
 (deftest work-on-base-branch-configuration
@@ -384,7 +603,7 @@
                           git/branch-exists? (fn [_ branch-name]
                                                (cond
                                                  (= branch-name "develop") {:success true :exists? true :error nil}
-                                                 (= branch-name "feature-task") {:success true :exists? false :error nil}
+                                                 (= branch-name (str task-id "-feature-task")) {:success true :exists? false :error nil}
                                                  :else {:success true :exists? false :error nil}))
                           git/checkout-branch (fn [_ branch-name]
                                                 (when (= branch-name "develop")
@@ -399,7 +618,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "feature-task" (:branch-name response)))
+                (is (= (str task-id "-feature-task") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -430,7 +649,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "auto-detect-task" (:branch-name response))))))))
+                (is (= (str task-id "-auto-detect-task") (:branch-name response))))))))
 
       (testing "errors when configured base branch doesn't exist"
         (let [base-dir (:base-dir (h/test-config test-dir))

@@ -42,8 +42,9 @@
                         git/derive-project-name
                         (fn [_] {:success true :name "mcp-tasks" :error nil})
                         git/derive-worktree-path
-                        (fn [_ title _config]
+                        (fn [_ title task-id* _config]
                           (is (= "Fix Parser Bug" title))
+                          (is (= task-id task-id*))
                           {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists?
                         (fn [_ path]
@@ -53,7 +54,7 @@
                         (fn create-worktree
                           [_ path branch base]
                           (is (= expected-worktree-path path))
-                          (is (= "fix-parser-bug" branch))
+                          (is (= (str task-id "-fix-parser-bug") branch))
                           (is (= "main" base))
                           {:success true :error nil})]
 
@@ -68,7 +69,7 @@
               (is (false? (:isError result)))
               (is (= expected-worktree-path (:worktree-path response)))
               (is (true? (:worktree-created? response)))
-              (is (= "fix-parser-bug" (:branch-name response)))
+              (is (= (str task-id "-fix-parser-bug") (:branch-name response)))
               (is (= "mcp-tasks-fix-parser-bug" (:worktree-name response)))
               (is (str/includes? (:message response) "Worktree created"))
               (is (str/includes? (:message response) expected-worktree-path))
@@ -119,7 +120,7 @@
                             {:success true :exists? true :error nil})
                           git/derive-worktree-path
                           (fn derive-worktree-path
-                            [_ _ _]
+                            [_ _ _ _]
                             {:success true
                              :path expected-worktree-path
                              :error nil})
@@ -161,7 +162,7 @@
                           git/checkout-branch (fn [_ _] {:success true :error nil})
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                          git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                          git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
                           git/worktree-exists? (fn [_ _]
                                                  {:success true :exists? true
                                                   :worktree {:path expected-worktree-path :branch "clean-task"}
@@ -201,7 +202,7 @@
                         git/checkout-branch (fn [_ _] {:success true :error nil})
                         git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                         git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                        git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                        git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists? (fn [_ _]
                                                {:success true :exists? true
                                                 :worktree {:path expected-worktree-path :branch "wrong-branch"}
@@ -240,7 +241,7 @@
                         git/checkout-branch (fn [_ _] {:success true :error nil})
                         git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                         git/branch-exists? (fn [_ _] {:success true :exists? true :error nil})
-                        git/derive-worktree-path (fn [_ _ _] {:success true :path expected-worktree-path :error nil})
+                        git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
                         git/worktree-exists? (fn [_ _]
                                                {:success true :exists? true
                                                 :worktree {:path expected-worktree-path :branch "switch-dir-task"}
@@ -275,10 +276,10 @@
                 task-id (get-in add-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch (fn [_ branch-name]
-                                                         (is (= "reuse-worktree" branch-name))
+                                                         (is (= (str task-id "-reuse-worktree") branch-name))
                                                          {:success true
                                                           :worktree {:path existing-worktree-path
-                                                                     :branch "reuse-worktree"}
+                                                                     :branch (str task-id "-reuse-worktree")}
                                                           :error nil})]
 
               (let [result (#'sut/work-on-impl
@@ -306,15 +307,16 @@
 
             (with-redefs [git/find-worktree-for-branch (fn find-worktree-for-branch
                                                          [_ branch-name]
-                                                         (is (= "new-worktree" branch-name))
+                                                         (is (= (str task-id "-new-worktree") branch-name))
                                                          {:success true
                                                           :worktree nil
                                                           :error nil})
-                          git/derive-worktree-path (fn derive-worktree-path
-                                                     [_ _ _]
-                                                     {:success true
-                                                      :path expected-worktree-path
-                                                      :error nil})
+                          git/derive-worktree-path
+                          (fn derive-worktree-path
+                            [_ _ _ _]
+                            {:success true
+                             :path expected-worktree-path
+                             :error nil})
                           git/worktree-exists? (fn worktree-exists?
                                                  [_ path]
                                                  (is (= expected-worktree-path path))
@@ -323,7 +325,7 @@
                                                   :error nil})
                           git/branch-exists? (fn branch-exists?
                                                [_ branch]
-                                               (is (= "new-worktree" branch))
+                                               (is (= (str task-id "-new-worktree") branch))
                                                {:success true
                                                 :exists? false
                                                 :error nil})
@@ -335,7 +337,7 @@
                           git/create-worktree (fn create-worktree
                                                 ([_ path branch base]
                                                  (is (= expected-worktree-path path))
-                                                 (is (= "new-worktree" branch))
+                                                 (is (= (str task-id "-new-worktree") branch))
                                                  (is (= "main" base))
                                                  {:success true :error nil}))]
 
@@ -374,10 +376,10 @@
                 task2-id (get-in task2-response [:task :id])]
 
             (with-redefs [git/find-worktree-for-branch (fn [_ branch-name]
-                                                         (is (= "my-story" branch-name))
+                                                         (is (= (str story-id "-my-story") branch-name))
                                                          {:success true
                                                           :worktree {:path story-worktree-path
-                                                                     :branch "my-story"}
+                                                                     :branch (str story-id "-my-story")}
                                                           :error nil})]
 
               ;; First task should find existing worktree
@@ -413,10 +415,10 @@
             (with-redefs [git/find-worktree-for-branch
                           (fn find-worktree-for-branch
                             [_ branch-name]
-                            (is (= "main-repo-task" branch-name))
+                            (is (= (str task-id "-main-repo-task") branch-name))
                             {:success true
                              :worktree {:path base-dir
-                                        :branch "main-repo-task"}
+                                        :branch (str task-id "-main-repo-task")}
                              :error nil})]
 
               (let [result (#'sut/work-on-impl

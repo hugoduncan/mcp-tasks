@@ -394,7 +394,7 @@
                 (is (= 1 (:task-id response-data)))
                 (is (= "Fix Parser Bug" (:title response-data)))
                 (is (true? (:worktree-created? response-data)))
-                (is (= "fix-parser-bug" (:branch-name response-data)))
+                (is (= "1-fix-parser-bug" (:branch-name response-data)))
                 (is (string? (:worktree-path response-data)))
                 (is (str/includes? (:message response-data) "Worktree created"))
                 (is (str/includes? (:message response-data) "Please start a new Claude Code session"))
@@ -411,14 +411,14 @@
                                              "rev-parse" "--abbrev-ref" "HEAD")
                         current-branch (str/trim (:out branch-result))]
                     (is (= 0 (:exit branch-result)))
-                    (is (= "fix-parser-bug" current-branch)))
+                    (is (= "1-fix-parser-bug" current-branch)))
 
                   ;; Verify branch exists in main repo
                   (let [branch-exists-result (sh/sh "git" "-C" project-root
-                                                    "branch" "--list" "fix-parser-bug")
+                                                    "branch" "--list" "1-fix-parser-bug")
                         branches (str/trim (:out branch-exists-result))]
                     (is (= 0 (:exit branch-exists-result)))
-                    (is (str/includes? branches "fix-parser-bug")))
+                    (is (str/includes? branches "1-fix-parser-bug")))
 
                   ;; Verify worktree is in git worktree list
                   (let [worktree-list-result (sh/sh "git" "-C" project-root
@@ -516,7 +516,7 @@
         (sh/sh "git" "-C" project-root "checkout" "-b" "main")
 
         ;; Pre-create the branch that we'll use
-        (sh/sh "git" "-C" project-root "checkout" "-b" "fix-parser-bug")
+        (sh/sh "git" "-C" project-root "checkout" "-b" "1-fix-parser-bug")
         (spit (io/file project-root "test.txt") "branch-specific content")
         (sh/sh "git" "-C" project-root "add" ".")
         (sh/sh "git" "-C" project-root "commit" "-m" "Branch commit")
@@ -552,7 +552,7 @@
                 (is (= 1 (:task-id response-data)))
                 (is (= "Fix Parser Bug" (:title response-data)))
                 (is (true? (:worktree-created? response-data)))
-                (is (= "fix-parser-bug" (:branch-name response-data)))
+                (is (= "1-fix-parser-bug" (:branch-name response-data)))
                 (is (string? (:worktree-path response-data)))
                 (is (str/includes? (:message response-data) "Worktree created"))
                 (is (str/includes? (:message response-data) "Please start a new Claude Code session"))
@@ -569,7 +569,7 @@
                                              "rev-parse" "--abbrev-ref" "HEAD")
                         current-branch (str/trim (:out branch-result))]
                     (is (= 0 (:exit branch-result)))
-                    (is (= "fix-parser-bug" current-branch)))
+                    (is (= "1-fix-parser-bug" current-branch)))
 
                   ;; Verify worktree is in git worktree list
                   (let [worktree-list-result (sh/sh "git" "-C" project-root

@@ -37,7 +37,8 @@
   (:require
     [babashka.fs :as fs]
     [clojure.java.shell :as sh]
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [mcp-tasks.util :as util]))
 
 ;; Worktree Detection
 
@@ -559,57 +560,68 @@
        :error (.getMessage e)})))
 
 (defn derive-worktree-path
-  "Generates a worktree path from a project directory and title.
+  "Generates a worktree path from a project directory, title, and task ID.
+
+  The worktree path includes the task ID prefix and respects the configured
+  word limit from :branch-title-words (defaults to 4 words).
 
   The worktree path format depends on the :worktree-prefix config:
-  - :project-name (default when not specified): <parent-dir>/<project-name>-<sanitized-title>
-  - :none: <parent-dir>/<sanitized-title>
+  - :project-name (default): <parent-dir>/<project-name>-<id>-<title-slug>
+  - :none: <parent-dir>/<id>-<title-slug>
 
-  The title is sanitized by:
-  - Converting to lowercase
-  - Replacing spaces with dashes
-  - Removing all characters except a-z, 0-9, and -
+  The title slug is generated using util/sanitize-branch-name which:
+  - Takes first N words from title (N = :branch-title-words, default 4)
+  - Converts to lowercase
+  - Replaces spaces with dashes
+  - Removes all special characters (keeping only a-z, 0-9, -)
+  - Prepends task ID
 
   Parameters:
   - project-dir: Path to the project directory
   - title: Story or task title to convert to path
-  - config: Configuration map containing :worktree-prefix
+  - task-id: The task or story ID number
+  - config: Configuration map containing :worktree-prefix and :branch-title-words
 
   Returns a map with:
   - :success - boolean indicating if operation succeeded
   - :path - worktree path string
-  - :error - error message string (or nil if successful)"
-  [project-dir title config]
+  - :error - error message string (or nil if successful)
+
+  Examples:
+  (derive-worktree-path \"/Users/test/mcp-tasks\" \"Fix parser bug\" 123
+                        {:worktree-prefix :project-name :branch-title-words 4})
+  ;; => {:success true :path \"/Users/test/mcp-tasks-123-fix-parser-bug\" :error nil}
+
+  (derive-worktree-path \"/Users/test/mcp-tasks\" \"Fix parser bug\" 123
+                        {:worktree-prefix :none :branch-title-words 2})
+  ;; => {:success true :path \"/Users/test/123-fix-parser\" :error nil}"
+  [project-dir title task-id config]
   {:pre [(string? project-dir)
          (not (clojure.string/blank? project-dir))
          (string? title)
          (not (clojure.string/blank? title))
+         (int? task-id)
          (map? config)]}
   (try
     (let [worktree-prefix (:worktree-prefix config :project-name)
-          sanitized (-> title
-                        str/lower-case
-                        (str/replace #"\s+" "-")
-                        (str/replace #"[^a-z0-9-]" ""))
+          word-limit (get config :branch-title-words 4)
+          ;; Generate ID-prefixed slug using sanitize-branch-name
+          id-slug (util/sanitize-branch-name title task-id word-limit)
           parent-dir (fs/parent project-dir)
 
           ;; Build path based on prefix mode
           worktree-path (if (= worktree-prefix :none)
-                          (str parent-dir "/" sanitized)
+                          (str parent-dir "/" id-slug)
                           (let [name-result (derive-project-name project-dir)]
                             (if-not (:success name-result)
                               (throw (ex-info (:error name-result)
                                               {:operation "derive-project-name"}))
                               (let [project-name (:name name-result)]
-                                (str parent-dir "/" project-name "-" sanitized)))))]
+                                (str parent-dir "/" project-name "-" id-slug)))))]
 
-      (if (str/blank? sanitized)
-        {:success false
-         :path nil
-         :error "Title produced empty path after sanitization"}
-        {:success true
-         :path worktree-path
-         :error nil}))
+      {:success true
+       :path worktree-path
+       :error nil})
     (catch Exception e
       {:success false
        :path nil

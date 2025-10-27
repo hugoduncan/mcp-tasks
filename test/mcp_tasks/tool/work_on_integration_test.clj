@@ -266,3 +266,75 @@
           (is (= (str (fs/canonicalize worktree-path))
                  (str (fs/canonicalize response-worktree-path)))
               "Should recognize current worktree"))))))
+
+(deftest ^:integration work-on-unlimited-title-words
+  (h/with-test-setup [test-dir]
+    ;; Test that work-on includes all words from title when :branch-title-words is nil
+    (testing "includes all words in branch and worktree names with :branch-title-words nil"
+      (let [base-dir (str test-dir)
+            config-file (str base-dir "/.mcp-tasks.edn")]
+
+        ;; Initialize main git repo
+        (init-main-git-repo base-dir)
+
+        ;; Initialize .mcp-tasks with git
+        (h/init-git-repo base-dir)
+
+        ;; Enable worktree management with unlimited title words
+        (spit config-file "{:worktree-management? true :branch-title-words nil}")
+
+        ;; Add a task with a long title (9 words)
+        (let [long-title "Implement comprehensive user authentication with OAuth and multi factor support"
+              add-result (#'add-task/add-task-impl
+                          (h/test-config base-dir)
+                          nil
+                          {:category "simple"
+                           :title long-title
+                           :type "task"})
+              add-response (json/parse-string
+                             (get-in add-result [:content 1 :text])
+                             keyword)
+              task-id (get-in add-response [:task :id])
+
+              ;; Call work-on tool with nil branch-title-words config
+              result (#'sut/work-on-impl
+                      (assoc (h/git-test-config base-dir)
+                             :worktree-management? true
+                             :branch-title-words nil
+                             :main-repo-dir base-dir)
+                      nil
+                      {:task-id task-id})
+              response (json/parse-string
+                         (get-in result [:content 0 :text])
+                         keyword)
+              actual-worktree-path (:worktree-path response)
+              actual-branch-name (:branch-name response)
+              expected-branch-slug "implement-comprehensive-user-authentication-with-oauth-and-multi-factor-support"
+              expected-branch-name (str task-id "-" expected-branch-slug)]
+
+          ;; Verify response indicates worktree creation
+          (is (false? (:isError result))
+              "work-on should succeed")
+          (is (true? (:worktree-created? response))
+              "Response should indicate worktree was created")
+          (is (some? actual-worktree-path)
+              "Response should include worktree path")
+
+          ;; Verify branch name includes ID prefix and ALL words from title
+          (is (= expected-branch-name actual-branch-name)
+              (str "Branch name should include task ID and all 9 words from title. "
+                   "Expected: " expected-branch-name ", Got: " actual-branch-name))
+
+          ;; Verify worktree path includes all words
+          (is (str/includes? actual-worktree-path expected-branch-slug)
+              (str "Worktree path should include all words from title. "
+                   "Path: " actual-worktree-path))
+
+          ;; Verify worktree actually exists on filesystem
+          (is (worktree-exists? actual-worktree-path)
+              "Worktree directory should exist with .git file")
+
+          ;; Verify worktree is listed in git worktree list
+          (let [worktree-list (list-worktrees base-dir)]
+            (is (str/includes? worktree-list actual-worktree-path)
+                "Worktree should appear in git worktree list")))))))
