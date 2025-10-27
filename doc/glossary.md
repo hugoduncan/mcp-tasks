@@ -65,4 +65,6 @@ EDN map with fields defined by the Task schema in
 
 **Task Lifecycle**: The progression of a task from creation → `:status :open` → `:status :closed` → archived in `complete.ednl`.
 
+**Worktree Cleanup**: Automatic removal of git worktrees after task completion when `:worktree-management?` is enabled. The `complete-task` tool performs safety checks (no uncommitted changes, all commits pushed) before removing the worktree. The branch is preserved after cleanup. Task completion succeeds even if cleanup fails, with a warning message indicating the reason.
+
 **Worktree Workflow**: Using git worktrees to isolate task execution by category in separate directories.

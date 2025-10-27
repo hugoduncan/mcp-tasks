@@ -8,6 +8,7 @@
   - Moving tasks from tasks.ednl to complete.ednl with :status :closed
   - Handling special cases for story tasks and child tasks
   - Committing changes to git
+  - Cleaning up worktrees when worktree management is enabled
 
   The tool supports three completion modes:
   - Regular tasks: Simple completion and archive
@@ -20,6 +21,7 @@
     [mcp-tasks.execution-state :as exec-state]
     [mcp-tasks.schema :as schema]
     [mcp-tasks.tasks :as tasks]
+    [mcp-tasks.tool.work-on :as work-on]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
@@ -165,6 +167,71 @@
                             (str " with " child-count " child task"
                                  (when (> child-count 1) "s"))))})))))
 
+(defn- build-cleanup-warning
+  "Builds a warning message for failed worktree cleanup.
+
+  Parameters:
+  - worktree-path: Path to the worktree that failed to be cleaned up
+  - error: Error message describing why cleanup failed
+
+  Returns: Warning message string
+
+  Example:
+  (build-cleanup-warning \"/path/to/worktree\" \"Uncommitted changes\")
+  => \"Warning: Could not remove worktree at /path/to/worktree: Uncommitted changes\""
+  [worktree-path error]
+  (str "Warning: Could not remove worktree at " worktree-path ": " error))
+
+(defn- enhance-message-with-worktree-cleanup
+  "Enhances a completion message with worktree cleanup status.
+
+  Parameters:
+  - base-message: The original completion message
+  - cleanup-result: Result map from cleanup-worktree-after-completion (or nil)
+  - worktree-path: Path to the worktree that was cleaned up
+
+  Returns: Enhanced message string
+
+  Examples:
+  ;; No cleanup performed
+  (enhance-message-with-worktree-cleanup \"Task completed\" nil \"/path\")
+  => \"Task completed\"
+
+  ;; Successful cleanup
+  (enhance-message-with-worktree-cleanup 
+    \"Task completed\"
+    {:success true :message \"Worktree removed\"}
+    \"/path/to/worktree\")
+  => \"Task completed. Worktree removed at /path/to/worktree (switch directories to continue)\"
+
+  ;; Failed cleanup
+  (enhance-message-with-worktree-cleanup
+    \"Task completed\"
+    {:success false :error \"Uncommitted changes\"}
+    \"/path/to/worktree\")
+  => \"Task completed. Warning: Could not remove worktree at /path/to/worktree: Uncommitted changes\""
+  [base-message cleanup-result worktree-path]
+  (if cleanup-result
+    (if (:success cleanup-result)
+      (str base-message ". Worktree removed at " worktree-path
+           " (switch directories to continue)")
+      (str base-message ". " (build-cleanup-warning worktree-path (:error cleanup-result))))
+    base-message))
+
+(defn- get-current-directory
+  "Returns the current working directory for worktree detection purposes.
+  
+  This is the directory that will be checked to determine if we're running
+  from within a worktree. Normally returns (:base-dir config), but can be
+  redef'd in tests to simulate running from within a specific worktree.
+  
+  Parameters:
+  - config: Configuration map containing :base-dir
+  
+  Returns: The directory path string to use for worktree detection"
+  [config]
+  (:base-dir config))
+
 (defn- complete-task-impl
   "Implementation of complete-task tool.
 
@@ -183,8 +250,15 @@
   - Git mode enabled: Three text items (completion message + JSON with :modified-files + JSON with git status)
   - Git mode disabled: Single text item (completion message only)"
   [config _context {:keys [task-id title completion-comment category]}]
-  ;; Perform file operations inside lock
-  (let [locked-result (helpers/with-task-lock config
+  ;; Detect worktree context before lock
+  (let [_base-dir (:base-dir config)
+        current-dir (get-current-directory config)
+        in-worktree? (git/in-worktree? current-dir)
+        worktree-path (when in-worktree? current-dir)
+        main-repo-dir (when in-worktree? (git/get-main-repo-dir current-dir))
+
+        ;; Perform file operations inside lock
+        locked-result (helpers/with-task-lock config
                                               (fn []
                                                 ;; Sync with remote and load tasks
                                                 (let [sync-result (helpers/sync-and-prepare-task-file config)]
@@ -250,11 +324,23 @@
     (if (:isError locked-result)
       locked-result
 
-      ;; Perform git operations outside lock and build response
+      ;; Perform git operations and worktree cleanup outside lock
       (let [{:keys [updated-task updated-story tasks-file complete-file modified-files
                     use-git? base-dir commit-msg msg-text child-count]} locked-result
             git-result (when use-git?
                          (git/commit-task-changes base-dir modified-files commit-msg))
+
+            ;; Attempt worktree cleanup if applicable
+            worktree-cleanup-result
+            (when (and in-worktree?
+                       (:worktree-management? config))
+              (work-on/cleanup-worktree-after-completion
+                main-repo-dir worktree-path config))
+
+            ;; Enhance message with cleanup status
+            enhanced-msg-text (enhance-message-with-worktree-cleanup
+                                msg-text worktree-cleanup-result worktree-path)
+
             ;; Use updated-task for regular/child tasks, updated-story for stories
             final-task (or updated-task updated-story)
             ;; Use tasks-file or complete-file depending on completion type
@@ -263,7 +349,7 @@
                        :metadata (cond-> {:file metadata-file
                                           :operation "complete-task"}
                                    child-count (assoc :archived-children child-count))}]
-        (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))
+        (helpers/build-completion-response enhanced-msg-text modified-files use-git? git-result task-data)))))
 
 (defn- description
   "Generate description for complete-task tool based on config."

@@ -12,6 +12,8 @@
   (:require
     [babashka.fs :as fs]
     [cheshire.core :as json]
+    [clojure.string :as str]
+    [mcp-clj.log :as log]
     [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.response :as response]
     [mcp-tasks.tasks :as tasks]
@@ -398,6 +400,130 @@
       {:success false
        :error (:error (ex-data e) (.getMessage e))
        :metadata (dissoc (ex-data e) :error)})))
+
+(defn- safe-to-remove-worktree?
+  "Checks if a worktree is safe to remove.
+
+  Performs safety checks to ensure no work will be lost:
+  1. Verifies no uncommitted changes exist
+  2. Verifies all commits are pushed to remote
+
+  Parameters:
+  - worktree-path: Path to the worktree to check
+
+  Returns a map with:
+  - :safe? - boolean indicating if safe to remove
+  - :reason - string describing the result
+
+  Examples:
+  ;; Safe to remove
+  {:safe? true :reason \"Worktree is clean and all commits are pushed\"}
+
+  ;; Not safe - uncommitted changes
+  {:safe? false :reason \"Uncommitted changes exist in worktree\"}
+
+  ;; Not safe - unpushed commits
+  {:safe? false :reason \"Unpushed commits exist\"}"
+  [worktree-path]
+  {:pre [(string? worktree-path)
+         (not (str/blank? worktree-path))]}
+  (let [uncommitted-result (git/check-uncommitted-changes worktree-path)
+        pushed-result (git/check-all-pushed? worktree-path)
+        result (or
+                 ;; Return first failure found, or nil to continue to success case
+                 (when-not (:success uncommitted-result)
+                   {:safe? false
+                    :reason (str "Failed to check uncommitted changes: " (:error uncommitted-result))})
+
+                 (when (:has-changes? uncommitted-result)
+                   {:safe? false
+                    :reason "Uncommitted changes exist in worktree"})
+
+                 (when-not (:success pushed-result)
+                   {:safe? false
+                    :reason (:reason pushed-result)})
+
+                 (when-not (:all-pushed? pushed-result)
+                   {:safe? false
+                    :reason (:reason pushed-result)})
+
+                 ;; All checks passed
+                 {:safe? true
+                  :reason "Worktree is clean and all commits are pushed"})]
+    (log/info :worktree-safety-check
+              {:worktree-path worktree-path
+               :safe? (:safe? result)
+               :reason (:reason result)})
+    result))
+
+(defn cleanup-worktree-after-completion
+  "Removes a worktree after verifying it is safe to remove.
+
+  This function should be called after task completion to clean up
+  worktrees that were created for task isolation. It performs safety
+  checks before removal to prevent data loss.
+
+  Parameters:
+  - main-repo-dir: Path to the main repository directory
+  - worktree-path: Path to the worktree to remove
+  - config: Configuration map (reserved for future use)
+
+  Returns a map with:
+  - :success - boolean indicating if removal succeeded
+  - :message - string describing success (or nil on failure)
+  - :error - string describing failure (or nil on success)
+
+  Examples:
+  ;; Successful removal
+  {:success true
+   :message \"Worktree removed at /path/to/worktree\"
+   :error nil}
+
+  ;; Failed safety checks
+  {:success false
+   :message nil
+   :error \"Cannot remove worktree: Uncommitted changes exist in worktree\"}
+
+  ;; Failed removal operation
+  {:success false
+   :message nil
+   :error \"Failed to remove worktree: <git error>\"}"
+  [main-repo-dir worktree-path config]
+  {:pre [(string? main-repo-dir)
+         (not (str/blank? main-repo-dir))
+         (string? worktree-path)
+         (not (str/blank? worktree-path))
+         (map? config)]}
+  (let [safety-check (safe-to-remove-worktree? worktree-path)]
+    (log/info :worktree-cleanup-attempt
+              {:main-repo-dir main-repo-dir
+               :worktree-path worktree-path
+               :safe-to-remove? (:safe? safety-check)})
+    (if (:safe? safety-check)
+      ;; Safe to remove - attempt removal
+      (let [remove-result (git/remove-worktree main-repo-dir worktree-path)]
+        (if (:success remove-result)
+          (do
+            (log/info :worktree-cleanup-success
+                      {:worktree-path worktree-path})
+            {:success true
+             :message (str "Worktree removed at " worktree-path)
+             :error nil})
+          (do
+            (log/warn :worktree-cleanup-failed
+                      {:worktree-path worktree-path
+                       :error (:error remove-result)})
+            {:success false
+             :message nil
+             :error (str "Failed to remove worktree: " (:error remove-result))})))
+      ;; Not safe to remove
+      (do
+        (log/warn :worktree-cleanup-skipped
+                  {:worktree-path worktree-path
+                   :reason (:reason safety-check)})
+        {:success false
+         :message nil
+         :error (str "Cannot remove worktree: " (:reason safety-check))}))))
 
 (defn- validate-task-id-param
   "Validates the task-id parameter.

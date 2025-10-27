@@ -324,6 +324,54 @@ The `work-on` tool returns a map containing task and environment information:
 
 These return values allow agents to display clear context about their working environment.
 
+**Automatic Worktree Cleanup:**
+
+When `:worktree-management?` is enabled, the `complete-task` tool automatically removes worktrees after successful task completion. This keeps your workspace clean and prevents accumulation of unused worktrees.
+
+**Cleanup Behavior:**
+- Triggered automatically when completing any task from within a worktree
+- Performs safety checks before removal:
+  - Verifies no uncommitted changes exist
+  - Verifies all commits are pushed to remote (if remote configured)
+- Preserves the branch after cleanup (not deleted)
+- Task completion succeeds even if cleanup fails (with warning)
+
+**Safety Requirements:**
+
+Before removing a worktree, the system verifies:
+1. **No uncommitted changes**: Working directory must be clean
+2. **All changes pushed**: Commits must be pushed to remote (if remote exists)
+
+If safety checks fail, the task is still marked complete but the worktree remains with a warning message explaining why cleanup was skipped.
+
+**Cleanup Messages:**
+
+Successful cleanup:
+```
+Task completed. Worktree removed at /path/to/worktree (switch directories to continue)
+```
+
+Failed cleanup (safety checks):
+```
+Task completed. Warning: Could not remove worktree at /path/to/worktree: Uncommitted changes exist in worktree
+```
+
+Failed cleanup (git operation):
+```
+Task completed. Warning: Could not remove worktree at /path/to/worktree: Failed to remove worktree: <git error>
+```
+
+**Manual Cleanup:**
+
+If automatic cleanup fails or is disabled, remove worktrees manually:
+```bash
+# From the main repository directory
+git worktree remove /path/to/worktree
+
+# Or with force flag if worktree has modifications
+git worktree remove --force /path/to/worktree
+```
+
 **Common Scenarios:**
 
 1. **Config in main repo, working in worktree:**
@@ -348,6 +396,8 @@ If you encounter worktree-related issues:
 - **Execution state not found**: Check that `.mcp-tasks-current.edn` exists in the worktree root
 - **Config not found**: Verify `.mcp-tasks.edn` exists in the worktree or a parent directory
 - **Branch conflicts**: Ensure the worktree is on the expected branch for the task
+- **Worktree cleanup skipped**: Check for uncommitted changes or unpushed commits; resolve and cleanup manually if needed
+- **Worktree removal fails**: Use `git worktree remove --force <path>` to force removal after verifying no important changes remain
 
 **Limitations:**
 
