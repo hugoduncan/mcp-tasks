@@ -64,7 +64,8 @@ USAGE:
   clojure -M:cli list [options]
 
 OPTIONS:
-  --status, -s <status>         Filter by status (open, closed, in-progress, blocked)
+  --status, -s <status>         Filter by status (open, closed, in-progress, blocked, any)
+                                Use 'any' to list all tasks regardless of status
   --category, -c <name>         Filter by category name
   --type, -t <type>             Filter by type (task, bug, feature, story, chore)
   --parent-id, -p <id>          Filter by parent task ID
@@ -76,7 +77,7 @@ OPTIONS:
 
 EXAMPLES:
   clojure -M:cli list --status open --format human
-  clojure -M:cli list --category simple --limit 10
+  clojure -M:cli list --status any --category simple
   clojure -M:cli list --parent-id 31 --status open")
 
 (def show-help
@@ -299,7 +300,7 @@ EXAMPLES:
   Validates and coerces arguments for querying tasks with filters.
 
   Coercion rules:
-  - :status -> keyword (open, closed, in-progress, blocked)
+  - :status -> keyword (open, closed, in-progress, blocked, any)
   - :type -> keyword (task, bug, feature, story, chore)
   - :parent-id -> long integer
   - :task-id -> long integer
@@ -311,7 +312,7 @@ EXAMPLES:
   - Post-parse validation checks format is valid (edn, json, human)"
   {:status {:coerce :keyword
             :alias :s
-            :desc "Filter by status (open, closed, in-progress, blocked)"}
+            :desc "Filter by status (open, closed, in-progress, blocked, any)"}
    :category {:alias :c
               :desc "Filter by category name"}
    :type {:coerce :keyword

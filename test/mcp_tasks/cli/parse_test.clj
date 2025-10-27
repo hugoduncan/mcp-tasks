@@ -118,6 +118,10 @@
         (is (= 20 (:limit result)))
         (is (true? (:unique result)))))
 
+    (testing "parses status any"
+      (is (= {:status :any :limit 30}
+             (sut/parse-list ["--status" "any"]))))
+
     (testing "returns error for invalid format"
       (let [result (sut/parse-list ["--format" "xyz"])]
         (is (contains? result :error))
