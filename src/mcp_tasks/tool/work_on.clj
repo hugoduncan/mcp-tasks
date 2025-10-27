@@ -25,30 +25,33 @@
   "Calculate the branch name for a task or story.
 
   Uses the parent story's title if present, otherwise uses the task's title.
-  The title is sanitized using util/sanitize-branch-name.
+  The title is sanitized using util/sanitize-branch-name with the configured
+  word limit (defaults to 4 words).
 
   Parameters:
   - task: The task being worked on
   - parent-story: The parent story (nil if standalone task)
+  - config: Configuration map containing :branch-title-words (optional, defaults to 4)
 
   Returns:
-  - The sanitized branch name string
+  - The sanitized branch name string with ID prefix
 
   Examples:
-  (calculate-branch-name {:title \"My Task\" :id 42} nil)
-  ;; => \"my-task-42\"
+  (calculate-branch-name {:title \"My Task\" :id 42} nil {:branch-title-words 4})
+  ;; => \"42-my-task\"
 
   (calculate-branch-name
-    {:title \"Child Task\" :id 10} {:title \"Parent Story\" :id 5})
-  ;; => \"parent-story-5\""
-  [task parent-story]
+    {:title \"Child Task\" :id 10} {:title \"Parent Story\" :id 5} {:branch-title-words 4})
+  ;; => \"5-parent-story\""
+  [task parent-story config]
   (let [title (if parent-story
                 (:title parent-story)
                 (:title task))
         branch-source-id (if parent-story
                            (:id parent-story)
-                           (:id task))]
-    (util/sanitize-branch-name title branch-source-id)))
+                           (:id task))
+        word-limit (get config :branch-title-words 4)]
+    (util/sanitize-branch-name title branch-source-id word-limit)))
 
 (defn- calculate-base-branch
   [configured-base-branch main-repo-dir]
@@ -680,7 +683,7 @@
           title (if parent-story
                   (:title parent-story)
                   (:title task))
-          branch-name (calculate-branch-name task parent-story)
+          branch-name (calculate-branch-name task parent-story cfg)
 
           ;; Handle worktree management if configured
           worktree-info (when worktree-mgmt-enabled?

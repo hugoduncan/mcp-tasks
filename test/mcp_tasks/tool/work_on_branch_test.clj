@@ -57,14 +57,14 @@
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ branch-name]
-                                                           (is (= "add-new-feature" branch-name))
+                                                           (is (= (str story-id "-add-new-feature") branch-name))
                                                            {:success true :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "add-new-feature" (:branch-name response)))
+                (is (= (str story-id "-add-new-feature") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -87,19 +87,19 @@
                           git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
                           git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
                           git/checkout-branch (fn [_ branch-name]
-                                                (when (= branch-name "fix-bug")
+                                                (when (= branch-name (str story-id "-fix-bug"))
                                                   (is true "Checking out existing branch"))
                                                 {:success true :error nil})
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ branch-name]
-                                               (is (= "fix-bug" branch-name))
+                                               (is (= (str story-id "-fix-bug") branch-name))
                                                {:success true :exists? true :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "fix-bug" (:branch-name response)))
+                (is (= (str story-id "-fix-bug") (:branch-name response)))
                 (is (false? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -117,13 +117,13 @@
                 task-id (get-in task-response [:task :id])]
 
             ;; Mock git operations - already on correct branch
-            (with-redefs [git/get-current-branch (fn [_] {:success true :branch "optimize-performance" :error nil})]
+            (with-redefs [git/get-current-branch (fn [_] {:success true :branch (str story-id "-optimize-performance") :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "optimize-performance" (:branch-name response)))
+                (is (= (str story-id "-optimize-performance") (:branch-name response)))
                 (is (false? (:branch-created? response)))
                 (is (false? (:branch-switched? response)))))))))))
 
@@ -148,14 +148,14 @@
                           git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
                           git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
                           git/create-and-checkout-branch (fn [_ branch-name]
-                                                           (is (= "update-documentation" branch-name))
+                                                           (is (= (str task-id "-update-documentation") branch-name))
                                                            {:success true :error nil})]
 
               (let [result (#'sut/work-on-impl (assoc (h/test-config test-dir) :branch-management? true) nil {:task-id task-id})
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "update-documentation" (:branch-name response)))
+                (is (= (str task-id "-update-documentation") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response)))))))))))
 
@@ -183,7 +183,7 @@
                 (is (contains? response :error))
                 (is (str/includes? (:error response) "uncommitted changes"))
                 (is (= "main" (get-in response [:metadata :current-branch])))
-                (is (= "test-task" (get-in response [:metadata :target-branch]))))))))
+                (is (= (str task-id "-test-task") (get-in response [:metadata :target-branch]))))))))
 
       (testing "handles local-only repo gracefully"
         (let [base-dir (:base-dir (h/test-config test-dir))
@@ -208,7 +208,7 @@
 
                 ;; Should succeed despite failed pull
                 (is (false? (:isError result)))
-                (is (= "local-task" (:branch-name response)))
+                (is (= (str task-id "-local-task") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -335,7 +335,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "test-fallback" (:branch-name response)))
+                (is (= (str task-id "-test-fallback") (:branch-name response)))
                 (is (true? (:branch-created? response))))))))
 
       (testing "falls back to 'master' when main not found"
@@ -362,7 +362,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "test-master" (:branch-name response)))
+                (is (= (str task-id "-test-master") (:branch-name response)))
                 (is (true? (:branch-created? response)))))))))))
 
 (deftest work-on-base-branch-configuration
@@ -384,7 +384,7 @@
                           git/branch-exists? (fn [_ branch-name]
                                                (cond
                                                  (= branch-name "develop") {:success true :exists? true :error nil}
-                                                 (= branch-name "feature-task") {:success true :exists? false :error nil}
+                                                 (= branch-name (str task-id "-feature-task")) {:success true :exists? false :error nil}
                                                  :else {:success true :exists? false :error nil}))
                           git/checkout-branch (fn [_ branch-name]
                                                 (when (= branch-name "develop")
@@ -399,7 +399,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "feature-task" (:branch-name response)))
+                (is (= (str task-id "-feature-task") (:branch-name response)))
                 (is (true? (:branch-created? response)))
                 (is (true? (:branch-switched? response))))))))
 
@@ -430,7 +430,7 @@
                     response (json/parse-string (get-in result [:content 0 :text]) keyword)]
 
                 (is (false? (:isError result)))
-                (is (= "auto-detect-task" (:branch-name response))))))))
+                (is (= (str task-id "-auto-detect-task") (:branch-name response))))))))
 
       (testing "errors when configured base branch doesn't exist"
         (let [base-dir (:base-dir (h/test-config test-dir))
