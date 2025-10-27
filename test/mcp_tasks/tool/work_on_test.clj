@@ -1,6 +1,8 @@
 (ns mcp-tasks.tool.work-on-test
   (:require
+    [babashka.fs :as fs]
     [cheshire.core :as json]
+    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.execution-state :as execution-state]
@@ -220,3 +222,256 @@
           (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id2})
           (let [state2 (execution-state/read-execution-state base-dir)]
             (is (= task-id2 (:task-id state2)))))))))
+
+(deftest safe-to-remove-worktree-with-uncommitted-changes
+  ;; Test that safety check fails when worktree has uncommitted changes
+  (testing "safe-to-remove-worktree? with uncommitted changes"
+    (h/with-test-setup [test-dir]
+      ;; Initialize git repo in test-dir
+      (sh/sh "git" "init" :dir (str test-dir))
+      (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+      (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+
+      ;; Create initial commit
+      (spit (str test-dir "/initial.txt") "initial")
+      (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+      (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+      ;; Create a worktree with a branch
+      (let [worktree-path (str test-dir "-worktree")
+            _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+            ;; Create an uncommitted file in the worktree
+            test-file (str worktree-path "/uncommitted.txt")
+            _ (spit test-file "uncommitted changes")
+
+            ;; Call safe-to-remove-worktree?
+            result (#'sut/safe-to-remove-worktree? worktree-path)]
+
+        (is (false? (:safe? result)))
+        (is (str/includes? (:reason result) "Uncommitted changes exist"))
+
+        ;; Cleanup
+        (sh/sh "git" "-C" (str test-dir) "worktree" "remove" "--force" worktree-path)))))
+
+(deftest safe-to-remove-worktree-with-unpushed-commits
+  ;; Test that safety check fails when worktree has unpushed commits
+  (testing "safe-to-remove-worktree? with unpushed commits"
+    (h/with-test-setup [test-dir]
+      ;; Initialize git repo in test-dir
+      (sh/sh "git" "init" :dir (str test-dir))
+      (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+      (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+
+      ;; Create initial commit
+      (spit (str test-dir "/initial.txt") "initial")
+      (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+      (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+      ;; Create a worktree with a branch
+      (let [worktree-path (str test-dir "-worktree")
+            _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+            ;; Create and commit a file in the worktree
+            test-file (str worktree-path "/committed.txt")
+            _ (spit test-file "committed changes")
+            _ (sh/sh "git" "-C" worktree-path "add" "committed.txt")
+            _ (sh/sh "git" "-C" worktree-path "commit" "-m" "Test commit")
+
+            ;; Call safe-to-remove-worktree?
+            result (#'sut/safe-to-remove-worktree? worktree-path)]
+
+        (is (false? (:safe? result)))
+        (is (str/includes? (:reason result) "remote"))
+
+        ;; Cleanup
+        (sh/sh "git" "-C" (str test-dir) "worktree" "remove" "--force" worktree-path)))))
+
+(deftest safe-to-remove-worktree-with-no-remote
+  ;; Test that safety check fails when no remote is configured
+  (testing "safe-to-remove-worktree? with no remote"
+    (h/with-test-setup [test-dir]
+      ;; Initialize git repo in test-dir
+      (sh/sh "git" "init" :dir (str test-dir))
+      (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+      (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+
+      ;; Create initial commit
+      (spit (str test-dir "/initial.txt") "initial")
+      (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+      (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+      ;; Create a worktree with a branch
+      (let [worktree-path (str test-dir "-worktree")
+            _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+            ;; Call safe-to-remove-worktree? (no commits, so should check remote)
+            result (#'sut/safe-to-remove-worktree? worktree-path)]
+
+        (is (false? (:safe? result)))
+        (is (str/includes? (:reason result) "remote"))
+
+        ;; Cleanup
+        (sh/sh "git" "-C" (str test-dir) "worktree" "remove" "--force" worktree-path)))))
+
+(deftest safe-to-remove-worktree-clean-and-pushed
+  ;; Test that safety check passes when worktree is clean and all commits are pushed
+  (testing "safe-to-remove-worktree? when clean and pushed"
+    (h/with-test-setup [test-dir]
+      ;; Create main repo with a remote
+      (let [remote-dir (fs/create-temp-dir {:prefix "mcp-tasks-remote-"})
+            ;; Initialize remote repo
+            _ (sh/sh "git" "init" "--bare" :dir (str remote-dir))
+
+            ;; Initialize local repo
+            _ (sh/sh "git" "init" :dir (str test-dir))
+            _ (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+            _ (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+            _ (sh/sh "git" "-C" (str test-dir) "remote" "add" "origin" (str remote-dir))
+
+            ;; Create initial commit in local
+            test-file (str test-dir "/initial.txt")
+            _ (spit test-file "initial")
+            _ (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+            _ (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+            ;; Push to remote
+            _ (sh/sh "git" "-C" (str test-dir) "push" "-u" "origin" "master")
+
+            ;; Create a worktree with a new branch based on master (which is pushed)
+            worktree-path (str test-dir "-worktree")
+            _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+            ;; Push the new branch from the worktree
+            _ (sh/sh "git" "-C" worktree-path "push" "-u" "origin" "test-branch")
+
+            ;; Call safe-to-remove-worktree?
+            result (#'sut/safe-to-remove-worktree? worktree-path)]
+
+        (is (true? (:safe? result)))
+        (is (str/includes? (:reason result) "clean"))
+        (is (str/includes? (:reason result) "pushed"))
+
+        ;; Cleanup
+        (sh/sh "git" "-C" (str test-dir) "worktree" "remove" worktree-path)
+        (fs/delete-tree remote-dir)))))
+
+(deftest cleanup-worktree-succeeds
+  ;; Test that cleanup succeeds when safety checks pass
+  (testing "cleanup-worktree-after-completion succeeds"
+    (h/with-test-setup [test-dir]
+      ;; Create main repo with a remote
+      (let [remote-dir (fs/create-temp-dir {:prefix "mcp-tasks-remote-"})
+            ;; Initialize remote repo
+            _ (sh/sh "git" "init" "--bare" :dir (str remote-dir))
+
+            ;; Initialize local repo
+            _ (sh/sh "git" "init" :dir (str test-dir))
+            _ (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+            _ (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+            _ (sh/sh "git" "-C" (str test-dir) "remote" "add" "origin" (str remote-dir))
+
+            ;; Create initial commit in local
+            test-file (str test-dir "/initial.txt")
+            _ (spit test-file "initial")
+            _ (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+            _ (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+            ;; Push to remote
+            _ (sh/sh "git" "-C" (str test-dir) "push" "-u" "origin" "master")
+
+            ;; Create a worktree with a new branch based on master (which is pushed)
+            worktree-path (str test-dir "-worktree")
+            _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+            ;; Push the new branch from the worktree
+            _ (sh/sh "git" "-C" worktree-path "push" "-u" "origin" "test-branch")
+
+            ;; Call cleanup-worktree-after-completion
+            config (h/test-config test-dir)
+            result (sut/cleanup-worktree-after-completion (str test-dir) worktree-path config)]
+
+        (is (true? (:success result)))
+        (is (nil? (:error result)))
+        (is (str/includes? (:message result) "removed"))
+        (is (str/includes? (:message result) worktree-path))
+
+        ;; Verify worktree was actually removed
+        (is (not (fs/exists? worktree-path)))
+
+        ;; Cleanup
+        (fs/delete-tree remote-dir)))))
+
+(deftest cleanup-worktree-fails-safety-checks
+  ;; Test that cleanup fails when safety checks don't pass
+  (testing "cleanup-worktree-after-completion fails safety checks"
+    (testing "fails with uncommitted changes"
+      (h/with-test-setup [test-dir]
+        ;; Initialize git repo in test-dir
+        (sh/sh "git" "init" :dir (str test-dir))
+        (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+        (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+
+        ;; Create initial commit
+        (spit (str test-dir "/initial.txt") "initial")
+        (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+        (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+        ;; Create a worktree with a branch
+        (let [worktree-path (str test-dir "-worktree")
+              _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+              ;; Create an uncommitted file in the worktree
+              test-file (str worktree-path "/uncommitted.txt")
+              _ (spit test-file "uncommitted changes")
+
+              ;; Call cleanup-worktree-after-completion
+              config (h/test-config test-dir)
+              result (sut/cleanup-worktree-after-completion (str test-dir) worktree-path config)]
+
+          (is (false? (:success result)))
+          (is (nil? (:message result)))
+          (is (str/includes? (:error result) "Cannot remove worktree"))
+          (is (str/includes? (:error result) "Uncommitted changes"))
+
+          ;; Verify worktree still exists
+          (is (fs/exists? worktree-path))
+
+          ;; Cleanup
+          (sh/sh "git" "-C" (str test-dir) "worktree" "remove" "--force" worktree-path))))
+
+    (testing "fails with unpushed commits"
+      (h/with-test-setup [test-dir]
+        ;; Initialize git repo in test-dir
+        (sh/sh "git" "init" :dir (str test-dir))
+        (sh/sh "git" "config" "user.email" "test@test.com" :dir (str test-dir))
+        (sh/sh "git" "config" "user.name" "Test User" :dir (str test-dir))
+
+        ;; Create initial commit
+        (spit (str test-dir "/initial.txt") "initial")
+        (sh/sh "git" "-C" (str test-dir) "add" "initial.txt")
+        (sh/sh "git" "-C" (str test-dir) "commit" "-m" "Initial commit")
+
+        ;; Create a worktree with a branch
+        (let [worktree-path (str test-dir "-worktree")
+              _ (sh/sh "git" "-C" (str test-dir) "worktree" "add" "-b" "test-branch" worktree-path "master")
+
+              ;; Create and commit a file in the worktree
+              test-file (str worktree-path "/committed.txt")
+              _ (spit test-file "committed changes")
+              _ (sh/sh "git" "-C" worktree-path "add" "committed.txt")
+              _ (sh/sh "git" "-C" worktree-path "commit" "-m" "Test commit")
+
+              ;; Call cleanup-worktree-after-completion
+              config (h/test-config test-dir)
+              result (sut/cleanup-worktree-after-completion (str test-dir) worktree-path config)]
+
+          (is (false? (:success result)))
+          (is (nil? (:message result)))
+          (is (str/includes? (:error result) "Cannot remove worktree"))
+
+          ;; Verify worktree still exists
+          (is (fs/exists? worktree-path))
+
+          ;; Cleanup
+          (sh/sh "git" "-C" (str test-dir) "worktree" "remove" "--force" worktree-path))))))
