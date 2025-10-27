@@ -305,6 +305,25 @@ When `:worktree-management?` is enabled, the `work-on` tool automatically:
 - Switches to the appropriate worktree
 - Manages branches within the worktree
 
+**work-on Tool Return Values:**
+
+The `work-on` tool returns a map containing task and environment information:
+- `:task-id` - The task ID being worked on
+- `:category` - The task's category
+- `:type` - The task type (e.g., :task, :bug, :feature)
+- `:title` - The task title
+- `:status` - The task status
+- `:message` - Status message about the operation
+- `:worktree-path` - Full path to the worktree (only present when in a worktree)
+- `:worktree-name` - The worktree directory name (only present when `:worktree-path` is present)
+  - Extracted as the final path component (e.g., `/Users/duncan/projects/mcp-tasks-fix-bug/` → `mcp-tasks-fix-bug`)
+- `:branch-name` - The current branch name (only present when branch management is active)
+- `:worktree-clean?` - Boolean indicating if the worktree has uncommitted changes
+- `:execution-state-file` - Path to the execution state file
+- `:worktree-created?` - Boolean indicating if a new worktree was created
+
+These return values allow agents to display clear context about their working environment.
+
 **Common Scenarios:**
 
 1. **Config in main repo, working in worktree:**
