@@ -90,6 +90,7 @@
                       {:type :invalid-config-value
                        :key :lock-poll-interval-ms
                        :value poll-interval}))))
+  ;; :branch-title-words can be nil (unlimited words) or a positive integer
   (when-let [branch-title-words (:branch-title-words config)]
     (when-not (int? branch-title-words)
       (throw (ex-info (str "Expected integer for :branch-title-words, got " (type branch-title-words))
