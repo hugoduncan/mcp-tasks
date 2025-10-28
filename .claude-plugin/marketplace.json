@@ -7,6 +7,14 @@
     "name": "Hugo Duncan"
   },
   "plugins": [
-    "./plugins/mcp-tasks-skill/"
+    {
+      "name": "mcp-tasks-skill",
+      "source": "./plugins/mcp-tasks-skill",
+      "description": "Skill for using mcp-tasks",
+      "version": "1.0.0",
+      "author": {
+        "name": "Hugo Duncan"
+      }
+    }
   ]
 }
