@@ -52,7 +52,8 @@
        :use-git? use-git?
        :base-dir (:base-dir config)
        :commit-msg (str "Complete task #" (:id task) ": " (:title task))
-       :msg-text (str "Task " (:id task) " completed and moved to " complete-file)})))
+       :msg-text (str "Task " (:id task) " completed and moved to " complete-file)
+       :parent-id nil})))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -103,7 +104,8 @@
            :use-git? use-git?
            :base-dir (:base-dir config)
            :commit-msg (str "Complete task #" (:id task) ": " (:title task))
-           :msg-text (str "Task " (:id task) " completed")})))))
+           :msg-text (str "Task " (:id task) " completed (staying in worktree for remaining story tasks)")
+           :parent-id (:parent-id task)})))))
 
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
@@ -165,7 +167,8 @@
            :msg-text (str "Story " (:id task) " completed and archived"
                           (when (pos? child-count)
                             (str " with " child-count " child task"
-                                 (when (> child-count 1) "s"))))})))))
+                                 (when (> child-count 1) "s"))))
+           :parent-id nil})))))
 
 (defn- build-cleanup-warning
   "Builds a warning message for failed worktree cleanup.
@@ -326,14 +329,15 @@
 
       ;; Perform git operations and worktree cleanup outside lock
       (let [{:keys [updated-task updated-story tasks-file complete-file modified-files
-                    use-git? base-dir commit-msg msg-text child-count]} locked-result
+                    use-git? base-dir commit-msg msg-text child-count parent-id]} locked-result
             git-result (when use-git?
                          (git/commit-task-changes base-dir modified-files commit-msg))
 
-            ;; Attempt worktree cleanup if applicable
+            ;; Attempt worktree cleanup if applicable (skip for child tasks)
             worktree-cleanup-result
             (when (and in-worktree?
-                       (:worktree-management? config))
+                       (:worktree-management? config)
+                       (nil? parent-id))
               (work-on/cleanup-worktree-after-completion
                 main-repo-dir worktree-path config))
 

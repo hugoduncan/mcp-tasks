@@ -1044,9 +1044,9 @@
 
 (deftest completes-story-child-with-worktree-cleanup
   (h/with-test-setup [test-dir]
-    ;; Tests that completing a story child task triggers worktree cleanup
+    ;; Tests that completing a story child task does NOT trigger worktree cleanup
     (testing "complete-task child task with worktree cleanup"
-      (testing "removes worktree after completing child task"
+      (testing "keeps worktree after completing child task"
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
@@ -1069,12 +1069,12 @@
                           nil
                           {:task-id 91})]
               (is (false? (:isError result)))
-              (is @cleanup-called "cleanup should be called for child tasks")
+              (is (not @cleanup-called) "cleanup should NOT be called for child tasks")
 
-              ;; Verify message includes cleanup success
+              ;; Verify message indicates staying in worktree
               (let [msg (get-in result [:content 0 :text])]
                 (is (str/includes? msg "Task 91 completed"))
-                (is (str/includes? msg "Worktree removed"))))))))))
+                (is (str/includes? msg "staying in worktree for remaining story tasks"))))))))))
 
 (deftest completes-story-with-worktree-cleanup
   (h/with-test-setup [test-dir]
