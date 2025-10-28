@@ -52,8 +52,7 @@
        :use-git? use-git?
        :base-dir (:base-dir config)
        :commit-msg (str "Complete task #" (:id task) ": " (:title task))
-       :msg-text (str "Task " (:id task) " completed and moved to " complete-file)
-       :parent-id nil})))
+       :msg-text (str "Task " (:id task) " completed and moved to " complete-file)})))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -167,8 +166,7 @@
            :msg-text (str "Story " (:id task) " completed and archived"
                           (when (pos? child-count)
                             (str " with " child-count " child task"
-                                 (when (> child-count 1) "s"))))
-           :parent-id nil})))))
+                                 (when (> child-count 1) "s"))))})))))
 
 (defn- build-cleanup-warning
   "Builds a warning message for failed worktree cleanup.
