@@ -292,6 +292,20 @@ EXAMPLES:
                   :allowed #{:edn :json :human}}})
     {:valid? true}))
 
+(defn validate-status
+  "Validate that status is one of the allowed values.
+
+  Returns {:valid? true} or {:valid? false :error \"...\" :details {...}}"
+  [parsed-map]
+  (if-let [status (:status parsed-map)]
+    (if (#{:open :closed :in-progress :blocked :any} status)
+      {:valid? true}
+      {:valid? false
+       :error (str "Invalid status value '" (name status) "'. Must be one of: open, closed, in-progress, blocked, any")
+       :metadata {:provided status
+                  :allowed #{:open :closed :in-progress :blocked :any}}})
+    {:valid? true}))
+
 ;; Command Spec Maps
 
 (def list-spec
@@ -486,10 +500,17 @@ EXAMPLES:
                      (cond-> (:t raw-parsed) (assoc :type (:t raw-parsed)))
                      (cond-> (contains? raw-parsed :p) (assoc :parent-id (:p raw-parsed)))
                      (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
-          format-validation (validate-format parsed)]
-      (if (:valid? format-validation)
-        parsed
-        (dissoc format-validation :valid?)))
+          format-validation (validate-format parsed)
+          status-validation (validate-status parsed)]
+      (cond
+        (not (:valid? format-validation))
+        (dissoc format-validation :valid?)
+
+        (not (:valid? status-validation))
+        (dissoc status-validation :valid?)
+
+        :else
+        parsed))
     (catch Exception e
       {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))

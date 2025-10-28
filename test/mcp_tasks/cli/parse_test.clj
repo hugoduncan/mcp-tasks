@@ -76,6 +76,34 @@
         (is (false? (:valid? result)))
         (is (= "Invalid format: csv. Must be one of: edn, json, human" (:error result)))))))
 
+(deftest validate-status-test
+  (testing "validate-status"
+    (testing "returns valid for allowed status values"
+      (is (= {:valid? true}
+             (sut/validate-status {:status :open})))
+      (is (= {:valid? true}
+             (sut/validate-status {:status :closed})))
+      (is (= {:valid? true}
+             (sut/validate-status {:status :in-progress})))
+      (is (= {:valid? true}
+             (sut/validate-status {:status :blocked})))
+      (is (= {:valid? true}
+             (sut/validate-status {:status :any}))))
+
+    (testing "returns valid when status is not present"
+      (is (= {:valid? true}
+             (sut/validate-status {:other "data"}))))
+
+    (testing "returns error for invalid status values"
+      (let [result (sut/validate-status {:status :invalid})]
+        (is (false? (:valid? result)))
+        (is (= "Invalid status value 'invalid'. Must be one of: open, closed, in-progress, blocked, any" (:error result)))
+        (is (= {:provided :invalid :allowed #{:open :closed :in-progress :blocked :any}} (:metadata result))))
+
+      (let [result (sut/validate-status {:status :foo})]
+        (is (false? (:valid? result)))
+        (is (= "Invalid status value 'foo'. Must be one of: open, closed, in-progress, blocked, any" (:error result)))))))
+
 (deftest parse-list-test
   (testing "parse-list"
     (testing "parses basic arguments"
@@ -125,7 +153,12 @@
     (testing "returns error for invalid format"
       (let [result (sut/parse-list ["--format" "xyz"])]
         (is (contains? result :error))
-        (is (= "Invalid format: xyz. Must be one of: edn, json, human" (:error result)))))))
+        (is (= "Invalid format: xyz. Must be one of: edn, json, human" (:error result)))))
+
+    (testing "returns error for invalid status"
+      (let [result (sut/parse-list ["--status" "foo"])]
+        (is (contains? result :error))
+        (is (= "Invalid status value 'foo'. Must be one of: open, closed, in-progress, blocked, any" (:error result)))))))
 
 (deftest parse-show-test
   (testing "parse-show"
