@@ -92,8 +92,8 @@
 
         ;; Get all matching tasks
         ;; When parent-id is provided, we need to count completed child tasks separately
-        (let [query-result (if parent-id
-                             ;; Parent-id case: single query with :status :any, partition by status
+        (let [query-result (if (and parent-id (nil? status-keyword))
+                             ;; Parent-id case without explicit status: query :any, count completed separately
                              (let [all-matching (tasks/get-tasks
                                                   :task-id task-id
                                                   :category category
@@ -107,7 +107,7 @@
                                    completed-count (count closed)]
                                {:tasks (or non-closed [])
                                 :completed-task-count completed-count})
-                             ;; Normal case: use status filter as before
+                             ;; Normal case or explicit status: use status filter directly
                              {:tasks (tasks/get-tasks
                                        :task-id task-id
                                        :category category

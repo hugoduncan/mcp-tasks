@@ -153,7 +153,7 @@
   - title-pattern: Task title must match pattern (regex or substring)
   - type: Task type must match exactly (keyword: :task, :bug, :feature, :story, :chore)
   - status: Task status must match exactly (keyword: :open, :closed, :in-progress, :blocked)
-            When nil (default), filters out closed tasks (same as old behavior)
+            When nil (default), returns only non-closed tasks
             When :any, returns tasks regardless of status
 
   Returns vector of task maps in the order they appear in tasks.ednl.
