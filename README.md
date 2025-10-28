@@ -2,6 +2,58 @@
 
 Task-based workflow management for AI agents via Model Context Protocol (MCP).
 
+## Installation
+
+### Quick Start: Claude Code Marketplace
+
+Install the skill plugin directly from Claude Code:
+
+```bash
+/plugin install hugoduncan/mcp-tasks
+```
+
+This installs the **mcp-tasks-skill plugin**, which provides comprehensive documentation and guidance for using mcp-tasks workflows in Claude Code.
+
+**Important:** The skill plugin provides documentation and usage patterns. To use mcp-tasks functionality (tools, prompts, resources), you must also install the **mcp-tasks MCP server** separately (see below).
+
+### MCP Server Setup
+
+After installing the skill plugin, configure the mcp-tasks MCP server to enable task management tools and prompts:
+
+1. **Add to `~/.clojure/deps.edn`:**
+
+```clojure
+{:aliases
+ {:mcp-tasks
+  {:replace-paths []
+   :replace-deps {org.hugoduncan/mcp-tasks
+                  {:git/url "https://github.com/hugoduncan/mcp-tasks"
+                   :git/sha "2d82cffb53e3f03deced02365f5be314c7377f0b"}
+                  org.clojure/clojure {:mvn/version "1.12.3"}}
+   :exec-fn mcp-tasks.main/start}}}
+```
+
+2. **Configure Claude Code:**
+
+```bash
+claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
+```
+
+3. **Initialize task directories in your project:**
+
+```bash
+mkdir -p .mcp-tasks/prompts
+
+# Optional: Initialize as git repository for version control
+cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
+```
+
+**What You Get:**
+- **Skill Plugin**: Documentation, workflow guidance, and usage examples accessible in Claude Code
+- **MCP Server**: Actual task management functionality - tools (add-task, select-tasks, etc.), prompts (/mcp-tasks:next-simple, etc.), and resources
+
+For complete installation instructions including Claude Desktop setup, see **[doc/install.md](doc/install.md)**.
+
 ## Quick Start
 
 ```bash
@@ -161,14 +213,6 @@ mcp-tasks enables you to manage development tasks in markdown files and have AI 
 - Teams coordinating agent-driven development
 
 **vs. clojure-mcp:** This is a task management layer built on the [clojure-mcp](https://github.com/hugoduncan/mcp-clj) server library. clojure-mcp provides MCP infrastructure; mcp-tasks adds workflow automation on top.
-
-## Installation
-
-See **[doc/install.md](doc/install.md)** for complete setup instructions for Claude Code, Claude Desktop, and other MCP clients.
-
-**TL;DR:**
-- Add `:mcp-tasks` alias to `~/.clojure/deps.edn` with git coordinates
-- Configure your MCP client to run `clojure -X:mcp-tasks`
 
 ## Core Usage
 

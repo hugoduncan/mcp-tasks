@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "mcp-tasks",
+  "version": "1.0.0",
+  "description": "Task-based workflow management for AI agents via Model Context Protocol (MCP)",
+  "owner": {
+    "name": "Hugo Duncan"
+  },
+  "plugins": [
+    {
+      "name": "mcp-tasks-skill",
+      "source": "./plugins/mcp-tasks-skill",
+      "description": "Skill for using mcp-tasks",
+      "version": "1.0.0",
+      "author": {
+        "name": "Hugo Duncan"
+      }
+    }
+  ]
+}
