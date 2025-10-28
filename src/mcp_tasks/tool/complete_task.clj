@@ -26,6 +26,64 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
 
+(defn- build-completion-result-base
+  "Builds the common base result map returned by completion functions.
+  
+  All completion functions return similar intermediate data maps for git
+  operations and response building. This helper extracts the common fields.
+  
+  Parameters:
+  - config: Configuration map (provides :base-dir)
+  - context: Context map (provides :use-git?)
+  - task: Task map being completed (for commit message)
+  - modified-files: Vector of relative file paths that were modified
+  
+  Returns base map with:
+  - :use-git? - Whether git operations should be performed
+  - :base-dir - Base directory for git operations
+  - :commit-msg - Commit message for the completion
+  - :modified-files - Files to stage in git commit"
+  [config context task modified-files]
+  {:use-git? (:use-git? context)
+   :base-dir (:base-dir config)
+   :commit-msg (str "Complete task #" (:id task) ": " (:title task))
+   :modified-files modified-files})
+
+(defn- format-regular-task-completion-message
+  "Formats completion message for regular tasks.
+  
+  Parameters:
+  - task-id: Task ID
+  - complete-file: Path to complete.ednl
+  
+  Returns: Message string"
+  [task-id complete-file]
+  (str "Task " task-id " completed and moved to " complete-file))
+
+(defn- format-child-task-completion-message
+  "Formats completion message for story child tasks.
+  
+  Parameters:
+  - task-id: Task ID
+  
+  Returns: Message string"
+  [task-id]
+  (str "Task " task-id " completed (staying in worktree for remaining story tasks)"))
+
+(defn- format-story-task-completion-message
+  "Formats completion message for story tasks.
+  
+  Parameters:
+  - task-id: Story task ID
+  - child-count: Number of child tasks archived with the story
+  
+  Returns: Message string"
+  [task-id child-count]
+  (str "Story " task-id " completed and archived"
+       (when (pos? child-count)
+         (str " with " child-count " child task"
+              (when (> child-count 1) "s")))))
+
 (defn- complete-regular-task-
   "Completes a regular task by marking it :status :closed and moving to complete.ednl.
   
@@ -37,7 +95,7 @@
   
   Returns intermediate data map for git operations and response building."
   [config context task completion-comment]
-  (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context]
+  (let [{:keys [tasks-file complete-file tasks-rel-path complete-rel-path]} context]
     (tasks/mark-complete (:id task) completion-comment)
     ;; Get the updated task after marking complete
     (let [updated-task (tasks/get-task (:id task))]
@@ -46,13 +104,10 @@
       (exec-state/clear-execution-state! (:base-dir config))
 
       ;; Return intermediate data for git operations
-      {:updated-task updated-task
-       :complete-file complete-file
-       :modified-files [tasks-rel-path complete-rel-path]
-       :use-git? use-git?
-       :base-dir (:base-dir config)
-       :commit-msg (str "Complete task #" (:id task) ": " (:title task))
-       :msg-text (str "Task " (:id task) " completed and moved to " complete-file)})))
+      (merge (build-completion-result-base config context task [tasks-rel-path complete-rel-path])
+             {:updated-task updated-task
+              :complete-file complete-file
+              :msg-text (format-regular-task-completion-message (:id task) complete-file)}))))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -67,7 +122,7 @@
   - Error response if parent validation fails
   - Intermediate data map for git operations and response building"
   [config context task completion-comment]
-  (let [{:keys [use-git? tasks-file tasks-rel-path]} context
+  (let [{:keys [tasks-file tasks-rel-path]} context
         parent (tasks/get-task (:parent-id task))]
     (cond
       (not parent)
@@ -97,13 +152,11 @@
           (exec-state/clear-execution-state! (:base-dir config))
 
           ;; Return intermediate data for git operations
-          {:updated-task updated-task
-           :tasks-file tasks-file
-           :modified-files [tasks-rel-path]
-           :use-git? use-git?
-           :base-dir (:base-dir config)
-           :commit-msg (str "Complete task #" (:id task) ": " (:title task))
-           :msg-text (str "Task " (:id task) " completed")})))))
+          (merge (build-completion-result-base config context task [tasks-rel-path])
+                 {:updated-task updated-task
+                  :tasks-file tasks-file
+                  :msg-text (format-child-task-completion-message (:id task))
+                  :parent-id (:parent-id task)}))))))
 
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
@@ -119,7 +172,7 @@
   - Error response if children are not all closed
   - Intermediate data map for git operations and response building"
   [config context task completion-comment]
-  (let [{:keys [use-git? tasks-file complete-file tasks-rel-path complete-rel-path]} context
+  (let [{:keys [tasks-file complete-file tasks-rel-path complete-rel-path]} context
         children (tasks/get-children (:id task))
         ;; Only open, in-progress, and blocked tasks prevent completion
         ;; Closed and deleted tasks are considered resolved
@@ -152,20 +205,16 @@
           (exec-state/clear-execution-state! (:base-dir config))
 
           ;; Return intermediate data for git operations
-          {:updated-story updated-story
-           :complete-file complete-file
-           :modified-files [tasks-rel-path complete-rel-path]
-           :use-git? use-git?
-           :base-dir (:base-dir config)
-           :child-count child-count
-           :commit-msg (str "Complete story #" (:id task) ": " (:title task)
-                            (when (pos? child-count)
-                              (str " (with " child-count " task"
-                                   (when (> child-count 1) "s") ")")))
-           :msg-text (str "Story " (:id task) " completed and archived"
-                          (when (pos? child-count)
-                            (str " with " child-count " child task"
-                                 (when (> child-count 1) "s"))))})))))
+          (merge (build-completion-result-base config context task [tasks-rel-path complete-rel-path])
+                 {:updated-story updated-story
+                  :complete-file complete-file
+                  :child-count child-count
+                  ;; Override commit-msg to include child count
+                  :commit-msg (str "Complete story #" (:id task) ": " (:title task)
+                                   (when (pos? child-count)
+                                     (str " (with " child-count " task"
+                                          (when (> child-count 1) "s") ")")))
+                  :msg-text (format-story-task-completion-message (:id task) child-count)}))))))
 
 (defn- build-cleanup-warning
   "Builds a warning message for failed worktree cleanup.
@@ -326,14 +375,15 @@
 
       ;; Perform git operations and worktree cleanup outside lock
       (let [{:keys [updated-task updated-story tasks-file complete-file modified-files
-                    use-git? base-dir commit-msg msg-text child-count]} locked-result
+                    use-git? base-dir commit-msg msg-text child-count parent-id]} locked-result
             git-result (when use-git?
                          (git/commit-task-changes base-dir modified-files commit-msg))
 
-            ;; Attempt worktree cleanup if applicable
+            ;; Attempt worktree cleanup if applicable (skip for child tasks)
             worktree-cleanup-result
             (when (and in-worktree?
-                       (:worktree-management? config))
+                       (:worktree-management? config)
+                       (nil? parent-id))
               (work-on/cleanup-worktree-after-completion
                 main-repo-dir worktree-path config))
 

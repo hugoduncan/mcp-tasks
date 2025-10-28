@@ -348,7 +348,9 @@ These return values allow agents to display clear context about their working en
 When `:worktree-management?` is enabled, the `complete-task` tool automatically removes worktrees after successful task completion. This keeps your workspace clean and prevents accumulation of unused worktrees.
 
 **Cleanup Behavior:**
-- Triggered automatically when completing any task from within a worktree
+- Triggered automatically when completing standalone tasks (tasks without a parent-id) from within a worktree
+- **NOT triggered** for story child tasks (tasks with a parent-id) - these tasks share the same worktree and branch, so the worktree is preserved for remaining story tasks
+- Cleanup only occurs when completing the parent story itself
 - Performs safety checks before removal:
   - Verifies no uncommitted changes exist
   - Verifies all commits are pushed to remote (if remote configured)
@@ -365,7 +367,12 @@ If safety checks fail, the task is still marked complete but the worktree remain
 
 **Cleanup Messages:**
 
-Successful cleanup:
+Story child task completion (no cleanup):
+```
+Task completed (staying in worktree for remaining story tasks)
+```
+
+Successful cleanup (standalone tasks):
 ```
 Task completed. Worktree removed at /path/to/worktree (switch directories to continue)
 ```

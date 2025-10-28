@@ -11,6 +11,36 @@
     [mcp-tasks.tools.git]
     [mcp-tasks.tools.helpers]))
 
+;; Test Mocking Strategy
+;;
+;; This test suite uses `with-redefs` extensively to mock external dependencies
+;; and isolate the behavior of the complete-task functionality.
+;;
+;; What Gets Mocked:
+;;
+;; 1. Git Operations:
+;;    - mcp-tasks.tools.git/in-worktree? - Controls whether tests run in worktree context
+;;    - mcp-tasks.tools.git/get-main-repo-dir - Provides main repo path for worktree tests
+;;    - mcp-tasks.tools.helpers/sync-and-prepare-task-file - Mocks git pull/sync behavior
+;;
+;; 2. Worktree Management:
+;;    - mcp-tasks.tool.work-on/cleanup-worktree-after-completion - Verifies cleanup is called
+;;      with correct arguments and allows testing success/failure paths
+;;
+;; Why Mock:
+;;
+;; - Unit tests avoid real git operations for speed and isolation
+;; - Integration tests (marked with ^:integration) use real git repos via h/init-git-repo
+;; - Mocking allows testing edge cases (conflicts, network failures) without complex setup
+;; - Atomic assertions can verify functions were called with expected arguments
+;;
+;; Common Patterns:
+;;
+;; - Unit tests: Mock git functions to return controlled values
+;; - Integration tests: Use real git repos, minimal mocking
+;; - Cleanup tests: Mock cleanup function to verify invocation without filesystem side effects
+;; - Sync tests: Mock sync-and-prepare-task-file to test conflict/network failure handling
+
 ;; Git helper functions
 
 ;; complete-task tests
@@ -1044,9 +1074,9 @@
 
 (deftest completes-story-child-with-worktree-cleanup
   (h/with-test-setup [test-dir]
-    ;; Tests that completing a story child task triggers worktree cleanup
+    ;; Tests that completing a story child task does NOT trigger worktree cleanup
     (testing "complete-task child task with worktree cleanup"
-      (testing "removes worktree after completing child task"
+      (testing "keeps worktree after completing child task"
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
@@ -1069,12 +1099,63 @@
                           nil
                           {:task-id 91})]
               (is (false? (:isError result)))
-              (is @cleanup-called "cleanup should be called for child tasks")
+              (is (not @cleanup-called) "cleanup should NOT be called for child tasks")
 
-              ;; Verify message includes cleanup success
+              ;; Verify message indicates staying in worktree
               (let [msg (get-in result [:content 0 :text])]
                 (is (str/includes? msg "Task 91 completed"))
-                (is (str/includes? msg "Worktree removed"))))))))))
+                (is (str/includes? msg "staying in worktree for remaining story tasks"))))))))))
+
+(deftest completes-multiple-story-children-sequentially
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing multiple child tasks in sequence keeps worktree intact
+    (testing "complete-task multiple children sequentially"
+      (testing "keeps worktree through completion of all child tasks"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 92 :parent-id nil :title "Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+           {:id 93 :parent-id 92 :title "Child 1" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}
+           {:id 94 :parent-id 92 :title "Child 2" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+
+        (let [cleanup-call-count (atom 0)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] true)
+                        mcp-tasks.tools.git/get-main-repo-dir
+                        (fn [_] "/main/repo")
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [_ _ _]
+                          (swap! cleanup-call-count inc)
+                          {:success true
+                           :message "Worktree removed"
+                           :error nil})]
+
+            ;; Complete first child
+            (let [result1 (#'sut/complete-task-impl
+                           (assoc (h/test-config test-dir) :worktree-management? true)
+                           nil
+                           {:task-id 93})]
+              (is (false? (:isError result1)))
+              (is (= 0 @cleanup-call-count) "cleanup should NOT be called for first child")
+
+              (let [msg (get-in result1 [:content 0 :text])]
+                (is (str/includes? msg "Task 93 completed"))
+                (is (str/includes? msg "staying in worktree for remaining story tasks"))))
+
+            ;; Complete second child
+            (let [result2 (#'sut/complete-task-impl
+                           (assoc (h/test-config test-dir) :worktree-management? true)
+                           nil
+                           {:task-id 94})]
+              (is (false? (:isError result2)))
+              (is (= 0 @cleanup-call-count) "cleanup should NOT be called for second child")
+
+              (let [msg (get-in result2 [:content 0 :text])]
+                (is (str/includes? msg "Task 94 completed"))
+                (is (str/includes? msg "staying in worktree for remaining story tasks"))))
+
+            ;; Verify both tasks completed and no cleanup occurred
+            (is (= 0 @cleanup-call-count) "cleanup should never be called for child tasks")))))))
 
 (deftest completes-story-with-worktree-cleanup
   (h/with-test-setup [test-dir]
