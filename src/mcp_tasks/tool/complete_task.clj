@@ -49,6 +49,41 @@
    :commit-msg (str "Complete task #" (:id task) ": " (:title task))
    :modified-files modified-files})
 
+(defn- format-regular-task-completion-message
+  "Formats completion message for regular tasks.
+  
+  Parameters:
+  - task-id: Task ID
+  - complete-file: Path to complete.ednl
+  
+  Returns: Message string"
+  [task-id complete-file]
+  (str "Task " task-id " completed and moved to " complete-file))
+
+(defn- format-child-task-completion-message
+  "Formats completion message for story child tasks.
+  
+  Parameters:
+  - task-id: Task ID
+  
+  Returns: Message string"
+  [task-id]
+  (str "Task " task-id " completed (staying in worktree for remaining story tasks)"))
+
+(defn- format-story-task-completion-message
+  "Formats completion message for story tasks.
+  
+  Parameters:
+  - task-id: Story task ID
+  - child-count: Number of child tasks archived with the story
+  
+  Returns: Message string"
+  [task-id child-count]
+  (str "Story " task-id " completed and archived"
+       (when (pos? child-count)
+         (str " with " child-count " child task"
+              (when (> child-count 1) "s")))))
+
 (defn- complete-regular-task-
   "Completes a regular task by marking it :status :closed and moving to complete.ednl.
   
@@ -72,7 +107,7 @@
       (merge (build-completion-result-base config context task [tasks-rel-path complete-rel-path])
              {:updated-task updated-task
               :complete-file complete-file
-              :msg-text (str "Task " (:id task) " completed and moved to " complete-file)}))))
+              :msg-text (format-regular-task-completion-message (:id task) complete-file)}))))
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
@@ -120,7 +155,7 @@
           (merge (build-completion-result-base config context task [tasks-rel-path])
                  {:updated-task updated-task
                   :tasks-file tasks-file
-                  :msg-text (str "Task " (:id task) " completed (staying in worktree for remaining story tasks)")
+                  :msg-text (format-child-task-completion-message (:id task))
                   :parent-id (:parent-id task)}))))))
 
 (defn- complete-story-task-
@@ -179,10 +214,7 @@
                                    (when (pos? child-count)
                                      (str " (with " child-count " task"
                                           (when (> child-count 1) "s") ")")))
-                  :msg-text (str "Story " (:id task) " completed and archived"
-                                 (when (pos? child-count)
-                                   (str " with " child-count " child task"
-                                        (when (> child-count 1) "s"))))}))))))
+                  :msg-text (format-story-task-completion-message (:id task) child-count)}))))))
 
 (defn- build-cleanup-warning
   "Builds a warning message for failed worktree cleanup.
