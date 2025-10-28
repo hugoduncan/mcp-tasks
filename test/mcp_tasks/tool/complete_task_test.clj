@@ -11,6 +11,36 @@
     [mcp-tasks.tools.git]
     [mcp-tasks.tools.helpers]))
 
+;; Test Mocking Strategy
+;;
+;; This test suite uses `with-redefs` extensively to mock external dependencies
+;; and isolate the behavior of the complete-task functionality.
+;;
+;; What Gets Mocked:
+;;
+;; 1. Git Operations:
+;;    - mcp-tasks.tools.git/in-worktree? - Controls whether tests run in worktree context
+;;    - mcp-tasks.tools.git/get-main-repo-dir - Provides main repo path for worktree tests
+;;    - mcp-tasks.tools.helpers/sync-and-prepare-task-file - Mocks git pull/sync behavior
+;;
+;; 2. Worktree Management:
+;;    - mcp-tasks.tool.work-on/cleanup-worktree-after-completion - Verifies cleanup is called
+;;      with correct arguments and allows testing success/failure paths
+;;
+;; Why Mock:
+;;
+;; - Unit tests avoid real git operations for speed and isolation
+;; - Integration tests (marked with ^:integration) use real git repos via h/init-git-repo
+;; - Mocking allows testing edge cases (conflicts, network failures) without complex setup
+;; - Atomic assertions can verify functions were called with expected arguments
+;;
+;; Common Patterns:
+;;
+;; - Unit tests: Mock git functions to return controlled values
+;; - Integration tests: Use real git repos, minimal mocking
+;; - Cleanup tests: Mock cleanup function to verify invocation without filesystem side effects
+;; - Sync tests: Mock sync-and-prepare-task-file to test conflict/network failure handling
+
 ;; Git helper functions
 
 ;; complete-task tests
