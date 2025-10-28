@@ -3,6 +3,11 @@
   "description": "Guidance for using the mcp-tasks MCP server for task and story management",
   "version": "1.0.0",
   "author": {
-    "name": "Hugo Duncan"
-  }
+    "name": "Hugo Duncan",
+    "email": "hugo_duncan@yahoo.com"
+  },
+  "homepage": "https://github.com/hugoduncan/mcp-tasks",
+  "repository": "https://github.com/hugoduncan/mcp-tasks",
+  "license": "EPL-1.0",
+  "keywords": ["task-management", "workflow", "productivity", "development", "mcp"]
 }
