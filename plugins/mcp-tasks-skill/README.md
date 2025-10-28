@@ -56,11 +56,15 @@ For detailed installation instructions and configuration options, see the [mcp-t
 
 ## Installation
 
-### From GitHub (Recommended)
+### From Claude Code Marketplace (Recommended)
 
 ```bash
-/plugin install hugoduncan/mcp-tasks/plugins/mcp-tasks-skill
+/plugin install hugoduncan/mcp-tasks
 ```
+
+This installs the mcp-tasks-skill plugin, which provides comprehensive documentation for the mcp-tasks MCP server.
+
+**Note:** This plugin is part of the mcp-tasks marketplace package. Installing via `/plugin install hugoduncan/mcp-tasks` automatically includes this skill plugin.
 
 ### From Local Path (Development/Testing)
 
