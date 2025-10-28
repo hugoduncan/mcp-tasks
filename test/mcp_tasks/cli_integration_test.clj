@@ -713,11 +713,9 @@
       (let [result (call-cli "--format" "edn" "list" "--status" "any" "--parent-id" "5")]
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
-          ;; When parent-id is used, only non-closed tasks are in :tasks vector
-          ;; Completed tasks are only reflected in :completed-task-count
-          (is (= 1 (count (:tasks parsed)))
-              "Should return only the open child task")
-          (is (= 1 (-> parsed :metadata :open-task-count))
-              "Should show 1 open task")
-          (is (= 1 (-> parsed :metadata :completed-task-count))
-              "Should show 1 completed task in metadata"))))))
+          (is (= 2 (count (:tasks parsed)))
+              "Should return both completed and open child tasks")
+          (is (= 2 (-> parsed :metadata :open-task-count))
+              "Should show 2 total matching tasks")
+          (is (nil? (-> parsed :metadata :completed-task-count))
+              "completed-task-count should not be present when status is explicit"))))))
