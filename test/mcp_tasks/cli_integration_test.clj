@@ -671,3 +671,53 @@
         ;; Should NOT contain EDN-style output like ":task" or ":id"
         (is (not (str/includes? (:out result) ":task")))
         (is (not (str/includes? (:out result) ":id")))))))
+
+(deftest status-any-workflow-test
+  ;; Test --status any returns both active and completed tasks
+  (testing "status-any-workflow"
+    (testing "add multiple tasks"
+      (call-cli "add" "--category" "simple" "--title" "Active Task 1")
+      (call-cli "add" "--category" "simple" "--title" "Active Task 2")
+      (call-cli "add" "--category" "simple" "--title" "Complete Task 1")
+      (let [result (call-cli "add" "--category" "simple" "--title" "Complete Task 2")]
+        (is (= 0 (:exit result)))))
+
+    (testing "complete two tasks"
+      (call-cli "complete" "--title" "Complete Task 1")
+      (let [result (call-cli "complete" "--title" "Complete Task 2")]
+        (is (= 0 (:exit result)))))
+
+    (testing "list --status any returns all tasks"
+      (let [result (call-cli "--format" "edn" "list" "--status" "any")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 4 (count (:tasks parsed)))
+              "Should have 4 tasks in result")
+          (is (= 4 (-> parsed :metadata :total-matches))
+              "Should show 4 total matches"))))
+
+    (testing "tasks are in correct order (active then completed)"
+      (let [result (call-cli "--format" "edn" "list" "--status" "any")
+            parsed (read-string (:out result))
+            tasks (:tasks parsed)
+            titles (mapv :title tasks)]
+        (is (= ["Active Task 1" "Active Task 2" "Complete Task 1" "Complete Task 2"]
+               titles)
+            "Active tasks should come before completed tasks")))
+
+    (testing "status any works with parent-id filter"
+      (call-cli "add" "--category" "simple" "--title" "Parent" "--type" "story")
+      (call-cli "add" "--category" "simple" "--title" "Child 1" "--parent-id" "5")
+      (call-cli "add" "--category" "simple" "--title" "Child 2" "--parent-id" "5")
+      (call-cli "complete" "--title" "Child 1")
+      (let [result (call-cli "--format" "edn" "list" "--status" "any" "--parent-id" "5")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          ;; When parent-id is used, only non-closed tasks are in :tasks vector
+          ;; Completed tasks are only reflected in :completed-task-count
+          (is (= 1 (count (:tasks parsed)))
+              "Should return only the open child task")
+          (is (= 1 (-> parsed :metadata :open-task-count))
+              "Should show 1 open task")
+          (is (= 1 (-> parsed :metadata :completed-task-count))
+              "Should show 1 completed task in metadata"))))))
