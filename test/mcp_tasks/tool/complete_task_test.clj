@@ -1076,6 +1076,57 @@
                 (is (str/includes? msg "Task 91 completed"))
                 (is (str/includes? msg "staying in worktree for remaining story tasks"))))))))))
 
+(deftest completes-multiple-story-children-sequentially
+  (h/with-test-setup [test-dir]
+    ;; Tests that completing multiple child tasks in sequence keeps worktree intact
+    (testing "complete-task multiple children sequentially"
+      (testing "keeps worktree through completion of all child tasks"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 92 :parent-id nil :title "Story" :description "" :design "" :category "story" :type :story :status :open :meta {} :relations []}
+           {:id 93 :parent-id 92 :title "Child 1" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}
+           {:id 94 :parent-id 92 :title "Child 2" :description "" :design "" :category "simple" :type :task :status :open :meta {} :relations []}])
+
+        (let [cleanup-call-count (atom 0)]
+          (with-redefs [mcp-tasks.tools.git/in-worktree?
+                        (fn [_] true)
+                        mcp-tasks.tools.git/get-main-repo-dir
+                        (fn [_] "/main/repo")
+                        mcp-tasks.tool.work-on/cleanup-worktree-after-completion
+                        (fn [_ _ _]
+                          (swap! cleanup-call-count inc)
+                          {:success true
+                           :message "Worktree removed"
+                           :error nil})]
+
+            ;; Complete first child
+            (let [result1 (#'sut/complete-task-impl
+                           (assoc (h/test-config test-dir) :worktree-management? true)
+                           nil
+                           {:task-id 93})]
+              (is (false? (:isError result1)))
+              (is (= 0 @cleanup-call-count) "cleanup should NOT be called for first child")
+
+              (let [msg (get-in result1 [:content 0 :text])]
+                (is (str/includes? msg "Task 93 completed"))
+                (is (str/includes? msg "staying in worktree for remaining story tasks"))))
+
+            ;; Complete second child
+            (let [result2 (#'sut/complete-task-impl
+                           (assoc (h/test-config test-dir) :worktree-management? true)
+                           nil
+                           {:task-id 94})]
+              (is (false? (:isError result2)))
+              (is (= 0 @cleanup-call-count) "cleanup should NOT be called for second child")
+
+              (let [msg (get-in result2 [:content 0 :text])]
+                (is (str/includes? msg "Task 94 completed"))
+                (is (str/includes? msg "staying in worktree for remaining story tasks"))))
+
+            ;; Verify both tasks completed and no cleanup occurred
+            (is (= 0 @cleanup-call-count) "cleanup should never be called for child tasks")))))))
+
 (deftest completes-story-with-worktree-cleanup
   (h/with-test-setup [test-dir]
     ;; Tests that completing a story triggers worktree cleanup
