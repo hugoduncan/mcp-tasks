@@ -77,9 +77,11 @@ The mcp-tasks MCP server provides:
 - Optional: `:worktree-management?` enabled in `.mcp-tasks.edn`
 - Optional: `:base-branch` configured for branch management
 
-### Example: Medium Complexity Task
+This section covers two workflows: **Standalone Tasks** and **Story-Based Workflows**.
 
-This walkthrough demonstrates executing task #123 "Add user authentication" (category: medium).
+### Workflow A: Standalone Task
+
+Example: Executing standalone task #123 "Add user authentication" (category: medium).
 
 #### 1. Refine Task (Optional - Skip for Simple/Clear Tasks)
 
@@ -203,6 +205,108 @@ git worktree remove --force /path/to/worktree
 **Need to modify task during execution:**
 - Use `update-task` to change description/design
 - Continue execution with updated task
+
+### Workflow B: Story-Based Workflow
+
+Example: Story #408 "Improve mcp-tasks skill" with multiple child tasks.
+
+#### 1. Refine Story (Optional but Recommended)
+
+```bash
+/mcp-tasks:refine-task 408
+```
+
+**What happens:**
+- Agent analyzes story in project context
+- Suggests improvements to requirements
+- Updates story with `update-task` tool
+- Sets `meta: {"refined": "true"}`
+
+**Note:** `create-story-tasks` warns if story is not refined.
+
+#### 2. Create Story Tasks
+
+```bash
+/mcp-tasks:create-story-tasks 408
+```
+
+**What happens:**
+- Retrieves story using `select-tasks` (type: story)
+- Checks refinement status, warns if not refined
+- Displays story content to user
+- Analyzes and breaks down into specific tasks
+- Presents task breakdown for user approval
+- Adds each task using `add-task` with:
+  - `parent-id`: Story ID (408)
+  - `category`: Appropriate category per task
+  - `type`: Usually `:task`, `:feature`, or `:bug`
+
+**Example tasks created:**
+```
+Task #410: Add walkthrough section (category: medium, parent-id: 408)
+Task #411: Document git integration (category: medium, parent-id: 408)
+Task #412: Add error recovery section (category: simple, parent-id: 408)
+```
+
+#### 3. Execute Story Tasks (Repeat for Each Task)
+
+```bash
+/mcp-tasks:execute-story-task 408
+```
+
+**What happens:**
+- Finds story and first incomplete child task
+- Shows progress: "2 of 5 tasks completed"
+- Calls `work-on` tool with task ID
+- **For first task only** (if worktree/branch management enabled):
+  - Creates worktree: `project-408-improve-mcp-tasks-skill/`
+  - Creates branch: `408-improve-mcp-tasks-skill`
+  - All story tasks use same worktree/branch
+- Executes task using its category workflow
+- Creates git commit
+- Marks task complete with `complete-task`
+- **Preserves worktree** for remaining story tasks
+
+**Repeat** until all story tasks complete.
+
+#### 4. Create Pull Request (Optional)
+
+```bash
+/mcp-tasks:create-story-pr 408
+```
+
+**What happens:**
+- Finds story using `select-tasks`
+- Verifies current branch (must not be master/main)
+- Collects commits from story branch
+- Generates PR content:
+  - Title: Story title (with optional semantic prefix)
+  - Description: Story details + commit summary
+- Creates PR targeting default branch
+- Returns PR URL
+
+**Prerequisites:**
+- Must be on story branch
+- Remote repository configured
+- `gh` CLI or similar tool available
+
+#### 5. Complete Story (After PR Merged)
+
+```bash
+/mcp-tasks:complete-story 408
+```
+
+**What happens:**
+- Moves story and all child tasks to archive
+- Preserves implementation history
+
+**Worktree cleanup:**
+After PR is merged, manually remove worktree:
+```bash
+git worktree remove /path/to/project-408-improve-mcp-tasks-skill
+```
+
+Or if automatic cleanup enabled, it happens on last task completion.
 
 ## Best Practices
 
