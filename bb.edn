@@ -41,7 +41,11 @@
    :task (do
            (println "Building mcp-tasks uberscript...")
            (shell "rm -f mcp-tasks-temp")
-           (shell "bb uberscript mcp-tasks-temp script/uberscript-main.clj")
+           ;; SKIP_MALLI=true disables malli validation in the uberscript build.
+           ;; This keeps the uberscript lean and free of malli dependencies.
+           ;; BB tests still run with full validation (SKIP_MALLI unset by default).
+           (shell {:extra-env {"SKIP_MALLI" "true"}}
+                  "bb uberscript mcp-tasks-temp script/uberscript-main.clj")
            (println "Adding shebang and making executable...")
            (spit "mcp-tasks" (str "#!/usr/bin/env bb\n" (slurp "mcp-tasks-temp")))
            (shell "rm mcp-tasks-temp")
