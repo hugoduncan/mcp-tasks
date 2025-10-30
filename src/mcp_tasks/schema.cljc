@@ -49,40 +49,56 @@
 
 (def relation-validator
   "Compiled validator for Relation schema."
-  (delay ((requiring-resolve 'malli.core/validator) Relation)))
+  #?(:clj (delay ((requiring-resolve 'malli.core/validator) Relation))
+     :bb (if (System/getenv "SKIP_MALLI")
+           (delay (fn [_] true))
+           (delay ((requiring-resolve 'malli.core/validator) Relation)))))
 
 (def task-validator
   "Compiled validator for Task schema."
-  (delay ((requiring-resolve 'malli.core/validator) Task)))
+  #?(:clj (delay ((requiring-resolve 'malli.core/validator) Task))
+     :bb (if (System/getenv "SKIP_MALLI")
+           (delay (fn [_] true))
+           (delay ((requiring-resolve 'malli.core/validator) Task)))))
 
 (def relation-explainer
   "Compiled explainer for Relation schema."
-  (delay ((requiring-resolve 'malli.core/explainer) Relation)))
+  #?(:clj (delay ((requiring-resolve 'malli.core/explainer) Relation))
+     :bb (if (System/getenv "SKIP_MALLI")
+           (delay (fn [_] nil))
+           (delay ((requiring-resolve 'malli.core/explainer) Relation)))))
 
 (def task-explainer
   "Compiled explainer for Task schema."
-  (delay ((requiring-resolve 'malli.core/explainer) Task)))
+  #?(:clj (delay ((requiring-resolve 'malli.core/explainer) Task))
+     :bb (if (System/getenv "SKIP_MALLI")
+           (delay (fn [_] nil))
+           (delay ((requiring-resolve 'malli.core/explainer) Task)))))
 
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
   [relation]
+  #_{:clj-kondo/ignore [:type-mismatch]}
   (@relation-validator relation))
 
 (defn valid-task?
   "Validate a task map against the Task schema."
   [task]
+  #_{:clj-kondo/ignore [:type-mismatch]}
   (@task-validator task))
 
 (defn explain-relation
   "Explain why a relation map is invalid.
   Returns nil if valid, explanation map if invalid."
   [relation]
+  #_{:clj-kondo/ignore [:type-mismatch]}
   (@relation-explainer relation))
 
 (defn explain-task
   "Explain why a task map is invalid.
   Returns nil if valid, explanation map if invalid."
   [task]
+  #_{:clj-kondo/ignore [:type-mismatch]}
   (@task-explainer task))
 
 ;; Example Data
