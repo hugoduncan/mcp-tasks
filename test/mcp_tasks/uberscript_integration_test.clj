@@ -19,18 +19,31 @@
   (let [project-root (System/getProperty "user.dir")]
     (str project-root "/mcp-tasks")))
 
+(defn- bb-available?
+  "Check if bb (Babashka) is available on the system."
+  []
+  (try
+    (let [result (sh/sh "bb" "--version")]
+      (zero? (:exit result)))
+    (catch java.io.IOException _
+      false)))
+
 (defn- build-uberscript-once
-  "Build the uberscript once before all tests."
+  "Build the uberscript once before all tests.
+  Skips tests if bb is not available."
   [f]
-  (println "Building uberscript for integration tests...")
-  (let [result (sh/sh "bb" "build-uberscript")]
-    (when-not (zero? (:exit result))
-      (throw (ex-info "Failed to build uberscript"
-                      {:exit (:exit result)
-                       :out (:out result)
-                       :err (:err result)}))))
-  (println "Uberscript built successfully")
-  (f))
+  (if (bb-available?)
+    (do
+      (println "Building uberscript for integration tests...")
+      (let [result (sh/sh "bb" "build-uberscript")]
+        (when-not (zero? (:exit result))
+          (throw (ex-info "Failed to build uberscript"
+                          {:exit (:exit result)
+                           :out (:out result)
+                           :err (:err result)}))))
+      (println "Uberscript built successfully")
+      (f))
+    (println "Skipping uberscript integration tests: bb (Babashka) not available")))
 
 (defn- setup-test-dir
   [test-dir]
@@ -79,119 +92,121 @@
 
 (deftest ^:integration uberscript-build-test
   ;; Test that the uberscript was built correctly and does not contain malli
-  (testing "uberscript-build"
-    (testing "executable exists and is executable"
-      (let [file (io/file (get-uberscript-path))]
-        (is (.exists file) "Uberscript executable should exist")
-        (is (.canExecute file) "Uberscript should be executable")))
+  (when (bb-available?)
+    (testing "uberscript-build"
+      (testing "executable exists and is executable"
+        (let [file (io/file (get-uberscript-path))]
+          (is (.exists file) "Uberscript executable should exist")
+          (is (.canExecute file) "Uberscript should be executable")))
 
-    (testing "malli namespace is not included in uberscript"
-      (let [content (slurp (get-uberscript-path))
-            ;; Look for malli namespace declarations
-            has-malli-ns? (or (str/includes? content "(ns malli.")
-                              (str/includes? content "(ns malli.core")
-                              (str/includes? content "(ns malli.impl"))]
-        (is (not has-malli-ns?)
-            "Uberscript should not contain malli namespace declarations")))))
+      (testing "malli namespace is not included in uberscript"
+        (let [content (slurp (get-uberscript-path))
+              ;; Look for malli namespace declarations
+              has-malli-ns? (or (str/includes? content "(ns malli.")
+                                (str/includes? content "(ns malli.core")
+                                (str/includes? content "(ns malli.impl"))]
+          (is (not has-malli-ns?)
+              "Uberscript should not contain malli namespace declarations"))))))
 
 (deftest ^:integration uberscript-cli-commands-test
   ;; Test that all CLI commands work through the uberscript
-  (testing "uberscript-cli-commands"
-    (testing "can add a task"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "add"
-                     "--category" "simple"
-                     "--title" "Test task"
-                     "--description" "A test task")]
-        (is (= 0 (:exit result))
-            (str "Add command should succeed. stderr: " (:err result)))
-        (is (str/includes? (:out result) ":id 1"))
-        (is (str/blank? (:err result))
-            "Should not have errors when adding task")
-        (is (not (str/includes? (:err result) "malli"))
-            "Should not have malli-related errors")))
+  (when (bb-available?)
+    (testing "uberscript-cli-commands"
+      (testing "can add a task"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "add"
+                       "--category" "simple"
+                       "--title" "Test task"
+                       "--description" "A test task")]
+          (is (= 0 (:exit result))
+              (str "Add command should succeed. stderr: " (:err result)))
+          (is (str/includes? (:out result) ":id 1"))
+          (is (str/blank? (:err result))
+              "Should not have errors when adding task")
+          (is (not (str/includes? (:err result) "malli"))
+              "Should not have malli-related errors")))
 
-    (testing "can list tasks"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "list")]
-        (is (= 0 (:exit result))
-            (str "List command should succeed. stderr: " (:err result)))
-        (is (str/includes? (:out result) "Test task"))
-        (is (not (str/includes? (:err result) "malli"))
-            "Should not have malli-related errors")))
+      (testing "can list tasks"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "list")]
+          (is (= 0 (:exit result))
+              (str "List command should succeed. stderr: " (:err result)))
+          (is (str/includes? (:out result) "Test task"))
+          (is (not (str/includes? (:err result) "malli"))
+              "Should not have malli-related errors")))
 
-    (testing "can show task by ID"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "show"
-                     "--task-id" "1")]
-        (is (= 0 (:exit result))
-            (str "Show command should succeed. stderr: " (:err result)))
-        (let [parsed (read-string (:out result))]
-          (is (= 1 (-> parsed :task :id)))
-          (is (= "Test task" (-> parsed :task :title))))
-        (is (not (str/includes? (:err result) "malli"))
-            "Should not have malli-related errors")))
+      (testing "can show task by ID"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "show"
+                       "--task-id" "1")]
+          (is (= 0 (:exit result))
+              (str "Show command should succeed. stderr: " (:err result)))
+          (let [parsed (read-string (:out result))]
+            (is (= 1 (-> parsed :task :id)))
+            (is (= "Test task" (-> parsed :task :title))))
+          (is (not (str/includes? (:err result) "malli"))
+              "Should not have malli-related errors")))
 
-    (testing "can update task"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "update"
-                     "--task-id" "1"
-                     "--status" "in-progress")]
-        (is (= 0 (:exit result))
-            (str "Update command should succeed. stderr: " (:err result)))
-        (let [parsed (read-string (:out result))]
-          (is (= "in-progress" (:status (:task parsed)))))
-        (is (not (str/includes? (:err result) "malli"))
-            "Should not have malli-related errors")))
+      (testing "can update task"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "update"
+                       "--task-id" "1"
+                       "--status" "in-progress")]
+          (is (= 0 (:exit result))
+              (str "Update command should succeed. stderr: " (:err result)))
+          (let [parsed (read-string (:out result))]
+            (is (= "in-progress" (:status (:task parsed)))))
+          (is (not (str/includes? (:err result) "malli"))
+              "Should not have malli-related errors")))
 
-    (testing "can complete task"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "complete"
-                     "--task-id" "1"
-                     "--completion-comment" "Done")]
-        (is (= 0 (:exit result))
-            (str "Complete command should succeed. stderr: " (:err result)))
-        (let [parsed (read-string (:out result))]
-          (is (= "closed" (:status (:task parsed))))
-          (is (str/includes? (:description (:task parsed)) "Done")))
-        (is (not (str/includes? (:err result) "malli"))
-            "Should not have malli-related errors")))
+      (testing "can complete task"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "complete"
+                       "--task-id" "1"
+                       "--completion-comment" "Done")]
+          (is (= 0 (:exit result))
+              (str "Complete command should succeed. stderr: " (:err result)))
+          (let [parsed (read-string (:out result))]
+            (is (= "closed" (:status (:task parsed))))
+            (is (str/includes? (:description (:task parsed)) "Done")))
+          (is (not (str/includes? (:err result) "malli"))
+              "Should not have malli-related errors")))
 
-    (testing "task moved to complete file"
-      (let [tasks (read-tasks-file)
-            completed (read-complete-file)]
-        (is (empty? tasks))
-        (is (= 1 (count completed)))
-        (is (= "Test task" (:title (first completed))))))
+      (testing "task moved to complete file"
+        (let [tasks (read-tasks-file)
+              completed (read-complete-file)]
+          (is (empty? tasks))
+          (is (= 1 (count completed)))
+          (is (= "Test task" (:title (first completed))))))
 
-    (testing "can add another task for delete test"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "add"
-                     "--category" "simple"
-                     "--title" "Delete me")]
-        (is (= 0 (:exit result))
-            (str "Add command should succeed. stderr: " (:err result)))))
+      (testing "can add another task for delete test"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "add"
+                       "--category" "simple"
+                       "--title" "Delete me")]
+          (is (= 0 (:exit result))
+              (str "Add command should succeed. stderr: " (:err result)))))
 
-    (testing "can delete task"
-      (let [result (call-uberscript
-                     "--format" "edn"
-                     "delete"
-                     "--task-id" "2")]
-        (is (= 0 (:exit result))
-            (str "Delete command should succeed. stderr: " (:err result)))
-        (let [parsed (read-string (:out result))]
-          (is (= "deleted" (:status (:deleted parsed)))))
-        (is (not (str/includes? (:err result) "malli"))
-            "Should not have malli-related errors")))
+      (testing "can delete task"
+        (let [result (call-uberscript
+                       "--format" "edn"
+                       "delete"
+                       "--task-id" "2")]
+          (is (= 0 (:exit result))
+              (str "Delete command should succeed. stderr: " (:err result)))
+          (let [parsed (read-string (:out result))]
+            (is (= "deleted" (:status (:deleted parsed)))))
+          (is (not (str/includes? (:err result) "malli"))
+              "Should not have malli-related errors")))
 
-    (testing "deleted task moved to complete file"
-      (let [tasks (read-tasks-file)
-            completed (read-complete-file)]
-        (is (empty? tasks))
-        (is (= 2 (count completed)))))))
+      (testing "deleted task moved to complete file"
+        (let [tasks (read-tasks-file)
+              completed (read-complete-file)]
+          (is (empty? tasks))
+          (is (= 2 (count completed))))))))
