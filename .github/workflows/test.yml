@@ -26,6 +26,7 @@ jobs:
           cli: latest
           cljstyle: 0.17.642
           clj-kondo: latest
+          bb: latest
 
       - name: Cache Clojure dependencies
         uses: actions/cache@v4
