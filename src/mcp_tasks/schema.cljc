@@ -47,47 +47,47 @@
 ;; Compiled validators using delays
 ;; Both requiring-resolve AND validator compilation happen lazily
 
-;; SKIP_MALLI Environment Variable
+;; USE_MALLI Environment Variable
 ;;
-;; Why use SKIP_MALLI instead of just :bb reader conditional?
+;; Why use USE_MALLI instead of just :bb reader conditional?
 ;;
-;; The SKIP_MALLI environment variable provides more flexibility than platform-only
+;; The USE_MALLI environment variable provides more flexibility than platform-only
 ;; reader conditionals:
 ;;
-;; - BB tests can run with full malli validation (when SKIP_MALLI is not set)
-;; - Only the uberscript build disables malli (by setting SKIP_MALLI=true in bb.edn)
-;; - JVM mode always uses full validation regardless of SKIP_MALLI
+;; - BB tests can run with full malli validation (by setting USE_MALLI=true)
+;; - The uberscript and default BB usage disable malli (when USE_MALLI is not set)
+;; - JVM mode always uses full validation regardless of USE_MALLI
 ;;
-;; This approach allows testing the BB implementation with validation enabled while
-;; keeping the production uberscript lean and free of malli dependencies.
+;; This opt-in approach allows testing the BB implementation with validation enabled
+;; while keeping the production uberscript lean and free of malli dependencies.
 
 (def relation-validator
   "Compiled validator for Relation schema."
   #?(:clj (delay ((requiring-resolve 'malli.core/validator) Relation))
-     :bb (if (System/getenv "SKIP_MALLI")
-           (delay (fn [_] true))
-           (delay ((requiring-resolve 'malli.core/validator) Relation)))))
+     :bb (if (System/getenv "USE_MALLI")
+           (delay ((requiring-resolve 'malli.core/validator) Relation))
+           (delay (fn [_] true)))))
 
 (def task-validator
   "Compiled validator for Task schema."
   #?(:clj (delay ((requiring-resolve 'malli.core/validator) Task))
-     :bb (if (System/getenv "SKIP_MALLI")
-           (delay (fn [_] true))
-           (delay ((requiring-resolve 'malli.core/validator) Task)))))
+     :bb (if (System/getenv "USE_MALLI")
+           (delay ((requiring-resolve 'malli.core/validator) Task))
+           (delay (fn [_] true)))))
 
 (def relation-explainer
   "Compiled explainer for Relation schema."
   #?(:clj (delay ((requiring-resolve 'malli.core/explainer) Relation))
-     :bb (if (System/getenv "SKIP_MALLI")
-           (delay (fn [_] nil))
-           (delay ((requiring-resolve 'malli.core/explainer) Relation)))))
+     :bb (if (System/getenv "USE_MALLI")
+           (delay ((requiring-resolve 'malli.core/explainer) Relation))
+           (delay (fn [_] nil)))))
 
 (def task-explainer
   "Compiled explainer for Task schema."
   #?(:clj (delay ((requiring-resolve 'malli.core/explainer) Task))
-     :bb (if (System/getenv "SKIP_MALLI")
-           (delay (fn [_] nil))
-           (delay ((requiring-resolve 'malli.core/explainer) Task)))))
+     :bb (if (System/getenv "USE_MALLI")
+           (delay ((requiring-resolve 'malli.core/explainer) Task))
+           (delay (fn [_] nil)))))
 
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
