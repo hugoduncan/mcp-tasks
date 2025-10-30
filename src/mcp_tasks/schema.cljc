@@ -47,6 +47,20 @@
 ;; Compiled validators using delays
 ;; Both requiring-resolve AND validator compilation happen lazily
 
+;; SKIP_MALLI Environment Variable
+;;
+;; Why use SKIP_MALLI instead of just :bb reader conditional?
+;;
+;; The SKIP_MALLI environment variable provides more flexibility than platform-only
+;; reader conditionals:
+;;
+;; - BB tests can run with full malli validation (when SKIP_MALLI is not set)
+;; - Only the uberscript build disables malli (by setting SKIP_MALLI=true in bb.edn)
+;; - JVM mode always uses full validation regardless of SKIP_MALLI
+;;
+;; This approach allows testing the BB implementation with validation enabled while
+;; keeping the production uberscript lean and free of malli dependencies.
+
 (def relation-validator
   "Compiled validator for Relation schema."
   #?(:clj (delay ((requiring-resolve 'malli.core/validator) Relation))
