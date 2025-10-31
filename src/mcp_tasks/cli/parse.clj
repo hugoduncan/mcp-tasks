@@ -23,6 +23,7 @@ COMMANDS:
   complete  Mark a task as complete
   update    Update task fields
   delete    Delete a task
+  reopen    Reopen a closed task
 
 GLOBAL OPTIONS:
   --format <format>     Output format: edn, json, human (default: edn)
@@ -181,6 +182,25 @@ EXAMPLES:
   clojure -M:cli delete --task-id 42
   clojure -M:cli delete --title-pattern \"old-task\"
   clojure -M:cli delete --id 42 --format human")
+
+(def reopen-help
+  "Help text for the reopen command."
+  "Reopen a closed task
+
+USAGE:
+  clojure -M:cli reopen (--task-id <id> | --title <pattern>) [options]
+
+OPTIONS:
+  --task-id, --id <id>          Task ID to reopen
+  --title, -t <pattern>         Task title pattern (alternative to task-id)
+  --format <format>             Output format: edn, json, human (default: edn)
+
+NOTE: At least one of --task-id or --title must be provided.
+
+EXAMPLES:
+  clojure -M:cli reopen --task-id 42
+  clojure -M:cli reopen --title \"Fix bug\"
+  clojure -M:cli reopen --id 42 --format human")
 
 ;; Type Coercion Functions
 
@@ -484,6 +504,26 @@ EXAMPLES:
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
+(def reopen-spec
+  "Spec for the reopen command.
+
+  Validates and coerces arguments for reopening closed tasks.
+
+  Coercion rules:
+  - :task-id -> long integer
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires at least one of :task-id or :title-pattern"
+  {:task-id {:coerce :long
+             :alias :id
+             :desc "Task ID to reopen"}
+   :title-pattern {:alias :title
+                   :desc "Title pattern to match (alternative to task-id)"}
+   :format {:coerce :keyword
+            :desc "Output format (edn, json, human)"}})
+
 ;; Parse Functions
 
 (defn parse-list
@@ -665,6 +705,30 @@ EXAMPLES:
   [args]
   (try
     (let [raw-parsed (cli/parse-opts args {:spec delete-spec :restrict (get-allowed-keys delete-spec)})
+          task-id (or (:task-id raw-parsed) (:id raw-parsed))
+          parsed (-> raw-parsed
+                     (dissoc :id :title)
+                     (cond-> task-id (assoc :task-id task-id))
+                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
+          at-least-one-validation (validate-at-least-one parsed [:task-id :title-pattern] ["--task-id" "--title-pattern"])]
+      (if-not (:valid? at-least-one-validation)
+        (dissoc at-least-one-validation :valid?)
+        (let [format-validation (validate-format parsed)]
+          (if (:valid? format-validation)
+            parsed
+            (dissoc format-validation :valid?)))))
+    (catch Exception e
+      {:error (format-unknown-option-error (.getMessage e))
+       :metadata {:args args}})))
+
+(defn parse-reopen
+  "Parse arguments for the reopen command.
+
+  Validates that at least one of task-id or title-pattern is provided.
+  Returns parsed options map or error map with :error key."
+  [args]
+  (try
+    (let [raw-parsed (cli/parse-opts args {:spec reopen-spec :restrict (get-allowed-keys reopen-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
                      (dissoc :id :title)

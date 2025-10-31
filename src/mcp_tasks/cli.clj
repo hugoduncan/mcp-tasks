@@ -22,7 +22,7 @@
   (try
     (let [;; Find the first argument that looks like a command (not an option or option value)
           ;; Valid commands are known strings that don't start with --
-          valid-commands #{"list" "show" "add" "complete" "update" "delete"}
+          valid-commands #{"list" "show" "add" "complete" "update" "delete" "reopen"}
           ;; Find command by looking for first valid command OR first non-option after options
           command-idx (loop [idx 0
                              prev-was-option? false]
@@ -57,7 +57,7 @@
 
         ;; Handle command-specific help
         (and (= "--help" (first command-args))
-             (contains? #{"list" "show" "add" "complete" "update" "delete"} command))
+             (contains? #{"list" "show" "add" "complete" "update" "delete" "reopen"} command))
         (do
           (case command
             "list" (println parse/list-help)
@@ -65,12 +65,13 @@
             "add" (println parse/add-help)
             "complete" (println parse/complete-help)
             "update" (println parse/update-help)
-            "delete" (println parse/delete-help))
+            "delete" (println parse/delete-help)
+            "reopen" (println parse/reopen-help))
           (exit 0))
 
         ;; Execute command
         :else
-        (let [valid-commands #{"list" "show" "add" "complete" "update" "delete"}]
+        (let [valid-commands #{"list" "show" "add" "complete" "update" "delete" "reopen"}]
           ;; Validate command is known
           (if-not (contains? valid-commands command)
             (do
@@ -92,7 +93,8 @@
                                 "add" (parse/parse-add command-args)
                                 "complete" (parse/parse-complete command-args)
                                 "update" (parse/parse-update command-args)
-                                "delete" (parse/parse-delete command-args))]
+                                "delete" (parse/parse-delete command-args)
+                                "reopen" (parse/parse-reopen command-args))]
 
               ;; Check for parsing errors
               (if (:error parsed-args)
@@ -108,7 +110,8 @@
                                "add" (commands/add-command resolved-config parsed-args)
                                "complete" (commands/complete-command resolved-config parsed-args)
                                "update" (commands/update-command resolved-config parsed-args)
-                               "delete" (commands/delete-command resolved-config parsed-args))
+                               "delete" (commands/delete-command resolved-config parsed-args)
+                               "reopen" (commands/reopen-command resolved-config parsed-args))
                       output-format (or (:format parsed-args) format)
                       formatted-output (format/render output-format result)]
                   (if (:error result)

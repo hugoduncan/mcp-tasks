@@ -335,3 +335,26 @@
       (let [result (sut/parse-delete ["--format" "json"])]
         (is (contains? result :error))
         (is (= "At least one of --task-id, --title-pattern must be provided" (:error result)))))))
+
+(deftest parse-reopen-test
+  (testing "parse-reopen"
+    (testing "accepts task-id"
+      (is (= {:task-id 42}
+             (sut/parse-reopen ["--task-id" "42"]))))
+
+    (testing "accepts title-pattern"
+      (is (= {:title-pattern "my.*task"}
+             (sut/parse-reopen ["--title-pattern" "my.*task"]))))
+
+    (testing "accepts both task-id and title-pattern"
+      (is (= {:task-id 42 :title-pattern "task"}
+             (sut/parse-reopen ["--task-id" "42" "--title-pattern" "task"]))))
+
+    (testing "uses aliases"
+      (is (= {:task-id 99 :title-pattern "foo"}
+             (sut/parse-reopen ["--id" "99" "--title" "foo"]))))
+
+    (testing "requires at least one of task-id or title-pattern"
+      (let [result (sut/parse-reopen ["--format" "json"])]
+        (is (contains? result :error))
+        (is (= "At least one of --task-id, --title-pattern must be provided" (:error result)))))))
