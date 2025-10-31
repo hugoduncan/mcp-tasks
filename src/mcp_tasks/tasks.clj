@@ -99,6 +99,102 @@
   [id]
   (get @tasks id))
 
+;; Blocking Logic
+
+(defn- detect-circular-dependency
+  "Detect circular dependencies in :blocked-by relations.
+
+  Returns [:cycle path] if a cycle is found, nil otherwise.
+  Path shows the cycle: [id1 id2 id3 id1]."
+  [task-id visited]
+  (cond
+    (visited task-id)
+    [:cycle [task-id]]
+
+    :else
+    (let [task (get-task task-id)]
+      (if-not task
+        nil
+        (let [blocking-ids (->> (:relations task [])
+                                (filter #(= :blocked-by (:as-type %)))
+                                (map :relates-to))]
+          (reduce
+            (fn [_ blocking-id]
+              (let [result (detect-circular-dependency
+                             blocking-id
+                             (conj visited task-id))]
+                (when (= :cycle (first result))
+                  (reduced (update result 1 #(conj % task-id))))))
+            nil
+            blocking-ids))))))
+
+(defn get-blocking-tasks
+  "Get all tasks that are blocking the specified task.
+
+  Returns vector of task maps that have incomplete status and are referenced
+  in :blocked-by relations. Returns empty vector if task is not blocked."
+  [task-id]
+  (let [task (get-task task-id)]
+    (if-not task
+      []
+      (let [blocking-ids (->> (:relations task [])
+                              (filter #(= :blocked-by (:as-type %)))
+                              (map :relates-to))
+            blocking-tasks (keep get-task blocking-ids)]
+        (filterv #(schema/blocking-statuses (:status %))
+                 blocking-tasks)))))
+
+(defn is-task-blocked?
+  "Check if a task is blocked by incomplete tasks.
+
+  Returns map with:
+  - :blocked? - true if any :blocked-by relation references an incomplete task
+  - :blocking-ids - vector of task IDs that are blocking this task (empty if unblocked)
+  - :error - error message if invalid task ID or other issue
+  - :circular-dependency - vector showing cycle path if detected
+
+  A task is blocked if ANY :blocked-by relation points to a task with status
+  in #{:open :in-progress :blocked}. A task is unblocked if ALL :blocked-by
+  relations point to completed tasks (:closed or :deleted) or has no :blocked-by
+  relations."
+  [task-id]
+  (let [task (get-task task-id)]
+    (if-not task
+      {:blocked? false
+       :blocking-ids []
+       :error (str "Task " task-id " not found")}
+      (let [blocking-relations (->> (:relations task [])
+                                    (filter #(= :blocked-by (:as-type %))))
+            blocking-ids (map :relates-to blocking-relations)
+            ;; Check for circular dependencies
+            cycle-result (detect-circular-dependency task-id #{})
+            ;; Check each blocking task
+            blocking-results (for [blocking-id blocking-ids]
+                               (let [blocking-task (get-task blocking-id)]
+                                 (cond
+                                   (nil? blocking-task)
+                                   {:invalid-id blocking-id
+                                    :error (str "Blocked by invalid task ID: " blocking-id)}
+
+                                   (schema/blocking-statuses (:status blocking-task))
+                                   {:blocking-id blocking-id
+                                    :is-blocking true}
+
+                                   :else
+                                   {:blocking-id blocking-id
+                                    :is-blocking false})))
+            invalid-ids (keep :invalid-id blocking-results)
+            blocking-task-ids (keep #(when (:is-blocking %) (:blocking-id %))
+                                    blocking-results)
+            is-blocked (or (seq blocking-task-ids) (seq invalid-ids))]
+        (cond-> {:blocked? (boolean is-blocked)
+                 :blocking-ids (vec blocking-task-ids)}
+          (seq invalid-ids)
+          (assoc :error (str/join ", " (map :error (filter :error blocking-results))))
+
+          cycle-result
+          (assoc :circular-dependency (second cycle-result)))))))
+
 (defn get-children
   "Get all child tasks for a parent ID.
 
