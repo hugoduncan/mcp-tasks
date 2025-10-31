@@ -1,2 +1,3 @@
 {:lint-as
- {mcp-tasks.test-helpers/with-test-setup clojure.core/fn}}
+ {mcp-tasks.test-helpers/with-test-setup clojure.core/fn
+  mcp-tasks.uberscript-integration-test/with-uberscript-test clojure.test/testing}}
