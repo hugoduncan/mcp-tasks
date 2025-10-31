@@ -19,7 +19,8 @@
      :modified-files [tasks-rel-path]
      :msg-text (str "Task " (:id task) " reopened in " tasks-file)
      :updated-task (tasks/get-task (:id task))
-     :tasks-file tasks-file}))
+     :tasks-file tasks-file
+     :source-file "tasks.ednl"}))
 
 (defn- reopen-from-complete-ednl
   "Reopens an archived task from complete.ednl by moving it back to tasks.ednl."
@@ -37,7 +38,8 @@
        :modified-files [tasks-rel-path complete-rel-path]
        :msg-text (str "Task " task-id " reopened and moved from " complete-file " to " tasks-file)
        :updated-task reopened-task
-       :tasks-file tasks-file})))
+       :tasks-file tasks-file
+       :source-file "complete.ednl"})))
 
 (defn- reopen-task-impl
   "Implementation of reopen-task tool."
@@ -81,12 +83,13 @@
                                                                 (reopen-from-tasks-ednl config context task)))))))))))]
     (if (:isError locked-result)
       locked-result
-      (let [{:keys [updated-task tasks-file modified-files use-git? base-dir commit-msg msg-text]} locked-result
+      (let [{:keys [updated-task tasks-file modified-files use-git? base-dir commit-msg msg-text source-file]} locked-result
             git-result (when use-git?
                          (git/commit-task-changes base-dir modified-files commit-msg))
             task-data {:task (select-keys updated-task [:id :title :description :category :type :status :parent-id])
                        :metadata {:file tasks-file
-                                  :operation "reopen-task"}}]
+                                  :operation "reopen-task"
+                                  :source-file source-file}}]
         (helpers/build-completion-response msg-text modified-files use-git? git-result task-data)))))
 
 (defn- description
