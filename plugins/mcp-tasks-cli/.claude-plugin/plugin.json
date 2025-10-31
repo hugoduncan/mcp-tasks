@@ -1,0 +1,13 @@
+{
+  "name": "mcp-tasks-cli",
+  "description": "Pre-built CLI tool for mcp-tasks task management",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hugo Duncan",
+    "email": "hugo_duncan@yahoo.com"
+  },
+  "homepage": "https://github.com/hugoduncan/mcp-tasks",
+  "repository": "https://github.com/hugoduncan/mcp-tasks",
+  "license": "EPL-1.0",
+  "keywords": ["cli", "task-management", "babashka", "productivity", "scripting"]
+}
