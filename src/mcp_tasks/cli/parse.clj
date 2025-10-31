@@ -192,7 +192,7 @@ USAGE:
 
 OPTIONS:
   --task-id, --id <id>          Task ID to reopen
-  --title, -t <pattern>         Task title pattern (alternative to task-id)
+  --title, -t <title>           Exact task title (alternative to task-id)
   --format <format>             Output format: edn, json, human (default: edn)
 
 NOTE: At least one of --task-id or --title must be provided.
@@ -724,17 +724,16 @@ EXAMPLES:
 (defn parse-reopen
   "Parse arguments for the reopen command.
 
-  Validates that at least one of task-id or title-pattern is provided.
+  Validates that at least one of task-id or title is provided.
   Returns parsed options map or error map with :error key."
   [args]
   (try
     (let [raw-parsed (cli/parse-opts args {:spec reopen-spec :restrict (get-allowed-keys reopen-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
-                     (dissoc :id :title)
-                     (cond-> task-id (assoc :task-id task-id))
-                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
-          at-least-one-validation (validate-at-least-one parsed [:task-id :title-pattern] ["--task-id" "--title-pattern"])]
+                     (dissoc :id)
+                     (cond-> task-id (assoc :task-id task-id)))
+          at-least-one-validation (validate-at-least-one parsed [:task-id :title] ["--task-id" "--title"])]
       (if-not (:valid? at-least-one-validation)
         (dissoc at-least-one-validation :valid?)
         (let [format-validation (validate-format parsed)]

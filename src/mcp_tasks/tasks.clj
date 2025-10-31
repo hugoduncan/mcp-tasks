@@ -194,11 +194,12 @@
 (defn find-by-title
   "Find all tasks with exact title match.
 
+  Searches both active and completed tasks.
   Returns vector of matching tasks (may be empty or contain multiple tasks)."
   [title]
-  (let [ids @task-ids
+  (let [all-ids (concat @task-ids @complete-task-ids)
         task-map @tasks]
-    (->> ids
+    (->> all-ids
          (map #(get task-map %))
          (filter #(= (:title %) title))
          vec)))
