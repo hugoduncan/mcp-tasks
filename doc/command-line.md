@@ -104,6 +104,39 @@ clojure -M:cli complete --task-id 42 \
 clojure -M:cli complete --title "Fix authentication bug"
 ```
 
+### reopen - Reopen closed tasks
+
+Reopen tasks that were previously completed. Works with tasks in both `tasks.ednl` (closed but not archived) and `complete.ednl` (archived).
+
+```bash
+# Reopen a task by ID
+clojure -M:cli reopen --task-id 42
+
+# Reopen by title
+clojure -M:cli reopen --title "Fix authentication bug"
+```
+
+**Behavior:**
+- **Tasks in tasks.ednl**: Changes status from `:closed` to `:open` in place
+- **Tasks in complete.ednl**: Moves task back to `tasks.ednl` with status `:open`, appended to the end
+- All task metadata (`:meta`, `:relations`, `:parent-id`) is preserved during reopening
+- Child tasks follow the same rules as standalone tasks (moved from `complete.ednl` if archived)
+
+**Example scenarios:**
+```bash
+# Scenario 1: Task was completed but needs more work
+clojure -M:cli reopen --task-id 42
+# → Task moved back to active tasks at the end of tasks.ednl
+
+# Scenario 2: Archived task needs to be revisited
+clojure -M:cli reopen --title "User authentication"
+# → Task retrieved from complete.ednl and added to tasks.ednl
+
+# Scenario 3: Use with work-on to start working on reopened task
+clojure -M:cli reopen --task-id 42
+# Then in MCP client: use work-on tool with task-id 42
+```
+
 ### delete - Remove tasks
 
 ```bash
@@ -159,6 +192,9 @@ clojure -M:cli update --task-id 1 --status in-progress
 
 # Complete with notes
 clojure -M:cli complete --task-id 1 --completion-comment "All tests passing"
+
+# Reopen if needed
+clojure -M:cli reopen --task-id 1
 ```
 
 ### Query and filter
