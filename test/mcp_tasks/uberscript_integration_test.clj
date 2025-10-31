@@ -88,7 +88,8 @@
   Uses *uberscript-path* from temp dir and *test-dir* for working directory.
   Returns {:exit exit-code :out output-string :err error-string}"
   [& args]
-  (let [result (apply sh/sh *uberscript-path* (concat args [:dir *test-dir*]))]
+  (let [clean-env (dissoc (into {} (System/getenv)) "USE_MALLI")
+        result (apply sh/sh *uberscript-path* (concat args [:dir *test-dir* :env clean-env]))]
     {:exit (:exit result)
      :out (:out result)
      :err (:err result)}))
