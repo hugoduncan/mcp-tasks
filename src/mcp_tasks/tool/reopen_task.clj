@@ -30,8 +30,7 @@
     (let [reopened-task (tasks/get-task task-id)]
       (tasks-file/delete-task complete-file task-id)
       (tasks-file/append-task tasks-file reopened-task)
-      (swap! tasks/task-ids conj task-id)
-      (swap! tasks/complete-task-ids #(filterv (fn [id] (not= id task-id)) %))
+      (tasks/move-task-to-active task-id)
       {:use-git? (:use-git? config)
        :base-dir (:base-dir config)
        :commit-msg (str "Reopen task #" task-id ": " (:title task))

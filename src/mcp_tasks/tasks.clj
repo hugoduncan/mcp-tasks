@@ -58,6 +58,24 @@
         max-id (max active-max complete-max)]
     (vreset! next-id (inc max-id))))
 
+;; Atom Manipulation Helpers
+
+(defn move-task-to-active
+  "Move a task from complete-task-ids to task-ids.
+
+  Assumes task exists. No validation performed."
+  [task-id]
+  (swap! task-ids conj task-id)
+  (swap! complete-task-ids #(filterv (fn [id] (not= id task-id)) %)))
+
+(defn move-task-to-complete
+  "Move a task from task-ids to complete-task-ids.
+
+  Assumes task exists. No validation performed."
+  [task-id]
+  (swap! complete-task-ids conj task-id)
+  (swap! task-ids #(filterv (fn [id] (not= id task-id)) %)))
+
 (defn- build-parent-child-maps
   "Build parent-children and child-parent maps from task collection.
 
