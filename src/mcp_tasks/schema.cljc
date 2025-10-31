@@ -54,12 +54,12 @@
 ;; The USE_MALLI environment variable provides more flexibility than platform-only
 ;; reader conditionals:
 ;;
-;; - BB tests can run with full malli validation (by setting USE_MALLI=true)
-;; - The uberscript and default BB usage disable malli (when USE_MALLI is not set)
-;; - JVM mode always uses full validation regardless of USE_MALLI
+;; - BB tests run with full Malli validation (USE_MALLI=true set in bb.edn test task)
+;; - Standalone uberscript has no Malli dependencies (USE_MALLI not set, no-op validators)
+;; - JVM mode always uses full validation (Malli always available on classpath)
 ;;
 ;; This opt-in approach allows testing the BB implementation with validation enabled
-;; while keeping the production uberscript lean and free of malli dependencies.
+;; while keeping the standalone uberscript lean and dependency-free.
 
 (def relation-validator
   "Compiled validator for Relation schema."
