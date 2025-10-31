@@ -117,7 +117,43 @@ Directory: /Users/duncan/projects/mcp-tasks-fix-bug
 Branch: fix-bug
 ```
 
-### 5. Execute the Task
+### 5. Discovering Issues Beyond Current Scope
+
+While executing this task, you may notice issues, bugs, or improvements that are **beyond the current task scope**. When you encounter such issues:
+
+1. **Create a task immediately** using the `add-task` tool:
+   - Choose appropriate category (simple, medium, large, clarify-task)
+   - Write clear title and description
+   - Set appropriate type (:bug, :chore, :task, :feature)
+
+2. **Link the discovery** using the `update-task` tool after creation:
+   - Add a relation with `:as-type :discovered-during` pointing to the current task
+   - Example: If current task ID is 123 and new task ID is 456:
+     ```
+     mcp__mcp-tasks__update-task
+       task-id: 456
+       relations: [{:id 1, :relates-to 123, :as-type :discovered-during}]
+     ```
+   - This creates an audit trail
+   - Note: Current task ID is available from the task context in step 4
+
+3. **Continue with your current task** - don't get sidetracked
+
+4. **Before marking the task complete**: Do a final check to ensure all discovered issues have been captured as tasks
+
+**Examples of issues to capture:**
+- Unrelated bugs in nearby code
+- Technical debt in files you reviewed
+- Missing test coverage in unrelated areas
+- Documentation gaps discovered
+- Code quality issues outside current scope
+
+**Don't create tasks for:**
+- Issues within current task scope (handle directly)
+- Direct blockers (use `:blocked-by` instead)
+- Minor fixes in code you're modifying (fix now)
+
+### 6. Execute the Task
 
 Follow the category-specific instructions retrieved in step 3 to execute
 the task:
@@ -135,7 +171,7 @@ the task:
    with specific steps (e.g., analysis, design, planning,
    implementation). Execute each step in order.
 
-### 6. Mark Task Complete
+### 7. Mark Task Complete
 
 After successfully completing all execution steps:
 - Use the `complete-task` tool to mark the task as complete
