@@ -108,7 +108,7 @@
 
    Behavior:
    - Tasks in tasks.ednl (closed but not archived): Status changed to :open
-   - Tasks in complete.ednl (archived): Moved back to tasks.ednl with :status :open"))
+   - Tasks in complete.ednl (archived): Moved back to tasks.ednl (appended at end) with :status :open"))
 
 (defn reopen-task-tool
   "Tool to reopen a closed task."
