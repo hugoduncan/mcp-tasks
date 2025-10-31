@@ -724,16 +724,17 @@ EXAMPLES:
 (defn parse-reopen
   "Parse arguments for the reopen command.
 
-  Validates that at least one of task-id or title is provided.
+  Validates that at least one of task-id or title-pattern is provided.
   Returns parsed options map or error map with :error key."
   [args]
   (try
     (let [raw-parsed (cli/parse-opts args {:spec reopen-spec :restrict (get-allowed-keys reopen-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
-                     (dissoc :id)
-                     (cond-> task-id (assoc :task-id task-id)))
-          at-least-one-validation (validate-at-least-one parsed [:task-id :title] ["--task-id" "--title"])]
+                     (dissoc :id :title)
+                     (cond-> task-id (assoc :task-id task-id))
+                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
+          at-least-one-validation (validate-at-least-one parsed [:task-id :title-pattern] ["--task-id" "--title-pattern"])]
       (if-not (:valid? at-least-one-validation)
         (dissoc at-least-one-validation :valid?)
         (let [format-validation (validate-format parsed)]
