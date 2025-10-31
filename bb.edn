@@ -33,16 +33,19 @@
   delete {:doc  "Delete a task"
           :task (apply cli/-main (cons "delete" *command-line-args*))}
 
-  test {:doc  "Run tests with Malli validation enabled"
-        :task (shell {:extra-env {"USE_MALLI" "true"}}
-                     (str "clojure -M:dev:test " (clojure.string/join " " *command-line-args*)))}
+  test {:doc  "Cannot run tests with babashka"
+        :task (do
+                (binding [*out* *err*]
+                  (println "Can not run tests with babashka"))
+                (System/exit 1))}
 
   build-uberscript
   {:doc  "Build standalone babashka executable (output: mcp-tasks)"
    :task (do
            (println "Building mcp-tasks uberscript...")
            (shell "rm -f mcp-tasks-temp")
-           (shell "bb uberscript mcp-tasks-temp script/uberscript-main.clj")
+           (shell {:env {"USE_MALLI" nil "PATH" (System/getenv "PATH")}}
+                  "bb uberscript mcp-tasks-temp script/uberscript-main.clj")
            (println "Adding shebang and making executable...")
            (spit "mcp-tasks" (str "#!/usr/bin/env bb\n" (slurp "mcp-tasks-temp")))
            (shell "rm mcp-tasks-temp")

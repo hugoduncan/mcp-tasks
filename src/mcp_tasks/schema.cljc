@@ -1,6 +1,6 @@
 (ns mcp-tasks.schema
   "Malli schemas for task management system.
-  
+
   Uses lazy-loading via requiring-resolve and compiled validators with delays
   to avoid loading Malli at namespace load time.")
 
@@ -33,7 +33,7 @@
 
 (def blocking-statuses
   "Set of task statuses that prevent completion or deletion of parent tasks.
-  
+
   Tasks with these statuses are considered 'blocking' because they represent
   incomplete or problematic work. Tasks with :status :closed or :status :deleted
   are considered non-blocking as they represent completed or removed work."
