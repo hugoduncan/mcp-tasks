@@ -94,6 +94,9 @@ clojure -M:cli list --format human
 
 # Execute tasks in your MCP client or complete them via CLI
 clojure -M:cli complete --task-id 1
+
+# Reopen a task if needed
+clojure -M:cli reopen --task-id 1
 ```
 
 **[Installation Guide](doc/install.md)** • **[Workflow Documentation](doc/workflow.md)**
@@ -135,6 +138,7 @@ bb list --category simple
 bb add --category simple --title "New task"
 bb show --task-id 42
 bb complete --task-id 42
+bb reopen --task-id 42
 bb update --task-id 42 --status in-progress
 bb delete --task-id 42
 
@@ -151,6 +155,7 @@ bb cli add --category feature --title "Add endpoint"
 | Add task | `clojure -M:cli add --category simple --title "..."` | `bb add --category simple --title "..."` |
 | Show task | `clojure -M:cli show --task-id 42` | `bb show --task-id 42` |
 | Complete task | `clojure -M:cli complete --task-id 42` | `bb complete --task-id 42` |
+| Reopen task | `clojure -M:cli reopen --task-id 42` | `bb reopen --task-id 42` |
 | Update task | `clojure -M:cli update --task-id 42 --status in-progress` | `bb update --task-id 42 --status in-progress` |
 
 **When to Use Babashka vs JVM:**
@@ -174,6 +179,7 @@ bb build-uberscript
 # Use it directly
 ./mcp-tasks list --category simple
 ./mcp-tasks add --title "New task" --category simple
+./mcp-tasks reopen --task-id 42
 
 # Install system-wide (optional)
 sudo cp mcp-tasks /usr/local/bin/
@@ -323,7 +329,7 @@ The CLI provides direct access to task management from the terminal, complementi
 
 For complete CLI documentation including commands, output formats, workflows, and configuration options, see **[doc/command-line.md](doc/command-line.md)**.
 
-**Available Commands:** `list`, `show`, `add`, `update`, `complete`, `delete`
+**Available Commands:** `list`, `show`, `add`, `update`, `complete`, `reopen`, `delete`
 
 ## Configuration
 

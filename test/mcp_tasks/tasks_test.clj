@@ -517,6 +517,33 @@
       (is (thrown-with-msg? Exception #"Task not found"
             (tasks/mark-complete 999 nil))))))
 
+(deftest mark-open-test
+  ;; Test mark-open function behavior
+  ;; Contracts: Changes closed task status to open, preserves other fields
+  (testing "mark-open"
+    (testing "marks closed task as open"
+      (reset-state!)
+      (tasks/add-task (dissoc test-task-1 :id))
+      (tasks/mark-complete 1 nil)
+      (is (= :closed (:status (tasks/get-task 1))))
+      (tasks/mark-open 1)
+      (is (= :open (:status (tasks/get-task 1)))))
+
+    (testing "preserves all other task fields"
+      (reset-state!)
+      (tasks/add-task (dissoc test-task-1 :id))
+      (tasks/mark-complete 1 nil)
+      (let [closed-task (tasks/get-task 1)
+            original-fields (dissoc closed-task :status)]
+        (tasks/mark-open 1)
+        (let [reopened-task (tasks/get-task 1)]
+          (is (= original-fields (dissoc reopened-task :status))))))
+
+    (testing "throws on non-existent task"
+      (reset-state!)
+      (is (thrown-with-msg? Exception #"Task not found"
+            (tasks/mark-open 999))))))
+
 (deftest delete-task-test
   (testing "delete-task"
     (testing "removes task from all state atoms"

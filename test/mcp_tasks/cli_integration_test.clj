@@ -719,3 +719,225 @@
               "Should show 2 total matching tasks")
           (is (nil? (-> parsed :metadata :completed-task-count))
               "completed-task-count should not be present when status is explicit"))))))
+
+(deftest reopen-workflow-edn-format-test
+  ;; Test reopening tasks with EDN format
+  (testing "reopen-workflow-edn-format"
+    (testing "can add and complete a task"
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "Task to reopen"
+        "--description" "Test reopen")
+      (let [result (call-cli
+                     "--format" "edn"
+                     "complete"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))))
+
+    (testing "task is in complete file after completion"
+      (let [tasks (read-tasks-file)
+            completed (read-complete-file)]
+        (is (empty? tasks))
+        (is (= 1 (count completed)))
+        (is (= :closed (:status (first completed))))))
+
+    (testing "can reopen the archived task by task-id"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= "open" (:status (:task parsed))))
+          (is (= "Task to reopen" (:title (:task parsed)))))))
+
+    (testing "task moved back to tasks file with open status"
+      (let [tasks (read-tasks-file)
+            completed (read-complete-file)]
+        (is (= 1 (count tasks)))
+        (is (empty? completed))
+        (is (= :open (:status (first tasks))))
+        (is (= "Task to reopen" (:title (first tasks))))))
+
+    (testing "can close and reopen again"
+      (call-cli "complete" "--task-id" "1")
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))))))
+
+(deftest reopen-by-title-workflow-test
+  ;; Test reopening using exact title match
+  (testing "reopen-by-title-workflow"
+    (testing "add and complete task"
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "Unique reopen title")
+      (call-cli "complete" "--task-id" "1"))
+
+    (testing "can reopen by exact title"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--title" "Unique reopen title")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= "open" (:status (:task parsed))))
+          (is (= "Unique reopen title" (:title (:task parsed)))))))
+
+    (testing "task is back in tasks file"
+      (let [tasks (read-tasks-file)]
+        (is (= 1 (count tasks)))
+        (is (= :open (:status (first tasks))))))))
+
+(deftest reopen-formats-test
+  ;; Test reopen with different output formats
+  (testing "reopen-formats"
+    (testing "JSON format"
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "JSON reopen test")
+      (call-cli "complete" "--task-id" "1")
+      (let [result (call-cli
+                     "--format" "json"
+                     "reopen"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/parse-string (:out result) keyword)]
+          (is (= "open" (:status (:task parsed))))
+          (is (= "JSON reopen test" (:title (:task parsed)))))))
+
+    (testing "human format"
+      (call-cli "complete" "--task-id" "1")
+      (let [result (call-cli
+                     "--format" "human"
+                     "reopen"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Task #1"))
+        (is (str/includes? (:out result) "JSON reopen test"))
+        (is (str/includes? (:out result) "Status: open"))))))
+
+(deftest reopen-error-scenarios-test
+  ;; Test error handling for reopen command
+  (testing "reopen-error-scenarios"
+    (testing "task not found returns error"
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "Error test task")
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (or (str/includes? (:err result) "Task not found")
+                (str/includes? (:err result) "not found")))))
+
+    (testing "already open task returns error"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--task-id" "1")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (or (str/includes? (:err result) "already open")
+                (str/includes? (:err result) "Task is already open")))))
+
+    (testing "missing required arguments returns error"
+      (let [result (call-cli
+                     "reopen")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (or (str/includes? (:err result) "task-id")
+                (str/includes? (:err result) "title")))))))
+
+(deftest reopen-git-workflow-test
+  ;; Test reopen with git integration
+  (testing "reopen-git-workflow"
+    (testing "setup git repository"
+      (h/init-git-repo *test-dir*)
+      (spit (io/file *test-dir* ".mcp-tasks.edn") "{:use-git? true}")
+      (is (.exists (io/file *test-dir* ".mcp-tasks/.git"))))
+
+    (testing "add and complete task"
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "Git reopen task")
+      (call-cli "complete" "--task-id" "1"))
+
+    (testing "reopen creates git commit"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (contains? parsed :git-commit))
+          (is (string? (:git-commit parsed)))
+          (is (not (str/blank? (:git-commit parsed)))))))))
+
+(deftest reopen-preserves-metadata-test
+  ;; Test that reopening preserves task fields
+  (testing "reopen-preserves-metadata"
+    (testing "add task with description and parent"
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "Parent task"
+        "--type" "story")
+      (let [result (call-cli
+                     "--format" "edn"
+                     "add"
+                     "--category" "simple"
+                     "--title" "Child task"
+                     "--description" "Test description"
+                     "--parent-id" "1")]
+        (is (= 0 (:exit result)))))
+
+    (testing "complete task"
+      (call-cli "complete" "--task-id" "2"))
+
+    (testing "reopen preserves description and parent-id"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "reopen"
+                     "--task-id" "2")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))
+              task (:task parsed)]
+          (is (= "open" (:status task)))
+          (is (= "Child task" (:title task)))
+          (is (str/includes? (:description task) "Test description"))
+          (is (= 1 (:parent-id task))))))))
+
+(deftest reopen-appends-to-tasks-test
+  ;; Test that reopened tasks are appended to the end of tasks.ednl
+  (testing "reopen-appends-to-tasks"
+    (testing "add multiple tasks"
+      (call-cli "add" "--category" "simple" "--title" "Task 1")
+      (call-cli "add" "--category" "simple" "--title" "Task 2")
+      (call-cli "add" "--category" "simple" "--title" "Task 3"))
+
+    (testing "complete middle task"
+      (call-cli "complete" "--task-id" "2"))
+
+    (testing "verify task order before reopen"
+      (let [tasks (read-tasks-file)
+            titles (mapv :title tasks)]
+        (is (= ["Task 1" "Task 3"] titles))))
+
+    (testing "reopen the completed task"
+      (call-cli "reopen" "--task-id" "2"))
+
+    (testing "reopened task is appended to end"
+      (let [tasks (read-tasks-file)
+            titles (mapv :title tasks)]
+        (is (= ["Task 1" "Task 3" "Task 2"] titles)
+            "Task 2 should be appended to the end after reopening")))))

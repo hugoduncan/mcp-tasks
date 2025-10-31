@@ -18,7 +18,8 @@
       (is (re-find #"add" parse/help-text))
       (is (re-find #"complete" parse/help-text))
       (is (re-find #"update" parse/help-text))
-      (is (re-find #"delete" parse/help-text)))
+      (is (re-find #"delete" parse/help-text))
+      (is (re-find #"reopen" parse/help-text)))
 
     (testing "contains examples"
       (is (re-find #"EXAMPLES:" parse/help-text)))))
@@ -52,4 +53,9 @@
   (testing "delete-help"
     (is (string? parse/delete-help))
     (is (re-find #"Delete a task" parse/delete-help))
-    (is (re-find #"--title-pattern" parse/delete-help))))
+    (is (re-find #"--title-pattern" parse/delete-help)))
+
+  (testing "reopen-help"
+    (is (string? parse/reopen-help))
+    (is (re-find #"Reopen a closed task" parse/reopen-help))
+    (is (re-find #"--task-id" parse/reopen-help))))

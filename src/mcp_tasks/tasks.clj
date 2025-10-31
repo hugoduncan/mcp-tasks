@@ -58,6 +58,24 @@
         max-id (max active-max complete-max)]
     (vreset! next-id (inc max-id))))
 
+;; Atom Manipulation Helpers
+
+(defn move-task-to-active
+  "Move a task from complete-task-ids to task-ids.
+
+  Assumes task exists. No validation performed."
+  [task-id]
+  (swap! task-ids conj task-id)
+  (swap! complete-task-ids #(filterv (fn [id] (not= id task-id)) %)))
+
+(defn move-task-to-complete
+  "Move a task from task-ids to complete-task-ids.
+
+  Assumes task exists. No validation performed."
+  [task-id]
+  (swap! complete-task-ids conj task-id)
+  (swap! task-ids #(filterv (fn [id] (not= id task-id)) %)))
+
 (defn- build-parent-child-maps
   "Build parent-children and child-parent maps from task collection.
 
@@ -194,11 +212,12 @@
 (defn find-by-title
   "Find all tasks with exact title match.
 
+  Searches both active and completed tasks.
   Returns vector of matching tasks (may be empty or contain multiple tasks)."
   [title]
-  (let [ids @task-ids
+  (let [all-ids (concat @task-ids @complete-task-ids)
         task-map @tasks]
-    (->> ids
+    (->> all-ids
          (map #(get task-map %))
          (filter #(= (:title %) title))
          vec)))
@@ -300,6 +319,16 @@
                           description)]
     (update-task id {:status :closed
                      :description new-description})))
+
+(defn mark-open
+  "Mark a task as open by changing status to :open.
+
+  This is the inverse of mark-complete.
+  Throws ex-info if task not found."
+  [id]
+  (when-not (get-task id)
+    (throw (ex-info "Task not found" {:id id})))
+  (update-task id {:status :open}))
 
 (defn delete-task
   "Remove task from in-memory state.

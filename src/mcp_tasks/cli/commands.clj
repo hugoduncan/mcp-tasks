@@ -34,14 +34,15 @@
 
 (def ^:private tool-map
   "Map of command names to their tool function symbols.
-  
+
   Uses symbols instead of direct references to enable lazy loading via requiring-resolve."
   {:list 'mcp-tasks.tool.select-tasks/select-tasks-tool
    :show 'mcp-tasks.tool.select-tasks/select-tasks-tool
    :add 'mcp-tasks.tool.add-task/add-task-tool
    :complete 'mcp-tasks.tool.complete-task/complete-task-tool
    :update 'mcp-tasks.tool.update-task/update-task-tool
-   :delete 'mcp-tasks.tool.delete-task/delete-task-tool})
+   :delete 'mcp-tasks.tool.delete-task/delete-task-tool
+   :reopen 'mcp-tasks.tool.reopen-task/reopen-task-tool})
 
 (defn- execute-command
   "Execute a command by calling its corresponding tool implementation.
@@ -113,7 +114,14 @@
 
 (defn delete-command
   "Execute the delete command.
-  
+
   Calls tools/delete-task-tool and returns the parsed response data."
   [config parsed-args]
   (execute-command config :delete parsed-args))
+
+(defn reopen-command
+  "Execute the reopen command.
+
+  Calls tools/reopen-task-tool and returns the parsed response data."
+  [config parsed-args]
+  (execute-command config :reopen parsed-args))
