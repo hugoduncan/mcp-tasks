@@ -301,6 +301,16 @@
     (update-task id {:status :closed
                      :description new-description})))
 
+(defn mark-open
+  "Mark a task as open by changing status to :open.
+
+  This is the inverse of mark-complete.
+  Throws ex-info if task not found."
+  [id]
+  (when-not (get-task id)
+    (throw (ex-info "Task not found" {:id id})))
+  (update-task id {:status :open}))
+
 (defn delete-task
   "Remove task from in-memory state.
 
