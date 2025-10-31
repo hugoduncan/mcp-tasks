@@ -50,4 +50,19 @@
            (spit "mcp-tasks" (str "#!/usr/bin/env bb\n" (slurp "mcp-tasks-temp")))
            (shell "rm mcp-tasks-temp")
            (shell "chmod +x mcp-tasks")
-           (println "✓ Created executable: ./mcp-tasks"))}}}
+           (println "✓ Created executable: ./mcp-tasks"))}
+
+  copy-uberscript-to-plugin
+  {:doc  "Copy built uberscript to CLI plugin directory"
+   :task (let [source "mcp-tasks"
+               target "plugins/mcp-tasks-cli/bin/mcp-tasks"]
+           (if (.exists (clojure.java.io/file source))
+             (do
+               (println "Copying mcp-tasks uberscript to plugin...")
+               (shell "mkdir -p plugins/mcp-tasks-cli/bin")
+               (shell (str "cp " source " " target))
+               (println (str "✓ Copied to " target)))
+             (do
+               (println (str "Error: Source binary not found: " source))
+               (println "Run 'bb build-uberscript' first to create the binary")
+               (System/exit 1))))}}}
