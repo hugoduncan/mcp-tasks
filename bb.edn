@@ -54,8 +54,15 @@
 
   copy-uberscript-to-plugin
   {:doc  "Copy built uberscript to CLI plugin directory"
-   :task (do
-           (println "Copying mcp-tasks uberscript to plugin...")
-           (shell "mkdir -p plugins/mcp-tasks-cli/bin")
-           (shell "cp mcp-tasks plugins/mcp-tasks-cli/bin/")
-           (println "✓ Copied to plugins/mcp-tasks-cli/bin/mcp-tasks"))}}}
+   :task (let [source "mcp-tasks"
+               target "plugins/mcp-tasks-cli/bin/mcp-tasks"]
+           (if (.exists (clojure.java.io/file source))
+             (do
+               (println "Copying mcp-tasks uberscript to plugin...")
+               (shell "mkdir -p plugins/mcp-tasks-cli/bin")
+               (shell (str "cp " source " " target))
+               (println (str "✓ Copied to " target)))
+             (do
+               (println (str "Error: Source binary not found: " source))
+               (println "Run 'bb build-uberscript' first to create the binary")
+               (System/exit 1))))}}}

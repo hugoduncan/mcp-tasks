@@ -49,9 +49,11 @@ The CLI is a Babashka uberscript that bundles all dependencies. No other install
 
 After installation, the `mcp-tasks` binary is available in the plugin's `bin/` directory.
 
-### Adding to PATH
+### Adding to PATH (Optional for Outside Claude Usage)
 
-For convenient command-line access, add the binary to your PATH or create a symlink:
+**Note:** This step is only needed if you want to use the CLI tool outside of Claude Code (e.g., in terminal scripts or automation). Within Claude Code, the tool is automatically available.
+
+For command-line access outside Claude Code, add the binary to your PATH or create a symlink:
 
 ```bash
 # Option 1: Symlink to a directory in your PATH
