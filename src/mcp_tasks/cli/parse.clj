@@ -188,14 +188,14 @@ EXAMPLES:
   "Reopen a closed task
 
 USAGE:
-  clojure -M:cli reopen (--task-id <id> | --title <pattern>) [options]
+  clojure -M:cli reopen (--task-id <id> | --title-pattern <pattern>) [options]
 
 OPTIONS:
   --task-id, --id <id>          Task ID to reopen
-  --title, -t <title>           Exact task title (alternative to task-id)
+  --title-pattern, --title <pattern>  Title pattern to match (alternative to task-id)
   --format <format>             Output format: edn, json, human (default: edn)
 
-NOTE: At least one of --task-id or --title must be provided.
+NOTE: At least one of --task-id or --title-pattern must be provided.
 
 EXAMPLES:
   clojure -M:cli reopen --task-id 42
