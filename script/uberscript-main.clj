@@ -5,4 +5,5 @@
 (require 'mcp-tasks.tool.update-task)
 (require 'mcp-tasks.tool.delete-task)
 (require 'mcp-tasks.cli)
+
 (apply mcp-tasks.cli/-main *command-line-args*)

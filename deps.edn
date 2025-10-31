@@ -13,7 +13,8 @@
 
  :aliases
  {:cli {:main-opts ["-m" "mcp-tasks.cli"]}
-  :dev {:override-deps
+  :dev {:extra-paths ["test"]
+        :override-deps
         {org.hugpduncan/mcp-clj-server
          {:git/url "https://github.com/hugoduncan/mcp-clj"
           :git/sha "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"

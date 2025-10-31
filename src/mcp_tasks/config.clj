@@ -296,7 +296,7 @@
         canonical-path)
       ;; Malformed .git file - provide helpful error message
       (throw (ex-info
-               (str "Malformed .git file in worktree. Expected format: 'gitdir: /path/to/.git/worktrees/name'")
+               "Malformed .git file in worktree. Expected format: 'gitdir: /path/to/.git/worktrees/name'"
                {:worktree-dir worktree-dir
                 :git-file (str git-file)
                 :content content})))))
