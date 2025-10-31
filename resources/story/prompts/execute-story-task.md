@@ -75,6 +75,13 @@ Worktree: mcp-tasks-fix-bug
 Directory: /Users/duncan/projects/mcp-tasks-fix-bug
 Branch: fix-bug
    ```
+   - While executing the task, watch for issues beyond the current task scope:
+     - Create new tasks immediately using `add-task` tool
+     - Link them with `:discovered-during` relation using `update-task`
+     - Example relation: `{:id 1, :relates-to <current-task-id>, :as-type :discovered-during}`
+     - Continue with the current task without getting sidetracked
+     - Do a final check before completion to capture all discoveries
+     - See "Discovering Issues Beyond Current Scope" guidance in execute-task prompt for details
    - Then execute the task using the category workflow:
      - Do NOT check the refinement status of the task
      - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
