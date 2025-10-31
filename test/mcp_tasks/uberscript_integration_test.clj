@@ -34,14 +34,19 @@
 (def ^:private uberscript-built? (atom false))
 
 (defmacro with-uberscript-build
-  "Ensures uberscript is built once before running tests.
-  Skips test body if bb is not available."
+  "Ensures uberscript is built once before running tests WITHOUT Malli dependencies.
+  Skips test body if bb is not available.
+
+  The uberscript is intentionally built without USE_MALLI=true to validate
+  standalone operation without Malli on the classpath."
   [& body]
   `(if (bb-available?)
      (do
        (when-not @uberscript-built?
-         (println "Building uberscript for integration tests...")
-         (let [result# (sh/sh "bb" "build-uberscript")]
+         (println "Building uberscript for integration tests (without Malli)...")
+         ;; Explicitly clear USE_MALLI env var to build without Malli dependencies
+         (let [clean-env# (dissoc (into {} (System/getenv)) "USE_MALLI")
+               result# (sh/sh "bb" "build-uberscript" :env clean-env#)]
            (when-not (zero? (:exit result#))
              (throw (ex-info "Failed to build uberscript"
                              {:exit (:exit result#)
@@ -71,7 +76,27 @@
 
 (defmacro with-uberscript-test
   "Sets up isolated test environment with temp directory and uberscript copy.
-  Binds *test-dir* and *uberscript-path* for use in test body."
+
+  **Lifecycle:**
+  1. Creates temporary directory with .mcp-tasks structure and category prompts
+  2. Copies uberscript to temp dir and makes it executable
+  3. Binds dynamic vars for use in test body
+  4. Executes test body
+  5. Automatically cleans up temp directory (even on exception)
+
+  **Isolation:**
+  Tests run in a temp directory OUTSIDE the project to validate standalone
+  execution. This prevents dependency leakage - the uberscript must work
+  without access to project dependencies like Malli. Running from the project
+  directory would mask bugs where dependencies leak into the uberscript.
+
+  **Bindings:**
+  - *test-dir*: Absolute path to isolated temp directory
+  - *uberscript-path*: Absolute path to copied uberscript executable
+
+  **Cleanup:**
+  The temp directory and all contents are automatically deleted via finally
+  block, ensuring cleanup even when tests fail."
   [& body]
   `(let [test-dir# (str (fs/create-temp-dir {:prefix "mcp-tasks-uberscript-"}))]
      (try
