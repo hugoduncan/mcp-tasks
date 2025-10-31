@@ -342,19 +342,19 @@
       (is (= {:task-id 42}
              (sut/parse-reopen ["--task-id" "42"]))))
 
-    (testing "accepts title-pattern"
-      (is (= {:title-pattern "my.*task"}
-             (sut/parse-reopen ["--title-pattern" "my.*task"]))))
+    (testing "accepts title"
+      (is (= {:title "my task"}
+             (sut/parse-reopen ["--title" "my task"]))))
 
-    (testing "accepts both task-id and title-pattern"
-      (is (= {:task-id 42 :title-pattern "task"}
-             (sut/parse-reopen ["--task-id" "42" "--title-pattern" "task"]))))
+    (testing "accepts both task-id and title"
+      (is (= {:task-id 42 :title "task"}
+             (sut/parse-reopen ["--task-id" "42" "--title" "task"]))))
 
     (testing "uses aliases"
-      (is (= {:task-id 99 :title-pattern "foo"}
-             (sut/parse-reopen ["--id" "99" "--title" "foo"]))))
+      (is (= {:task-id 99 :title "foo"}
+             (sut/parse-reopen ["--id" "99" "--t" "foo"]))))
 
-    (testing "requires at least one of task-id or title-pattern"
+    (testing "requires at least one of task-id or title"
       (let [result (sut/parse-reopen ["--format" "json"])]
         (is (contains? result :error))
-        (is (= "At least one of --task-id, --title-pattern must be provided" (:error result)))))))
+        (is (= "At least one of --task-id, --title must be provided" (:error result)))))))
