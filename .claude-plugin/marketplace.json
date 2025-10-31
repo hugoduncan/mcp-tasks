@@ -15,6 +15,15 @@
       "author": {
         "name": "Hugo Duncan"
       }
+    },
+    {
+      "name": "mcp-tasks-cli",
+      "source": "./plugins/mcp-tasks-cli",
+      "description": "Pre-built CLI tool for mcp-tasks task management",
+      "version": "1.0.0",
+      "author": {
+        "name": "Hugo Duncan"
+      }
     }
   ]
 }
