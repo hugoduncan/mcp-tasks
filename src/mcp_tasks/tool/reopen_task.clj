@@ -65,7 +65,7 @@
                                                           (if (:isError task-result)
                                                             task-result
                                                             (let [task task-result
-                                                                  in-complete? (contains? (set @tasks/complete-task-ids) (:id task))]
+                                                                  archived? (contains? (set @tasks/complete-task-ids) (:id task))]
                                                               (cond
                                                                 (not= (:status task) :closed)
                                                                 (helpers/build-tool-error-response
@@ -75,7 +75,7 @@
                                                                    :title (:title task)
                                                                    :status (:status task)
                                                                    :file tasks-file})
-                                                                in-complete?
+                                                                archived?
                                                                 (reopen-from-complete-ednl config context task)
                                                                 :else
                                                                 (reopen-from-tasks-ednl config context task)))))))))))]

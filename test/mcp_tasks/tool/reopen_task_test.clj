@@ -43,6 +43,34 @@
 ;; - Use h/read-ednl-test-file to verify results
 ;; - Mock git operations for unit tests
 
+;; Test helpers
+
+(defn make-test-task
+  "Create a test task map with defaults."
+  [& {:keys [id title status parent-id meta relations description design category type]
+      :or {id 1
+           title "test task"
+           status :open
+           parent-id nil
+           meta {}
+           relations []
+           description ""
+           design ""
+           category "test"
+           type :task}}]
+  {:id id
+   :parent-id parent-id
+   :title title
+   :description description
+   :design design
+   :category category
+   :type type
+   :status status
+   :meta meta
+   :relations relations})
+
+;; Tests
+
 (deftest reopens-closed-task-in-tasks-ednl
   (h/with-test-setup [test-dir]
     ;; Tests that reopening a closed task in tasks.ednl changes status to :open
@@ -52,26 +80,8 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "closed task"
-            :description "detail"
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {}
-            :relations []}
-           {:id 2
-            :parent-id nil
-            :title "open task"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :open
-            :meta {}
-            :relations []}])
+          [(make-test-task :id 1 :title "closed task" :description "detail" :status :closed)
+           (make-test-task :id 2 :title "open task" :status :open)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -93,30 +103,12 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 2
-            :parent-id nil
-            :title "open task"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :open
-            :meta {}
-            :relations []}])
+          [(make-test-task :id 2 :title "open task" :status :open)])
         ;; Create complete.ednl with archived task
         (h/write-ednl-test-file
           test-dir
           "complete.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "archived task"
-            :description "archived"
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {}
-            :relations []}])
+          [(make-test-task :id 1 :title "archived task" :description "archived" :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -140,8 +132,8 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1 :parent-id nil :title "first task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
-           {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}])
+          [(make-test-task :id 1 :title "first task" :status :open)
+           (make-test-task :id 2 :title "second task" :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -161,26 +153,8 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "first task"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :open
-            :meta {}
-            :relations []}
-           {:id 2
-            :parent-id nil
-            :title "second task"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {}
-            :relations []}])
+          [(make-test-task :id 1 :title "first task" :status :open)
+           (make-test-task :id 2 :title "second task" :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -200,8 +174,8 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1 :parent-id nil :title "duplicate" :description "first" :design "" :category "test" :type :task :status :closed :meta {} :relations []}
-           {:id 2 :parent-id nil :title "duplicate" :description "second" :design "" :category "test" :type :task :status :closed :meta {} :relations []}])
+          [(make-test-task :id 1 :title "duplicate" :description "first" :status :closed)
+           (make-test-task :id 2 :title "duplicate" :description "second" :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -219,8 +193,8 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1 :parent-id nil :title "first task" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}
-           {:id 2 :parent-id nil :title "second task" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}])
+          [(make-test-task :id 1 :title "first task" :status :closed)
+           (make-test-task :id 2 :title "second task" :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -238,7 +212,7 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1 :parent-id nil :title "existing" :description "" :design "" :category "test" :type :task :status :closed :meta {} :relations []}])
+          [(make-test-task :id 1 :title "existing" :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -256,7 +230,7 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1 :parent-id nil :title "open task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+          [(make-test-task :id 1 :title "open task" :status :open)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -274,16 +248,11 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "task with meta"
-            :description "detail"
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {"key1" "value1" "key2" "value2"}
-            :relations []}])
+          [(make-test-task :id 1
+                           :title "task with meta"
+                           :description "detail"
+                           :status :closed
+                           :meta {"key1" "value1" "key2" "value2"})])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -303,17 +272,11 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "task with relations"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {}
-            :relations [{:id 1 :relates-to 2 :as-type :blocked-by}
-                        {:id 2 :relates-to 3 :as-type :related}]}])
+          [(make-test-task :id 1
+                           :title "task with relations"
+                           :status :closed
+                           :relations [{:id 1 :relates-to 2 :as-type :blocked-by}
+                                       {:id 2 :relates-to 3 :as-type :related}])])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -335,26 +298,8 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "parent story"
-            :description ""
-            :design ""
-            :category "test"
-            :type :story
-            :status :open
-            :meta {}
-            :relations []}
-           {:id 2
-            :parent-id 1
-            :title "child task"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {}
-            :relations []}])
+          [(make-test-task :id 1 :title "parent story" :type :story :status :open)
+           (make-test-task :id 2 :title "child task" :parent-id 1 :status :closed)])
         (let [result (#'sut/reopen-task-impl
                       (h/test-config test-dir)
                       nil
@@ -375,16 +320,7 @@
         (h/write-ednl-test-file
           test-dir
           "tasks.ednl"
-          [{:id 1
-            :parent-id nil
-            :title "test task"
-            :description ""
-            :design ""
-            :category "test"
-            :type :task
-            :status :closed
-            :meta {}
-            :relations []}])
+          [(make-test-task :id 1 :title "test task" :status :closed)])
         ;; Initial commit
         (let [result (#'sut/reopen-task-impl
                       (h/git-test-config test-dir)
