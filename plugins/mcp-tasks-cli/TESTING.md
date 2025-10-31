@@ -10,8 +10,8 @@ This document provides testing procedures for the mcp-tasks-cli Claude Code plug
 
 **Required Files**:
 - ✓ `.claude-plugin/plugin.json` - Plugin manifest
-- ✓ `bin/mcp-tasks` - Pre-built Babashka uberscript (to be added)
-- ✓ `skills/cli-usage/SKILL.md` - CLI reference documentation (to be added)
+- ✓ `bin/mcp-tasks` - Pre-built Babashka uberscript
+- ✓ `skills/cli-usage/SKILL.md` - CLI reference documentation
 - ✓ `README.md` - Installation and usage instructions
 - ✓ `LICENSE` - EPL-2.0 license
 
