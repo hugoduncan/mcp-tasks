@@ -8,6 +8,6 @@
   },
   "homepage": "https://github.com/hugoduncan/mcp-tasks",
   "repository": "https://github.com/hugoduncan/mcp-tasks",
-  "license": "EPL-1.0",
+  "license": "EPL-2.0",
   "keywords": ["cli", "task-management", "babashka", "productivity", "scripting"]
 }
