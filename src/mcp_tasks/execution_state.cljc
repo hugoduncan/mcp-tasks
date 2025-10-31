@@ -36,7 +36,7 @@
   "Compiled explainer for ExecutionState schema."
   #?(:bb (if (System/getenv "USE_MALLI")
            (delay ((requiring-resolve 'malli.core/explainer) ExecutionState))
-           (delay (fn [_ _] "")))
+           (delay (fn [_] nil)))
      :clj (delay ((requiring-resolve 'malli.core/explainer) ExecutionState))))
 
 (defn valid-execution-state?

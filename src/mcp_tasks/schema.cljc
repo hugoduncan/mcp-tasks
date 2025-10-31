@@ -63,31 +63,31 @@
 
 (def relation-validator
   "Compiled validator for Relation schema."
-  #?(:clj (delay ((requiring-resolve 'malli.core/validator) Relation))
-     :bb (if (System/getenv "USE_MALLI")
+  #?(:bb (if (System/getenv "USE_MALLI")
            (delay ((requiring-resolve 'malli.core/validator) Relation))
-           (delay (fn [_] true)))))
+           (delay (fn [_] true)))
+     :clj (delay ((requiring-resolve 'malli.core/validator) Relation))))
 
 (def task-validator
   "Compiled validator for Task schema."
-  #?(:clj (delay ((requiring-resolve 'malli.core/validator) Task))
-     :bb (if (System/getenv "USE_MALLI")
+  #?(:bb (if (System/getenv "USE_MALLI")
            (delay ((requiring-resolve 'malli.core/validator) Task))
-           (delay (fn [_] true)))))
+           (delay (fn [_] true)))
+     :clj (delay ((requiring-resolve 'malli.core/validator) Task))))
 
 (def relation-explainer
   "Compiled explainer for Relation schema."
-  #?(:clj (delay ((requiring-resolve 'malli.core/explainer) Relation))
-     :bb (if (System/getenv "USE_MALLI")
+  #?(:bb (if (System/getenv "USE_MALLI")
            (delay ((requiring-resolve 'malli.core/explainer) Relation))
-           (delay (fn [_] nil)))))
+           (delay (fn [_] nil)))
+     :clj (delay ((requiring-resolve 'malli.core/explainer) Relation))))
 
 (def task-explainer
   "Compiled explainer for Task schema."
-  #?(:clj (delay ((requiring-resolve 'malli.core/explainer) Task))
-     :bb (if (System/getenv "USE_MALLI")
+  #?(:bb (if (System/getenv "USE_MALLI")
            (delay ((requiring-resolve 'malli.core/explainer) Task))
-           (delay (fn [_] nil)))))
+           (delay (fn [_] nil)))
+     :clj (delay ((requiring-resolve 'malli.core/explainer) Task))))
 
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
