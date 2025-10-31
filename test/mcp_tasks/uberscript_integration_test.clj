@@ -140,7 +140,7 @@
   ;; Test that the uberscript was built correctly and does not contain malli
   ;; Runs from temp dir to validate standalone execution
   (with-uberscript-build
-    (with-uberscript-test [test-dir uberscript-path]
+    (with-uberscript-test [_test-dir uberscript-path]
       (testing "uberscript-build"
         (testing "executable exists and is executable"
           (let [file (io/file uberscript-path)]
