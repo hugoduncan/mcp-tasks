@@ -83,3 +83,6 @@ jobs:
 
       - name: Smoke test - list tasks
         run: bb list --format json
+
+      - name: Run Babashka tests with Malli enabled
+        run: bb test
