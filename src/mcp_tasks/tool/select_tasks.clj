@@ -22,6 +22,16 @@
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.helpers :as helpers]))
 
+(defn- enrich-task-with-blocked-status
+  "Enrich a task with blocking status information.
+
+  Adds :is-blocked and :blocking-task-ids fields based on :blocked-by relations."
+  [task]
+  (let [blocking-info (tasks/is-task-blocked? (:id task))]
+    (assoc task
+           :is-blocked (:blocked? blocking-info)
+           :blocking-task-ids (:blocking-ids blocking-info))))
+
 (defn- select-tasks-impl
   "Implementation of select-tasks tool.
 
@@ -32,6 +42,7 @@
   - title-pattern: Pattern to match task titles (regex or substring)
   - type: Task type (keyword: :task, :bug, :feature, :story, :chore)
   - status: Task status (keyword: :open, :closed, :in-progress, :blocked)
+  - blocked: Filter by blocked status (true = only blocked, false = only unblocked, nil = all)
 
   Additional parameters:
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
@@ -52,7 +63,7 @@
     {:open-task-count 3, :completed-task-count 2, :returned-count 2, :limited? true}
   - Query parent with 1 open + 5 closed children, no limit:
     {:open-task-count 1, :completed-task-count 5, :returned-count 1, :limited? false}"
-  [config _context {:keys [task-id category parent-id title-pattern type status limit unique]}]
+  [config _context {:keys [task-id category parent-id title-pattern type status limit unique blocked]}]
   (try
     ;; Determine effective limit
     ;; If unique? is true, effective limit is always 1
@@ -118,8 +129,15 @@
                               :completed-task-count nil})
               non-closed-tasks (:tasks query-result)
               completed-count (:completed-task-count query-result)
-              total-matches (count non-closed-tasks)
-              limited-tasks (vec (take effective-limit non-closed-tasks))
+              ;; Enrich all tasks with blocked status
+              enriched-tasks (mapv enrich-task-with-blocked-status non-closed-tasks)
+              ;; Apply blocked filter if specified
+              filtered-tasks (cond
+                               (true? blocked) (filterv :is-blocked enriched-tasks)
+                               (false? blocked) (filterv (complement :is-blocked) enriched-tasks)
+                               :else enriched-tasks)
+              total-matches (count filtered-tasks)
+              limited-tasks (vec (take effective-limit filtered-tasks))
               result-count (count limited-tasks)]
 
           ;; Check unique? constraint
@@ -172,6 +190,7 @@
   - title-pattern: Pattern to match task titles (regex or substring)
   - type: Task type (task, bug, feature, story, chore)
   - status: Task status (open, closed, in-progress, blocked)
+  - blocked: Filter by blocked status (true = only blocked, false = only unblocked, nil = all)
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
   - unique: If true, enforce that 0 or 1 task matches (error if >1)
 
@@ -206,6 +225,9 @@
      {:type "string"
       :enum ["open" "closed" "in-progress" "blocked"]
       :description "Task status to filter by"}
+     "blocked"
+     {:type "boolean"
+      :description "Filter by blocked status (true = only blocked, false = only unblocked, nil = all)"}
      "limit"
      {:type "integer"
       :description "Maximum number of tasks to return (default: 5, must be > 0)"}
