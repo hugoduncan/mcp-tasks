@@ -478,6 +478,8 @@ mcp-tasks enables you to manage development tasks in markdown files and have AI 
 
 **vs. clojure-mcp:** This is a task management layer built on the [clojure-mcp](https://github.com/hugoduncan/mcp-clj) server library. clojure-mcp provides MCP infrastructure; mcp-tasks adds workflow automation on top.
 
+For a deeper understanding of how mcp-tasks helps you work more effectively with AI agents, see **[Introduction to mcp-tasks](doc/introduction.md)**.
+
 ## Core Usage
 
 ### 1. Create Task Files
