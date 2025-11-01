@@ -2,12 +2,12 @@
  {:tests [{:id :unit
            :test-paths ["test"]
            :ns-patterns [".*-test$"]
-           :skip-meta [:integ :pending]}
+           :skip-meta [:integ :native-binary :pending]}
           {:id :integration
            :test-paths ["test"]
            :ns-patterns [".*-test$"]
            :focus-meta [:integ]
-           :skip-meta [:pending]}]
+           :skip-meta [:native-binary :pending]}]
   :color? true
   :fail-fast? false
   :randomize? false}
