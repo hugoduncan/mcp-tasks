@@ -32,6 +32,28 @@
            :is-blocked (:blocked? blocking-info)
            :blocking-task-ids (:blocking-ids blocking-info))))
 
+(defn- enrich-tasks-with-blocked-status
+  "Batch version of enrich-task-with-blocked-status for optimized processing.
+
+  Enriches multiple tasks with blocking status in a single pass, which is more
+  efficient than calling enrich-task-with-blocked-status repeatedly because:
+  - Builds task lookup map once
+  - Caches circular dependency checks
+  - Reduces redundant blocking task lookups
+
+  Falls back to single-task enrichment for empty collections."
+  [tasks-coll]
+  (if (empty? tasks-coll)
+    tasks-coll
+    (let [task-ids (mapv :id tasks-coll)
+          blocking-info-map (tasks/is-tasks-blocked? task-ids)]
+      (mapv (fn [task]
+              (let [blocking-info (get blocking-info-map (:id task))]
+                (assoc task
+                       :is-blocked (:blocked? blocking-info)
+                       :blocking-task-ids (:blocking-ids blocking-info))))
+            tasks-coll))))
+
 (defn- select-tasks-impl
   "Implementation of select-tasks tool.
 
@@ -129,8 +151,8 @@
                               :completed-task-count nil})
               non-closed-tasks (:tasks query-result)
               completed-count (:completed-task-count query-result)
-              ;; Enrich all tasks with blocked status
-              enriched-tasks (mapv enrich-task-with-blocked-status non-closed-tasks)
+              ;; Enrich all tasks with blocked status (batch for performance)
+              enriched-tasks (enrich-tasks-with-blocked-status non-closed-tasks)
               ;; Apply blocked filter if specified
               filtered-tasks (cond
                                (true? blocked) (filterv :is-blocked enriched-tasks)

@@ -195,6 +195,72 @@
           cycle-result
           (assoc :circular-dependency (second cycle-result)))))))
 
+(defn is-tasks-blocked?
+  "Batch version of is-task-blocked? for optimized processing of multiple tasks.
+
+  Accepts a collection of task IDs and returns a map of task-id -> blocking-info.
+  This is more efficient than calling is-task-blocked? repeatedly because:
+  - Builds task lookup map once
+  - Caches blocking task status lookups
+  - Detects circular dependencies once per task
+
+  Returns map of task-id -> {:blocked? bool, :blocking-ids [...], :error ..., :circular-dependency ...}"
+  [task-ids]
+  (let [;; Build task map once for all lookups
+        task-map @tasks
+        ;; Build a cache for circular dependency checks (memoized during this batch)
+        cycle-cache (atom {})
+        ;; Helper to check circular deps with caching
+        check-cycle (fn check-cycle
+                      [tid visited]
+                      (if-let [cached (@cycle-cache tid)]
+                        cached
+                        (let [result (detect-circular-dependency tid visited)]
+                          (swap! cycle-cache assoc tid result)
+                          result)))]
+
+    ;; Process each task ID
+    (into {}
+          (map (fn [task-id]
+                 (let [task (get task-map task-id)]
+                   [task-id
+                    (if-not task
+                      {:blocked? false
+                       :blocking-ids []
+                       :error (str "Task " task-id " not found")}
+                      (let [blocking-relations (->> (:relations task [])
+                                                    (filter #(= :blocked-by (:as-type %))))
+                            blocking-ids (map :relates-to blocking-relations)
+                            ;; Check for circular dependencies (cached)
+                            cycle-result (check-cycle task-id #{})
+                            ;; Check each blocking task
+                            blocking-results (for [blocking-id blocking-ids]
+                                               (let [blocking-task (get task-map blocking-id)]
+                                                 (cond
+                                                   (nil? blocking-task)
+                                                   {:invalid-id blocking-id
+                                                    :error (str "Blocked by invalid task ID: " blocking-id)}
+
+                                                   (schema/blocking-statuses (:status blocking-task))
+                                                   {:blocking-id blocking-id
+                                                    :is-blocking true}
+
+                                                   :else
+                                                   {:blocking-id blocking-id
+                                                    :is-blocking false})))
+                            invalid-ids (keep :invalid-id blocking-results)
+                            blocking-task-ids (keep #(when (:is-blocking %) (:blocking-id %))
+                                                    blocking-results)
+                            is-blocked (or (seq blocking-task-ids) (seq invalid-ids))]
+                        (cond-> {:blocked? (boolean is-blocked)
+                                 :blocking-ids (vec blocking-task-ids)}
+                          (seq invalid-ids)
+                          (assoc :error (str/join ", " (map :error (filter :error blocking-results))))
+
+                          cycle-result
+                          (assoc :circular-dependency (second cycle-result)))))]))
+               task-ids))))
+
 (defn get-children
   "Get all child tasks for a parent ID.
 
