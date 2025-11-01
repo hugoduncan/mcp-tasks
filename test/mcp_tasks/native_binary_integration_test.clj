@@ -29,7 +29,8 @@
   (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-native-binary-"}))]
     (try
       (setup-test-dir test-dir)
-      ;; Find binary - check common locations
+      ;; Find binary - check legacy fallback name then platform-specific names
+      ;; mcp-tasks-cli is legacy, current builds use mcp-tasks-<platform>-<arch>
       (let [binary-locations [(io/file "target/mcp-tasks-cli")
                               (io/file "target/mcp-tasks-linux-amd64")
                               (io/file "target/mcp-tasks-macos-amd64")
