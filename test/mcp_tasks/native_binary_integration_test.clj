@@ -66,7 +66,7 @@
 ;; Smoke Tests
 ;; These tests are suitable for all platforms (Linux, macOS, Windows)
 
-(deftest ^:integ smoke-test-help
+(deftest ^:native-binary smoke-test-help
   ;; Verify binary runs and shows help
   (testing "smoke-test-help"
     (testing "binary shows help with --help"
@@ -78,7 +78,7 @@
         (is (str/includes? (:out result) "list")
             "Help should list available commands")))))
 
-(deftest ^:integ smoke-test-basic-workflow
+(deftest ^:native-binary smoke-test-basic-workflow
   ;; Test basic add → list → complete workflow
   (testing "smoke-test-basic-workflow"
     (testing "can add a task"
@@ -110,7 +110,7 @@
 ;; Comprehensive Tests
 ;; These tests are more extensive and intended primarily for Linux CI
 
-(deftest ^:integ ^:comprehensive comprehensive-cli-commands
+(deftest ^:native-binary ^:comprehensive comprehensive-cli-commands
   ;; Test all major CLI commands work correctly
   (testing "comprehensive-cli-commands"
 
@@ -157,7 +157,7 @@
                                 "--task-id" "1")]
         (is (= 0 (:exit result)))))))
 
-(deftest ^:integ ^:comprehensive comprehensive-formats
+(deftest ^:native-binary ^:comprehensive comprehensive-formats
   ;; Test all output formats work
   (testing "comprehensive-formats"
 
@@ -184,7 +184,7 @@
         (is (str/includes? (:out result) "ID"))
         (is (str/includes? (:out result) "Status"))))))
 
-(deftest ^:integ ^:comprehensive comprehensive-error-handling
+(deftest ^:native-binary ^:comprehensive comprehensive-error-handling
   ;; Test error handling works correctly
   (testing "comprehensive-error-handling"
 
@@ -205,7 +205,7 @@
         (is (or (str/includes? (:err result) "not found")
                 (str/includes? (:err result) "No task")))))))
 
-(deftest ^:integ ^:comprehensive comprehensive-malli-warnings
+(deftest ^:native-binary ^:comprehensive comprehensive-malli-warnings
   ;; Test that Malli warnings are present but don't affect functionality
   (testing "comprehensive-malli-warnings"
     (testing "binary works despite Malli warnings"
@@ -221,7 +221,7 @@
           (is (= 1 (-> parsed :task :id)))
           (is (= "Malli test" (-> parsed :task :title))))))))
 
-(deftest ^:integ ^:comprehensive comprehensive-startup-performance
+(deftest ^:native-binary ^:comprehensive comprehensive-startup-performance
   ;; Measure startup time to ensure it's reasonable
   (testing "comprehensive-startup-performance"
     (testing "help command executes quickly"

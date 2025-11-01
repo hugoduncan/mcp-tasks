@@ -28,7 +28,7 @@ jobs:
         run: clojure -M:dev:test --focus :unit
 
       - name: Run integration tests
-        run: clojure -M:dev:test --focus :integration
+        run: clojure -M:dev:test --focus :integration --skip-meta :native-binary
 
   build-matrix:
     name: Build ${{ matrix.os }}-${{ matrix.arch }}
@@ -131,8 +131,8 @@ jobs:
 
       - name: Run smoke tests
         if: matrix.test-focus == 'smoke'
-        run: clojure -M:dev:test --focus :integration --skip-meta :comprehensive mcp-tasks.native-binary-integration-test
+        run: clojure -M:dev:test --focus :native-binary --skip-meta :comprehensive
 
       - name: Run comprehensive tests
         if: matrix.test-focus == 'comprehensive'
-        run: clojure -M:dev:test --focus :integration mcp-tasks.native-binary-integration-test
+        run: clojure -M:dev:test --focus :native-binary

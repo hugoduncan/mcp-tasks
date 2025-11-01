@@ -48,7 +48,7 @@ jobs:
         run: clojure -M:dev:test --focus :unit
 
       - name: Run integration tests
-        run: clojure -M:dev:test --focus :integration
+        run: clojure -M:dev:test --focus :integration --skip-meta :native-binary
 
   babashka-test:
     runs-on: ubuntu-latest
