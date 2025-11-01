@@ -42,6 +42,12 @@ Different types of tasks require different approaches. A bug fix follows a diffe
 
 Quality assurance is built into the mcp-tasks workflow. After completing each task, the agent commits its changes and moves the task to a completed archive. This creates natural review points where you can examine what was done before proceeding. The completed task archive provides full context about what was implemented and why, making it easy to review changes or understand decisions later. This systematic approach to review prevents the quality drift that happens when changes accumulate unchecked.
 
+### Enables parallel sessions through built-in branch and worktree management
+
+Real-world development rarely proceeds in a straight line. You might need to pause work on a feature to fix an urgent bug, or you might want multiple agents working on different tasks simultaneously. mcp-tasks supports this through automatic branch and worktree management. When you start working on a task, the system can automatically create a dedicated branch and, optionally, an isolated worktree (a separate working directory). This isolation means you can have multiple tasks in progress at once without any interference—each task has its own workspace, its own branch, and its own working directory.
+
+This capability transforms how you can use AI agents. You can have one agent working on a feature in one worktree while another agent fixes a bug in a different worktree. You can switch between tasks without losing your place or risking merge conflicts. When a task is complete, the worktree is automatically cleaned up, keeping your workspace organized. The branch and worktree management is configurable, so you can enable it when you need isolation or disable it when you prefer a simpler workflow. See [doc/workflow.md](workflow.md) for details on worktree workflows.
+
 ## Making It Work Your Way
 
 ### Different prompts for different categories of tasks
