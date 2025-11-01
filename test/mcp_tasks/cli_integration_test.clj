@@ -941,3 +941,83 @@
             titles (mapv :title tasks)]
         (is (= ["Task 1" "Task 3" "Task 2"] titles)
             "Task 2 should be appended to the end after reopening")))))
+
+(deftest why-blocked-workflow-test
+  ;; Test why-blocked command with different scenarios and formats
+  (testing "why-blocked-workflow"
+    (testing "setup tasks with blocked-by relationships"
+      (call-cli "add" "--category" "simple" "--title" "Base task")
+      (call-cli "add" "--category" "simple" "--title" "Blocking task 1")
+      (call-cli "add" "--category" "simple" "--title" "Blocking task 2")
+      (call-cli "add" "--category" "simple" "--title" "Blocked task")
+      (let [result (call-cli
+                     "--format" "edn"
+                     "update"
+                     "--task-id" "4"
+                     "--relations" "[{\"id\":1,\"relates-to\":2,\"as-type\":\"blocked-by\"},{\"id\":2,\"relates-to\":3,\"as-type\":\"blocked-by\"}]")]
+        (is (= 0 (:exit result)))))
+
+    (testing "can query why-blocked with task-id in human format"
+      (let [result (call-cli
+                     "--format" "human"
+                     "why-blocked"
+                     "--task-id" "4")]
+        (is (= 0 (:exit result)))
+        ;; Human format for why-blocked shows detailed task info
+        (is (str/includes? (:out result) "4"))
+        (is (str/includes? (:out result) "Blocked task"))
+        (is (or (str/includes? (:out result) "Blocked by")
+                (str/includes? (:out result) "⊠")))))
+
+    (testing "can query why-blocked in edn format"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "why-blocked"
+                     "--task-id" "4")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (contains? parsed :why-blocked))
+          (is (= 4 (-> parsed :why-blocked :id)))
+          (is (= "Blocked task" (-> parsed :why-blocked :title)))
+          (is (contains? (:why-blocked parsed) :is-blocked))
+          (is (contains? (:why-blocked parsed) :blocking-task-ids)))))
+
+    (testing "can query why-blocked in json format"
+      (let [result (call-cli
+                     "--format" "json"
+                     "why-blocked"
+                     "--task-id" "4")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/parse-string (:out result) keyword)]
+          (is (contains? parsed :whyBlocked))
+          (is (= 4 (-> parsed :whyBlocked :id)))
+          (is (= "Blocked task" (-> parsed :whyBlocked :title))))))
+
+    (testing "can query unblocked task"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "why-blocked"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (contains? parsed :why-blocked))
+          (is (= 1 (-> parsed :why-blocked :id)))
+          (is (= "Base task" (-> parsed :why-blocked :title)))
+          (is (contains? (:why-blocked parsed) :is-blocked))
+          (is (contains? (:why-blocked parsed) :blocking-task-ids)))))
+
+    (testing "why-blocked with invalid task-id returns error"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "why-blocked"
+                     "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (or (str/includes? (:err result) "No task found")
+                (str/includes? (:err result) "not found")))))
+
+    (testing "why-blocked without task-id returns error"
+      (let [result (call-cli "why-blocked")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "task-id"))))))
