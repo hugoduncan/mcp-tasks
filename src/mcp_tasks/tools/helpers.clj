@@ -339,21 +339,21 @@
 
       (finally
         ;; Always release lock, close channel, and close RAF
-        (when-let [^java.nio.channels.FileLock l @lock]
+        (when-let [l @lock]
           (try
             (.release l)
             (catch Exception e
               (log/warn :lock-release-failed
                         {:error (.getMessage e)
                          :file tasks-file}))))
-        (when-let [^java.nio.channels.FileChannel ch @channel]
+        (when-let [ch @channel]
           (try
             (.close ch)
             (catch Exception e
               (log/warn :channel-close-failed
                         {:error (.getMessage e)
                          :file tasks-file}))))
-        (when-let [^java.io.RandomAccessFile r @raf]
+        (when-let [r @raf]
           (try
             (.close r)
             (catch Exception e
