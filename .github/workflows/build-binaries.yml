@@ -12,28 +12,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
         with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Install Clojure tools
-        uses: DeLaGuardo/setup-clojure@12.5
-        with:
-          cli: latest
-          cljstyle: 0.17.642
-          clj-kondo: latest
-
-      - name: Cache Clojure dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
-          key: clojure-deps-${{ hashFiles('deps.edn') }}
-          restore-keys: |
-            clojure-deps-
+          java-distribution: 'temurin'
+          install-linters: 'true'
 
       - name: Run cljstyle check
         run: cljstyle check
@@ -71,29 +54,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup GraalVM
-        uses: graalvm/setup-graalvm@v1
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
         with:
-          java-version: '21'
-          distribution: 'graalvm'
+          java-distribution: 'graalvm'
+          cache-key-suffix: '${{ matrix.os }}-${{ matrix.arch }}-'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: 'true'
-
-      - name: Install Clojure tools
-        uses: DeLaGuardo/setup-clojure@12.5
-        with:
-          cli: latest
-
-      - name: Cache Clojure dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
-          key: clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('deps.edn') }}
-          restore-keys: |
-            clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-
-            clojure-deps-
 
       - name: Build CLI JAR
         run: clojure -T:build jar-cli
@@ -147,27 +113,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
         with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Install Clojure tools
-        uses: DeLaGuardo/setup-clojure@12.5
-        with:
-          cli: latest
-
-      - name: Cache Clojure dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
-          key: clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('deps.edn') }}
-          restore-keys: |
-            clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-
-            clojure-deps-
+          java-distribution: 'temurin'
+          cache-key-suffix: '${{ matrix.os }}-${{ matrix.arch }}-'
 
       - name: Download binary artifact
         uses: actions/download-artifact@v4
