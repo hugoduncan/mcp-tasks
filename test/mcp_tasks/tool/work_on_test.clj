@@ -475,3 +475,81 @@
 
           ;; Cleanup
           (sh/sh "git" "-C" (str test-dir) "worktree" "remove" "--force" worktree-path))))))
+
+(deftest work-on-includes-blocked-status
+  ;; Test that work-on includes blocked status in response
+  (testing "work-on includes blocked status"
+    (testing "returns unblocked status for task without relations"
+      (h/with-test-setup [test-dir]
+        (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task A" :type "task"})
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
+              task-id (get-in add-response [:task :id])
+
+              result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+          (is (false? (:isError result)))
+          (is (= false (:is-blocked response)))
+          (is (= [] (:blocking-task-ids response))))))
+
+    (testing "returns unblocked status when blocked-by task is completed"
+      (h/with-test-setup [test-dir]
+        (let [;; Create task A
+              add-a (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task A" :type "task"})
+              resp-a (json/parse-string (get-in add-a [:content 1 :text]) keyword)
+              task-a-id (get-in resp-a [:task :id])
+
+              ;; Create task B
+              add-b (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task B" :type "task"})
+              resp-b (json/parse-string (get-in add-b [:content 1 :text]) keyword)
+              task-b-id (get-in resp-b [:task :id])
+
+              ;; Update task B to be blocked-by task A
+              update-task-ns (find-ns 'mcp-tasks.tool.update-task)
+              _ (require 'mcp-tasks.tool.update-task)
+              update-task-impl (ns-resolve update-task-ns 'update-task-impl)
+              _ (update-task-impl (h/test-config test-dir) nil
+                                  {:task-id task-b-id
+                                   :relations [{"id" 1 "relates-to" task-a-id "as-type" "blocked-by"}]})
+
+              ;; Complete task A
+              complete-task-ns (find-ns 'mcp-tasks.tool.complete-task)
+              _ (require 'mcp-tasks.tool.complete-task)
+              complete-task-impl (ns-resolve complete-task-ns 'complete-task-impl)
+              _ (complete-task-impl (h/test-config test-dir) nil {:task-id task-a-id})
+
+              ;; Work on task B
+              result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-b-id})
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+          (is (false? (:isError result)))
+          (is (= false (:is-blocked response)))
+          (is (= [] (:blocking-task-ids response))))))
+
+    (testing "returns blocked status when blocked-by task is incomplete"
+      (h/with-test-setup [test-dir]
+        (let [;; Create task A
+              add-a (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task A" :type "task"})
+              resp-a (json/parse-string (get-in add-a [:content 1 :text]) keyword)
+              task-a-id (get-in resp-a [:task :id])
+
+              ;; Create task B
+              add-b (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Task B" :type "task"})
+              resp-b (json/parse-string (get-in add-b [:content 1 :text]) keyword)
+              task-b-id (get-in resp-b [:task :id])
+
+              ;; Update task B to be blocked-by task A
+              update-task-ns (find-ns 'mcp-tasks.tool.update-task)
+              _ (require 'mcp-tasks.tool.update-task)
+              update-task-impl (ns-resolve update-task-ns 'update-task-impl)
+              _ (update-task-impl (h/test-config test-dir) nil
+                                  {:task-id task-b-id
+                                   :relations [{"id" 1 "relates-to" task-a-id "as-type" "blocked-by"}]})
+
+              ;; Work on task B (task A is still incomplete)
+              result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-b-id})
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+          (is (false? (:isError result)))
+          (is (= true (:is-blocked response)))
+          (is (= [task-a-id] (:blocking-task-ids response))))))))
