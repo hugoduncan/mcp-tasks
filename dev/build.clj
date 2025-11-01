@@ -91,13 +91,15 @@
              (re-find #"(?i)linux" os-name) :linux
              (re-find #"(?i)mac|darwin" os-name) :macos
              (re-find #"(?i)windows" os-name) :windows
-             :else (throw (ex-info (format "Unsupported OS: %s" os-name)
-                                   {:os-name os-name})))
+             :else (throw (ex-info (format "Unsupported OS: %s. Supported platforms: Linux, macOS, Windows" os-name)
+                                   {:os-name os-name
+                                    :supported-platforms [:linux :macos :windows]})))
         arch (cond
                (re-find #"(?i)amd64|x86_64" os-arch) :amd64
                (re-find #"(?i)aarch64|arm64" os-arch) :arm64
-               :else (throw (ex-info (format "Unsupported architecture: %s" os-arch)
-                                     {:os-arch os-arch})))]
+               :else (throw (ex-info (format "Unsupported architecture: %s. Supported architectures: amd64, arm64" os-arch)
+                                     {:os-arch os-arch
+                                      :supported-architectures [:amd64 :arm64]})))]
     {:os os :arch arch}))
 
 (defn- platform-binary-name
@@ -171,7 +173,6 @@
                              "--no-fallback"
                              "-H:+ReportExceptionStackTraces"
                              "--initialize-at-build-time"
-                             "--report-unsupported-elements-at-runtime"
                              "-o" output-binary]})
 
       (println (format "✓ Native CLI binary built: %s" output-binary))
