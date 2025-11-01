@@ -199,6 +199,111 @@ The uberscript maintains the same optimized performance as running via `bb`:
 
 **Note:** The uberscript requires babashka to be installed on the target system (`/usr/bin/env bb` shebang).
 
+### Native Binary Distribution
+
+For true standalone execution without any runtime dependencies, native binaries are available for all major platforms. These are built with GraalVM native-image and require no JVM or Babashka installation.
+
+**Download Pre-Built Binaries:**
+
+Download the latest binary for your platform from the [GitHub Releases](https://github.com/hugoduncan/mcp-tasks/releases) page:
+
+- **Linux (amd64)**: `mcp-tasks-linux-amd64`
+- **macOS (Intel)**: `mcp-tasks-macos-amd64`
+- **macOS (Apple Silicon)**: `mcp-tasks-macos-arm64`
+- **Windows**: `mcp-tasks-windows-amd64.exe`
+
+**Installation:**
+
+```bash
+# Download binary (example for macOS arm64)
+curl -L -o mcp-tasks https://github.com/hugoduncan/mcp-tasks/releases/latest/download/mcp-tasks-macos-arm64
+
+# Make executable (Unix-like systems)
+chmod +x mcp-tasks
+
+# Install system-wide (optional)
+sudo mv mcp-tasks /usr/local/bin/
+
+# Use directly
+mcp-tasks list --category simple
+mcp-tasks add --title "New task" --category simple
+```
+
+**Building from Source:**
+
+Requirements:
+- GraalVM 21+ with native-image installed
+- Set `GRAALVM_HOME` environment variable
+
+```bash
+# Build CLI JAR first
+clj -T:build jar-cli
+
+# Build native binary for your platform
+GRAALVM_HOME=/path/to/graalvm clj -T:build native-cli
+
+# Binary created at: target/mcp-tasks-<platform>-<arch>
+```
+
+**Distribution Comparison:**
+
+| Feature | Babashka Uberscript | Native Binary |
+|---------|-------------------|---------------|
+| **Size** | 48 KB | 35.4 MB |
+| **Startup Time** | ~66ms (help commands) | ~instant (<10ms typical) |
+| **Runtime Dependency** | Requires Babashka installed | None - fully standalone |
+| **Distribution** | Single portable script | Platform-specific executable |
+| **Best For** | Systems with Babashka, scripting | Standalone deployment, no dependencies |
+
+**Choosing a Distribution:**
+
+- **Use Native Binary when:**
+  - You need true standalone execution without any runtime
+  - Deploying to systems where installing runtimes is restricted
+  - Absolute fastest startup time is critical
+  - You can accept larger binary size for convenience
+
+- **Use Babashka Uberscript when:**
+  - You already have Babashka installed
+  - Minimizing disk space is important (48KB vs 35MB)
+  - You want a single cross-platform script
+  - You prefer the Babashka ecosystem
+
+**Troubleshooting Native Binaries:**
+
+Common issues and solutions:
+
+1. **"Permission denied" errors (Unix)**
+   ```bash
+   chmod +x mcp-tasks
+   ```
+
+2. **macOS "unidentified developer" warning**
+   ```bash
+   # First run: Right-click → Open, then click "Open"
+   # Or remove quarantine attribute:
+   xattr -d com.apple.quarantine mcp-tasks
+   ```
+
+3. **Windows SmartScreen warning**
+   - Click "More info" → "Run anyway"
+   - Binaries are not code-signed (open source project)
+
+4. **"Library not found" errors**
+   - Native binaries are statically linked and should work standalone
+   - Ensure you downloaded the correct platform binary
+   - Try re-downloading if file was corrupted
+
+5. **Build failures with GraalVM**
+   - Verify GraalVM 21+ is installed: `native-image --version`
+   - Ensure `GRAALVM_HOME` points to GraalVM root directory
+   - Check that native-image component is installed
+   - Build CLI JAR first before building native binary
+
+6. **Malli validation warnings during build**
+   - Expected behavior - Malli validation is disabled for native builds
+   - Warnings don't affect functionality
+
 ---
 
 ## What & Why
@@ -326,6 +431,11 @@ See **[doc/workflow.md#story-workflows](doc/workflow.md#story-workflows)** for c
 ## Command Line Interface
 
 The CLI provides direct access to task management from the terminal, complementing the primary MCP interface. While the MCP server is the recommended way to use mcp-tasks with AI agents, the CLI is useful for scripting, inspecting task state, and working outside of MCP-enabled environments.
+
+**CLI Distribution Options:**
+- **Native Binary**: Standalone executable, no runtime required (see [Native Binary Distribution](#native-binary-distribution) above)
+- **Babashka Uberscript**: Fast startup with Babashka runtime (see [Standalone Executable](#standalone-executable-uberscript) above)
+- **JVM Clojure**: Full Clojure toolchain via `clojure -M:cli` (for development)
 
 For complete CLI documentation including commands, output formats, workflows, and configuration options, see **[doc/command-line.md](doc/command-line.md)**.
 
