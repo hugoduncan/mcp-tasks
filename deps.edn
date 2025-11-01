@@ -32,7 +32,8 @@
         :main-opts ["-m" "mcp-tasks.main"]}
   :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
           :main-opts ["-m" "nrepl.cmdline"]}
-  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}
+                 babashka/fs {:mvn/version "0.5.22"}}
           :paths ["dev"]
           :ns-default build}
   :deploy {:replace-deps {slipset/deps-deploy {:mvn/version "0.2.2"}}

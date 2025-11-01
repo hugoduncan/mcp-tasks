@@ -43,7 +43,7 @@
 
 (defn deploy
   "Deploy JAR to Clojars using deps-deploy.
-  
+
   Requires CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables.
   CLOJARS_PASSWORD should contain your deploy token, not your actual password."
   [_]
@@ -64,3 +64,83 @@
       (throw (ex-info "POM file not found. Run 'clj -T:build jar' first."
                       {:pom-file pom-file})))
     (println "Files validated for deployment")))
+
+;; Native Image Build
+
+(defn- shell
+  "Execute a shell command and return the result.
+  Throws an exception if the command fails."
+  [& args]
+  (let [result (apply b/process args)]
+    (when-not (zero? (:exit result))
+      (throw (ex-info (format "Command failed with exit code %d: %s"
+                              (:exit result)
+                              (pr-str args))
+                      {:exit (:exit result)
+                       :out (:out result)
+                       :err (:err result)})))
+    result))
+
+(defn jar-cli
+  "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
+  [_]
+  (let [v (version nil)
+        basis (b/create-basis {:project "deps.edn"})
+        jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)]
+    (println "Building CLI uberjar:" jar-file)
+    (b/write-pom {:class-dir class-dir
+                  :lib lib
+                  :version v
+                  :basis basis
+                  :src-dirs ["src"]})
+    (b/copy-dir {:src-dirs ["src" "resources"]
+                 :target-dir class-dir})
+    (b/compile-clj {:basis basis
+                    :src-dirs ["src"]
+                    :class-dir class-dir})
+    (b/uber {:class-dir class-dir
+             :uber-file jar-file
+             :basis basis
+             :main 'mcp-tasks.native-init})
+    (println "CLI uberjar built successfully:" jar-file)))
+
+(defn native-cli
+  "Build native CLI binary using GraalVM native-image.
+
+  Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
+  Output: target/mcp-tasks-cli
+
+  The native binary provides a standalone CLI without requiring JVM or Babashka."
+  [_]
+  (let [graalvm-home (System/getenv "GRAALVM_HOME")]
+    (when-not graalvm-home
+      (throw (ex-info "GRAALVM_HOME environment variable not set. Please set it to your GraalVM installation directory."
+                      {:required "GRAALVM_HOME"})))
+
+    (let [v (version nil)
+          jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)
+          output-binary (str target-dir "/mcp-tasks-cli")
+          native-image-bin (str graalvm-home "/bin/native-image")]
+
+      (when-not (fs/exists? native-image-bin)
+        (throw (ex-info (format "native-image not found at %s. Please install native-image or verify GRAALVM_HOME is correct." native-image-bin)
+                        {:graalvm-home graalvm-home
+                         :native-image-bin native-image-bin})))
+
+      (println "Building native CLI binary...")
+
+      (when-not (fs/exists? jar-file)
+        (throw (ex-info "CLI JAR file not found. Run 'clj -T:build jar-cli' first."
+                        {:jar-file jar-file})))
+
+      (println "Running native-image (this may take several minutes)...")
+      (shell {:command-args [native-image-bin
+                             "-jar" jar-file
+                             "--no-fallback"
+                             "-H:+ReportExceptionStackTraces"
+                             "--initialize-at-build-time"
+                             "--report-unsupported-elements-at-runtime"
+                             "-o" output-binary]})
+
+      (println (format "✓ Native CLI binary built: %s" output-binary))
+      (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
