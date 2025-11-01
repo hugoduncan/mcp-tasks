@@ -249,7 +249,7 @@ GRAALVM_HOME=/path/to/graalvm clj -T:build native-cli
 
 | Feature | Babashka Uberscript | Native Binary |
 |---------|-------------------|---------------|
-| **Size** | 48 KB | 35.4 MB |
+| **Size** | 48 KB | 38.3 MB |
 | **Startup Time** | ~66ms (help commands) | ~instant (<10ms typical) |
 | **Runtime Dependency** | Requires Babashka installed | None - fully standalone |
 | **Distribution** | Single portable script | Platform-specific executable |

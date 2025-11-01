@@ -2,7 +2,7 @@
 
 ## Summary
 
-Successfully created a native CLI binary using GraalVM native-image. The binary is 35.4 MB and works correctly for all CLI commands.
+Successfully created a native CLI binary using GraalVM native-image. The binary is 38.3 MB and works correctly for all CLI commands.
 
 ## Build Process
 
@@ -22,7 +22,7 @@ clj -T:build jar-cli
 GRAALVM_HOME=/path/to/graalvm clj -T:build native-cli
 ```
 
-Output: `target/mcp-tasks-cli` (35.4 MB native executable)
+Output: `target/mcp-tasks-cli` (38.3 MB native executable)
 
 ## Dependency Compatibility
 
@@ -130,7 +130,7 @@ The build succeeded without custom reflection configuration files because:
    - Custom validation functions
    - Enable Malli with reflection config (requires investigation)
 
-3. **Binary size optimization**: Current 35.4 MB could potentially be reduced with:
+3. **Binary size optimization**: Current 38.3 MB could potentially be reduced with:
    - `--gc=G1` (different garbage collector)
    - `-O3` optimization level
    - Removing unused dependencies
