@@ -81,6 +81,31 @@
                        :err (:err result)})))
     result))
 
+(defn- detect-platform
+  "Detect the current platform and architecture.
+  Returns a map with :os and :arch keys."
+  []
+  (let [os-name (System/getProperty "os.name")
+        os-arch (System/getProperty "os.arch")
+        os (cond
+             (re-find #"(?i)linux" os-name) :linux
+             (re-find #"(?i)mac|darwin" os-name) :macos
+             (re-find #"(?i)windows" os-name) :windows
+             :else (throw (ex-info (format "Unsupported OS: %s" os-name)
+                                   {:os-name os-name})))
+        arch (cond
+               (re-find #"(?i)amd64|x86_64" os-arch) :amd64
+               (re-find #"(?i)aarch64|arm64" os-arch) :arm64
+               :else (throw (ex-info (format "Unsupported architecture: %s" os-arch)
+                                     {:os-arch os-arch})))]
+    {:os os :arch arch}))
+
+(defn- platform-binary-name
+  "Generate platform-specific binary name.
+  Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64"
+  [{:keys [os arch]}]
+  (format "mcp-tasks-%s-%s" (name os) (name arch)))
+
 (defn jar-cli
   "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
   [_]
@@ -108,7 +133,7 @@
   "Build native CLI binary using GraalVM native-image.
 
   Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
-  Output: target/mcp-tasks-cli
+  Output: target/mcp-tasks-<platform>-<arch> (e.g., target/mcp-tasks-macos-arm64)
 
   The native binary provides a standalone CLI without requiring JVM or Babashka."
   [_]
@@ -117,9 +142,11 @@
       (throw (ex-info "GRAALVM_HOME environment variable not set. Please set it to your GraalVM installation directory."
                       {:required "GRAALVM_HOME"})))
 
-    (let [v (version nil)
+    (let [platform (detect-platform)
+          v (version nil)
           jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)
-          output-binary (str target-dir "/mcp-tasks-cli")
+          binary-name (platform-binary-name platform)
+          output-binary (str target-dir "/" binary-name)
           native-image-bin (str graalvm-home "/bin/native-image")]
 
       (when-not (fs/exists? native-image-bin)
@@ -127,7 +154,9 @@
                         {:graalvm-home graalvm-home
                          :native-image-bin native-image-bin})))
 
-      (println "Building native CLI binary...")
+      (println (format "Building native CLI binary for %s %s..."
+                       (name (:os platform))
+                       (name (:arch platform))))
 
       (when-not (fs/exists? jar-file)
         (throw (ex-info "CLI JAR file not found. Run 'clj -T:build jar-cli' first."
@@ -143,4 +172,5 @@
                              "-o" output-binary]})
 
       (println (format "✓ Native CLI binary built: %s" output-binary))
+      (println (format "  Platform: %s %s" (name (:os platform)) (name (:arch platform))))
       (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
