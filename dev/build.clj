@@ -102,9 +102,12 @@
 
 (defn- platform-binary-name
   "Generate platform-specific binary name.
-  Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64"
+  Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64, mcp-tasks-windows-amd64.exe"
   [{:keys [os arch]}]
-  (format "mcp-tasks-%s-%s" (name os) (name arch)))
+  (let [base-name (format "mcp-tasks-%s-%s" (name os) (name arch))]
+    (if (= os :windows)
+      (str base-name ".exe")
+      base-name)))
 
 (defn jar-cli
   "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"

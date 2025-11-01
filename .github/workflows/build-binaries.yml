@@ -1,0 +1,120 @@
+name: Build Native Binaries
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+          cljstyle: 0.17.642
+          clj-kondo: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clojure-deps-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            clojure-deps-
+
+      - name: Run cljstyle check
+        run: cljstyle check
+
+      - name: Run clj-kondo lint
+        run: clj-kondo --lint src test --fail-level warning
+
+      - name: Run unit tests
+        run: clojure -M:dev:test --focus :unit
+
+      - name: Run integration tests
+        run: clojure -M:dev:test --focus :integration
+
+  build-matrix:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: macos
+            arch: amd64
+            runner: macos-13
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+          - os: windows
+            arch: amd64
+            runner: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-
+            clojure-deps-
+
+      - name: Build CLI JAR
+        run: clojure -T:build jar-cli
+
+      - name: Build native binary
+        run: clojure -T:build native-cli
+
+      - name: Set binary name (Unix)
+        if: runner.os != 'Windows'
+        id: binary-name-unix
+        run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+      - name: Set binary name (Windows)
+        if: runner.os == 'Windows'
+        id: binary-name-windows
+        shell: bash
+        run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}.exe" >> $GITHUB_OUTPUT
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
+          path: target/${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
+          if-no-files-found: error
