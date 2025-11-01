@@ -95,8 +95,8 @@
 
             ;; Benchmark single-task enrichment
             single-start (System/nanoTime)
-            single-results (doseq [tid task-ids]
-                             (tasks/is-task-blocked? tid))
+            _ (doseq [tid task-ids]
+                (tasks/is-task-blocked? tid))
             single-duration (/ (- (System/nanoTime) single-start) 1e6)]
 
         ;; Verify batch version completed
@@ -115,7 +115,7 @@
 
 (deftest batch-enrichment-empty-collection
   ;; Test batch enrichment handles empty collections
-  (h/with-test-setup [test-dir]
+  (h/with-test-setup [_test-dir]
     (testing "Batch enrichment with empty collection"
       (let [result (tasks/is-tasks-blocked? [])]
         (is (map? result))

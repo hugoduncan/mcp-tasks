@@ -22,16 +22,6 @@
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.helpers :as helpers]))
 
-(defn- enrich-task-with-blocked-status
-  "Enrich a task with blocking status information.
-
-  Adds :is-blocked and :blocking-task-ids fields based on :blocked-by relations."
-  [task]
-  (let [blocking-info (tasks/is-task-blocked? (:id task))]
-    (assoc task
-           :is-blocked (:blocked? blocking-info)
-           :blocking-task-ids (:blocking-ids blocking-info))))
-
 (defn- enrich-tasks-with-blocked-status
   "Batch version of enrich-task-with-blocked-status for optimized processing.
 
