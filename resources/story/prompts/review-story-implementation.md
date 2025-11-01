@@ -66,7 +66,7 @@ The story can be specified in multiple ways:
      a) For each selected suggestion, use the `add-task` tool for each task:
         - Use the `add-task` tool with these parameters:
           - `category`: pick an appropriate category based on the task complexity
-          - `title`: "REVIEW: <task description>"
+          - `title`: "CR: <task description>"
           - `description`: the task description (can span multiple lines)
           - `parent-id`: the story's task ID from step 1
           - `prepend`: false (to append tasks)
@@ -75,7 +75,7 @@ The story can be specified in multiple ways:
         ```
         add-task(
           category="medium",
-          title="REVIEW: Add error handling for edge cases",
+          title="CR: Add error handling for edge cases",
           description="throw exceptions if edge cases not supported",
           parent-id=42,
           prepend=false
