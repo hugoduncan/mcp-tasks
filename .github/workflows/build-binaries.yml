@@ -118,3 +118,71 @@ jobs:
           name: ${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
           path: target/${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
           if-no-files-found: error
+
+  test-binaries:
+    name: Test ${{ matrix.os }}-${{ matrix.arch }} Binary
+    needs: build-matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            test-focus: comprehensive
+          - os: macos
+            arch: amd64
+            runner: macos-13
+            test-focus: smoke
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            test-focus: smoke
+          - os: windows
+            arch: amd64
+            runner: windows-2022
+            test-focus: smoke
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            clojure-deps-${{ matrix.os }}-${{ matrix.arch }}-
+            clojure-deps-
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
+          path: target/
+
+      - name: Make binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x target/mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Run smoke tests
+        if: matrix.test-focus == 'smoke'
+        run: clojure -M:dev:test --focus :integration --skip-meta :comprehensive mcp-tasks.native-binary-integration-test
+
+      - name: Run comprehensive tests
+        if: matrix.test-focus == 'comprehensive'
+        run: clojure -M:dev:test --focus :integration mcp-tasks.native-binary-integration-test

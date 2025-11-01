@@ -21,7 +21,8 @@
           :deps/root "projects/test-dep"}}}
   :test {:extra-paths ["test"]
          :extra-deps
-         {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+          babashka/process {:mvn/version "0.5.22"}}
          :override-deps
          {org.hugpduncan/mcp-clj-server
           {:git/url "https://github.com/hugoduncan/mcp-clj"
