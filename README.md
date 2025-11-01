@@ -169,7 +169,7 @@ A `bb test` task is available in `bb.edn`, but currently blocked by a dependency
 
 ### Standalone Executable (Uberscript)
 
-For distribution or system-wide installation, you can build a standalone executable that bundles all dependencies:
+For distribution or system-wide installation, you can build a standalone executable that bundles all dependencies. For a comparison with the Native Binary distribution, see [Distribution Comparison](#native-binary-distribution).
 
 ```bash
 # Build the executable (from the mcp-tasks source directory)
@@ -202,6 +202,8 @@ The uberscript maintains the same optimized performance as running via `bb`:
 ### Native Binary Distribution
 
 For true standalone execution without any runtime dependencies, native binaries are available for all major platforms. These are built with GraalVM native-image and require no JVM or Babashka installation.
+
+For an alternative distribution option using Babashka, see the [Standalone Executable (Uberscript)](#standalone-executable-uberscript) section above.
 
 **Download Pre-Built Binaries:**
 
