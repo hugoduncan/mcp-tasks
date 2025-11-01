@@ -42,7 +42,8 @@
    :complete 'mcp-tasks.tool.complete-task/complete-task-tool
    :update 'mcp-tasks.tool.update-task/update-task-tool
    :delete 'mcp-tasks.tool.delete-task/delete-task-tool
-   :reopen 'mcp-tasks.tool.reopen-task/reopen-task-tool})
+   :reopen 'mcp-tasks.tool.reopen-task/reopen-task-tool
+   :why-blocked 'mcp-tasks.tool.select-tasks/select-tasks-tool})
 
 (defn- execute-command
   "Execute a command by calling its corresponding tool implementation.
@@ -71,10 +72,15 @@
 
 (defn list-command
   "Execute the list command.
-  
-  Calls tools/select-tasks-tool implementation and returns the parsed response data."
+
+  Calls tools/select-tasks-tool implementation and returns the parsed response data.
+  Extracts :show-blocking from args and adds it to the response data for formatting."
   [config parsed-args]
-  (execute-command config :list parsed-args))
+  (let [show-blocking (:show-blocking parsed-args)
+        response (execute-command config :list parsed-args)]
+    (if show-blocking
+      (assoc response :show-blocking true)
+      response)))
 
 (defn show-command
   "Execute the show command.
@@ -125,3 +131,15 @@
   Calls tools/reopen-task-tool and returns the parsed response data."
   [config parsed-args]
   (execute-command config :reopen parsed-args))
+
+(defn why-blocked-command
+  "Execute the why-blocked command.
+
+  Calls select-tasks-tool with unique: true to get blocking status for a single task.
+  Transforms response to :why-blocked format for specialized formatting."
+  [config parsed-args]
+  (let [response (execute-command config :why-blocked parsed-args #(assoc % :unique true))
+        tasks (:tasks response)]
+    (if (seq tasks)
+      (assoc response :why-blocked (first tasks))
+      response)))
