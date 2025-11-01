@@ -65,7 +65,33 @@ Once you have identified the task to execute:
    - If user chooses "Yes, proceed":
      - Continue to step 3
 
-### 3. Retrieve Category Instructions
+### 3. Validate Task Dependencies
+
+Once you have confirmed the task:
+
+1. **Check if task is blocked**: Examine the task for `:is-blocked` field
+   - If the field is absent or `false`, the task is not blocked - proceed to step 4
+   - If `true`, the task is blocked by other incomplete tasks - continue to step 2
+
+2. **Display blocking information**: If the task is blocked:
+   - Get the `:blocking-task-ids` vector from the task (if available)
+   - For each blocking task ID, retrieve the task title using `select-tasks` with `task-id` filter
+   - Display error: "⚠️  Task #<task-id> is blocked by the following incomplete tasks:"
+   - List each blocking task: "#<blocking-id>: <blocking-title>"
+
+3. **Ask user to proceed**: Use the `AskUserQuestion` tool:
+   - Question: "This task is blocked by other incomplete tasks. Do you want to proceed anyway?"
+   - Options:
+     - "Yes, proceed" - continue to step 4 with a warning
+     - "No, complete blocking tasks first" - stop execution
+   - If user chooses "No, complete blocking tasks first":
+     - Suggest: "Complete the blocking tasks first, then try executing this task again"
+     - Stop execution - do not proceed to step 4
+   - If user chooses "Yes, proceed":
+     - Display warning: "⚠️  Proceeding with blocked task. This may cause issues if dependencies are not met."
+     - Continue to step 4
+
+### 4. Retrieve Category Instructions
 
 Once you have identified a single task:
 
@@ -85,12 +111,12 @@ Once you have identified a single task:
    - Inform the user: "Category instructions for '<category>' are not
      available. Please ensure the category prompt resource exists or
      contact the maintainer."
-   - Stop execution - do not proceed to step 4
+   - Stop execution - do not proceed to step 5
 
 4. **Extract instructions**: The resource will return a `text` field
    containing the category-specific workflow steps
 
-### 4. Prepare Task Environment
+### 5. Prepare Task Environment
 
 Before executing the task, set up the task environment using the `work-on` MCP tool:
 - Use the `mcp__mcp-tasks__work-on` tool with the following parameter:
@@ -117,7 +143,7 @@ Directory: /Users/duncan/projects/mcp-tasks-fix-bug
 Branch: fix-bug
 ```
 
-### 5. Discovering Issues Beyond Current Scope
+### 6. Discovering Issues Beyond Current Scope
 
 While executing this task, you may notice issues, bugs, or improvements that are **beyond the current task scope**. When you encounter such issues:
 
@@ -153,9 +179,9 @@ While executing this task, you may notice issues, bugs, or improvements that are
 - Direct blockers (use `:blocked-by` instead)
 - Minor fixes in code you're modifying (fix now)
 
-### 6. Execute the Task
+### 7. Execute the Task
 
-Follow the category-specific instructions retrieved in step 3 to execute
+Follow the category-specific instructions retrieved in step 4 to execute
 the task:
 
 1. **Provide task context**: When executing the category instructions,
@@ -171,7 +197,7 @@ the task:
    with specific steps (e.g., analysis, design, planning,
    implementation). Execute each step in order.
 
-### 7. Mark Task Complete
+### 8. Mark Task Complete
 
 After successfully completing all execution steps:
 - Use the `complete-task` tool to mark the task as complete
