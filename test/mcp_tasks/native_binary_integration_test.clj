@@ -24,27 +24,29 @@
         "---\ndescription: Simple tasks\n---\nSimple task execution"))
 
 (defn- binary-test-fixture
-  "Test fixture that sets up temporary directory and locates binary."
+  "Test fixture that sets up temporary directory and locates binary.
+  Skips tests gracefully if binary is not found (e.g., during unit test runs)."
   [f]
-  (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-native-binary-"}))]
-    (try
-      (setup-test-dir test-dir)
-      ;; Find binary - check legacy fallback name then platform-specific names
-      ;; mcp-tasks-cli is legacy, current builds use mcp-tasks-<platform>-<arch>
-      (let [binary-locations [(io/file "target/mcp-tasks-cli")
-                              (io/file "target/mcp-tasks-linux-amd64")
-                              (io/file "target/mcp-tasks-macos-amd64")
-                              (io/file "target/mcp-tasks-macos-arm64")
-                              (io/file "target/mcp-tasks-windows-amd64.exe")]
-            binary (some #(when (.exists %) %) binary-locations)]
-        (when-not binary
-          (throw (ex-info "No native binary found. Build with: clj -T:build native-cli"
-                          {:searched binary-locations})))
-        (binding [*test-dir* test-dir
-                  *binary-path* (.getAbsolutePath binary)]
-          (f)))
-      (finally
-        (fs/delete-tree test-dir)))))
+  ;; Find binary - check legacy fallback name then platform-specific names
+  ;; mcp-tasks-cli is legacy, current builds use mcp-tasks-<platform>-<arch>
+  (let [binary-locations [(io/file "target/mcp-tasks-cli")
+                          (io/file "target/mcp-tasks-linux-amd64")
+                          (io/file "target/mcp-tasks-macos-amd64")
+                          (io/file "target/mcp-tasks-macos-arm64")
+                          (io/file "target/mcp-tasks-windows-amd64.exe")]
+        binary (some #(when (.exists %) %) binary-locations)]
+    (if-not binary
+      ;; Binary not found - skip test silently (happens during unit/integration test runs)
+      (println "Skipping native binary test - binary not found. Build with: clj -T:build native-cli")
+      ;; Binary found - run test with proper setup
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-native-binary-"}))]
+        (try
+          (setup-test-dir test-dir)
+          (binding [*test-dir* test-dir
+                    *binary-path* (.getAbsolutePath binary)]
+            (f))
+          (finally
+            (fs/delete-tree test-dir)))))))
 
 (use-fixtures :each binary-test-fixture)
 
