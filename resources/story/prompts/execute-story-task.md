@@ -30,22 +30,29 @@ The story can be specified in multiple ways:
 
 ## Process
 
-1. Find the story and its first incomplete child task:
+1. Find the story and its first unblocked incomplete child task:
    - First, use `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true` to find the story task
    - Handle errors:
      - **No match**: Inform user no story found, suggest checking available stories
      - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
-   - Then use `select-tasks` with `parent-id` filter and `:limit 1` to get the first incomplete child
+   - Then use `select-tasks` with `parent-id` filter, `blocked: false`, and `:limit 1` to get the first unblocked incomplete child
    - The tool returns :tasks (a vector) and :metadata
    - use :open-task-count and :completed-task-count to show story progress,
      like "2 of 5 tasks completed", where 2 is :completed-task-count
      and 5 is (+ :open-task-count :completed-task-count)
-   - If no tasks found,
-	  - if completed-task-count is positive:
+   - If no unblocked tasks found:
+     - Check if there are any incomplete tasks at all by calling `select-tasks` again with `parent-id` filter but without `blocked: false`
+     - If incomplete tasks exist but all are blocked:
+       - Inform user: "All remaining tasks are blocked. Blocked tasks:"
+       - List each blocked task with its ID, title, and blocking task IDs (from `:blocking-task-ids` field)
+       - Suggest completing blocking tasks first
+       - Stop - do not take any further actions
+     - If no incomplete tasks exist:
+       - if completed-task-count is positive:
          - inform the user that all tasks are complete
          - suggest the user reviews the story implementation or creates a PR
          - stop - do not take any further actions
-	  - if completed-task-count is zero:
+       - if completed-task-count is zero:
          - if the story is not refined, suggest the user refines the story
          - else if the story is refined, suggest the user creates story tasks
 		   for the story

@@ -17,13 +17,14 @@ USAGE:
   clojure -M:cli <command> [options]
 
 COMMANDS:
-  list      List tasks with optional filters
-  show      Display a single task by ID
-  add       Create a new task
-  complete  Mark a task as complete
-  update    Update task fields
-  delete    Delete a task
-  reopen    Reopen a closed task
+  list         List tasks with optional filters
+  show         Display a single task by ID
+  add          Create a new task
+  complete     Mark a task as complete
+  update       Update task fields
+  delete       Delete a task
+  reopen       Reopen a closed task
+  why-blocked  Show why a task is blocked
 
 GLOBAL OPTIONS:
   --format <format>     Output format: edn, json, human (default: edn)
@@ -72,6 +73,8 @@ OPTIONS:
   --parent-id, -p <id>          Filter by parent task ID
   --task-id <id>                Filter by specific task ID
   --title-pattern, --title <pattern>  Filter by title pattern (regex or substring)
+  --blocked <true|false>        Filter by dependency-blocked status (based on :blocked-by relations)
+  --show-blocking               Append blocking details section showing which task IDs block each task
   --limit <n>                   Maximum tasks to return (default: 30)
   --unique                      Enforce 0 or 1 match (error if >1)
   --format <format>             Output format: edn, json, human (default: edn)
@@ -79,7 +82,9 @@ OPTIONS:
 EXAMPLES:
   clojure -M:cli list --status open --format human
   clojure -M:cli list --status any --category simple
-  clojure -M:cli list --parent-id 31 --status open")
+  clojure -M:cli list --parent-id 31 --status open
+  clojure -M:cli list --blocked true --format human
+  clojure -M:cli list --blocked false --show-blocking")
 
 (def show-help
   "Help text for the show command."
@@ -201,6 +206,21 @@ EXAMPLES:
   clojure -M:cli reopen --task-id 42
   clojure -M:cli reopen --title \"Fix bug\"
   clojure -M:cli reopen --id 42 --format human")
+
+(def why-blocked-help
+  "Help text for the why-blocked command."
+  "Show why a task is blocked
+
+USAGE:
+  clojure -M:cli why-blocked --task-id <id> [options]
+
+OPTIONS:
+  --task-id, --id <id>  Task ID to check (required)
+  --format <format>     Output format: edn, json, human (default: edn)
+
+EXAMPLES:
+  clojure -M:cli why-blocked --task-id 42
+  clojure -M:cli why-blocked --id 42 --format human")
 
 ;; Type Coercion Functions
 
@@ -338,6 +358,8 @@ EXAMPLES:
   - :type -> keyword (task, bug, feature, story, chore)
   - :parent-id -> long integer
   - :task-id -> long integer
+  - :blocked -> boolean
+  - :show-blocking -> boolean
   - :limit -> long integer (default: 30)
   - :unique -> boolean
   - :format -> keyword (edn, json, human)
@@ -359,6 +381,10 @@ EXAMPLES:
              :desc "Filter by specific task ID"}
    :title-pattern {:alias :title
                    :desc "Filter by title pattern (regex or substring)"}
+   :blocked {:coerce :boolean
+             :desc "Filter by blocked status (true for blocked, false for unblocked)"}
+   :show-blocking {:coerce :boolean
+                   :desc "Show which tasks are blocking each listed task"}
    :limit {:coerce :long
            :default 30
            :desc "Maximum number of tasks to return"}
@@ -523,6 +549,24 @@ EXAMPLES:
              :desc "Task ID to reopen"}
    :title {:alias :t
            :desc "Task title (alternative to task-id)"}
+   :format {:coerce :keyword
+            :desc "Output format (edn, json, human)"}})
+
+(def why-blocked-spec
+  "Spec for the why-blocked command.
+
+  Validates and coerces arguments for checking task blocking status.
+
+  Coercion rules:
+  - :task-id -> long integer
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires :task-id to be present"
+  {:task-id {:coerce :long
+             :alias :id
+             :desc "Task ID to check"}
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
@@ -742,6 +786,31 @@ EXAMPLES:
         (let [format-validation (validate-format parsed)]
           (if (:valid? format-validation)
             parsed
+            (dissoc format-validation :valid?)))))
+    (catch Exception e
+      {:error (format-unknown-option-error (.getMessage e))
+       :metadata {:args args}})))
+
+(defn parse-why-blocked
+  "Parse arguments for the why-blocked command.
+
+  Returns parsed options map or error map with :error key."
+  [args]
+  (try
+    (let [parsed (cli/parse-opts args {:spec why-blocked-spec :restrict (get-allowed-keys why-blocked-spec)})
+          task-id (resolve-alias parsed :task-id :id)]
+      (cond
+        (not task-id)
+        {:error "Required option: --task-id (or --id)"
+         :metadata {:args args}}
+
+        :else
+        (let [result (-> parsed
+                         (dissoc :id)
+                         (assoc :task-id task-id))
+              format-validation (validate-format result)]
+          (if (:valid? format-validation)
+            result
             (dissoc format-validation :valid?)))))
     (catch Exception e
       {:error (format-unknown-option-error (.getMessage e))

@@ -17,6 +17,7 @@
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [cheshire.core :as json]
+    [clojure.string :as str]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
@@ -51,7 +52,8 @@
 (defn- convert-relations-field
   "Convert relations from JSON structure to Clojure keyword-based structure.
 
-  Transforms string keys to keywords for :as-type field.
+  Handles both keyword keys (from MCP JSON parsing) and string keys (from
+  direct function calls). Transforms string keys to keywords for :as-type field.
   Returns [] if relations is nil.
 
   Note: When updating a task's :relations field, the entire vector is
@@ -62,11 +64,43 @@
   [relations]
   (if relations
     (mapv (fn [rel]
-            {:id (get rel "id")
-             :relates-to (get rel "relates-to")
-             :as-type (keyword (get rel "as-type"))})
+            (let [id (or (get rel :id) (get rel "id"))
+                  relates-to (or (get rel :relates-to) (get rel "relates-to"))
+                  as-type-val (or (get rel :as-type) (get rel "as-type"))
+                  as-type (if (keyword? as-type-val) as-type-val (keyword as-type-val))]
+              {:id id
+               :relates-to relates-to
+               :as-type as-type}))
           relations)
     []))
+
+(defn- validate-circular-dependencies
+  "Validate that updating task relations won't create circular dependencies.
+
+  Checks each :blocked-by relation in the new relations to ensure no cycles
+  would be created. Returns error map if cycle detected, nil otherwise."
+  [task-id new-relations tasks-file]
+  (let [blocked-by-relations (filter #(= :blocked-by (:as-type %)) new-relations)]
+    (when (seq blocked-by-relations)
+      ;; Temporarily update the task to check for cycles
+      (let [old-task (tasks/get-task task-id)
+            temp-task (assoc old-task :relations new-relations)]
+        ;; Temporarily update in-memory state
+        (swap! tasks/tasks assoc task-id temp-task)
+        (let [result (try
+                       ;; Check for circular dependencies
+                       (let [blocking-info (tasks/is-task-blocked? task-id)]
+                         (when-let [cycle (:circular-dependency blocking-info)]
+                           (helpers/build-tool-error-response
+                             (str "Circular dependency detected: " (str/join " → " cycle))
+                             "update-task"
+                             {:task-id task-id
+                              :file tasks-file
+                              :cycle cycle})))
+                       (finally
+                         ;; Restore original task
+                         (swap! tasks/tasks assoc task-id old-task)))]
+          result)))))
 
 (defn- extract-provided-updates
   "Extract and convert provided fields from arguments map.
@@ -138,6 +172,8 @@
                                                           (or (validation/validate-task-exists task-id "update-task" tasks-file)
                                                               (when (and (contains? updates :parent-id) (:parent-id updates))
                                                                 (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
+                                                              (when (contains? updates :relations)
+                                                                (validate-circular-dependencies task-id (:relations updates) tasks-file))
                                                               (let [old-task (tasks/get-task task-id)
                                                                     updated-task (merge old-task updates)]
                                                                 (validation/validate-task-schema updated-task "update-task" task-id tasks-file))

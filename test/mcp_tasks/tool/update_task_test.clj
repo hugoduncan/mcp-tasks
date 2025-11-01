@@ -385,3 +385,151 @@
             ;; Verify schema compliance - all keys and values must be strings
             (is (every? string? (keys (:meta task))))
             (is (every? string? (vals (:meta task))))))))))
+
+(deftest update-task-prevents-simple-self-cycle
+  (h/with-test-setup [test-dir]
+    ;; Tests preventing A → A circular dependency
+    ;; Contracts: Cannot create self-referencing blocked-by relation
+    (testing "update-task"
+      (testing "prevents simple A → A self-cycle"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "task1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :relations [{"id" 1 "relates-to" 1 "as-type" "blocked-by"}]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Circular dependency detected"))
+          ;; Verify structured error includes cycle path
+          (let [data-content (second (:content result))
+                data (json/parse-string (:text data-content) keyword)]
+            (is (some? (get-in data [:metadata :cycle])))
+            ;; Cycle should start and end with same task ID
+            (let [cycle (get-in data [:metadata :cycle])]
+              (is (= (first cycle) (last cycle)))
+              (is (= 1 (first cycle))))))))))
+
+(deftest update-task-prevents-two-task-cycle
+  (h/with-test-setup [test-dir]
+    ;; Tests preventing A → B → A circular dependency
+    ;; Contracts: Detects cycle when task 1 blocked-by task 2, and task 2 blocked-by task 1
+    (testing "update-task"
+      (testing "prevents A → B → A cycle"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "task1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]}
+           {:id 2 :parent-id nil :title "task2" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        ;; Try to add blocked-by from task 2 to task 1 (creates cycle)
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 2 :relations [{"id" 1 "relates-to" 1 "as-type" "blocked-by"}]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Circular dependency detected"))
+          ;; Verify cycle path is provided
+          (let [data-content (second (:content result))
+                data (json/parse-string (:text data-content) keyword)
+                cycle (get-in data [:metadata :cycle])]
+            (is (some? cycle))
+            (is (= (first cycle) (last cycle)))))))))
+
+(deftest update-task-prevents-three-task-cycle
+  (h/with-test-setup [test-dir]
+    ;; Tests preventing A → B → C → A circular dependency
+    ;; Contracts: Detects longer cycles in blocked-by chains
+    (testing "update-task"
+      (testing "prevents A → B → C → A cycle"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "task1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]}
+           {:id 2 :parent-id nil :title "task2" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations [{:id 1 :relates-to 3 :as-type :blocked-by}]}
+           {:id 3 :parent-id nil :title "task3" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        ;; Try to add blocked-by from task 3 to task 1 (creates cycle)
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 3 :relations [{"id" 1 "relates-to" 1 "as-type" "blocked-by"}]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Circular dependency detected"))
+          ;; Verify cycle is returned
+          (let [data-content (second (:content result))
+                data (json/parse-string (:text data-content) keyword)
+                cycle (get-in data [:metadata :cycle])]
+            (is (some? cycle))
+            (is (= (first cycle) (last cycle)))))))))
+
+(deftest update-task-allows-valid-blocked-by-relations
+  (h/with-test-setup [test-dir]
+    ;; Tests that valid (non-circular) blocked-by relations are allowed
+    ;; Contracts: Linear dependency chains are allowed
+    (testing "update-task"
+      (testing "allows valid non-circular blocked-by relations"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "task1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+           {:id 2 :parent-id nil :title "task2" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+           {:id 3 :parent-id nil :title "task3" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        ;; Create linear chain: 3 blocked-by 2 blocked-by 1 (no cycle)
+        (let [result1 (#'sut/update-task-impl
+                       (h/test-config test-dir)
+                       nil
+                       {:task-id 2 :relations [{"id" 1 "relates-to" 1 "as-type" "blocked-by"}]})
+              result2 (#'sut/update-task-impl
+                       (h/test-config test-dir)
+                       nil
+                       {:task-id 3 :relations [{"id" 1 "relates-to" 2 "as-type" "blocked-by"}]})]
+          (is (false? (:isError result1)))
+          (is (false? (:isError result2)))
+          ;; Verify relations were saved correctly
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task2 (second tasks)
+                task3 (nth tasks 2)]
+            (is (= [{:id 1 :relates-to 1 :as-type :blocked-by}] (:relations task2)))
+            (is (= [{:id 1 :relates-to 2 :as-type :blocked-by}] (:relations task3)))))))))
+
+(deftest update-task-detects-cycle-in-multiple-relations
+  (h/with-test-setup [test-dir]
+    ;; Tests detecting cycle when one of multiple blocked-by relations creates a cycle
+    ;; Contracts: All blocked-by relations are checked for cycles
+    (testing "update-task"
+      (testing "detects cycle when one of multiple blocked-by relations creates cycle"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "task1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]}
+           {:id 2 :parent-id nil :title "task2" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+           {:id 3 :parent-id nil :title "task3" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        ;; Try to add multiple blocked-by relations where one creates a cycle
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 2 :relations [{"id" 1 "relates-to" 3 "as-type" "blocked-by"}
+                                              {"id" 2 "relates-to" 1 "as-type" "blocked-by"}]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Circular dependency detected")))))))
+
+(deftest update-task-allows-non-blocked-by-relations
+  (h/with-test-setup [test-dir]
+    ;; Tests that non-blocked-by relations are not validated for cycles
+    ;; Contracts: Only :blocked-by relations are checked for circular dependencies
+    (testing "update-task"
+      (testing "allows circular :related relations without error"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "task1" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations [{:id 1 :relates-to 2 :as-type :related}]}
+           {:id 2 :parent-id nil :title "task2" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        ;; Create "circular" related relation (should be allowed)
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 2 :relations [{"id" 1 "relates-to" 1 "as-type" "related"}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task2 (second tasks)]
+            (is (= [{:id 1 :relates-to 1 :as-type :related}] (:relations task2)))))))))

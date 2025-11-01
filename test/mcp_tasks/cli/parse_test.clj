@@ -358,3 +358,46 @@
       (let [result (sut/parse-reopen ["--format" "json"])]
         (is (contains? result :error))
         (is (= "At least one of --task-id, --title must be provided" (:error result)))))))
+
+(deftest parse-list-with-blocked-filter-test
+  (testing "parse-list with blocked filter"
+    (testing "parses --blocked true"
+      (is (= {:blocked true :limit 30}
+             (sut/parse-list ["--blocked" "true"]))))
+
+    (testing "parses --blocked false"
+      (is (= {:blocked false :limit 30}
+             (sut/parse-list ["--blocked" "false"]))))
+
+    (testing "combines with other filters"
+      (is (= {:blocked true :status :open :limit 30}
+             (sut/parse-list ["--blocked" "true" "--status" "open"]))))))
+
+(deftest parse-list-with-show-blocking-test
+  (testing "parse-list with show-blocking flag"
+    (testing "parses --show-blocking"
+      (is (= {:show-blocking true :limit 30}
+             (sut/parse-list ["--show-blocking" "true"]))))
+
+    (testing "defaults to false when not provided"
+      (is (= {:limit 30}
+             (sut/parse-list []))))))
+
+(deftest parse-why-blocked-test
+  (testing "parse-why-blocked"
+    (testing "parses task-id successfully"
+      (is (= {:task-id 42}
+             (sut/parse-why-blocked ["--task-id" "42"]))))
+
+    (testing "uses id alias"
+      (is (= {:task-id 99}
+             (sut/parse-why-blocked ["--id" "99"]))))
+
+    (testing "parses with format option"
+      (is (= {:task-id 42 :format :human}
+             (sut/parse-why-blocked ["--task-id" "42" "--format" "human"]))))
+
+    (testing "requires task-id"
+      (let [result (sut/parse-why-blocked ["--format" "json"])]
+        (is (contains? result :error))
+        (is (= "Required option: --task-id (or --id)" (:error result)))))))

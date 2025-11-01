@@ -46,6 +46,64 @@ Task relationships are defined as:
 - Depends on local `mcp-clj` server library at `../mcp-clj/projects/server`
 - Ensure the sibling mcp-clj repository is available for development
 
+## Task Dependencies and Blocking
+
+The system supports task dependencies through `:blocked-by` relationships, enabling proper task ordering and dependency management.
+
+**Blocking Logic:**
+
+A task is **blocked** if ANY of its `:blocked-by` relations reference an incomplete task (status `:open`, `:in-progress`, or `:blocked`). A task is **unblocked** if ALL of its `:blocked-by` relations reference completed tasks (status `:closed` or `:deleted`), or if it has no `:blocked-by` relations.
+
+**Status Field vs. blocked-by Relations:**
+
+The system distinguishes between two types of blocking:
+
+- **`:status :blocked`** - Manual blocking for external factors (e.g., waiting on stakeholder decision, external dependency). This is a user-set status indicating the task cannot proceed for reasons outside the task system.
+
+- **`:blocked-by` relations** - Automated dependency-based blocking. The system computes whether a task is blocked by checking the completion status of tasks referenced in its `:blocked-by` relations.
+
+A task can be both manually blocked (`:status :blocked`) and dependency-blocked (has incomplete `:blocked-by` relations). When computing dependency blocking, tasks with `:status :blocked` are treated as incomplete, meaning they can block other tasks that depend on them.
+
+**Creating Dependencies:**
+
+When creating tasks with dependencies:
+1. Create all tasks first using `add-task`
+2. Use `update-task` to add `:blocked-by` relations after tasks exist
+3. Example: Task B depends on Task A → add relation `{:id 1, :relates-to <task-a-id>, :as-type :blocked-by}` to Task B's `:relations` vector
+
+**Querying Blocked Status:**
+
+The `select-tasks` tool automatically computes blocking status for each returned task:
+- `:is-blocked` - Boolean indicating if the task is currently blocked
+- `:blocking-task-ids` - Vector of task IDs that are blocking this task (empty if unblocked)
+- `blocked` parameter - Filter results to only blocked (`blocked: true`) or only unblocked (`blocked: false`) tasks
+
+The `work-on` tool also returns `:is-blocked` and `:blocking-task-ids` fields in its response.
+
+**Story and Task Execution:**
+
+When executing stories, the `execute-story-task` prompt automatically finds the first **unblocked** incomplete child task using `select-tasks` with `blocked: false` parameter. If all incomplete tasks are blocked, the prompt informs the user with details about blocking tasks and suggests completing blocking tasks first.
+
+When executing individual tasks, the `execute-task` prompt validates whether the task is blocked before proceeding and asks for user confirmation if blocked.
+
+**Circular Dependencies:**
+
+The system detects circular dependencies when computing blocked status (e.g., Task A → Task B → Task A). If detected, affected tasks are marked as `:is-blocked true` with `:blocking-task-ids` showing the cycle. The system logs warnings but allows users to proceed manually to resolve the issue.
+
+**Invalid Task IDs:**
+
+If a `:blocked-by` relation references a non-existent task ID, the system treats this as an error. The task is marked as `:is-blocked true` with an error message in the metadata. A warning is logged, but users can choose to proceed.
+
+**CLI Support:**
+
+The CLI provides filtering and display options for blocked tasks:
+- `--blocked true/false` - Filter tasks by dependency-blocked status (based on `:blocked-by` relations)
+- `--show-blocking` - Append a "Blocking Details" section showing which task IDs are blocking each task
+- Blocked indicator (⊠) is always shown in table output for dependency-blocked tasks
+- `why-blocked` command - Explains why a specific task is blocked
+
+See `doc/command-line.md` for complete CLI documentation and examples.
+
 ## Git Synchronization Strategy
 
 The system provides git synchronization to ensure agents work with the latest task state when making modifications. This is implemented as a separate concern from file locking.

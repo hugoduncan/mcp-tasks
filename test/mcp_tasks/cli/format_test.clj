@@ -410,6 +410,113 @@
         (is (str/includes? output "Git Status: error"))
         (is (str/includes? output "Git Error: nothing to commit"))))))
 
+;; Blocked indicator tests
+
+(deftest format-blocked-indicator-test
+  (testing "format-blocked-indicator"
+    (testing "returns ⊠ for blocked tasks"
+      (is (= "⊠" (sut/format-blocked-indicator true))))
+
+    (testing "returns empty string for unblocked tasks"
+      (is (= "" (sut/format-blocked-indicator false)))
+      (is (= "" (sut/format-blocked-indicator nil))))))
+
+(deftest format-table-with-blocked-column-test
+  (testing "format-table with blocked indicator column"
+    (testing "includes B column header"
+      (let [tasks [{:id 1 :status :open :title "Task 1" :category "simple"
+                    :type :task :meta {} :relations [] :is-blocked false}]
+            output (sut/format-table tasks)]
+        (is (str/includes? output "B"))
+        (is (str/includes? output "ID"))))
+
+    (testing "shows ⊠ for blocked tasks"
+      (let [blocked-task {:id 1 :status :open :title "Blocked" :category "simple"
+                          :type :task :meta {} :relations [] :is-blocked true
+                          :blocking-task-ids [2 3]}
+            unblocked-task {:id 2 :status :open :title "Free" :category "simple"
+                            :type :task :meta {} :relations [] :is-blocked false
+                            :blocking-task-ids []}
+            output (sut/format-table [blocked-task unblocked-task])]
+        (is (str/includes? output "⊠"))
+        (is (str/includes? output "Blocked"))
+        (is (str/includes? output "Free"))))))
+
+(deftest format-blocking-details-test
+  (testing "format-blocking-details"
+    (testing "shows blocking task IDs"
+      (let [tasks [{:id 1 :title "Task 1" :is-blocked true :blocking-task-ids [2 3]}
+                   {:id 2 :title "Task 2" :is-blocked false :blocking-task-ids []}]
+            output (sut/format-blocking-details tasks)]
+        (is (str/includes? output "Task #1 blocked by: #2, #3"))
+        (is (not (str/includes? output "Task #2")))))
+
+    (testing "returns nil when no blocked tasks"
+      (let [tasks [{:id 1 :title "Task 1" :is-blocked false :blocking-task-ids []}]
+            output (sut/format-blocking-details tasks)]
+        (is (nil? output))))))
+
+(deftest format-table-with-show-blocking-test
+  (testing "format-table with :show-blocking option"
+    (testing "appends blocking details when option is true"
+      (let [blocked-task {:id 1 :status :open :title "Blocked" :category "simple"
+                          :type :task :meta {} :relations [] :is-blocked true
+                          :blocking-task-ids [2]}
+            output (sut/format-table [blocked-task] {:show-blocking true})]
+        (is (str/includes? output "Blocking Details:"))
+        (is (str/includes? output "Task #1 blocked by: #2"))))
+
+    (testing "does not show blocking details when option is false"
+      (let [blocked-task {:id 1 :status :open :title "Blocked" :category "simple"
+                          :type :task :meta {} :relations [] :is-blocked true
+                          :blocking-task-ids [2]}
+            output (sut/format-table [blocked-task] {:show-blocking false})]
+        (is (not (str/includes? output "Blocking Details:")))))))
+
+(deftest format-why-blocked-test
+  (testing "format-why-blocked"
+    (testing "shows blocked status for blocked task"
+      (let [task {:id 42 :title "Fix bug" :is-blocked true
+                  :blocking-task-ids [10 11]}
+            output (sut/format-why-blocked task)]
+        (is (str/includes? output "Task #42: Fix bug"))
+        (is (str/includes? output "Status: BLOCKED"))
+        (is (str/includes? output "Blocked by tasks: #10, #11"))))
+
+    (testing "shows not blocked for unblocked task"
+      (let [task {:id 42 :title "Fix bug" :is-blocked false
+                  :blocking-task-ids []}
+            output (sut/format-why-blocked task)]
+        (is (str/includes? output "Task #42: Fix bug"))
+        (is (str/includes? output "Status: Not blocked"))
+        (is (not (str/includes? output "Blocked by")))))
+
+    (testing "shows circular dependency when present"
+      (let [task {:id 42 :title "Fix bug" :is-blocked true
+                  :blocking-task-ids [10]
+                  :circular-dependency [42 10 42]}
+            output (sut/format-why-blocked task)]
+        (is (str/includes? output "Circular dependency detected"))
+        (is (str/includes? output "#42 → #10 → #42"))))
+
+    (testing "shows error when present"
+      (let [task {:id 42 :title "Fix bug" :is-blocked true
+                  :blocking-task-ids []
+                  :error "Blocked by invalid task ID: 999"}
+            output (sut/format-why-blocked task)]
+        (is (str/includes? output "Error:"))
+        (is (str/includes? output "invalid task ID"))))))
+
+(deftest render-why-blocked-test
+  (testing "render :human for why-blocked response"
+    (let [task {:id 42 :title "Fix bug" :is-blocked true
+                :blocking-task-ids [10 11]}
+          response {:why-blocked task}
+          output (sut/render :human response)]
+      (is (str/includes? output "Task #42"))
+      (is (str/includes? output "BLOCKED"))
+      (is (str/includes? output "#10, #11")))))
+
 ;; Default method test
 
 (deftest unknown-format-test

@@ -85,12 +85,20 @@
     (pr-str meta)
     "-"))
 
+(defn format-blocked-indicator
+  "Format blocked indicator for table display.
+
+  Returns '⊠' if task is blocked, empty string otherwise."
+  [is-blocked]
+  (if is-blocked "⊠" ""))
+
 ;; Table formatting
 
 (defn format-table-row
   "Format a single row of the table with proper column widths."
-  [id parent-id status category meta title max-title-width]
-  (format "%4s  %-8s  %-12s  %-10s  %-20s  %s"
+  [blocked-indicator id parent-id status category meta title max-title-width]
+  (format "%-2s  %4s  %-8s  %-12s  %-10s  %-20s  %s"
+          blocked-indicator
           (or id "")
           (if parent-id (str parent-id) "")
           (truncate-text status 12)
@@ -98,27 +106,52 @@
           (truncate-text meta 20)
           (truncate-text title max-title-width)))
 
+(defn format-blocking-details
+  "Format blocking task details for display.
+
+  Returns formatted string showing which tasks are blocking each task.
+  Only includes tasks that have blocking tasks."
+  [tasks]
+  (let [blocked-tasks (filter :is-blocked tasks)]
+    (when (seq blocked-tasks)
+      (str "\n\nBlocking Details:\n"
+           (str/join "\n"
+                     (map (fn [task]
+                            (let [blocking-ids (:blocking-task-ids task)]
+                              (str "  Task #" (:id task) " blocked by: "
+                                   (str/join ", " (map #(str "#" %) blocking-ids)))))
+                          blocked-tasks))))))
+
 (defn format-table
   "Format a vector of tasks as an ASCII table.
 
-  Columns: ID, Parent, Status, Category, Meta, Title (truncated)"
-  [tasks]
-  (if (empty? tasks)
-    "No tasks found"
-    (let [max-title-width 50
-          header (format "%4s  %-8s  %-12s  %-10s  %-20s  %s" "ID" "Parent" "Status" "Category" "Meta" "Title")
-          separator (str/join (repeat (+ 4 2 8 2 12 2 10 2 20 2 max-title-width) "-"))
-          rows (map (fn [task]
-                      (format-table-row
-                        (:id task)
-                        (:parent-id task)
-                        (format-status (:status task))
-                        (:category task)
-                        (format-meta (:meta task))
-                        (:title task)
-                        max-title-width))
-                    tasks)]
-      (str/join "\n" (concat [header separator] rows)))))
+  Columns: B (blocked indicator), ID, Parent, Status, Category, Meta, Title (truncated)
+
+  Options (from opts map):
+  - :show-blocking - If true, append blocking details after table"
+  ([tasks]
+   (format-table tasks {}))
+  ([tasks opts]
+   (if (empty? tasks)
+     "No tasks found"
+     (let [max-title-width 50
+           header (format "%-2s  %4s  %-8s  %-12s  %-10s  %-20s  %s" "B" "ID" "Parent" "Status" "Category" "Meta" "Title")
+           separator (str/join (repeat (+ 2 2 4 2 8 2 12 2 10 2 20 2 max-title-width) "-"))
+           rows (map (fn [task]
+                       (format-table-row
+                         (format-blocked-indicator (:is-blocked task))
+                         (:id task)
+                         (:parent-id task)
+                         (format-status (:status task))
+                         (:category task)
+                         (format-meta (:meta task))
+                         (:title task)
+                         max-title-width))
+                     tasks)
+           table-output (str/join "\n" (concat [header separator] rows))
+           blocking-details (when (:show-blocking opts)
+                              (format-blocking-details tasks))]
+       (str table-output blocking-details)))))
 
 ;; Single task formatting
 
@@ -152,6 +185,30 @@
                 (and (:design task) (not (str/blank? (:design task))))
                 (conj "Design:"
                       (str "  " (str/replace (:design task) #"\n" "\n  ")))))))
+
+(defn format-why-blocked
+  "Format why-blocked response showing task blocking status.
+
+  Shows task ID, title, blocked status, and details about blocking tasks."
+  [task]
+  (let [task-id (:id task)
+        title (:title task)
+        is-blocked (:is-blocked task)
+        blocking-ids (:blocking-task-ids task)
+        circular-dep (:circular-dependency task)
+        error (:error task)]
+    (str/join "\n"
+              (filter some?
+                      [(str "Task #" task-id ": " title)
+                       (if is-blocked
+                         "Status: BLOCKED"
+                         "Status: Not blocked")
+                       (when (seq blocking-ids)
+                         (str "Blocked by tasks: " (str/join ", " (map #(str "#" %) blocking-ids))))
+                       (when circular-dep
+                         (str "Circular dependency detected: " (str/join " → " (map #(str "#" %) circular-dep))))
+                       (when error
+                         (str "Error: " error))]))))
 
 ;; Error formatting
 
@@ -217,7 +274,8 @@
     (let [tasks (:tasks data)
           metadata (:metadata data)
           task-count (count tasks)
-          task-output (format-table tasks)
+          show-blocking (:show-blocking data)
+          task-output (format-table tasks {:show-blocking show-blocking})
           git-output (format-git-metadata data)]
       (str/join "\n\n"
                 (filter some?
@@ -256,6 +314,10 @@
           task-output (str "Deleted Task #" (:id task) ": " (:title task))
           git-output (format-git-metadata data)]
       (str/join "\n\n" (filter some? [task-output git-output])))
+
+    ;; Why-blocked response
+    (:why-blocked data)
+    (format-why-blocked (:why-blocked data))
 
     ;; Generic response with modified files
     (:modified-files data)

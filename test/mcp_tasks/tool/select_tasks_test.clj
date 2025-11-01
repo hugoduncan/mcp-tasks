@@ -695,3 +695,245 @@
             (let [response (json/parse-string (get-in result [:content 0 :text]) keyword)]
               (is (= 1 (get-in response [:metadata :open-task-count])))
               (is (nil? (get-in response [:metadata :completed-task-count]))))))))))
+
+;; Blocked status tests
+
+(deftest select-tasks-enriches-with-blocked-status
+  ;; Test that all returned tasks include :is-blocked and :blocking-task-ids fields
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks enriches tasks with blocked status"
+      (testing "adds :is-blocked and :blocking-task-ids to all tasks"
+        (let [task1 {:id 1
+                     :type :task
+                     :title "Unblocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Blocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}]
+          (write-tasks-ednl test-dir [task1 task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test"})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (false? (:isError result)))
+            (is (= 2 (count tasks)))
+            ;; First task should be unblocked
+            (is (false? (:is-blocked (first tasks))))
+            (is (= [] (:blocking-task-ids (first tasks))))
+            ;; Second task should be blocked by task 1
+            (is (true? (:is-blocked (second tasks))))
+            (is (= [1] (:blocking-task-ids (second tasks))))))))))
+
+(deftest select-tasks-filter-blocked-true
+  ;; Test that blocked: true returns only blocked tasks
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with blocked: true filter"
+      (testing "returns only blocked tasks"
+        (let [task1 {:id 1
+                     :type :task
+                     :title "Blocking task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Blocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}
+              task3 {:id 3
+                     :type :task
+                     :title "Another unblocked"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}]
+          (write-tasks-ednl test-dir [task1 task2 task3])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test" :blocked true})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (false? (:isError result)))
+            (is (= 1 (count tasks)))
+            (is (= "Blocked task" (:title (first tasks))))
+            (is (true? (:is-blocked (first tasks))))
+            (is (= [1] (:blocking-task-ids (first tasks))))))))))
+
+(deftest select-tasks-filter-blocked-false
+  ;; Test that blocked: false returns only unblocked tasks
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with blocked: false filter"
+      (testing "returns only unblocked tasks"
+        (let [task1 {:id 1
+                     :type :task
+                     :title "Unblocked 1"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Blocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}
+              task3 {:id 3
+                     :type :task
+                     :title "Unblocked 2"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}]
+          (write-tasks-ednl test-dir [task1 task2 task3])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test" :blocked false})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (false? (:isError result)))
+            (is (= 2 (count tasks)))
+            (is (= #{"Unblocked 1" "Unblocked 2"} (set (map :title tasks))))
+            (is (every? #(false? (:is-blocked %)) tasks))
+            (is (every? #(= [] (:blocking-task-ids %)) tasks))))))))
+
+(deftest select-tasks-filter-blocked-nil
+  ;; Test that blocked: nil returns all tasks (default behavior)
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with blocked: nil filter"
+      (testing "returns all tasks regardless of blocked status"
+        (let [task1 {:id 1
+                     :type :task
+                     :title "Unblocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Blocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}]
+          (write-tasks-ednl test-dir [task1 task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test"})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (false? (:isError result)))
+            (is (= 2 (count tasks)))
+            (is (= ["Unblocked task" "Blocked task"] (map :title tasks)))))))))
+
+(deftest select-tasks-blocked-filter-with-other-filters
+  ;; Test that blocked filter combines properly with other filters
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks blocked filter combines with other filters"
+      (testing "combines blocked filter with category and type filters"
+        (let [task1 {:id 1
+                     :type :task
+                     :title "Blocking task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              task2 {:id 2
+                     :type :bug
+                     :title "Blocked bug"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}
+              task3 {:id 3
+                     :type :task
+                     :title "Blocked task"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 2 :relates-to 1 :as-type :blocked-by}]}
+              task4 {:id 4
+                     :type :bug
+                     :title "Unblocked bug"
+                     :description ""
+                     :design ""
+                     :category "other"
+                     :status :open
+                     :meta {}
+                     :relations []}]
+          (write-tasks-ednl test-dir [task1 task2 task3 task4])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test" :type "bug" :blocked true})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (false? (:isError result)))
+            (is (= 1 (count tasks)))
+            (is (= "Blocked bug" (:title (first tasks))))
+            (is (true? (:is-blocked (first tasks))))))))))
+
+(deftest select-tasks-blocked-by-completed-task-is-not-blocked
+  ;; Test that a task blocked-by a completed task is not considered blocked
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks blocked status with completed blocking task"
+      (testing "task blocked-by completed task is not blocked"
+        (let [completed-task {:id 1
+                              :type :task
+                              :title "Completed blocking task"
+                              :description ""
+                              :design ""
+                              :category "test"
+                              :status :closed
+                              :meta {}
+                              :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Task blocked by completed"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}]
+          (write-tasks-ednl test-dir [task2])
+          (h/write-ednl-test-file test-dir "complete.ednl" [completed-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test"})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (false? (:isError result)))
+            (is (= 1 (count tasks)))
+            (is (false? (:is-blocked (first tasks))))
+            (is (= [] (:blocking-task-ids (first tasks))))))))))

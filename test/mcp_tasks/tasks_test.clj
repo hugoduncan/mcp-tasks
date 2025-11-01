@@ -805,3 +805,243 @@
         (is (= 6 (:id task-6)))
         (is (= 7 (:id task-7)))
         (is (= 8 @tasks/next-id))))))
+
+;; Blocking Logic Tests
+
+(deftest is-task-blocked-basic-test
+  ;; Test basic blocking detection logic
+  ;; Contracts: Task blocked if any :blocked-by relation references incomplete task
+  (testing "is-task-blocked?"
+    (testing "returns unblocked for task with no relations"
+      (reset-state!)
+      (tasks/add-task (dissoc test-task-1 :id))
+      (let [result (tasks/is-task-blocked? 1)]
+        (is (false? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))
+        (is (nil? (:error result)))))
+
+    (testing "returns unblocked for task with :blocked-by pointing to closed task"
+      (reset-state!)
+      (tasks/add-task (dissoc test-task-1 :id))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]
+                             :status :closed))
+      (tasks/add-task (assoc (dissoc test-task-3 :id)
+                             :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 3)]
+        (is (false? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))))
+
+    (testing "returns blocked for task with :blocked-by pointing to open task"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :open))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 2)]
+        (is (true? (:blocked? result)))
+        (is (= [1] (:blocking-ids result)))))
+
+    (testing "returns blocked for task with :blocked-by pointing to in-progress task"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :in-progress))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 2)]
+        (is (true? (:blocked? result)))
+        (is (= [1] (:blocking-ids result)))))
+
+    (testing "returns blocked for task with :blocked-by pointing to blocked task"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :blocked))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 2)]
+        (is (true? (:blocked? result)))
+        (is (= [1] (:blocking-ids result)))))
+
+    (testing "returns unblocked for task with :blocked-by pointing to deleted task"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :deleted))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 2)]
+        (is (false? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))))))
+
+(deftest is-task-blocked-multiple-blockers-test
+  ;; Test blocking logic with multiple :blocked-by relations
+  ;; Contracts: Task blocked if ANY blocker is incomplete
+  (testing "is-task-blocked? with multiple blockers"
+    (testing "returns blocked if at least one blocker is incomplete"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :closed))
+      (tasks/add-task (assoc (dissoc test-task-2 :id) :status :open))
+      (tasks/add-task (assoc (dissoc test-task-3 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}
+                                         {:id 2 :relates-to 2 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 3)]
+        (is (true? (:blocked? result)))
+        (is (= [2] (:blocking-ids result)))))
+
+    (testing "returns unblocked if all blockers are complete"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :closed))
+      (tasks/add-task (assoc (dissoc test-task-2 :id) :status :closed))
+      (tasks/add-task (assoc (dissoc test-task-3 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}
+                                         {:id 2 :relates-to 2 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 3)]
+        (is (false? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))))
+
+    (testing "returns all incomplete blockers in blocking-ids"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :open))
+      (tasks/add-task (assoc (dissoc test-task-2 :id) :status :in-progress))
+      (tasks/add-task (assoc (dissoc test-task-4 :id) :status :closed))
+      (tasks/add-task (assoc (dissoc test-task-3 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}
+                                         {:id 2 :relates-to 2 :as-type :blocked-by}
+                                         {:id 3 :relates-to 3 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 4)]
+        (is (true? (:blocked? result)))
+        (is (= [1 2] (:blocking-ids result)))))))
+
+(deftest is-task-blocked-invalid-task-id-test
+  ;; Test handling of invalid task IDs in :blocked-by relations
+  ;; Contracts: Invalid IDs should cause blocked status with error message
+  (testing "is-task-blocked? with invalid task IDs"
+    (testing "returns error for non-existent task"
+      (reset-state!)
+      (let [result (tasks/is-task-blocked? 999)]
+        (is (false? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))
+        (is (string? (:error result)))
+        (is (re-find #"Task 999 not found" (:error result)))))
+
+    (testing "returns blocked with error for invalid blocker ID"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id)
+                             :relations [{:id 1 :relates-to 999 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 1)]
+        (is (true? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))
+        (is (string? (:error result)))
+        (is (re-find #"invalid task ID: 999" (:error result)))))
+
+    (testing "returns blocked with multiple errors for multiple invalid IDs"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id)
+                             :relations [{:id 1 :relates-to 888 :as-type :blocked-by}
+                                         {:id 2 :relates-to 999 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 1)]
+        (is (true? (:blocked? result)))
+        (is (= [] (:blocking-ids result)))
+        (is (string? (:error result)))
+        (is (re-find #"888" (:error result)))
+        (is (re-find #"999" (:error result)))))))
+
+(deftest detect-circular-dependency-test
+  ;; Test circular dependency detection
+  ;; Contracts: Detects cycles in :blocked-by chains
+  (testing "detect-circular-dependency"
+    (testing "returns nil for no circular dependency"
+      (reset-state!)
+      (tasks/add-task (dissoc test-task-1 :id))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 2)]
+        (is (nil? (:circular-dependency result)))))
+
+    (testing "detects simple A -> A cycle"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 1)]
+        (is (some? (:circular-dependency result)))
+        (is (= 1 (first (:circular-dependency result))))
+        (is (= 1 (last (:circular-dependency result))))))
+
+    (testing "detects A -> B -> A cycle"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id)
+                             :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 1)]
+        (is (some? (:circular-dependency result)))
+        (let [cycle (:circular-dependency result)]
+          (is (= (first cycle) (last cycle)))
+          (is (or (= [2 1 2] cycle) (= [1 2 1] cycle))))))
+
+    (testing "detects A -> B -> C -> A cycle"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id)
+                             :relations [{:id 1 :relates-to 2 :as-type :blocked-by}]))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 3 :as-type :blocked-by}]))
+      (tasks/add-task (assoc (dissoc test-task-3 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (let [result (tasks/is-task-blocked? 1)]
+        (is (some? (:circular-dependency result)))
+        (let [cycle (:circular-dependency result)]
+          (is (= (first cycle) (last cycle))))))))
+
+(deftest get-blocking-tasks-test
+  ;; Test get-blocking-tasks returns task maps for incomplete blockers
+  ;; Contracts: Returns vector of task maps with blocking status
+  (testing "get-blocking-tasks"
+    (testing "returns empty vector for task with no relations"
+      (reset-state!)
+      (tasks/add-task (dissoc test-task-1 :id))
+      (is (= [] (tasks/get-blocking-tasks 1))))
+
+    (testing "returns empty vector for non-existent task"
+      (reset-state!)
+      (is (= [] (tasks/get-blocking-tasks 999))))
+
+    (testing "returns empty vector when all blockers are complete"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :closed))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+      (is (= [] (tasks/get-blocking-tasks 2))))
+
+    (testing "returns blocking task maps for incomplete blockers"
+      (reset-state!)
+      (let [blocker (tasks/add-task (assoc (dissoc test-task-1 :id) :status :open))]
+        (tasks/add-task (assoc (dissoc test-task-2 :id)
+                               :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]))
+        (let [result (tasks/get-blocking-tasks 2)]
+          (is (= 1 (count result)))
+          (is (= blocker (first result))))))
+
+    (testing "returns multiple blocking task maps"
+      (reset-state!)
+      (let [blocker-1 (tasks/add-task (assoc (dissoc test-task-1 :id) :status :open))
+            blocker-2 (tasks/add-task (assoc (dissoc test-task-2 :id) :status :in-progress))]
+        (tasks/add-task (assoc (dissoc test-task-3 :id)
+                               :relations [{:id 1 :relates-to 1 :as-type :blocked-by}
+                                           {:id 2 :relates-to 2 :as-type :blocked-by}]))
+        (let [result (tasks/get-blocking-tasks 3)]
+          (is (= 2 (count result)))
+          (is (= #{blocker-1 blocker-2} (set result))))))
+
+    (testing "filters out completed tasks from results"
+      (reset-state!)
+      (let [blocker-open (tasks/add-task (assoc (dissoc test-task-1 :id) :status :open))]
+        (tasks/add-task (assoc (dissoc test-task-2 :id) :status :closed))
+        (tasks/add-task (assoc (dissoc test-task-3 :id)
+                               :relations [{:id 1 :relates-to 1 :as-type :blocked-by}
+                                           {:id 2 :relates-to 2 :as-type :blocked-by}]))
+        (let [result (tasks/get-blocking-tasks 3)]
+          (is (= 1 (count result)))
+          (is (= blocker-open (first result))))))
+
+    (testing "ignores non-blocked-by relations"
+      (reset-state!)
+      (tasks/add-task (assoc (dissoc test-task-1 :id) :status :open))
+      (tasks/add-task (assoc (dissoc test-task-2 :id)
+                             :relations [{:id 1 :relates-to 1 :as-type :related}
+                                         {:id 2 :relates-to 1 :as-type :discovered-during}]))
+      (is (= [] (tasks/get-blocking-tasks 2))))))

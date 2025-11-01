@@ -625,12 +625,15 @@
   Returns:
   - MCP response map with :content and :isError keys"
   [task branch-info worktree-info state-file-path]
-  (let [response-data (cond-> {:task-id (:id task)
+  (let [blocking-status (tasks/is-task-blocked? (:id task))
+        response-data (cond-> {:task-id (:id task)
                                :title (:title task)
                                :category (:category task)
                                :type (:type task)
                                :status (:status task)
                                :execution-state-file state-file-path
+                               :is-blocked (:blocked? blocking-status)
+                               :blocking-task-ids (:blocking-ids blocking-status)
                                :message "Task validated successfully and execution state written"}
                         branch-info
                         (assoc :branch-name (:branch-name branch-info)

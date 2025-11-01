@@ -71,7 +71,15 @@ The story can be specified in multiple ways:
    - Get user feedback and approval
    - Make adjustments based on feedback
 
-6. Once approved, add each task using the `add-task` tool:
+6. Ask about task dependencies:
+   - Ask the user: "Are there any dependencies between these tasks?"
+   - If yes:
+     - Guide the user to identify which tasks must be completed before others
+     - Note which tasks are blocked by other tasks
+     - Explain that dependencies will be added as `:blocked-by` relations after task creation
+   - If no dependencies, proceed to task creation
+
+7. Once approved, add each task using the `add-task` tool:
    - For each task, call `add-task` with:
      - `category`: the selected category (simple, medium, large, clarify-task)
      - `title`: task title on first line, then description including
@@ -81,7 +89,21 @@ The story can be specified in multiple ways:
    - Tasks will be added to `.mcp-tasks/tasks.ednl` with the story as parent
    - Add tasks in order (dependencies first)
 
-7. Confirm task creation to the user:
+8. If there are dependencies, add `:blocked-by` relations using `update-task`:
+   - For each task that is blocked by another task, call `update-task` with:
+     - `task-id`: the ID of the blocked task
+     - `relations`: a JSON array containing the new relation(s)
+   - Each relation is a JSON object with:
+     - `id`: a unique integer for this relation (use 1, 2, 3, etc.)
+     - `relates-to`: the task ID that blocks this task
+     - `as-type`: "blocked-by"
+   - Example: If task B (ID 461) is blocked by task A (ID 460):
+     ```json
+     update-task task-id: 461, relations: [{"id": 1, "relates-to": 460, "as-type": "blocked-by"}]
+     ```
+   - If a task is blocked by multiple tasks, include multiple relation objects in the array
+
+9. Confirm task creation to the user:
    - Report how many tasks were created
    - Mention they can be executed with `/mcp-tasks:execute-story-task <story-name>`
 

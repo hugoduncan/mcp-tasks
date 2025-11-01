@@ -22,7 +22,7 @@
   (try
     (let [;; Find the first argument that looks like a command (not an option or option value)
           ;; Valid commands are known strings that don't start with --
-          valid-commands #{"list" "show" "add" "complete" "update" "delete" "reopen"}
+          valid-commands #{"list" "show" "add" "complete" "update" "delete" "reopen" "why-blocked"}
           ;; Find command by looking for first valid command OR first non-option after options
           command-idx (loop [idx 0
                              prev-was-option? false]
@@ -57,7 +57,7 @@
 
         ;; Handle command-specific help
         (and (= "--help" (first command-args))
-             (contains? #{"list" "show" "add" "complete" "update" "delete" "reopen"} command))
+             (contains? #{"list" "show" "add" "complete" "update" "delete" "reopen" "why-blocked"} command))
         (do
           (case command
             "list" (println parse/list-help)
@@ -66,12 +66,13 @@
             "complete" (println parse/complete-help)
             "update" (println parse/update-help)
             "delete" (println parse/delete-help)
-            "reopen" (println parse/reopen-help))
+            "reopen" (println parse/reopen-help)
+            "why-blocked" (println parse/why-blocked-help))
           (exit 0))
 
         ;; Execute command
         :else
-        (let [valid-commands #{"list" "show" "add" "complete" "update" "delete" "reopen"}]
+        (let [valid-commands #{"list" "show" "add" "complete" "update" "delete" "reopen" "why-blocked"}]
           ;; Validate command is known
           (if-not (contains? valid-commands command)
             (do
@@ -94,7 +95,8 @@
                                 "complete" (parse/parse-complete command-args)
                                 "update" (parse/parse-update command-args)
                                 "delete" (parse/parse-delete command-args)
-                                "reopen" (parse/parse-reopen command-args))]
+                                "reopen" (parse/parse-reopen command-args)
+                                "why-blocked" (parse/parse-why-blocked command-args))]
 
               ;; Check for parsing errors
               (if (:error parsed-args)
@@ -111,7 +113,8 @@
                                "complete" (commands/complete-command resolved-config parsed-args)
                                "update" (commands/update-command resolved-config parsed-args)
                                "delete" (commands/delete-command resolved-config parsed-args)
-                               "reopen" (commands/reopen-command resolved-config parsed-args))
+                               "reopen" (commands/reopen-command resolved-config parsed-args)
+                               "why-blocked" (commands/why-blocked-command resolved-config parsed-args))
                       output-format (or (:format parsed-args) format)
                       formatted-output (format/render output-format result)]
                   (if (:error result)
