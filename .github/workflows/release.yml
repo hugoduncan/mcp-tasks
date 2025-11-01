@@ -106,6 +106,35 @@ jobs:
           echo "Downloaded binaries:"
           ls -lh binaries/
 
+      - name: Validate binary artifacts
+        run: |
+          echo "Validating binary artifacts..."
+          MISSING=()
+
+          if [ ! -f "binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64" ]; then
+            MISSING+=("linux-amd64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64" ]; then
+            MISSING+=("macos-amd64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64" ]; then
+            MISSING+=("macos-arm64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-windows-amd64.exe/mcp-tasks-windows-amd64.exe" ]; then
+            MISSING+=("windows-amd64.exe")
+          fi
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "Error: Missing binary artifacts: ${MISSING[*]}"
+            echo "Cannot proceed with release without all binaries"
+            exit 1
+          fi
+
+          echo "All binary artifacts validated successfully"
+
       - name: Create git tag
         if: ${{ !inputs.dry-run }}
         run: |
