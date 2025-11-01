@@ -200,15 +200,54 @@ clojure -M:cli reopen --task-id 1
 ### Query and filter
 
 ```bash
-# Find all blocked tasks
-clojure -M:cli list --status blocked
+# Find all blocked tasks (by dependency)
+clojure -M:cli list --blocked true
+
+# Find all unblocked tasks
+clojure -M:cli list --blocked false
+
+# Show blocking details for blocked tasks
+clojure -M:cli list --blocked true --show-blocking
 
 # Show tasks for a specific category
 clojure -M:cli list --category feature --format human
 
 # View completed tasks
 clojure -M:cli list --status closed --limit 5
+
+# Find tasks with manual blocked status
+clojure -M:cli list --status blocked
 ```
+
+### Blocked task management
+
+Tasks can be blocked by dependencies (via `:blocked-by` relations) or manually blocked (via `:status :blocked`). The CLI provides filtering and display options for working with blocked tasks:
+
+```bash
+# List all tasks blocked by dependencies
+clojure -M:cli list --blocked true --format human
+
+# Show blocking details (which tasks are blocking each blocked task)
+clojure -M:cli list --blocked true --show-blocking
+
+# List only unblocked tasks (useful for finding next available work)
+clojure -M:cli list --blocked false --format human
+
+# Find tasks with manual blocked status (waiting on external factors)
+clojure -M:cli list --status blocked
+
+# Explain why a specific task is blocked
+clojure -M:cli why-blocked --task-id 42
+```
+
+**Blocked indicator:**
+- The blocked indicator (⊠) is always shown in the table for dependency-blocked tasks
+- Use `--show-blocking` to append a "Blocking Details" section listing which task IDs are blocking each task
+
+**Difference between `--blocked` and `--status blocked`:**
+- `--blocked true/false` - Filters by computed dependency blocking (based on `:blocked-by` relations)
+- `--status blocked` - Filters by manual blocked status (set by user for external factors)
+- A task can be both dependency-blocked and manually blocked
 
 ### Story management
 

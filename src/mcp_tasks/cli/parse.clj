@@ -73,8 +73,8 @@ OPTIONS:
   --parent-id, -p <id>          Filter by parent task ID
   --task-id <id>                Filter by specific task ID
   --title-pattern, --title <pattern>  Filter by title pattern (regex or substring)
-  --blocked <true|false>        Filter by blocked status (true for blocked, false for unblocked)
-  --show-blocking               Show which tasks are blocking each listed task
+  --blocked <true|false>        Filter by dependency-blocked status (based on :blocked-by relations)
+  --show-blocking               Append blocking details section showing which task IDs block each task
   --limit <n>                   Maximum tasks to return (default: 30)
   --unique                      Enforce 0 or 1 match (error if >1)
   --format <format>             Output format: edn, json, human (default: edn)

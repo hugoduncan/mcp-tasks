@@ -94,6 +94,16 @@ The system detects circular dependencies when computing blocked status (e.g., Ta
 
 If a `:blocked-by` relation references a non-existent task ID, the system treats this as an error. The task is marked as `:is-blocked true` with an error message in the metadata. A warning is logged, but users can choose to proceed.
 
+**CLI Support:**
+
+The CLI provides filtering and display options for blocked tasks:
+- `--blocked true/false` - Filter tasks by dependency-blocked status (based on `:blocked-by` relations)
+- `--show-blocking` - Append a "Blocking Details" section showing which task IDs are blocking each task
+- Blocked indicator (⊠) is always shown in table output for dependency-blocked tasks
+- `why-blocked` command - Explains why a specific task is blocked
+
+See `doc/command-line.md` for complete CLI documentation and examples.
+
 ## Git Synchronization Strategy
 
 The system provides git synchronization to ensure agents work with the latest task state when making modifications. This is implemented as a separate concern from file locking.
