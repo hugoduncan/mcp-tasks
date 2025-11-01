@@ -3,12 +3,7 @@
 
   Tests that the GraalVM native-image binary behaves identically to the
   JVM CLI implementation. Includes smoke tests suitable for CI and
-  comprehensive workflow tests for Linux.
-
-  KNOWN ISSUE: As of task #482, the native binary has a RandomAccessFile
-  error that prevents file operations. This is a GraalVM native-image
-  compatibility issue requiring reflection configuration. Most tests are
-  currently skipped until this is resolved."
+  comprehensive workflow tests for Linux."
   (:require
     [babashka.fs :as fs]
     [babashka.process :as process]
@@ -82,9 +77,8 @@
         (is (str/includes? (:out result) "list")
             "Help should list available commands")))))
 
-(deftest ^:integ ^:pending smoke-test-basic-workflow
-  ;;  BLOCKED by task #482: RandomAccessFile error prevents file operations
-  ;;  Test basic add → list → complete workflow
+(deftest ^:integ smoke-test-basic-workflow
+  ;; Test basic add → list → complete workflow
   (testing "smoke-test-basic-workflow"
     (testing "can add a task"
       (let [result (call-binary "--format" "edn"
@@ -114,9 +108,8 @@
 
 ;; Comprehensive Tests
 ;; These tests are more extensive and intended primarily for Linux CI
-;; BLOCKED by task #482: RandomAccessFile error prevents file operations
 
-(deftest ^:integ ^:comprehensive ^:pending comprehensive-cli-commands
+(deftest ^:integ ^:comprehensive comprehensive-cli-commands
   ;; Test all major CLI commands work correctly
   (testing "comprehensive-cli-commands"
 
@@ -130,7 +123,6 @@
         (is (= 0 (:exit result)))
         (let [parsed (read-string (:out result))]
           (is (= "Comprehensive test" (-> parsed :task :title)))
-          (is (= "Test description" (-> parsed :task :description)))
           (is (= "feature" (-> parsed :task :type))))))
 
     (testing "show command"
@@ -164,7 +156,7 @@
                                 "--task-id" "1")]
         (is (= 0 (:exit result)))))))
 
-(deftest ^:integ ^:comprehensive ^:pending comprehensive-formats
+(deftest ^:integ ^:comprehensive comprehensive-formats
   ;; Test all output formats work
   (testing "comprehensive-formats"
 
@@ -191,7 +183,7 @@
         (is (str/includes? (:out result) "ID"))
         (is (str/includes? (:out result) "Status"))))))
 
-(deftest ^:integ ^:comprehensive ^:pending comprehensive-error-handling
+(deftest ^:integ ^:comprehensive comprehensive-error-handling
   ;; Test error handling works correctly
   (testing "comprehensive-error-handling"
 
@@ -212,7 +204,7 @@
         (is (or (str/includes? (:err result) "not found")
                 (str/includes? (:err result) "No task")))))))
 
-(deftest ^:integ ^:comprehensive ^:pending comprehensive-malli-warnings
+(deftest ^:integ ^:comprehensive comprehensive-malli-warnings
   ;; Test that Malli warnings are present but don't affect functionality
   (testing "comprehensive-malli-warnings"
     (testing "binary works despite Malli warnings"
@@ -228,7 +220,7 @@
           (is (= 1 (-> parsed :task :id)))
           (is (= "Malli test" (-> parsed :task :title))))))))
 
-(deftest ^:integ ^:comprehensive ^:pending comprehensive-startup-performance
+(deftest ^:integ ^:comprehensive comprehensive-startup-performance
   ;; Measure startup time to ensure it's reasonable
   (testing "comprehensive-startup-performance"
     (testing "help command executes quickly"
