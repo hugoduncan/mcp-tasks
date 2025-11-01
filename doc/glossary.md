@@ -4,9 +4,15 @@
 
 **Archive**: The `.mcp-tasks/complete.ednl` file where completed tasks are stored with `:status :closed`.
 
+**Blocked Task**: A task that cannot be executed because it has `:blocked-by` relations referencing incomplete tasks (status `:open`, `:in-progress`, or `:blocked`). Computed automatically by checking the completion status of all tasks referenced in the `:blocked-by` relations. A task is unblocked when all its `:blocked-by` relations point to completed tasks (`:closed` or `:deleted`), or when it has no `:blocked-by` relations.
+
+**Blocking Task**: A task that is preventing another task from being executed due to a `:blocked-by` relation. A task blocks another if it appears in that task's `:blocked-by` relations and has incomplete status (`:open`, `:in-progress`, or `:blocked`). Once the blocking task is completed (`:closed` or `:deleted`), it no longer blocks dependent tasks.
+
 **Category**: A task organization unit that determines which prompt will be used to execute a task. Each task has a `:category` field that determines its execution workflow.
 
 **Category Discovery**: Automatic detection of available categories by scanning `.mcp-tasks/prompts/` for `.md` files.
+
+**Circular Dependency**: A dependency cycle where a chain of `:blocked-by` relations forms a loop (e.g., Task A blocked-by Task B, Task B blocked-by Task C, Task C blocked-by Task A). The system detects circular dependencies and marks affected tasks as blocked with `:blocking-task-ids` showing the cycle. Users must manually resolve circular dependencies by removing or reordering relations.
 
 **Complete**: Changing a task's `:status` from `:open` to `:closed` and moving it from `tasks.ednl` to `complete.ednl`.
 
