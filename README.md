@@ -101,7 +101,7 @@ git log -1 --stat
 
 ## Core Concepts
 
-**Tasks**: Units of work stored in `.mcp-tasks/tasks.ednl` as EDN records with fields like `:id`, `:category`, `:title`, `:description`, `:status`.
+**Tasks**: A unit of work an agent can complete without exceeding its context limits. Stored as EDN records with fields: `:id`, `:category`, `:title`, `:description`, `:status`, `:type`, `:design`, `:meta`, `:relations`.
 
 **Categories**: Task organization by type/workflow. Each category has a prompt file (e.g., `.mcp-tasks/prompts/simple.md`) defining execution steps. Built-in categories include `simple`, `medium`, `large`.
 
@@ -113,14 +113,31 @@ See **[Glossary](doc/glossary.md)** and **[Workflow Documentation](doc/workflow.
 
 ## Common Workflows
 
-### Basic Task Workflow
+### Task-ID Based Workflow
+
+```bash
+# Ask agent to create tasks
+"Create a simple task to add user profile endpoint"
+# Agent uses add-task tool, returns task-id: 123
+
+"Create a medium task to fix memory leak in worker process"
+# Agent uses add-task tool, returns task-id: 124
+
+# Execute specific tasks by ID (direct control over execution order)
+/mcp-tasks:execute-task 124     # Agent fixes bug, commits
+/mcp-tasks:execute-task 123     # Agent adds endpoint, commits
+
+# Check completion history in .mcp-tasks/complete.ednl
+```
+
+### Category-Based Workflow
 
 ```bash
 # Add tasks using add-task tool in Claude Code
 # category: "feature", title: "Add user profile endpoint"
 # category: "bugfix", title: "Fix memory leak in worker process"
 
-# Execute by category
+# Execute by category (sequential processing from queue)
 /mcp-tasks:category-bugfix      # Agent fixes bug, commits
 /mcp-tasks:category-feature     # Agent adds endpoint, commits
 
