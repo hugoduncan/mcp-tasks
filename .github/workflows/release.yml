@@ -10,9 +10,14 @@ on:
         default: false
 
 jobs:
+  build-binaries:
+    name: Build Native Binaries
+    uses: ./.github/workflows/build-binaries.yml
+
   release:
     runs-on: ubuntu-latest
     environment: Release
+    needs: build-binaries
     if: github.ref == 'refs/heads/master'
 
     steps:
@@ -21,18 +26,10 @@ jobs:
         with:
           fetch-depth: 0  # Need full history for version calculation and changelog
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
         with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Install Clojure tools
-        uses: DeLaGuardo/setup-clojure@12.5
-        with:
-          cli: latest
-          cljstyle: 0.17.642
-          clj-kondo: latest
+          java-distribution: 'temurin'
 
       - name: Install git-cliff
         run: |
@@ -40,28 +37,6 @@ jobs:
           tar -xzf git-cliff-2.7.0-x86_64-unknown-linux-gnu.tar.gz
           sudo mv git-cliff-2.7.0/git-cliff /usr/local/bin/
           git-cliff --version
-
-      - name: Cache Clojure dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
-          key: clojure-deps-${{ hashFiles('deps.edn') }}
-          restore-keys: |
-            clojure-deps-
-
-      - name: Run cljstyle check
-        run: cljstyle check
-
-      - name: Run clj-kondo lint
-        run: clj-kondo --lint src test --fail-level warning
-
-      - name: Run unit tests
-        run: clojure -M:dev:test --focus :unit
-
-      - name: Run integration tests
-        run: clojure -M:dev:test --focus :integration
 
       - name: Build JAR
         run: clojure -T:build jar
@@ -103,6 +78,47 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries/
+          pattern: mcp-tasks-*
+          merge-multiple: false
+
+      - name: List downloaded binaries
+        run: |
+          echo "Downloaded binaries:"
+          ls -lh binaries/
+
+      - name: Validate binary artifacts
+        run: |
+          echo "Validating binary artifacts..."
+          MISSING=()
+
+          if [ ! -f "binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64" ]; then
+            MISSING+=("linux-amd64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64" ]; then
+            MISSING+=("macos-amd64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64" ]; then
+            MISSING+=("macos-arm64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-windows-amd64.exe/mcp-tasks-windows-amd64.exe" ]; then
+            MISSING+=("windows-amd64.exe")
+          fi
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "Error: Missing binary artifacts: ${MISSING[*]}"
+            echo "Cannot proceed with release without all binaries"
+            exit 1
+          fi
+
+          echo "All binary artifacts validated successfully"
+
       - name: Create git tag
         if: ${{ !inputs.dry-run }}
         run: |
@@ -127,7 +143,12 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Release ${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.changelog }}
-          files: target/mcp-tasks-${{ steps.version.outputs.version }}.jar
+          files: |
+            target/mcp-tasks-${{ steps.version.outputs.version }}.jar
+            binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64
+            binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64
+            binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64
+            binaries/mcp-tasks-windows-amd64.exe/mcp-tasks-windows-amd64.exe
           draft: false
           prerelease: false
         env:
@@ -140,3 +161,4 @@ jobs:
           echo "::notice::Version: ${{ steps.version.outputs.version }}"
           echo "::notice::Tag: ${{ steps.version.outputs.tag }}"
           echo "::notice::JAR: target/mcp-tasks-${{ steps.version.outputs.version }}.jar"
+          echo "::notice::Binaries: binaries/mcp-tasks-*"

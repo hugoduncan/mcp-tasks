@@ -1,0 +1,138 @@
+name: Build Native Binaries
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
+        with:
+          java-distribution: 'temurin'
+          install-linters: 'true'
+
+      - name: Run cljstyle check
+        run: cljstyle check
+
+      - name: Run clj-kondo lint
+        run: clj-kondo --lint src test --fail-level warning
+
+      - name: Run unit tests
+        run: clojure -M:dev:test --focus :unit
+
+      - name: Run integration tests
+        run: clojure -M:dev:test --focus :integration --skip-meta :native-binary
+
+  build-matrix:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: macos
+            arch: amd64
+            runner: macos-13
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+          - os: windows
+            arch: amd64
+            runner: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
+        with:
+          java-distribution: 'graalvm'
+          cache-key-suffix: '${{ matrix.os }}-${{ matrix.arch }}-'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build CLI JAR
+        run: clojure -T:build jar-cli
+
+      - name: Build native binary
+        run: clojure -T:build native-cli
+
+      - name: Set binary name (Unix)
+        if: runner.os != 'Windows'
+        id: binary-name-unix
+        run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+      - name: Set binary name (Windows)
+        if: runner.os == 'Windows'
+        id: binary-name-windows
+        shell: bash
+        run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}.exe" >> $GITHUB_OUTPUT
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
+          path: target/${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
+          if-no-files-found: error
+
+  test-binaries:
+    name: Test ${{ matrix.os }}-${{ matrix.arch }} Binary
+    needs: build-matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            test-focus: comprehensive
+          - os: macos
+            arch: amd64
+            runner: macos-13
+            test-focus: smoke
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            test-focus: smoke
+          - os: windows
+            arch: amd64
+            runner: windows-2022
+            test-focus: smoke
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Clojure environment
+        uses: ./.github/actions/setup-clojure
+        with:
+          java-distribution: 'temurin'
+          cache-key-suffix: '${{ matrix.os }}-${{ matrix.arch }}-'
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
+          path: target/
+
+      - name: Make binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x target/mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Run smoke tests
+        if: matrix.test-focus == 'smoke'
+        run: clojure -M:dev:test --focus :native-binary --skip-meta :comprehensive
+
+      - name: Run comprehensive tests
+        if: matrix.test-focus == 'comprehensive'
+        run: clojure -M:dev:test --focus :native-binary

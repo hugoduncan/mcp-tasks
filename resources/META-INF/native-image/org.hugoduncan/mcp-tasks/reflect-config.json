@@ -1,0 +1,23 @@
+[
+  {
+    "name": "java.io.RandomAccessFile",
+    "methods": [
+      {"name": "getChannel", "parameterTypes": []},
+      {"name": "close", "parameterTypes": []}
+    ],
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "java.nio.channels.FileChannel",
+    "methods": [
+      {"name": "tryLock", "parameterTypes": []},
+      {"name": "close", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.nio.channels.FileLock",
+    "methods": [
+      {"name": "release", "parameterTypes": []}
+    ]
+  }
+]

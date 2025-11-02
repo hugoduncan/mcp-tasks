@@ -1,6 +1,6 @@
 (ns mcp-tasks.cli
   "Command-line interface for mcp-tasks.
-  
+
   Entry point for the CLI that routes commands to their implementations."
   (:require
     [babashka.cli :as cli]

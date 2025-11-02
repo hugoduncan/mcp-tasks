@@ -246,7 +246,7 @@
   timeout parameters - it either succeeds immediately or returns nil.
   
   Returns the acquired lock on success, nil on timeout."
-  [file-channel timeout-ms poll-interval-ms]
+  [^java.nio.channels.FileChannel file-channel ^long timeout-ms ^long poll-interval-ms]
   (let [deadline (+ (System/currentTimeMillis) timeout-ms)]
     (loop []
       (if-let [acquired-lock (.tryLock file-channel)]
@@ -297,7 +297,7 @@
       (ensure-file-exists! tasks-file)
 
       ;; Open RandomAccessFile and get its channel
-      (let [random-access-file (RandomAccessFile. tasks-file "rw")
+      (let [random-access-file (RandomAccessFile. ^String tasks-file "rw")
             file-channel (.getChannel random-access-file)]
         (reset! raf random-access-file)
         (reset! channel file-channel)

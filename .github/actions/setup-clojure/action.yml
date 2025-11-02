@@ -1,0 +1,62 @@
+name: 'Setup Clojure Environment'
+description: 'Sets up Java, Clojure tools, and caches dependencies'
+
+inputs:
+  java-distribution:
+    description: 'Java distribution to use (temurin or graalvm)'
+    required: false
+    default: 'temurin'
+  java-version:
+    description: 'Java version to use'
+    required: false
+    default: '21'
+  install-linters:
+    description: 'Whether to install cljstyle and clj-kondo'
+    required: false
+    default: 'false'
+  cache-key-suffix:
+    description: 'Optional suffix for cache key (e.g., OS/arch combination)'
+    required: false
+    default: ''
+  github-token:
+    description: 'GitHub token (required for GraalVM distribution)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+
+    - name: Setup Java (Temurin)
+      if: inputs.java-distribution == 'temurin'
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java-version }}
+
+    - name: Setup GraalVM
+      if: inputs.java-distribution == 'graalvm'
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: 'graalvm'
+        github-token: ${{ inputs.github-token }}
+        native-image-job-reports: 'true'
+
+    - name: Install Clojure tools
+      uses: DeLaGuardo/setup-clojure@12.5
+      with:
+        cli: latest
+        cljstyle: ${{ inputs.install-linters == 'true' && '0.17.642' || '' }}
+        clj-kondo: ${{ inputs.install-linters == 'true' && 'latest' || '' }}
+
+    - name: Cache Clojure dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.m2/repository
+          ~/.gitlibs
+        key: clojure-deps-${{ inputs.cache-key-suffix }}${{ hashFiles('deps.edn') }}
+        restore-keys: |
+          clojure-deps-${{ inputs.cache-key-suffix }}
+          clojure-deps-
