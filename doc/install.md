@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install
 iwr -useb https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.ps1 | iex
 ```
 
-For manual installation, building from source, and troubleshooting, see the [Installation section in README.md](../README.md#installation).
+For manual installation and troubleshooting, see the [Installation section in README.md](../README.md#installation). For building from source, see [build.md](build.md).
 
 ## Alternative: Clojure Git Dependency
 
