@@ -112,13 +112,17 @@
        (str base-name ".exe")
        base-name))))
 
-(defn jar-cli
-  "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
-  [_]
+(defn- build-uberjar
+  "Build an uberjar with the specified basename and main namespace.
+
+  Parameters:
+  - basename: The prefix for the JAR filename (e.g., 'mcp-tasks-cli')
+  - main-ns: The main namespace symbol (e.g., 'mcp-tasks.native-init)"
+  [basename main-ns]
   (let [v (version nil)
         basis (b/create-basis {:project "deps.edn"})
-        jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)]
-    (println "Building CLI uberjar:" jar-file)
+        jar-file (format "%s/%s-%s.jar" target-dir basename v)]
+    (println (format "Building %s uberjar: %s" basename jar-file))
     (b/write-pom {:class-dir class-dir
                   :lib lib
                   :version v
@@ -132,31 +136,18 @@
     (b/uber {:class-dir class-dir
              :uber-file jar-file
              :basis basis
-             :main 'mcp-tasks.native-init})
-    (println "CLI uberjar built successfully:" jar-file)))
+             :main main-ns})
+    (println (format "%s uberjar built successfully: %s" basename jar-file))))
+
+(defn jar-cli
+  "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
+  [_]
+  (build-uberjar "mcp-tasks-cli" 'mcp-tasks.native-init))
 
 (defn jar-server
   "Build uberjar for server with mcp-tasks.native-server-init as Main-Class"
   [_]
-  (let [v (version nil)
-        basis (b/create-basis {:project "deps.edn"})
-        jar-file (format "%s/mcp-tasks-server-%s.jar" target-dir v)]
-    (println "Building server uberjar:" jar-file)
-    (b/write-pom {:class-dir class-dir
-                  :lib lib
-                  :version v
-                  :basis basis
-                  :src-dirs ["src"]})
-    (b/copy-dir {:src-dirs ["src" "resources"]
-                 :target-dir class-dir})
-    (b/compile-clj {:basis basis
-                    :src-dirs ["src"]
-                    :class-dir class-dir})
-    (b/uber {:class-dir class-dir
-             :uber-file jar-file
-             :basis basis
-             :main 'mcp-tasks.native-server-init})
-    (println "Server uberjar built successfully:" jar-file)))
+  (build-uberjar "mcp-tasks-server" 'mcp-tasks.native-server-init))
 
 (defn native-cli
   "Build native CLI binary using GraalVM native-image.
