@@ -10,6 +10,8 @@ mcp-tasks enables you to manage development tasks in markdown files and have AI 
 - **Persistent Planning**: Tasks survive across chat sessions in markdown files
 - **Category-Based Organization**: Group tasks by type (features, bugfixes, refactoring) with custom execution strategies
 - **Story-Based Development**: Break down epics into tasks with dedicated workflows
+- **Automatic Branch Creation**: Tasks automatically get isolated branches for clean development
+- **Git Worktree Management**: Parallel development across multiple tasks without branch switching
 - **Audit Trail**: Completed tasks automatically archived with full context
 - **Flexible Workflows**: Supports both git-tracked and standalone task management
 
@@ -34,6 +36,20 @@ This installs:
 - `mcp-tasks-server` MCP server for AI agent integration
 
 See **[Installation Guide](doc/install.md)** for alternative installation methods (Clojure git dependency, building from source).
+
+**Install Claude Code Skill (Optional):**
+
+```bash
+claude skill add plugins/mcp-tasks-skill
+```
+
+The skill provides:
+- Comprehensive guidance on available tools and prompts
+- Task lifecycle walkthroughs and workflow patterns
+- Git integration best practices
+- Error recovery and troubleshooting
+
+**Alternative for non-Claude agents:** Add `@plugins/mcp-tasks-skill/skills/story-and-tasks/SKILL.md` to your agent's context file for similar guidance.
 
 ### Configuration
 
