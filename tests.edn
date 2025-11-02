@@ -7,7 +7,12 @@
            :test-paths ["test"]
            :ns-patterns [".*-test$"]
            :focus-meta [:integ]
-           :skip-meta [:native-binary :pending]}]
+           :skip-meta [:native-binary :pending]}
+          {:id :native-binary
+           :test-paths ["test"]
+           :ns-patterns [".*-test$"]
+           :focus-meta [:native-binary]
+           :skip-meta [:pending]}]
   :color? true
   :fail-fast? false
   :randomize? false}
