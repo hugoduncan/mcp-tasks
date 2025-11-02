@@ -105,11 +105,12 @@
 (defn- platform-binary-name
   "Generate platform-specific binary name.
   Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64, mcp-tasks-windows-amd64.exe"
-  [{:keys [os arch]}]
-  (let [base-name (format "mcp-tasks-%s-%s" (name os) (name arch))]
-    (if (= os :windows)
-      (str base-name ".exe")
-      base-name)))
+  ([platform] (platform-binary-name "mcp-tasks" platform))
+  ([basename {:keys [os arch]}]
+   (let [base-name (format "%s-%s-%s" basename (name os) (name arch))]
+     (if (= os :windows)
+       (str base-name ".exe")
+       base-name))))
 
 (defn jar-cli
   "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
@@ -173,7 +174,7 @@
     (let [platform (detect-platform)
           v (version nil)
           jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)
-          binary-name (platform-binary-name platform)
+          binary-name (platform-binary-name "mcp-tasks" platform)
           output-binary (str target-dir "/" binary-name)
           native-image-bin (str graalvm-home "/bin/native-image")]
 
@@ -199,5 +200,50 @@
                              "-o" output-binary]})
 
       (println (format "✓ Native CLI binary built: %s" output-binary))
+      (println (format "  Platform: %s %s" (name (:os platform)) (name (:arch platform))))
+      (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
+
+(defn native-server
+  "Build native server binary using GraalVM native-image.
+
+  Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
+  Output: target/mcp-tasks-server-<platform>-<arch> (e.g., target/mcp-tasks-server-macos-arm64)
+
+  The native binary provides a standalone MCP server without requiring JVM or Babashka."
+  [_]
+  (let [graalvm-home (System/getenv "GRAALVM_HOME")]
+    (when-not graalvm-home
+      (throw (ex-info "GRAALVM_HOME environment variable not set. Please set it to your GraalVM installation directory."
+                      {:required "GRAALVM_HOME"})))
+
+    (let [platform (detect-platform)
+          v (version nil)
+          jar-file (format "%s/mcp-tasks-server-%s.jar" target-dir v)
+          binary-name (platform-binary-name "mcp-tasks-server" platform)
+          output-binary (str target-dir "/" binary-name)
+          native-image-bin (str graalvm-home "/bin/native-image")]
+
+      (when-not (fs/exists? native-image-bin)
+        (throw (ex-info (format "native-image not found at %s. Please install native-image or verify GRAALVM_HOME is correct." native-image-bin)
+                        {:graalvm-home graalvm-home
+                         :native-image-bin native-image-bin})))
+
+      (println (format "Building native server binary for %s %s..."
+                       (name (:os platform))
+                       (name (:arch platform))))
+
+      (when-not (fs/exists? jar-file)
+        (throw (ex-info "Server JAR file not found. Run 'clj -T:build jar-server' first."
+                        {:jar-file jar-file})))
+
+      (println "Running native-image (this may take several minutes)...")
+      (shell {:command-args [native-image-bin
+                             "-jar" jar-file
+                             "--no-fallback"
+                             "-H:+ReportExceptionStackTraces"
+                             "--initialize-at-build-time"
+                             "-o" output-binary]})
+
+      (println (format "✓ Native server binary built: %s" output-binary))
       (println (format "  Platform: %s %s" (name (:os platform)) (name (:arch platform))))
       (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
