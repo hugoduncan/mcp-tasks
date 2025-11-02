@@ -358,3 +358,105 @@
             (is (nil? (:git-commit git-data)))
             (is (string? (:git-error git-data)))
             (is (not (str/blank? (:git-error git-data))))))))))
+
+(deftest add-task-with-relations
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "accepts and stores relations parameter"
+        ;; First create a task to reference
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1
+            :parent-id nil
+            :title "First task"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}])
+        ;; Load the first task into memory
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+        ;; Add a task with relations
+        (let [result (#'sut/add-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:category "test"
+                       :title "Second task"
+                       :relations [{"id" 1
+                                    "relates-to" 1
+                                    "as-type" "blocked-by"}]})]
+          (is (false? (:isError result)))
+          ;; Verify task was added with relations
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                second-task (first (filter #(= "Second task" (:title %)) tasks))]
+            (is (= "Second task" (:title second-task)))
+            (is (= [{:id 1 :relates-to 1 :as-type :blocked-by}] (:relations second-task)))))))))
+
+(deftest add-task-with-no-relations
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "stores empty relations when not provided"
+        (let [result (#'sut/add-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:category "test"
+                       :title "Task without relations"})]
+          (is (false? (:isError result)))
+          ;; Verify task was added with empty relations
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= "Task without relations" (:title task)))
+            (is (= [] (:relations task)))))))))
+
+(deftest add-task-with-multiple-relations
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "accepts multiple relations"
+        ;; Create tasks to reference
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1
+            :parent-id nil
+            :title "First task"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}
+           {:id 2
+            :parent-id nil
+            :title "Second task"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}])
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+        ;; Add a task with multiple relations
+        (let [result (#'sut/add-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:category "test"
+                       :title "Third task"
+                       :relations [{"id" 1
+                                    "relates-to" 1
+                                    "as-type" "blocked-by"}
+                                   {"id" 2
+                                    "relates-to" 2
+                                    "as-type" "related"}]})]
+          (is (false? (:isError result)))
+          ;; Verify task was added with multiple relations
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                third-task (first (filter #(= "Third task" (:title %)) tasks))]
+            (is (= "Third task" (:title third-task)))
+            (is (= [{:id 1 :relates-to 1 :as-type :blocked-by}
+                    {:id 2 :relates-to 2 :as-type :related}]
+                   (:relations third-task)))))))))

@@ -37,7 +37,7 @@
   - Git disabled: Two content items (text message + task data JSON)
   - Git enabled: Three content items (text message + task data JSON + git-status JSON)"
   [config _context
-   {:keys [category title description prepend type parent-id]}]
+   {:keys [category title description prepend type parent-id relations]}]
   ;; Perform file operations inside lock
   (let [locked-result (helpers/with-task-lock config
                                               (fn []
@@ -58,7 +58,9 @@
                                                          :tasks-dir tasks-dir}))
 
                                                     ;; sync-result is the tasks-file path - proceed
-                                                    (let [tasks-file sync-result]
+                                                    (let [tasks-file sync-result
+                                                          ;; Convert relations from JSON to EDN if provided
+                                                          converted-relations (helpers/convert-relations-field relations)]
                                                       ;; Validate parent-id exists if provided
                                                       (or (when parent-id
                                                             (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
@@ -72,7 +74,7 @@
                                                                                   :status :open
                                                                                   :type (keyword (or type "task"))
                                                                                   :meta {}
-                                                                                  :relations []}
+                                                                                  :relations converted-relations}
                                                                            parent-id (assoc :parent-id parent-id))
                                                                 ;; Add task to in-memory state and get the complete task with ID
                                                                 created-task (tasks/add-task task-map :prepend? (boolean prepend))
@@ -210,6 +212,18 @@
         :description "Optional task-id of parent"}
        "prepend"
        {:type "boolean"
-        :description "If true, add task at the beginning instead of the end"}}
+        :description "If true, add task at the beginning instead of the end"}
+       "relations"
+       {:type "array"
+        :description "Optional relations vector (e.g., blocked-by dependencies)"
+        :items {:type "object"
+                :properties {"id" {:type "integer"
+                                   :description "Unique relation ID within this task"}
+                             "relates-to" {:type "integer"
+                                           :description "Task ID this relates to"}
+                             "as-type" {:type "string"
+                                        :enum ["blocked-by" "related" "discovered-during"]
+                                        :description "Type of relationship"}}
+                :required ["id" "relates-to" "as-type"]}}}
       :required ["category" "title"]}
      :implementation (partial add-task-impl config)}))
