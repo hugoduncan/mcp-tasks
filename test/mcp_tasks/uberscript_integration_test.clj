@@ -136,7 +136,7 @@
     (when (.exists complete-file)
       (tasks-file/read-ednl (.getPath complete-file)))))
 
-(deftest ^:integration uberscript-build-test
+(deftest ^:integ uberscript-build-test
   ;; Test that the uberscript was built correctly and does not contain malli
   ;; Runs from temp dir to validate standalone execution
   (with-uberscript-build
@@ -156,7 +156,7 @@
             (is (not has-malli-ns?)
                 "Uberscript should not contain malli namespace declarations")))))))
 
-(deftest ^:integration uberscript-cli-commands-test
+(deftest ^:integ uberscript-cli-commands-test
   ;; Test that all CLI commands work through the uberscript from temp dir
   (with-uberscript-build
     (with-uberscript-test [test-dir uberscript-path]
