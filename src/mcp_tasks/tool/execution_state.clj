@@ -15,11 +15,11 @@
 
   Parameters map must contain:
   - :task-id - ID of task being executed
-  - :started-at - ISO-8601 timestamp
+  - :task-start-time - ISO-8601 timestamp
   - :story-id - (optional) ID of story containing task"
-  [base-dir {:keys [story-id task-id started-at]}]
+  [base-dir {:keys [story-id task-id task-start-time]}]
   (let [state (cond-> {:task-id task-id
-                       :started-at started-at}
+                       :task-start-time task-start-time}
                 story-id (assoc :story-id story-id))]
     (es/write-execution-state! base-dir state)
     {:content [{:type "text"
@@ -49,28 +49,28 @@
   Parameters:
   - action: (required) Either \"write\" to record state or \"clear\" to remove it
   - task-id: (required if action=write) ID of the task being executed
-  - started-at: (required if action=write) ISO-8601 timestamp when execution started
+  - task-start-time: (required if action=write) ISO-8601 timestamp when execution started
   - story-id: (optional) ID of the story being executed
 
   Returns:
   - Success response with state file path
   - Error response if validation fails"
-  [config _context {:keys [action story-id task-id started-at]}]
+  [config _context {:keys [action story-id task-id task-start-time]}]
   (let [base-dir (:base-dir config)]
     (try
       (case action
         "write"
-        (if (and task-id started-at)
+        (if (and task-id task-start-time)
           (write-state base-dir {:story-id story-id
                                  :task-id task-id
-                                 :started-at started-at})
+                                 :task-start-time task-start-time})
           (helpers/build-tool-error-response
             "Missing required parameters for write action"
             "execution-state"
             {:action action
              :missing (cond-> []
                         (not task-id) (conj "task-id")
-                        (not started-at) (conj "started-at"))}))
+                        (not task-start-time) (conj "task-start-time"))}))
 
         "clear"
         (clear-state base-dir)
@@ -105,12 +105,12 @@
    - \"clear\": Remove execution state file
 
    This enables external tools to monitor agent progress and coordinate work.
-   Stale executions can be detected via the started-at timestamp.
+   Stale executions can be detected via the task-start-time timestamp.
 
    Parameters:
    - action: (required) \"write\" or \"clear\"
    - task-id: (required if action=write) ID of the task being executed
-   - started-at: (required if action=write) ISO-8601 timestamp when execution started
+   - task-start-time: (required if action=write) ISO-8601 timestamp when execution started
    - story-id: (optional) ID of the story containing this task")
 
 (defn execution-state-tool
@@ -131,7 +131,7 @@
      "task-id"
      {:type "integer"
       :description "ID of the task being executed (required if action=write)"}
-     "started-at"
+     "task-start-time"
      {:type "string"
       :description "ISO-8601 timestamp when execution started (required if action=write, e.g., \"2025-10-20T14:30:00Z\")"}
      "story-id"
