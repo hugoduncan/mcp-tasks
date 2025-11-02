@@ -20,6 +20,31 @@
     [mcp-tasks.tools.helpers :as helpers]
     [mcp-tasks.tools.validation :as validation]))
 
+(defn- validate-circular-dependencies-for-new-task
+  "Validate that newly created task doesn't create circular dependencies.
+
+  Checks if the task (already added to in-memory state) would create a
+  circular dependency through its :blocked-by relations. Returns error
+  map if cycle detected, nil otherwise.
+
+  Parameters:
+  - task-id: ID of the newly created task (already in @tasks)
+  - tasks-file: Path to tasks.ednl file (for error metadata)
+
+  Returns:
+  - nil if no circular dependency
+  - error map with :isError true if cycle detected"
+  [task-id tasks-file]
+  (let [blocking-info (tasks/is-task-blocked? task-id)
+        cycle (:circular-dependency blocking-info)]
+    (when cycle
+      (helpers/build-tool-error-response
+        (str "Circular dependency detected: " (str/join " → " cycle))
+        "add-task"
+        {:task-id task-id
+         :file tasks-file
+         :cycle cycle}))))
+
 (defn- add-task-impl
   "Implementation of add-task tool.
 
@@ -82,17 +107,26 @@
                                                                            parent-id (assoc :parent-id parent-id))
                                                                 ;; Add task to in-memory state and get the complete task with ID
                                                                 created-task (tasks/add-task task-map :prepend? (boolean prepend))
-                                                                ;; Get path info for git operations
-                                                                tasks-path (helpers/task-path config ["tasks.ednl"])
-                                                                tasks-rel-path (:relative tasks-path)]
+                                                                task-id (:id created-task)
+                                                                ;; Validate circular dependencies after task is in memory
+                                                                circular-dep-error (validate-circular-dependencies-for-new-task task-id tasks-file)]
 
-                                                            ;; Save to EDNL file
-                                                            (tasks/save-tasks! tasks-file)
+                                                            ;; If circular dependency detected, remove task and return error
+                                                            (if circular-dep-error
+                                                              (do
+                                                                (tasks/delete-task task-id)
+                                                                circular-dep-error)
 
-                                                            ;; Return intermediate data for git operations
-                                                            {:created-task created-task
-                                                             :tasks-file tasks-file
-                                                             :tasks-rel-path tasks-rel-path})))))))]
+                                                              ;; No circular dependency - proceed with save
+                                                              (let [tasks-path (helpers/task-path config ["tasks.ednl"])
+                                                                    tasks-rel-path (:relative tasks-path)]
+                                                                ;; Save to EDNL file
+                                                                (tasks/save-tasks! tasks-file)
+
+                                                                ;; Return intermediate data for git operations
+                                                                {:created-task created-task
+                                                                 :tasks-file tasks-file
+                                                                 :tasks-rel-path tasks-rel-path})))))))))]
     ;; Check if locked section returned an error
     (if (:isError locked-result)
       locked-result

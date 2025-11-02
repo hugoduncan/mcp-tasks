@@ -544,3 +544,202 @@
               (is (= "add-task" (:attempted-operation metadata)))
               (is (= [888 999] (:missing-task-ids metadata)))
               (is (contains? metadata :file)))))))))
+
+(deftest add-task-error-circular-dependency
+  ;; Test that creating a task with blocked-by relation that creates a cycle fails
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "returns error when creating task would create circular dependency"
+        ;; Create Task A
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1
+            :parent-id nil
+            :title "Task A"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}])
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+
+        ;; Attempt to add Task B that is blocked-by Task A
+        ;; but then update Task A to be blocked-by Task B (creating A→B→A cycle)
+        (let [result-b (#'sut/add-task-impl
+                        (h/test-config test-dir)
+                        nil
+                        {:category "test"
+                         :title "Task B"
+                         :relations [{"id" 1
+                                      "relates-to" 1
+                                      "as-type" "blocked-by"}]})]
+          (is (false? (:isError result-b)))
+
+          ;; Now try to add Task C that is blocked-by Task B,
+          ;; while Task B is blocked-by Task A,
+          ;; and Task A is blocked-by Task C (creating cycle A→C→B→A)
+          ;; But we need to first update A to be blocked by something
+          ;; Let's create a simpler cycle: Task C blocks itself via Task B
+
+          ;; Actually, let's test the direct A→B, B→A cycle
+          ;; Update Task A to be blocked-by the newly created Task B
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task-b (first (filter #(= "Task B" (:title %)) tasks))
+                task-b-id (:id task-b)]
+
+            ;; Write Task A with relation to Task B
+            (h/write-ednl-test-file
+              test-dir
+              "tasks.ednl"
+              [{:id 1
+                :parent-id nil
+                :title "Task A"
+                :description ""
+                :design ""
+                :category "test"
+                :type :task
+                :status :open
+                :meta {}
+                :relations [{:id 1 :relates-to task-b-id :as-type :blocked-by}]}
+               task-b])
+            (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+
+            ;; Now try to add Task C that is blocked-by Task A
+            ;; This creates: Task A → Task B (via A's relation)
+            ;;               Task B → Task A (via B's relation)
+            ;;               Task C → Task A (via C's relation)
+            ;; So Task C would see: C → A → B → A (cycle)
+            (let [result-c (#'sut/add-task-impl
+                            (h/test-config test-dir)
+                            nil
+                            {:category "test"
+                             :title "Task C"
+                             :relations [{"id" 1
+                                          "relates-to" 1
+                                          "as-type" "blocked-by"}]})]
+              (is (true? (:isError result-c)))
+              (is (= 2 (count (:content result-c))))
+
+              ;; Verify error message mentions circular dependency
+              (let [text-content (first (:content result-c))]
+                (is (= "text" (:type text-content)))
+                (is (str/includes? (:text text-content) "Circular dependency detected")))
+
+              ;; Verify structured error data includes cycle information
+              (let [data-content (second (:content result-c))
+                    data (json/parse-string (:text data-content) keyword)]
+                (is (contains? data :error))
+                (is (contains? data :metadata))
+                (is (str/includes? (:error data) "Circular dependency detected"))
+                (let [metadata (:metadata data)]
+                  (is (= "add-task" (:attempted-operation metadata)))
+                  (is (contains? metadata :cycle))
+                  (is (vector? (:cycle metadata)))
+                  (is (contains? metadata :file))))
+
+              ;; Verify Task C was NOT added to the file
+              (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")]
+                (is (= 2 (count tasks))) ; Only Task A and Task B
+                (is (nil? (first (filter #(= "Task C" (:title %)) tasks))))))))))))
+
+(deftest add-task-success-valid-dependency-chain
+  ;; Test that creating tasks with valid multi-level dependencies succeeds
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "succeeds with valid multi-level dependency chain"
+        ;; Create Task A (no dependencies)
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1
+            :parent-id nil
+            :title "Task A"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}])
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+
+        ;; Add Task B blocked-by Task A
+        (let [result-b (#'sut/add-task-impl
+                        (h/test-config test-dir)
+                        nil
+                        {:category "test"
+                         :title "Task B"
+                         :relations [{"id" 1
+                                      "relates-to" 1
+                                      "as-type" "blocked-by"}]})]
+          (is (false? (:isError result-b)))
+
+          ;; Get Task B ID from file
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task-b (first (filter #(= "Task B" (:title %)) tasks))
+                task-b-id (:id task-b)]
+
+            ;; Add Task C blocked-by Task B (creates chain A→B→C, no cycle)
+            (let [result-c (#'sut/add-task-impl
+                            (h/test-config test-dir)
+                            nil
+                            {:category "test"
+                             :title "Task C"
+                             :relations [{"id" 1
+                                          "relates-to" task-b-id
+                                          "as-type" "blocked-by"}]})]
+              (is (false? (:isError result-c)))
+
+              ;; Verify all three tasks exist
+              (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")]
+                (is (= 3 (count tasks)))
+                (is (some #(= "Task A" (:title %)) tasks))
+                (is (some #(= "Task B" (:title %)) tasks))
+                (is (some #(= "Task C" (:title %)) tasks))
+
+                ;; Verify Task C has correct relation
+                (let [task-c (first (filter #(= "Task C" (:title %)) tasks))]
+                  (is (= [{:id 1 :relates-to task-b-id :as-type :blocked-by}]
+                         (:relations task-c))))))))))))
+
+(deftest add-task-success-no-cycle-with-relations
+  ;; Test creating a task with blocked-by relation that doesn't create a cycle
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "succeeds when blocked-by relation doesn't create cycle"
+        ;; Create Task A (no dependencies)
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1
+            :parent-id nil
+            :title "Task A"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}])
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+
+        ;; Add Task B blocked-by Task A (no cycle, valid)
+        (let [result (#'sut/add-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:category "test"
+                       :title "Task B"
+                       :relations [{"id" 1
+                                    "relates-to" 1
+                                    "as-type" "blocked-by"}]})]
+          (is (false? (:isError result)))
+
+          ;; Verify Task B was added
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task-b (first (filter #(= "Task B" (:title %)) tasks))]
+            (is (some? task-b))
+            (is (= [{:id 1 :relates-to 1 :as-type :blocked-by}]
+                   (:relations task-b)))))))))
