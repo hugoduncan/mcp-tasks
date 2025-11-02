@@ -375,9 +375,13 @@
                             {:task-id 11})]
               (is (not (:isError result)))
 
-              ;; Verify state file was deleted
+              ;; Verify state file preserves story-id
               (let [state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
-                (is (not (fs/exists? state-file))))
+                (is (fs/exists? state-file))
+                (let [state (edn/read-string (slurp state-file))]
+                  (is (= 10 (:story-id state)))
+                  (is (nil? (:task-id state)))
+                  (is (some? (:task-start-time state)))))
 
               ;; Verify child was marked closed but stayed in tasks.ednl
               (let [tasks-file (io/file (fixtures/test-project-dir) ".mcp-tasks" "tasks.ednl")
@@ -434,9 +438,13 @@
                             {:task-id 21})]
               (is (not (:isError result)))
 
-              ;; Verify state file was deleted
+              ;; Verify state file preserves story-id
               (let [state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
-                (is (not (fs/exists? state-file)))))
+                (is (fs/exists? state-file))
+                (let [state (edn/read-string (slurp state-file))]
+                  (is (= 20 (:story-id state)))
+                  (is (nil? (:task-id state)))
+                  (is (some? (:task-start-time state))))))
 
             (finally
               (mcp-client/close! client)
