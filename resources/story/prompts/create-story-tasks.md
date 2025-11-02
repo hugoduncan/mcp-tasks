@@ -65,46 +65,46 @@ The story can be specified in multiple ways:
    - Each task should have an appropriate category (the add-task
      description contains a description of the categories)
 
+   - **Identify dependencies during analysis**:
+      - Infer dependencies from implementation order (e.g., models before services)
+      - Look for logical dependencies (setup before usage, create before update)
+      - Consider data flow and component dependencies
+      - Note which tasks must be completed before others can begin
+
 5. Present the task breakdown to the user:
    - Show all tasks organized by section
    - Include category assignments for each task
+   - **Display which tasks are blocked-by other tasks**
+   - **Present the dependency graph for user approval**
    - Get user feedback and approval
    - Make adjustments based on feedback
 
-6. Ask about task dependencies:
-   - Ask the user: "Are there any dependencies between these tasks?"
-   - If yes:
-     - Guide the user to identify which tasks must be completed before others
-     - Note which tasks are blocked by other tasks
-     - Explain that dependencies will be added as `:blocked-by` relations after task creation
-   - If no dependencies, proceed to task creation
-
-7. Once approved, add each task using the `add-task` tool:
+6. Once approved, add each task using the `add-task` tool:
+   - **Create tasks in dependency order** (dependencies first, dependent tasks later)
    - For each task, call `add-task` with:
      - `category`: the selected category (simple, medium, large, clarify-task)
      - `title`: task title on first line, then description including
        "Part of story: task-id <story-id> \"<story-title>\""
      - `parent-id`: the story id
      - `type`: "task" (or "bug", "feature", etc. if appropriate)
+     - `relations`: JSON array of relations (if task has dependencies)
+   - **Including relations in add-task calls**:
+     - If a task is blocked by other tasks, include a `relations` parameter
+     - Relations must reference task IDs that already exist (create dependencies first)
+     - Format: `[{"id": 1, "relates-to": <blocking-task-id>, "as-type": "blocked-by"}]`
+     - Example: If task B is blocked by task A (ID 460):
+       ```json
+       add-task category: "simple", title: "Task B", parent-id: 521, relations: [{"id": 1, "relates-to": 460, "as-type": "blocked-by"}]
+       ```
+     - For multiple dependencies, include multiple relation objects:
+       ```json
+       [{"id": 1, "relates-to": 460, "as-type": "blocked-by"}, {"id": 2, "relates-to": 461, "as-type": "blocked-by"}]
+       ```
    - Tasks will be added to `.mcp-tasks/tasks.ednl` with the story as parent
-   - Add tasks in order (dependencies first)
 
-8. If there are dependencies, add `:blocked-by` relations using `update-task`:
-   - For each task that is blocked by another task, call `update-task` with:
-     - `task-id`: the ID of the blocked task
-     - `relations`: a JSON array containing the new relation(s)
-   - Each relation is a JSON object with:
-     - `id`: a unique integer for this relation (use 1, 2, 3, etc.)
-     - `relates-to`: the task ID that blocks this task
-     - `as-type`: "blocked-by"
-   - Example: If task B (ID 461) is blocked by task A (ID 460):
-     ```json
-     update-task task-id: 461, relations: [{"id": 1, "relates-to": 460, "as-type": "blocked-by"}]
-     ```
-   - If a task is blocked by multiple tasks, include multiple relation objects in the array
-
-9. Confirm task creation to the user:
+7. Confirm task creation to the user:
    - Report how many tasks were created
+   - Report how many dependencies were established
    - Mention they can be executed with `/mcp-tasks:execute-story-task <story-name>`
 
 ## Notes
