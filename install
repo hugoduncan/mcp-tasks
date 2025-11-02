@@ -71,7 +71,7 @@ download() {
   if has curl; then
     curl -fsSL -o "$output" "$url"
   elif has wget; then
-    wget -q -O "$output" "$url"
+    wget -q --server-response --content-on-error=off -O "$output" "$url" 2>&1 | grep -q "HTTP/.* 200" || return 1
   else
     echo "Error: Neither curl nor wget found" >&2
     echo "Please install curl or wget to continue" >&2
