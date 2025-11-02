@@ -42,7 +42,7 @@ function Get-Architecture {
 }
 
 # Download file using Invoke-WebRequest
-function Download-File {
+function Receive-File {
   param(
     [string]$Url,
     [string]$Output
@@ -96,7 +96,7 @@ function Install-Binary {
   $InstallPath = Join-Path $InstallDir "$BinaryName$BinaryExtension"
 
   Write-Host "Downloading $BinaryName..."
-  Download-File -Url $DownloadUrl -Output $TempFile
+  Receive-File -Url $DownloadUrl -Output $TempFile
 
   Backup-Binary -BinaryPath $InstallPath
 
