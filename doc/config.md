@@ -29,49 +29,6 @@ project-root/
 └── .mcp-tasks.edn    # Optional configuration file
 ```
 
-### Branch Management
-
-The `:branch-management?` configuration option enables automatic git branch creation and switching during task execution.
-
-**Default behavior:** When `:branch-management?` is not present in the config, it defaults to `false` (no branch management).
-
-**Applies to:** Both story tasks and standalone tasks
-
-**Dependency on git mode:** Branch management requires git mode to be enabled. This means:
-- `:use-git?` must be `true` (either explicitly set or auto-detected via `.mcp-tasks/.git`)
-- You cannot use branch management without git mode
-- If you explicitly set `:use-git? false` and `:branch-management? true`, branch operations will fail at runtime since there's no git repository for the `.mcp-tasks` directory
-
-**Independent use of git mode:** Note that `:use-git?` can be used independently without `:branch-management?`. This allows you to version-control task tracking history without automatic branch creation for each task.
-
-**Branch naming convention:**
-- **Story tasks**: Branch name derived from the story title
-- **Standalone tasks**: Branch name derived from the task title
-
-**Sanitization pattern** (same for both):
-- Convert to lowercase
-- Replace spaces with dashes
-- Remove all special characters (keep only a-z, 0-9, -)
-- Replace multiple consecutive dashes with single dash
-- Trim leading/trailing dashes
-- Truncate to 200 characters maximum
-- Fallback to `task-<task-id>` if result is empty
-
-**Examples:**
-```
-Story title: "Implement Branch Management for Tasks"
-→ Branch name: "implement-branch-management-for-tasks"
-
-Task title: "Update documentation for new config option"
-→ Branch name: "update-documentation-for-new-config-option"
-
-Task title: "Fix bug #123"
-→ Branch name: "fix-bug-123"
-
-Task title: "!!!" (empty after sanitization, task-id=45)
-→ Branch name: "task-45"
-```
-
 ### Task Storage Directory
 
 The `:tasks-dir` configuration option specifies where task files (`tasks.ednl`, `complete.ednl`, `prompts/`, etc.) are stored.
@@ -133,6 +90,49 @@ Configured :tasks-dir does not exist: ../nonexistent-path
 - **Centralized task tracking**: Use an absolute path like `/home/user/.mcp-tasks/my-project/` to keep all project tasks in one location
 - **Shared task storage**: Use a relative path like `../shared-tasks` to share tasks across multiple related projects
 - **Custom organization**: Use any directory structure that fits your workflow
+
+### Branch Management
+
+The `:branch-management?` configuration option enables automatic git branch creation and switching during task execution.
+
+**Default behavior:** When `:branch-management?` is not present in the config, it defaults to `false` (no branch management).
+
+**Applies to:** Both story tasks and standalone tasks
+
+**Dependency on git mode:** Branch management requires git mode to be enabled. This means:
+- `:use-git?` must be `true` (either explicitly set or auto-detected via `.mcp-tasks/.git`)
+- You cannot use branch management without git mode
+- If you explicitly set `:use-git? false` and `:branch-management? true`, branch operations will fail at runtime since there's no git repository for the `.mcp-tasks` directory
+
+**Independent use of git mode:** Note that `:use-git?` can be used independently without `:branch-management?`. This allows you to version-control task tracking history without automatic branch creation for each task.
+
+**Branch naming convention:**
+- **Story tasks**: Branch name derived from the story title
+- **Standalone tasks**: Branch name derived from the task title
+
+**Sanitization pattern** (same for both):
+- Convert to lowercase
+- Replace spaces with dashes
+- Remove all special characters (keep only a-z, 0-9, -)
+- Replace multiple consecutive dashes with single dash
+- Trim leading/trailing dashes
+- Truncate to 200 characters maximum
+- Fallback to `task-<task-id>` if result is empty
+
+**Examples:**
+```
+Story title: "Implement Branch Management for Tasks"
+→ Branch name: "implement-branch-management-for-tasks"
+
+Task title: "Update documentation for new config option"
+→ Branch name: "update-documentation-for-new-config-option"
+
+Task title: "Fix bug #123"
+→ Branch name: "fix-bug-123"
+
+Task title: "!!!" (empty after sanitization, task-id=45)
+→ Branch name: "task-45"
+```
 
 ### Worktree Management
 
