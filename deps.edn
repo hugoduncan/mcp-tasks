@@ -19,10 +19,11 @@
          {:git/url "https://github.com/hugoduncan/mcp-clj"
           :git/sha "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
           :deps/root "projects/test-dep"}}}
-  :test {:extra-paths ["test"]
+  :test {:extra-paths ["test" "dev"]
          :extra-deps
          {lambdaisland/kaocha {:mvn/version "1.91.1392"}
-          babashka/process {:mvn/version "0.5.22"}}
+          babashka/process {:mvn/version "0.5.22"}
+          io.github.clojure/tools.build {:mvn/version "0.10.5"}}
          :override-deps
          {org.hugpduncan/mcp-clj-server
           {:git/url "https://github.com/hugoduncan/mcp-clj"

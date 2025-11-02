@@ -82,7 +82,7 @@
                        :err (:err result)})))
     result))
 
-(defn- detect-platform
+(defn detect-platform
   "Detect the current platform and architecture.
   Returns a map with :os and :arch keys."
   []
@@ -103,7 +103,7 @@
                                       :supported-architectures [:amd64 :arm64]})))]
     {:os os :arch arch}))
 
-(defn- platform-binary-name
+(defn platform-binary-name
   "Generate platform-specific binary name.
   Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64, mcp-tasks-windows-amd64.exe"
   ([platform] (platform-binary-name "mcp-tasks" platform))

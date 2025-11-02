@@ -3,13 +3,35 @@
 
   Tests that the GraalVM native-image server binary implements the MCP
   protocol correctly using stdio transport. Includes smoke tests suitable
-  for CI and comprehensive protocol tests for Linux."
+  for CI and comprehensive protocol tests for Linux.
+
+  ## Binary Requirement
+
+  All tests require the native server binary to exist. If the binary is not
+  found, the test fixture throws an exception with clear error message and
+  binary path. This ensures test skips are explicit and visible in test output
+  rather than being silently ignored.
+
+  ## Test Metadata Tags
+
+  This namespace uses two metadata tags for test filtering:
+
+  - `:native-binary` - All tests in this namespace have this tag. Used to run
+    only native binary tests when the binary exists.
+
+  - `:comprehensive` - Subset of tests that perform more thorough protocol
+    validation and performance testing. These tests run on Linux in CI but are
+    skipped on macOS/Windows to reduce CI time while maintaining coverage.
+
+  Test filtering in CI:
+  - macOS/Windows: Run only `:native-binary` tests (smoke tests)
+  - Linux: Run both `:native-binary` and `:comprehensive` tests (full suite)"
   (:require
     [babashka.fs :as fs]
     [babashka.process :as process]
+    [build :as build]
     [cheshire.core :as json]
     [clojure.java.io :as io]
-    [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
 (def ^:dynamic *test-dir* nil)
@@ -24,23 +46,23 @@
 
 (defn- binary-test-fixture
   "Test fixture that sets up temporary directory and locates binary.
-  Skips tests gracefully if binary is not found (e.g., during unit test runs)."
+  Throws an exception to explicitly skip tests if binary is not found."
   [f]
-  (let [binary-locations [(io/file "target/mcp-tasks-server-linux-amd64")
-                          (io/file "target/mcp-tasks-server-macos-amd64")
-                          (io/file "target/mcp-tasks-server-macos-arm64")
-                          (io/file "target/mcp-tasks-server-windows-amd64.exe")]
-        binary (some #(when (.exists %) %) binary-locations)]
-    (if-not binary
-      (println "Skipping native server binary test - binary not found. Build with: bb build-native-server")
-      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-native-server-"}))]
-        (try
-          (setup-test-dir test-dir)
-          (binding [*test-dir* test-dir
-                    *binary-path* (.getAbsolutePath binary)]
-            (f))
-          (finally
-            (fs/delete-tree test-dir)))))))
+  (let [platform (build/detect-platform)
+        binary-name (build/platform-binary-name "mcp-tasks-server" platform)
+        binary (io/file "target" binary-name)]
+    (when-not (.exists binary)
+      (throw (ex-info "Native server binary not found - build with: bb build-native-server"
+                      {:type ::binary-not-found
+                       :binary-path (.getAbsolutePath binary)})))
+    (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-native-server-"}))]
+      (try
+        (setup-test-dir test-dir)
+        (binding [*test-dir* test-dir
+                  *binary-path* (.getAbsolutePath binary)]
+          (f))
+        (finally
+          (fs/delete-tree test-dir))))))
 
 (use-fixtures :each binary-test-fixture)
 
