@@ -1,6 +1,7 @@
 (ns build
   (:require
     [babashka.fs :as fs]
+    [clojure.string]
     [clojure.tools.build.api :as b]))
 
 (def lib 'org.hugoduncan/mcp-tasks)
@@ -81,7 +82,7 @@
                        :err (:err result)})))
     result))
 
-(defn- detect-platform
+(defn detect-platform
   "Detect the current platform and architecture.
   Returns a map with :os and :arch keys."
   []
@@ -102,22 +103,27 @@
                                       :supported-architectures [:amd64 :arm64]})))]
     {:os os :arch arch}))
 
-(defn- platform-binary-name
+(defn platform-binary-name
   "Generate platform-specific binary name.
   Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64, mcp-tasks-windows-amd64.exe"
-  [{:keys [os arch]}]
-  (let [base-name (format "mcp-tasks-%s-%s" (name os) (name arch))]
-    (if (= os :windows)
-      (str base-name ".exe")
-      base-name)))
+  ([platform] (platform-binary-name "mcp-tasks" platform))
+  ([basename {:keys [os arch]}]
+   (let [base-name (format "%s-%s-%s" basename (name os) (name arch))]
+     (if (= os :windows)
+       (str base-name ".exe")
+       base-name))))
 
-(defn jar-cli
-  "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
-  [_]
+(defn- build-uberjar
+  "Build an uberjar with the specified basename and main namespace.
+
+  Parameters:
+  - basename: The prefix for the JAR filename (e.g., 'mcp-tasks-cli')
+  - main-ns: The main namespace symbol (e.g., 'mcp-tasks.native-init)"
+  [basename main-ns]
   (let [v (version nil)
         basis (b/create-basis {:project "deps.edn"})
-        jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)]
-    (println "Building CLI uberjar:" jar-file)
+        jar-file (format "%s/%s-%s.jar" target-dir basename v)]
+    (println (format "Building %s uberjar: %s" basename jar-file))
     (b/write-pom {:class-dir class-dir
                   :lib lib
                   :version v
@@ -131,17 +137,29 @@
     (b/uber {:class-dir class-dir
              :uber-file jar-file
              :basis basis
-             :main 'mcp-tasks.native-init})
-    (println "CLI uberjar built successfully:" jar-file)))
+             :main main-ns})
+    (println (format "%s uberjar built successfully: %s" basename jar-file))))
 
-(defn native-cli
-  "Build native CLI binary using GraalVM native-image.
-
-  Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
-  Output: target/mcp-tasks-<platform>-<arch> (e.g., target/mcp-tasks-macos-arm64)
-
-  The native binary provides a standalone CLI without requiring JVM or Babashka."
+(defn jar-cli
+  "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
   [_]
+  (build-uberjar "mcp-tasks-cli" 'mcp-tasks.native-init))
+
+(defn jar-server
+  "Build uberjar for server with mcp-tasks.native-server-init as Main-Class"
+  [_]
+  (build-uberjar "mcp-tasks-server" 'mcp-tasks.native-server-init))
+
+(defn- build-native-binary
+  "Build a native binary using GraalVM native-image.
+
+  Common logic for building native CLI and server binaries.
+
+  Parameters:
+  - jar-basename: The JAR file prefix (e.g., 'mcp-tasks-cli', 'mcp-tasks-server')
+  - binary-basename: The binary file prefix (e.g., 'mcp-tasks', 'mcp-tasks-server')
+  - binary-type: Human-readable type for messages (e.g., 'CLI', 'server')"
+  [jar-basename binary-basename binary-type]
   (let [graalvm-home (System/getenv "GRAALVM_HOME")]
     (when-not graalvm-home
       (throw (ex-info "GRAALVM_HOME environment variable not set. Please set it to your GraalVM installation directory."
@@ -149,8 +167,8 @@
 
     (let [platform (detect-platform)
           v (version nil)
-          jar-file (format "%s/mcp-tasks-cli-%s.jar" target-dir v)
-          binary-name (platform-binary-name platform)
+          jar-file (format "%s/%s-%s.jar" target-dir jar-basename v)
+          binary-name (platform-binary-name binary-basename platform)
           output-binary (str target-dir "/" binary-name)
           native-image-bin (str graalvm-home "/bin/native-image")]
 
@@ -159,12 +177,15 @@
                         {:graalvm-home graalvm-home
                          :native-image-bin native-image-bin})))
 
-      (println (format "Building native CLI binary for %s %s..."
+      (println (format "Building native %s binary for %s %s..."
+                       binary-type
                        (name (:os platform))
                        (name (:arch platform))))
 
       (when-not (fs/exists? jar-file)
-        (throw (ex-info "CLI JAR file not found. Run 'clj -T:build jar-cli' first."
+        (throw (ex-info (format "%s JAR file not found. Run 'clj -T:build jar-%s' first."
+                                binary-type
+                                (clojure.string/lower-case binary-type))
                         {:jar-file jar-file})))
 
       (println "Running native-image (this may take several minutes)...")
@@ -175,6 +196,26 @@
                              "--initialize-at-build-time"
                              "-o" output-binary]})
 
-      (println (format "✓ Native CLI binary built: %s" output-binary))
+      (println (format "✓ Native %s binary built: %s" binary-type output-binary))
       (println (format "  Platform: %s %s" (name (:os platform)) (name (:arch platform))))
       (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
+
+(defn native-cli
+  "Build native CLI binary using GraalVM native-image.
+
+  Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
+  Output: target/mcp-tasks-<platform>-<arch> (e.g., target/mcp-tasks-macos-arm64)
+
+  The native binary provides a standalone CLI without requiring JVM or Babashka."
+  [_]
+  (build-native-binary "mcp-tasks-cli" "mcp-tasks" "CLI"))
+
+(defn native-server
+  "Build native server binary using GraalVM native-image.
+
+  Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
+  Output: target/mcp-tasks-server-<platform>-<arch> (e.g., target/mcp-tasks-server-macos-arm64)
+
+  The native binary provides a standalone MCP server without requiring JVM or Babashka."
+  [_]
+  (build-native-binary "mcp-tasks-server" "mcp-tasks-server" "server"))

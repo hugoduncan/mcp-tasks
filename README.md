@@ -205,17 +205,30 @@ For true standalone execution without any runtime dependencies, native binaries 
 
 For an alternative distribution option using Babashka, see the [Standalone Executable (Uberscript)](#standalone-executable-uberscript) section above.
 
+**Two Binary Types:**
+
+1. **CLI Binary** (`mcp-tasks`) - Task management commands from the terminal
+2. **Server Binary** (`mcp-tasks-server`) - MCP server for AI agent integration
+
 **Download Pre-Built Binaries:**
 
-Download the latest binary for your platform from the [GitHub Releases](https://github.com/hugoduncan/mcp-tasks/releases) page:
+Download the latest binaries for your platform from the [GitHub Releases](https://github.com/hugoduncan/mcp-tasks/releases) page:
 
+**CLI Binaries:**
 - **Linux (amd64)**: `mcp-tasks-linux-amd64`
 - **macOS (Intel)**: `mcp-tasks-macos-amd64`
 - **macOS (Apple Silicon)**: `mcp-tasks-macos-arm64`
 - **Windows**: `mcp-tasks-windows-amd64.exe`
 
+**Server Binaries:**
+- **Linux (amd64)**: `mcp-tasks-server-linux-amd64`
+- **macOS (Intel)**: `mcp-tasks-server-macos-amd64`
+- **macOS (Apple Silicon)**: `mcp-tasks-server-macos-arm64`
+- **Windows**: `mcp-tasks-server-windows-amd64.exe`
+
 **Installation:**
 
+**CLI Binary:**
 ```bash
 # Download binary (example for macOS arm64)
 curl -L -o mcp-tasks https://github.com/hugoduncan/mcp-tasks/releases/latest/download/mcp-tasks-macos-arm64
@@ -231,12 +244,30 @@ mcp-tasks list --category simple
 mcp-tasks add --title "New task" --category simple
 ```
 
+**Server Binary:**
+```bash
+# Download server binary (example for macOS arm64)
+curl -L -o mcp-tasks-server https://github.com/hugoduncan/mcp-tasks/releases/latest/download/mcp-tasks-server-macos-arm64
+
+# Make executable (Unix-like systems)
+chmod +x mcp-tasks-server
+
+# Install system-wide (optional)
+sudo mv mcp-tasks-server /usr/local/bin/
+
+# Configure in Claude Code
+claude mcp add mcp-tasks -- /usr/local/bin/mcp-tasks-server
+
+# Or configure in Claude Desktop (see MCP client configuration section below)
+```
+
 **Building from Source:**
 
 Requirements:
 - GraalVM 21+ with native-image installed
 - Set `GRAALVM_HOME` environment variable
 
+**CLI Binary:**
 ```bash
 # Build CLI JAR first
 clj -T:build jar-cli
@@ -245,6 +276,20 @@ clj -T:build jar-cli
 GRAALVM_HOME=/path/to/graalvm clj -T:build native-cli
 
 # Binary created at: target/mcp-tasks-<platform>-<arch>
+```
+
+**Server Binary:**
+```bash
+# Build server JAR first
+clj -T:build jar-server
+
+# Build native binary for your platform
+GRAALVM_HOME=/path/to/graalvm clj -T:build native-server
+
+# Or use Babashka task (builds both JAR and native binary)
+bb build-native-server
+
+# Binary created at: target/mcp-tasks-server-<platform>-<arch>
 ```
 
 **Distribution Comparison:**
@@ -305,6 +350,43 @@ Common issues and solutions:
 6. **Malli validation warnings during build**
    - Expected behavior - Malli validation is disabled for native builds
    - Warnings don't affect functionality
+
+**MCP Client Configuration:**
+
+Configure the server binary in your MCP client:
+
+**Claude Code:**
+```bash
+# Using system-wide installation
+claude mcp add mcp-tasks -- /usr/local/bin/mcp-tasks-server
+
+# Or using local binary
+claude mcp add mcp-tasks -- /path/to/mcp-tasks-server
+```
+
+**Claude Desktop:**
+
+Edit your Claude Desktop configuration file:
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+Add the server configuration:
+
+```json
+{
+  "mcpServers": {
+    "mcp-tasks": {
+      "command": "/usr/local/bin/mcp-tasks-server"
+    }
+  }
+}
+```
+
+**Other MCP Clients:**
+
+For other MCP-compatible clients, configure the server binary path according to your client's configuration format. The server uses stdio transport and requires no additional arguments.
 
 ---
 

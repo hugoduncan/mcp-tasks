@@ -65,4 +65,46 @@
              (do
                (println (str "Error: Source binary not found: " source))
                (println "Run 'bb build-uberscript' first to create the binary")
-               (System/exit 1))))}}}
+               (System/exit 1))))}
+
+  build-native-server
+  {:doc  "Build native server binary (requires GraalVM)"
+   :task (do
+           (let [graalvm-home (System/getenv "GRAALVM_HOME")]
+             (if graalvm-home
+               (do
+                 (println "Building native server binary...")
+                 (println (str "Using GraalVM at: " graalvm-home))
+                 (println "Step 1/2: Building server uberjar...")
+                 (shell "clj -T:build jar-server")
+                 (println "Step 2/2: Building native image (this may take several minutes)...")
+                 (shell "clj -T:build native-server")
+
+                 ;; Validate binary exists
+                 (let [os-name (System/getProperty "os.name")
+                       os-arch (System/getProperty "os.arch")
+                       os (cond
+                            (re-find (re-pattern "(?i)linux") os-name) "linux"
+                            (re-find (re-pattern "(?i)mac|darwin") os-name) "macos"
+                            (re-find (re-pattern "(?i)windows") os-name) "windows"
+                            :else (throw (ex-info (str "Unsupported OS: " os-name) {})))
+                       arch (cond
+                              (re-find (re-pattern "(?i)amd64|x86_64") os-arch) "amd64"
+                              (re-find (re-pattern "(?i)aarch64|arm64") os-arch) "arm64"
+                              :else (throw (ex-info (str "Unsupported architecture: " os-arch) {})))
+                       binary-name (str "mcp-tasks-server-" os "-" arch (when (= os "windows") ".exe"))
+                       binary-path (str "target/" binary-name)]
+                   (if (.exists (clojure.java.io/file binary-path))
+                     (println (str "✓ Native server binary built successfully: " binary-path))
+                     (do
+                       (binding [*out* *err*]
+                         (println (str "Error: Expected binary not found: " binary-path))
+                         (println "The build appeared to complete but the binary file was not created.")
+                         (println "This may indicate a build failure that was not detected."))
+                       (System/exit 1)))))
+               (do
+                 (binding [*out* *err*]
+                   (println "Error: GRAALVM_HOME environment variable not set")
+                   (println "Please set GRAALVM_HOME to your GraalVM installation directory")
+                   (println "Example: export GRAALVM_HOME=/Library/Java/JavaVirtualMachines/graalvm-jdk-23.jdk/Contents/Home"))
+                 (System/exit 1)))))}}}

@@ -64,8 +64,14 @@ jobs:
       - name: Build CLI JAR
         run: clojure -T:build jar-cli
 
-      - name: Build native binary
+      - name: Build native CLI binary
         run: clojure -T:build native-cli
+
+      - name: Build Server JAR
+        run: clojure -T:build jar-server
+
+      - name: Build native server binary
+        run: clojure -T:build native-server
 
       - name: Set binary name (Unix)
         if: runner.os != 'Windows'
@@ -78,11 +84,29 @@ jobs:
         shell: bash
         run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}.exe" >> $GITHUB_OUTPUT
 
-      - name: Upload binary artifact
+      - name: Upload CLI binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
           path: target/${{ steps.binary-name-unix.outputs.binary-name || steps.binary-name-windows.outputs.binary-name }}
+          if-no-files-found: error
+
+      - name: Set server binary name (Unix)
+        if: runner.os != 'Windows'
+        id: server-binary-name-unix
+        run: echo "server-binary-name=mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+      - name: Set server binary name (Windows)
+        if: runner.os == 'Windows'
+        id: server-binary-name-windows
+        shell: bash
+        run: echo "server-binary-name=mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}.exe" >> $GITHUB_OUTPUT
+
+      - name: Upload server binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.server-binary-name-unix.outputs.server-binary-name || steps.server-binary-name-windows.outputs.server-binary-name }}
+          path: target/${{ steps.server-binary-name-unix.outputs.server-binary-name || steps.server-binary-name-windows.outputs.server-binary-name }}
           if-no-files-found: error
 
   test-binaries:
@@ -119,15 +143,25 @@ jobs:
           java-distribution: 'temurin'
           cache-key-suffix: '${{ matrix.os }}-${{ matrix.arch }}-'
 
-      - name: Download binary artifact
+      - name: Download CLI binary artifact
         uses: actions/download-artifact@v4
         with:
           name: mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
           path: target/
 
-      - name: Make binary executable (Unix)
+      - name: Download server binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
+          path: target/
+
+      - name: Make CLI binary executable (Unix)
         if: runner.os != 'Windows'
         run: chmod +x target/mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Make server binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x target/mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Run smoke tests
         if: matrix.test-focus == 'smoke'

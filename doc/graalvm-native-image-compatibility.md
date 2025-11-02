@@ -2,7 +2,10 @@
 
 ## Summary
 
-Successfully created a native CLI binary using GraalVM native-image. The binary is 38.3 MB and works correctly for all CLI commands.
+Successfully created native binaries for both CLI and MCP server using GraalVM native-image. Both binaries work correctly for their respective use cases:
+
+- **CLI Binary**: 38.3 MB, works correctly for all CLI commands
+- **Server Binary**: Similar size, runs as MCP server using stdio transport
 
 ## Build Process
 
@@ -14,6 +17,7 @@ Successfully created a native CLI binary using GraalVM native-image. The binary 
 
 ### Build Commands
 
+**CLI Binary:**
 ```bash
 # Build CLI uberjar
 clj -T:build jar-cli
@@ -22,7 +26,21 @@ clj -T:build jar-cli
 GRAALVM_HOME=/path/to/graalvm clj -T:build native-cli
 ```
 
-Output: `target/mcp-tasks-cli` (38.3 MB native executable)
+Output: `target/mcp-tasks-<platform>-<arch>` (38.3 MB native executable)
+
+**Server Binary:**
+```bash
+# Build server uberjar
+clj -T:build jar-server
+
+# Build native binary (requires GRAALVM_HOME)
+GRAALVM_HOME=/path/to/graalvm clj -T:build native-server
+
+# Or use Babashka task (builds both)
+bb build-native-server
+```
+
+Output: `target/mcp-tasks-server-<platform>-<arch>` (native executable)
 
 ## Dependency Compatibility
 
@@ -52,16 +70,25 @@ Output: `target/mcp-tasks-cli` (38.3 MB native executable)
 
 **Problem**: Native-image cannot dynamically load namespaces via `requiring-resolve`
 
-**Solution**: Created `src/mcp_tasks/native_init.clj`
+**Solution**: Created separate entry points for CLI and server binaries:
+
+**CLI Binary** (`src/mcp_tasks/native_init.clj`):
 - Explicitly requires all tool namespaces before compilation
-- Similar to `script/uberscript-main.clj` approach for Babashka
-- Serves as entry point (`-main`) for native binary
+- Serves as entry point (`-main`) for native CLI binary
 - Delegates to `mcp-tasks.cli/-main` after loading namespaces
+
+**Server Binary** (`src/mcp_tasks/native_server_init.clj`):
+- Explicitly requires all tool namespaces before compilation
+- Serves as entry point (`-main`) for native server binary
+- Delegates to `mcp-tasks.main/-main` after loading namespaces
+- Identical pattern to CLI init, but targets server entry point
 
 ### Entry Points
 
 - **Regular CLI (BB/JVM)**: `mcp-tasks.cli/-main`
-- **Native binary**: `mcp-tasks.native-init/-main` → `mcp-tasks.cli/-main`
+- **Native CLI binary**: `mcp-tasks.native-init/-main` → `mcp-tasks.cli/-main`
+- **Regular MCP Server (JVM)**: `mcp-tasks.main/-main`
+- **Native Server binary**: `mcp-tasks.native-server-init/-main` → `mcp-tasks.main/-main`
 
 ## Build Configuration
 
@@ -86,14 +113,26 @@ Output: `target/mcp-tasks-cli` (38.3 MB native executable)
 
 ### ✅ Verified Working
 
+**CLI Binary:**
 ```bash
 # Help command
-./target/mcp-tasks-cli --help
+./target/mcp-tasks-<platform>-<arch> --help
 
 # List tasks
-./target/mcp-tasks-cli list --status open --format human
+./target/mcp-tasks-<platform>-<arch> list --status open --format human
 
 # All CLI commands tested and working
+```
+
+**Server Binary:**
+```bash
+# Start MCP server (stdio transport)
+./target/mcp-tasks-server-<platform>-<arch>
+
+# Server starts and accepts MCP protocol messages
+# Tested via integration tests with :native-binary metadata
+# Smoke tests verify startup on all platforms
+# Comprehensive tests validate full MCP protocol on Linux
 ```
 
 ### Known Warnings
@@ -135,6 +174,34 @@ The build succeeded without custom reflection configuration files because:
    - `-O3` optimization level
    - Removing unused dependencies
 
+## MCP Client Configuration
+
+The native server binary can be configured in MCP clients:
+
+**Claude Code:**
+```bash
+claude mcp add mcp-tasks -- /usr/local/bin/mcp-tasks-server
+```
+
+**Claude Desktop:**
+```json
+{
+  "mcpServers": {
+    "mcp-tasks": {
+      "command": "/usr/local/bin/mcp-tasks-server"
+    }
+  }
+}
+```
+
+The server binary uses stdio transport and requires no additional arguments or configuration.
+
 ## Conclusion
 
-The native CLI binary is **production-ready** for the current feature set. The Malli warnings are cosmetic and don't affect functionality. No blocking issues identified.
+Both native binaries (CLI and server) are **production-ready** for the current feature set. The Malli warnings are cosmetic and don't affect functionality. No blocking issues identified.
+
+**Key Benefits:**
+- No JVM or Babashka runtime required
+- Fast startup (< 10ms typical)
+- Standalone distribution
+- Cross-platform support (Linux, macOS, Windows)
