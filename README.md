@@ -138,44 +138,9 @@ See **[Workflow Documentation](doc/workflow.md)** for advanced patterns includin
 - **[Configuration](doc/config.md)** - Config file options, git integration, worktree management
 - **[Customization](doc/customization.md)** - Custom categories, prompt templates, task metadata, MCP resources
 - **[Command Line Interface](doc/command-line.md)** - CLI commands, output formats, and usage
+- **[Development](doc/development.md)** - Development setup, architecture, testing, and building
 - **[Glossary](doc/glossary.md)** - Terms and concepts
 - **[Building from Source](doc/build.md)** - Build instructions for native binaries and JAR
-
-## Development
-
-```bash
-# REPL
-clj
-
-# Lint
-clj-kondo --lint src test --fail-level warning
-
-# Tests
-clojure -M:dev:test --focus :unit
-```
-
-**Dependencies:**
-- Requires local [mcp-clj](https://github.com/hugoduncan/mcp-clj) at `../mcp-clj/projects/server`
-
-## Architecture
-
-**Task Storage:**
-
-```
-.mcp-tasks/          # Task tracking directory
-├── .git/            # Optional: Version control for task history
-├── tasks.ednl       # Active tasks (EDN lines format)
-├── complete.ednl    # Completed task archive (EDN lines format)
-└── prompts/         # Category-specific instructions (optional)
-    └── feature.md
-```
-
-**Key Components:**
-- Task discovery and category management (src/mcp_tasks/prompts.clj:29)
-- MCP prompt generation (src/mcp_tasks/prompts.clj:85)
-- Custom instruction loading (src/mcp_tasks/prompts.clj:76)
-
-**vs. clojure-mcp:** This is a task management layer built on the [clojure-mcp](https://github.com/hugoduncan/mcp-clj) server library. clojure-mcp provides MCP infrastructure; mcp-tasks adds workflow automation.
 
 ## Status & License
 
