@@ -29,7 +29,7 @@ detect_platform() {
     *)
       echo "Error: Unsupported operating system: $(uname -s)" >&2
       echo "Supported platforms: linux-amd64, macos-amd64, macos-arm64" >&2
-      exit 1
+      return 1
       ;;
   esac
 
@@ -44,7 +44,7 @@ detect_platform() {
     *)
       echo "Error: Unsupported architecture: $(uname -m)" >&2
       echo "Supported architectures: amd64, arm64" >&2
-      exit 1
+      return 1
       ;;
   esac
 
@@ -58,7 +58,7 @@ detect_platform() {
     *)
       echo "Error: Unsupported platform combination: $platform" >&2
       echo "Supported platforms: linux-amd64, macos-amd64, macos-arm64" >&2
-      exit 1
+      return 1
       ;;
   esac
 }
@@ -78,7 +78,7 @@ download() {
     echo "  - On macOS: brew install curl" >&2
     echo "  - On Ubuntu/Debian: sudo apt-get install curl" >&2
     echo "  - On Fedora/RHEL: sudo dnf install curl" >&2
-    exit 1
+    return 1
   fi
 }
 
@@ -106,7 +106,7 @@ install_binary() {
   echo "Downloading ${binary_name}..."
   if ! download "$download_url" "$temp_file"; then
     echo "Error: Failed to download ${binary_name} from ${download_url}" >&2
-    exit 1
+    return 1
   fi
 
   backup_binary "$install_path"
@@ -115,7 +115,7 @@ install_binary() {
   if ! mv "$temp_file" "$install_path" 2>/dev/null; then
     echo "Error: Failed to install to ${INSTALL_DIR}" >&2
     echo "Try running with sudo: sudo $0" >&2
-    exit 1
+    return 1
   fi
 
   chmod +x "$install_path"
@@ -135,7 +135,9 @@ main() {
 
   # Detect platform
   echo "Detecting platform..."
-  PLATFORM=$(detect_platform)
+  if ! PLATFORM=$(detect_platform); then
+    exit 1
+  fi
   echo "Platform: $PLATFORM"
   echo ""
 
@@ -144,9 +146,13 @@ main() {
   trap cleanup EXIT
 
   # Install binaries
-  install_binary "mcp-tasks" "$PLATFORM" "$TEMP_DIR"
+  if ! install_binary "mcp-tasks" "$PLATFORM" "$TEMP_DIR"; then
+    exit 1
+  fi
   echo ""
-  install_binary "mcp-tasks-server" "$PLATFORM" "$TEMP_DIR"
+  if ! install_binary "mcp-tasks-server" "$PLATFORM" "$TEMP_DIR"; then
+    exit 1
+  fi
   echo ""
 
   # Success message
