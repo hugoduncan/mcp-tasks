@@ -332,7 +332,7 @@
               ((:stop server)))))))
 
     (testing "child task completion"
-      (testing "clears state with git disabled"
+      (testing "preserves story-level state with git disabled"
         (fixtures/write-config-file "{:use-git? false}")
 
         (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
@@ -394,7 +394,7 @@
               (mcp-client/close! client)
               ((:stop server))))))
 
-      (testing "clears state with git enabled"
+      (testing "preserves story-level state with git enabled"
         (fixtures/write-config-file "{:use-git? true}")
         (fixtures/init-test-git-repo)
 
