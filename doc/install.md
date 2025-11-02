@@ -4,198 +4,25 @@ This guide describes how to install the mcp-tasks MCP server for use with variou
 
 ## Prerequisites
 
-- Clojure CLI tools installed
+Binary installation requires no prerequisites. For Clojure git dependency installation (alternative method), you need Clojure CLI tools installed.
 
-## Babashka Installation (Optional)
+## Binary Installation (Recommended)
 
-The mcp-tasks CLI can run under Babashka for faster startup times and better scripting support. This is optional but recommended for CLI usage.
+The recommended installation method is using the pre-built native binaries, which provide the best performance and simplest setup.
 
-### Minimum Version
-
-- **Required:** Babashka 1.0.0 or later (for full Malli support)
-- **Current Latest:** 1.12.207
-- **Malli Support:** Added in v0.8.9 (July 2022)
-
-### Installation Instructions
-
-**macOS:**
+**Quick Install (Unix/macOS):**
 ```bash
-# Using Homebrew
-brew install borkdude/brew/babashka
-
-# Or using the installer script
-bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+curl -fsSL https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.sh | bash
 ```
 
-**Linux:**
-```bash
-# Using the installer script
-bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
-
-# Or download binary directly
-wget https://github.com/babashka/babashka/releases/latest/download/babashka-$(uname -s | tr '[:upper:]' '[:lower:]')-amd64.tar.gz
-tar -xzf babashka-*.tar.gz
-sudo mv bb /usr/local/bin/
-```
-
-**Windows:**
+**Quick Install (Windows PowerShell):**
 ```powershell
-# Using Scoop
-scoop install babashka
-
-# Or download the Windows installer from:
-# https://github.com/babashka/babashka/releases
+iwr -useb https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.ps1 | iex
 ```
 
-### bb.edn Setup
+For manual installation and troubleshooting, see the [Installation section in README.md](../README.md#installation). For building from source, see [build.md](build.md).
 
-After installing Babashka, the mcp-tasks project includes a `bb.edn` configuration file that enables CLI usage. No additional setup is required - just use `bb` commands instead of `clojure` commands.
-
-**Performance:**
-
-Babashka provides dramatically faster startup times compared to JVM Clojure:
-- **JVM Clojure:** ~2.2 seconds
-- **Babashka (help commands):** ~66ms (0.066 seconds)
-- **Babashka (with validation):** ~390ms first run, ~330ms cached
-- **Improvement:** ~33x faster for help commands
-
-The CLI uses lazy-loading optimizations to defer loading validation libraries until needed. This means help commands and simple queries are nearly instant, while commands that validate data pay a small one-time cost.
-
-This makes babashka ideal for CLI operations, scripting, and interactive task management.
-
-**Usage Examples:**
-
-```bash
-# List available babashka tasks
-bb tasks
-
-# Use CLI commands with bb prefix
-bb list --category simple
-bb add --category simple --title "New task"
-bb show --task-id 42
-bb complete --task-id 42
-bb update --task-id 42 --status in-progress
-bb delete --task-id 42
-
-# Or use the main CLI entry point
-bb cli list --format json
-bb cli add --category feature --title "Add endpoint"
-```
-
-**When to Use Babashka vs JVM:**
-- **Babashka:** CLI operations, scripting, interactive task management
-- **JVM Clojure:** MCP server (requires JVM), development/testing with full Clojure toolchain
-
-**Important:** The MCP server requires JVM Clojure (`clojure -X:mcp-tasks`). Babashka support is for CLI operations only.
-
-**JSON Library Choice:**
-
-The mcp-tasks CLI uses `cheshire.core` for JSON parsing and serialization. This choice enables babashka compatibility:
-
-- **Built into babashka**: cheshire is included in the babashka distribution, requiring no additional dependencies
-- **JVM compatible**: Also works seamlessly in standard Clojure when added to deps.edn
-- **API compatible**: Provides the same API as clojure.data.json for our usage (`parse-string`/`read-str` with `:key-fn`, `generate-string`/`write-str`)
-- **Performance**: Enables the CLI to run under babashka with ~40x faster startup times compared to JVM Clojure
-
-This architectural decision allows the same codebase to run efficiently in both JVM and babashka environments without code changes.
-
-### Platform Considerations
-
-- **Windows:** The bb.bat wrapper is automatically created during installation
-- **All Platforms:** The bb.edn uses forward slashes for paths, which work correctly on all platforms including Windows
-- **Path separators:** Babashka handles platform-specific path separators automatically
-
-### Verifying Installation
-
-```bash
-# Check babashka version (should be 1.0.0 or later)
-bb --version
-
-# Test with mcp-tasks
-bb list --help
-```
-
-### Standalone Executable (Uberscript)
-
-For easier distribution or system-wide installation, you can build a standalone executable using babashka's uberscript feature. This bundles all dependencies into a single file.
-
-**Building the Uberscript:**
-
-```bash
-# From the mcp-tasks source directory
-cd /path/to/mcp-tasks
-bb build-uberscript
-
-# This creates a 48KB executable: ./mcp-tasks
-```
-
-**Installation Options:**
-
-```bash
-# Option 1: Use locally
-./mcp-tasks list --category simple
-
-# Option 2: Install to local bin directory
-mkdir -p ~/bin
-cp mcp-tasks ~/bin/
-# Add ~/bin to PATH if not already there
-
-# Option 3: Install system-wide
-sudo cp mcp-tasks /usr/local/bin/
-mcp-tasks list --format human
-```
-
-**Uberscript Benefits:**
-
-- **Single file distribution** - No need to install source code or maintain dependencies
-- **Fast startup** - Same ~66ms performance as `bb` commands for help operations
-- **Portable** - Copy to any system with babashka installed
-- **No classpath configuration** - All dependencies bundled in the executable
-- **Version locking** - Executable is built from specific source version
-
-**Performance:**
-
-The uberscript maintains the optimized lazy-loading performance:
-- **Help commands:** ~66ms (instant feel)
-- **Commands with validation:** ~390ms first run (loads Malli), ~330ms cached
-- **vs JVM:** ~33x faster for help commands
-
-**Requirements:**
-
-- Babashka must be installed on the target system (the `#!/usr/bin/env bb` shebang requires it)
-- The executable is platform-independent (runs on macOS, Linux, Windows with babashka installed)
-
-**Updating:**
-
-When you want to update to a newer version:
-
-```bash
-# Pull latest source
-cd /path/to/mcp-tasks
-git pull
-
-# Rebuild the uberscript
-bb build-uberscript
-
-# Reinstall
-sudo cp mcp-tasks /usr/local/bin/
-```
-
-**Distribution:**
-
-The uberscript can be distributed to other users/systems:
-
-```bash
-# Copy to another machine
-scp mcp-tasks user@remote-host:~/bin/
-
-# Or commit to your dotfiles repository
-cp mcp-tasks ~/dotfiles/bin/mcp-tasks
-```
-
-**Note:** While the uberscript provides a convenient CLI, the MCP server still requires JVM Clojure via `clojure -X:mcp-tasks`.
-
-## Setup
+## Alternative: Clojure Git Dependency
 
 ### Configure Global Clojure Alias
 
@@ -258,64 +85,7 @@ Add to your Codex MCP configuration file (location varies by installation):
 }
 ```
 
-## Workflow Configuration
-
-The mcp-tasks server supports both git-based and non-git workflows for managing tasks. The server automatically detects which mode to use.
-
-### Auto-Detection
-
-By default, mcp-tasks automatically detects whether to use git:
-- If `.mcp-tasks/.git` directory exists → git mode enabled
-- If `.mcp-tasks/.git` directory does not exist → git mode disabled
-
-This means you can start using mcp-tasks immediately without any configuration.
-
-### Explicit Configuration (Optional)
-
-You can override auto-detection by creating a `.mcp-tasks.edn` file in your project root (sibling to the `.mcp-tasks/` directory):
-
-```clojure
-{:use-git? true}   ; Force git mode on
-{:use-git? false}  ; Force git mode off
-```
-
-Explicit configuration takes precedence over auto-detection.
-
-### Git Workflow
-
-When git mode is enabled:
-- Task completion includes git commit instructions
-- The `complete-task` tool returns modified file paths for git operations
-- You can track task history using git commits
-
-**Setup:**
-```bash
-cd .mcp-tasks
-git init
-```
-
-### Non-Git Workflow
-
-When git mode is disabled:
-- Task completion focuses on file operations only
-- No git instructions or commit guidance included
-- Tasks are tracked in markdown files without version control
-
-**Setup:**
-No additional setup required - just use the `.mcp-tasks/` directory without initializing git.
-
-### When to Use Each Workflow
-
-**Use git workflow when:**
-- You want version history of your task changes
-- You're working in a team and want to share task state
-- You want to track when and why tasks were completed
-- Your main project repository is independent (mcp-tasks git repo is separate)
-
-**Use non-git workflow when:**
-- You prefer simplicity and don't need version history
-- You're working solo and tasks are ephemeral
-- You want minimal overhead
+For configuration options, see [Configuration](config.md).
 
 ## Setup
 
@@ -347,35 +117,7 @@ echo ".mcp-tasks/" >> .gitignore
 - Completed task archive provides an audit trail
 - Each project can have its own task repository
 
-
-## Command Line Options
-
-The mcp-tasks server supports command line flags for managing task prompts:
-
-### List Available Prompts
-
-Display all available prompt templates with their descriptions:
-
-```bash
-clojure -M:mcp-tasks --list-prompts
-```
-
-### Install Prompt Templates
-
-Install prompt templates to `.mcp-tasks/prompts/` directory:
-
-```bash
-# Install all available prompts
-clojure -M:mcp-tasks --install-prompts
-
-# Install specific prompts (comma-separated)
-clojure -M:mcp-tasks --install-prompts simple,clarify-task
-```
-
-The `--install-prompts` command:
-- Skips files that already exist (exit code 0)
-- Warns if a prompt is not found or installation fails (exit code 1)
-- Does not start the MCP server
+For prompt customization and management, see [Customization](customization.md).
 
 ## Verification
 
@@ -383,7 +125,7 @@ After configuration, restart your MCP client. The mcp-tasks server should be ava
 
 You can verify the installation by:
 1. Checking that the server appears in your client's MCP server list
-2. Listing available prompts using `clojure -M:mcp-tasks --list-prompts`
+2. Listing available prompts (see [Customization](customization.md) for prompt management commands)
 3. Running a simple task command like `/mcp-tasks:next-simple`
 
 ## Troubleshooting
