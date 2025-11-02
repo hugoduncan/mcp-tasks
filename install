@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Configuration
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+GITHUB_REPO="hugoduncan/mcp-tasks"
+BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
+
+# Check if command exists
+has() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Detect platform and architecture
+detect_platform() {
+  local os
+  local arch
+  local platform
+
+  # Detect OS
+  case "$(uname -s)" in
+    Linux*)
+      os="linux"
+      ;;
+    Darwin*)
+      os="macos"
+      ;;
+    *)
+      echo "Error: Unsupported operating system: $(uname -s)" >&2
+      echo "Supported platforms: linux-amd64, macos-amd64, macos-arm64" >&2
+      exit 1
+      ;;
+  esac
+
+  # Detect architecture
+  case "$(uname -m)" in
+    x86_64)
+      arch="amd64"
+      ;;
+    arm64|aarch64)
+      arch="arm64"
+      ;;
+    *)
+      echo "Error: Unsupported architecture: $(uname -m)" >&2
+      echo "Supported architectures: amd64, arm64" >&2
+      exit 1
+      ;;
+  esac
+
+  platform="${os}-${arch}"
+
+  # Validate against supported platforms
+  case "$platform" in
+    linux-amd64|macos-amd64|macos-arm64)
+      echo "$platform"
+      ;;
+    *)
+      echo "Error: Unsupported platform combination: $platform" >&2
+      echo "Supported platforms: linux-amd64, macos-amd64, macos-arm64" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# Download file using curl or wget
+download() {
+  local url="$1"
+  local output="$2"
+
+  if has curl; then
+    curl -fsSL -o "$output" "$url"
+  elif has wget; then
+    wget -q -O "$output" "$url"
+  else
+    echo "Error: Neither curl nor wget found" >&2
+    echo "Please install curl or wget to continue" >&2
+    echo "  - On macOS: brew install curl" >&2
+    echo "  - On Ubuntu/Debian: sudo apt-get install curl" >&2
+    echo "  - On Fedora/RHEL: sudo dnf install curl" >&2
+    exit 1
+  fi
+}
+
+# Backup existing binary
+backup_binary() {
+  local binary_path="$1"
+
+  if [ -f "$binary_path" ]; then
+    echo "Backing up existing binary: ${binary_path} -> ${binary_path}.old"
+    mv "$binary_path" "${binary_path}.old"
+  fi
+}
+
+# Install a single binary
+install_binary() {
+  local binary_name="$1"
+  local platform="$2"
+  local temp_dir="$3"
+
+  local remote_name="${binary_name}-${platform}"
+  local download_url="${BASE_URL}/${remote_name}"
+  local temp_file="${temp_dir}/${binary_name}"
+  local install_path="${INSTALL_DIR}/${binary_name}"
+
+  echo "Downloading ${binary_name}..."
+  if ! download "$download_url" "$temp_file"; then
+    echo "Error: Failed to download ${binary_name} from ${download_url}" >&2
+    exit 1
+  fi
+
+  backup_binary "$install_path"
+
+  echo "Installing ${binary_name} to ${INSTALL_DIR}..."
+  if ! mv "$temp_file" "$install_path" 2>/dev/null; then
+    echo "Error: Failed to install to ${INSTALL_DIR}" >&2
+    echo "Try running with sudo: sudo $0" >&2
+    exit 1
+  fi
+
+  chmod +x "$install_path"
+}
+
+# Cleanup temporary directory
+cleanup() {
+  if [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
+    rm -rf "$TEMP_DIR"
+  fi
+}
+
+# Main installation flow
+main() {
+  echo "mcp-tasks installer"
+  echo ""
+
+  # Detect platform
+  echo "Detecting platform..."
+  PLATFORM=$(detect_platform)
+  echo "Platform: $PLATFORM"
+  echo ""
+
+  # Create temporary directory
+  TEMP_DIR=$(mktemp -d)
+  trap cleanup EXIT
+
+  # Install binaries
+  install_binary "mcp-tasks" "$PLATFORM" "$TEMP_DIR"
+  echo ""
+  install_binary "mcp-tasks-server" "$PLATFORM" "$TEMP_DIR"
+  echo ""
+
+  # Success message
+  echo "Installation complete!"
+  echo ""
+  echo "Binaries installed to: $INSTALL_DIR"
+  echo "  - mcp-tasks"
+  echo "  - mcp-tasks-server"
+  echo ""
+  echo "You can now use the mcp-tasks CLI and server."
+  echo "For more information, visit: https://github.com/${GITHUB_REPO}"
+}
+
+main "$@"
