@@ -26,7 +26,7 @@
 
 **EDNL (EDN Lines)**: Line-oriented EDN format where each line contains a complete EDN data structure. Used in `tasks.ednl` and `complete.ednl` files.
 
-**Execution State**: A record of the currently executing story and task stored in `.mcp-tasks-current.edn`, containing `:story-id`, `:task-id`, and `:started-at` timestamp. Enables external monitoring and coordination.
+**Execution State**: A record of the currently executing story and task stored in `.mcp-tasks-current.edn`, containing `:story-id`, `:task-id`, and `:task-start-time` timestamp. Enables external monitoring and coordination. When a child task is completed, the `:task-id` field is removed while `:story-id` and `:task-start-time` are preserved to maintain story-level execution state.
 
 **Frontmatter**: YAML-style metadata at the start of prompt files delimited by `---`, containing key-value pairs.
 

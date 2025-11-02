@@ -116,5 +116,5 @@ Branch: fix-bug
 
 - If task execution fails or is interrupted:
   - The execution state remains in place (managed by work-on tool)
-  - External tools can detect stale execution via the `:started-at` timestamp
+  - External tools can detect stale execution via the `:task-start-time` timestamp
   - When starting a new task, work-on will overwrite the execution state automatically
