@@ -8,7 +8,54 @@ mcp-tasks provides a structured workflow where you plan tasks for an
 agent to execute. Tasks are organized into categories, with each
 category having its own execution instructions and task tracking.
 
-## Basic Workflow
+## Workflow Modes
+
+mcp-tasks supports two workflow modes:
+
+- **Task-ID Based Workflow**: Execute specific tasks by ID for direct control over execution order
+- **Category-Based Workflow**: Execute tasks from category queues for sequential processing
+
+Choose task-id based when you need to control execution order, or category-based when you want to process queued tasks sequentially within a category.
+
+## Task-ID Based Workflow
+
+### 1. Add Tasks
+
+Ask the agent to create tasks, or use the `add-task` tool directly:
+
+```bash
+# Ask agent to create a task
+"Create a simple task to add user profile endpoint"
+# Agent uses add-task tool, returns task-id: 123
+```
+
+The agent will use the `add-task` tool to create an EDN record with all required fields in `.mcp-tasks/tasks.ednl`.
+
+### 2. Execute Tasks by ID
+
+Execute specific tasks using their ID:
+
+```bash
+/mcp-tasks:execute-task 123
+```
+
+The agent will:
+1. Call the `work-on` tool to set up the task environment
+2. Execute the task using the category-specific workflow
+3. Commit changes to your repository
+4. Use the `complete-task` tool to mark the task as complete
+
+### 3. Review and Iterate
+
+After each task completion:
+- Review the changes made by the agent
+- Test the implementation
+- Add follow-up tasks as needed
+- Execute tasks in any order by ID
+
+**When to use:** Direct control over task execution order, working on specific tasks regardless of their position in the queue.
+
+## Category-Based Workflow
 
 ### 1. Add Tasks
 
@@ -41,13 +88,13 @@ beginning.
 Execute the next task in a category by running:
 
 ```
-/mcp-tasks:next-<category>
+/mcp-tasks:category-<category>
 ```
 
 **Examples:**
-- `/mcp-tasks:next-simple` - Process next simple task
-- `/mcp-tasks:next-feature` - Process next feature task
-- `/mcp-tasks:next-bugfix` - Process next bugfix task
+- `/mcp-tasks:category-simple` - Process next simple task
+- `/mcp-tasks:category-feature` - Process next feature task
+- `/mcp-tasks:category-bugfix` - Process next bugfix task
 
 The agent will:
 1. Read the first task with matching category and `:status :open`
@@ -64,6 +111,8 @@ After each task completion:
 - Test the implementation
 - If needed, add follow-up tasks to the task file
 - Continue with the next task
+
+**When to use:** Sequential processing of multiple tasks within a category, queue-based task management.
 
 ## Advanced Workflows
 
