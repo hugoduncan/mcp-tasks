@@ -12,6 +12,14 @@ $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { $DefaultInstallD
 $GitHubRepo = "hugoduncan/mcp-tasks"
 $BaseUrl = "https://github.com/$GitHubRepo/releases/latest/download"
 
+# Binary names
+$BinaryCli = "mcp-tasks"
+$BinaryServer = "mcp-tasks-server"
+
+# Platform constants
+$BinaryExtension = ".exe"
+$SupportedArchitectures = "amd64"
+
 # Detect architecture
 function Get-Architecture {
   $arch = $env:PROCESSOR_ARCHITECTURE
@@ -22,12 +30,12 @@ function Get-Architecture {
     }
     "ARM64" {
       Write-Error "Error: ARM64 architecture is not yet supported on Windows"
-      Write-Error "Supported architectures: amd64"
+      Write-Error "Supported architectures: $SupportedArchitectures"
       exit 1
     }
     default {
       Write-Error "Error: Unsupported architecture: $arch"
-      Write-Error "Supported architectures: amd64"
+      Write-Error "Supported architectures: $SupportedArchitectures"
       exit 1
     }
   }
@@ -74,10 +82,10 @@ function Install-Binary {
     [string]$TempDir
   )
 
-  $RemoteName = "$BinaryName-windows-$Architecture.exe"
+  $RemoteName = "$BinaryName-windows-$Architecture$BinaryExtension"
   $DownloadUrl = "$BaseUrl/$RemoteName"
-  $TempFile = Join-Path $TempDir "$BinaryName.exe"
-  $InstallPath = Join-Path $InstallDir "$BinaryName.exe"
+  $TempFile = Join-Path $TempDir "$BinaryName$BinaryExtension"
+  $InstallPath = Join-Path $InstallDir "$BinaryName$BinaryExtension"
 
   Write-Host "Downloading $BinaryName..."
   Download-File -Url $DownloadUrl -Output $TempFile
@@ -139,7 +147,7 @@ function Add-ToPath {
     Write-Host "Installation directory not added to PATH." -ForegroundColor Yellow
     Write-Host "To use the binaries, either:"
     Write-Host "  - Add $Directory to your PATH manually"
-    Write-Host "  - Run using full path: $Directory\mcp-tasks.exe"
+    Write-Host "  - Run using full path: $Directory\$BinaryCli$BinaryExtension"
   }
 }
 
@@ -177,17 +185,17 @@ function Main {
 
   try {
     # Install binaries
-    Install-Binary -BinaryName "mcp-tasks" -Architecture $Architecture -TempDir $TempDir
+    Install-Binary -BinaryName $BinaryCli -Architecture $Architecture -TempDir $TempDir
     Write-Host ""
-    Install-Binary -BinaryName "mcp-tasks-server" -Architecture $Architecture -TempDir $TempDir
+    Install-Binary -BinaryName $BinaryServer -Architecture $Architecture -TempDir $TempDir
     Write-Host ""
 
     # Success message
     Write-Host "Installation complete!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Binaries installed to: $InstallDir"
-    Write-Host "  - mcp-tasks.exe"
-    Write-Host "  - mcp-tasks-server.exe"
+    Write-Host "  - $BinaryCli$BinaryExtension"
+    Write-Host "  - $BinaryServer$BinaryExtension"
     Write-Host ""
 
     # Check PATH and offer to add
