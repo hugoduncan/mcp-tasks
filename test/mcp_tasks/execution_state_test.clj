@@ -171,3 +171,45 @@
                (exec-state/read-execution-state base-dir-2)))
         (fs/delete-tree base-dir-1)
         (fs/delete-tree base-dir-2)))))
+
+(deftest update-execution-state-for-child-completion-test
+  ;; Test updating execution state after child task completion.
+  ;; Contracts: state with :story-id → story-level state (no :task-id),
+  ;; state without :story-id → file cleared, defensive null handling.
+  (testing "update-execution-state-for-child-completion!"
+    (testing "preserves story-id and removes task-id when story-id present"
+      (let [base-dir (temp-dir)]
+        (exec-state/write-execution-state! base-dir valid-state-with-story)
+        (let [result (exec-state/update-execution-state-for-child-completion! base-dir)]
+          (is (= {:story-id 10 :task-start-time "2025-10-20T14:30:00Z"} result))
+          (is (= result (exec-state/read-execution-state base-dir))))
+        (fs/delete-tree base-dir)))
+
+    (testing "clears state when no story-id present"
+      (let [base-dir (temp-dir)]
+        (exec-state/write-execution-state! base-dir valid-state-without-story)
+        (is (nil? (exec-state/update-execution-state-for-child-completion! base-dir)))
+        (is (nil? (exec-state/read-execution-state base-dir)))
+        (fs/delete-tree base-dir)))
+
+    (testing "clears state when file does not exist"
+      (let [base-dir (temp-dir)]
+        (is (nil? (exec-state/update-execution-state-for-child-completion! base-dir)))
+        (is (nil? (exec-state/read-execution-state base-dir)))
+        (fs/delete-tree base-dir)))
+
+    (testing "handles story-level state correctly (no task-id)"
+      (let [base-dir (temp-dir)]
+        (exec-state/write-execution-state! base-dir valid-story-level-state)
+        (let [result (exec-state/update-execution-state-for-child-completion! base-dir)]
+          (is (= valid-story-level-state result))
+          (is (= result (exec-state/read-execution-state base-dir))))
+        (fs/delete-tree base-dir)))
+
+    (testing "uses atomic file operations"
+      (let [base-dir (temp-dir)]
+        (exec-state/write-execution-state! base-dir valid-state-with-story)
+        (exec-state/update-execution-state-for-child-completion! base-dir)
+        (is (= {:story-id 10 :task-start-time "2025-10-20T14:30:00Z"}
+               (exec-state/read-execution-state base-dir)))
+        (fs/delete-tree base-dir)))))

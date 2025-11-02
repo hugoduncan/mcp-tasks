@@ -123,3 +123,24 @@
     (when (fs/exists? file-path)
       (fs/delete file-path)
       true)))
+
+(defn update-execution-state-for-child-completion!
+  "Update execution state after child task completion.
+
+  Reads current state and:
+  - If state has :story-id: writes back with only :story-id and :task-start-time
+    (removes :task-id to indicate story-level state)
+  - If state has no :story-id: clears the file (defensive fallback)
+
+  Returns the updated state map if successful, or nil if state was cleared.
+  Uses atomic file operations for consistency."
+  [base-dir]
+  (let [current-state (read-execution-state base-dir)]
+    (if (and current-state (:story-id current-state))
+      (let [story-level-state {:story-id (:story-id current-state)
+                               :task-start-time (:task-start-time current-state)}]
+        (write-execution-state! base-dir story-level-state)
+        story-level-state)
+      (do
+        (clear-execution-state! base-dir)
+        nil))))
