@@ -134,6 +134,29 @@
              :main 'mcp-tasks.native-init})
     (println "CLI uberjar built successfully:" jar-file)))
 
+(defn jar-server
+  "Build uberjar for server with mcp-tasks.native-server-init as Main-Class"
+  [_]
+  (let [v (version nil)
+        basis (b/create-basis {:project "deps.edn"})
+        jar-file (format "%s/mcp-tasks-server-%s.jar" target-dir v)]
+    (println "Building server uberjar:" jar-file)
+    (b/write-pom {:class-dir class-dir
+                  :lib lib
+                  :version v
+                  :basis basis
+                  :src-dirs ["src"]})
+    (b/copy-dir {:src-dirs ["src" "resources"]
+                 :target-dir class-dir})
+    (b/compile-clj {:basis basis
+                    :src-dirs ["src"]
+                    :class-dir class-dir})
+    (b/uber {:class-dir class-dir
+             :uber-file jar-file
+             :basis basis
+             :main 'mcp-tasks.native-server-init})
+    (println "Server uberjar built successfully:" jar-file)))
+
 (defn native-cli
   "Build native CLI binary using GraalVM native-image.
 
