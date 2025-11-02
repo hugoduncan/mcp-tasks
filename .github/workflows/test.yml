@@ -104,7 +104,7 @@ jobs:
       - name: Run PSScriptAnalyzer on Windows install script
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Error
+          $results = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost
           if ($results) {
             $results | Format-Table -AutoSize
             exit 1
