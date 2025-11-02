@@ -8,6 +8,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An MCP (Model Context Protocol) server that provides task-based workflow management for agents. Tasks are organized into configurable categories, each with its own execution instructions.
 
+## Documentation Structure
+
+**Documentation Policy:**
+
+- **`doc/*.md` files**: Should be definitive and exhaustive, covering all details, edge cases, configuration options, and troubleshooting for their respective topics
+- **`README.md`**: Should address only the most common use cases and provide clear links to the exhaustive documentation in `doc/*.md` files
+
+When updating documentation:
+- Add comprehensive details to `doc/*.md` files
+- Keep `README.md` concise, covering quick start and common scenarios
+- Ensure `README.md` links to relevant `doc/*.md` files for deeper coverage
+- Avoid duplicating detailed content between README.md and doc files
+
 ## Architecture
 
 **Task Storage Structure:**
