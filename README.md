@@ -70,24 +70,25 @@ cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracki
 
 ### Your First Task
 
-**Add a task:**
+**Create a task:**
 
-In Claude Code, use the `add-task` tool:
-- category: `simple`
-- title: `Add README badges for build status`
+Ask your AI agent:
+```
+Create a simple category task to add README badges for build status
+```
+
+The agent will use the `add-task` tool and return a task-id (e.g., `123`).
 
 **Execute the task:**
 
 ```
-/mcp-tasks:category-simple
+/mcp-tasks:execute-task 123
 ```
 
 The agent will:
-- Read the task from `.mcp-tasks/tasks.ednl`
-- Analyze requirements in project context
-- Implement the solution
-- Commit changes to your repository
-- Move completed task to `.mcp-tasks/complete.ednl`
+- Validate the task and set up the execution environment
+- Follow the "simple" category workflow: analyze, implement, commit
+- Mark the task as complete
 
 **Review:**
 
