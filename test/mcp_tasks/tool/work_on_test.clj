@@ -139,8 +139,8 @@
           (is (some? state))
           (is (= task-id (:task-id state)))
           (is (nil? (:story-id state)))
-          (is (string? (:started-at state)))
-          (is (not (str/blank? (:started-at state))))))
+          (is (string? (:task-start-time state)))
+          (is (not (str/blank? (:task-start-time state))))))
 
       (testing "writes execution state for story task"
         ;; Create a story
@@ -167,7 +167,7 @@
           (is (some? state))
           (is (= task-id (:task-id state)))
           (is (= story-id (:story-id state)))
-          (is (string? (:started-at state))))))))
+          (is (string? (:task-start-time state))))))))
 
 (deftest work-on-idempotency
   (h/with-test-setup [test-dir]
@@ -183,7 +183,7 @@
               result1 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
               response1 (json/parse-string (get-in result1 [:content 0 :text]) keyword)
               state1 (execution-state/read-execution-state base-dir)
-              timestamp1 (:started-at state1)
+              timestamp1 (:task-start-time state1)
               _ (is (false? (:isError result1)))
               _ (is (= task-id (:task-id response1)))
 
@@ -194,7 +194,7 @@
               result2 (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id task-id})
               response2 (json/parse-string (get-in result2 [:content 0 :text]) keyword)
               state2 (execution-state/read-execution-state base-dir)
-              timestamp2 (:started-at state2)]
+              timestamp2 (:task-start-time state2)]
 
           (is (false? (:isError result2)))
           (is (= task-id (:task-id response2)))

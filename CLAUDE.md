@@ -207,14 +207,16 @@ The system tracks which story and task are currently being executed, making this
 ```clojure
 {:story-id 177              ;; nil if standalone task
  :task-id 180
- :started-at "2025-10-20T14:30:00Z"}
+ :task-start-time "2025-10-20T14:30:00Z"}
 ```
 
 **State Lifecycle:**
-- State file is created when task/story execution starts
-- State file is cleared when task completes successfully via `complete-task`
+- State file is created when task/story execution starts via `work-on`
+- For **child tasks**: Upon completion, `:task-id` is removed while `:story-id` and `:task-start-time` are preserved to maintain story-level state
+- For **standalone tasks**: State file is cleared completely upon completion
+- For **stories**: State file is cleared completely upon completion
 - Each worktree maintains its own state file in its root directory
-- External tools can detect stale executions via `:started-at` timestamp
+- External tools can detect stale executions via `:task-start-time` timestamp
 
 **Querying Current Execution:**
 

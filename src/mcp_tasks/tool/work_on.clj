@@ -745,10 +745,10 @@
 
         ;; Otherwise proceed with execution state and normal response
         (let [story-id (:parent-id task)
-              started-at (java.time.Instant/now)
+              task-start-time (java.time.Instant/now)
               state {:task-id task-id
                      :story-id story-id
-                     :started-at (str started-at)}
+                     :task-start-time (str task-start-time)}
               _ (execution-state/write-execution-state! base-dir state)
               state-file-path (str base-dir "/.mcp-tasks-current.edn")]
           (build-success-response task branch-info worktree-info state-file-path))))

@@ -217,5 +217,5 @@ The tool will automatically clear the task environment state and confirm complet
 - If task execution fails or is blocked, do not mark the task as complete
 - If task execution fails or is interrupted:
   - The task environment state remains in place for external tools to detect
-  - External tools can detect stale executions via the `:started-at` timestamp
+  - External tools can detect stale executions via the `:task-start-time` timestamp
   - When starting a new task, the `work-on` tool will overwrite the previous state automatically

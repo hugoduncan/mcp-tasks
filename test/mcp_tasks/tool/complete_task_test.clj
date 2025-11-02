@@ -2,6 +2,7 @@
   (:require
     [babashka.fs :as fs]
     [cheshire.core :as json]
+    [clojure.edn :as edn]
     [clojure.java.shell]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -704,7 +705,7 @@
         ;; Write execution state file to simulate task execution
         (let [state {:story-id nil
                      :task-id 1
-                     :started-at "2025-10-20T14:30:00Z"}
+                     :task-start-time "2025-10-20T14:30:00Z"}
               state-file (fs/file test-dir ".mcp-tasks-current.edn")]
           (spit state-file (pr-str state))
           (is (fs/exists? state-file)))
@@ -720,11 +721,11 @@
           (let [state-file (fs/file test-dir ".mcp-tasks-current.edn")]
             (is (not (fs/exists? state-file)))))))))
 
-(deftest complete-child-task-clears-execution-state
+(deftest complete-child-task-preserves-story-state
   (h/with-test-setup [test-dir]
-    ;; Tests that completing a story child task automatically clears the execution state.
+    ;; Tests that completing a story child task preserves story-level execution state.
     (testing "complete-task"
-      (testing "clears execution state when completing child task"
+      (testing "preserves story-level state when completing child task"
         ;; Setup story and child task
         (h/write-ednl-test-file
           test-dir
@@ -753,7 +754,7 @@
         ;; Write execution state file to simulate task execution
         (let [state {:story-id 50
                      :task-id 51
-                     :started-at "2025-10-20T14:30:00Z"}
+                     :task-start-time "2025-10-20T14:30:00Z"}
               state-file (fs/file test-dir ".mcp-tasks-current.edn")]
           (spit state-file (pr-str state))
           (is (fs/exists? state-file)))
@@ -765,9 +766,14 @@
                       {:task-id 51})]
           (is (false? (:isError result)))
 
-          ;; Verify execution state file was cleared
-          (let [state-file (fs/file test-dir ".mcp-tasks-current.edn")]
-            (is (not (fs/exists? state-file)))))))))
+          ;; Verify execution state file still exists with story-id only
+          (let [state-file (fs/file test-dir ".mcp-tasks-current.edn")
+                state (when (fs/exists? state-file)
+                        (edn/read-string (slurp state-file)))]
+            (is (fs/exists? state-file))
+            (is (= 50 (:story-id state)))
+            (is (nil? (:task-id state)))
+            (is (some? (:task-start-time state)))))))))
 
 (deftest complete-story-task-clears-execution-state
   (h/with-test-setup [test-dir]
@@ -812,7 +818,7 @@
         ;; Write execution state file to simulate task execution
         (let [state {:story-id nil
                      :task-id 60
-                     :started-at "2025-10-20T14:30:00Z"}
+                     :task-start-time "2025-10-20T14:30:00Z"}
               state-file (fs/file test-dir ".mcp-tasks-current.edn")]
           (spit state-file (pr-str state))
           (is (fs/exists? state-file)))

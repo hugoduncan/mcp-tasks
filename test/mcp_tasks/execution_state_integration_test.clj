@@ -42,7 +42,7 @@
           (let [state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")
                 state {:story-id 177
                        :task-id 181
-                       :started-at "2025-10-20T14:30:00Z"}]
+                       :task-start-time "2025-10-20T14:30:00Z"}]
             (spit state-file (pr-str state)))
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
@@ -51,7 +51,7 @@
             (is (not (:isError read-response)))
             (is (= 177 (:story-id state)))
             (is (= 181 (:task-id state)))
-            (is (= "2025-10-20T14:30:00Z" (:started-at state))))
+            (is (= "2025-10-20T14:30:00Z" (:task-start-time state))))
 
           (finally
             (mcp-client/close! client)
@@ -85,7 +85,7 @@
           (let [state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")
                 state {:story-id nil
                        :task-id 42
-                       :started-at "2025-10-20T15:00:00Z"}]
+                       :task-start-time "2025-10-20T15:00:00Z"}]
             (spit state-file (pr-str state)))
 
           (let [read-response @(mcp-client/read-resource client "resource://current-execution")
@@ -94,7 +94,7 @@
             (is (not (:isError read-response)))
             (is (nil? (:story-id state)))
             (is (= 42 (:task-id state)))
-            (is (= "2025-10-20T15:00:00Z" (:started-at state))))
+            (is (= "2025-10-20T15:00:00Z" (:task-start-time state))))
 
           (finally
             (mcp-client/close! client)
@@ -135,7 +135,7 @@
           ;; Simulate task execution starting - write state directly
           (let [state {:story-id 177
                        :task-id 181
-                       :started-at "2025-10-20T14:30:00Z"}
+                       :task-start-time "2025-10-20T14:30:00Z"}
                 state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
@@ -144,7 +144,7 @@
             (let [read-state (edn/read-string (slurp state-file))]
               (is (= 177 (:story-id read-state)))
               (is (= 181 (:task-id read-state)))
-              (is (= "2025-10-20T14:30:00Z" (:started-at read-state)))))
+              (is (= "2025-10-20T14:30:00Z" (:task-start-time read-state)))))
 
           (finally
             (mcp-client/close! client)
@@ -158,7 +158,7 @@
           ;; Create state file
           (let [state {:story-id 177
                        :task-id 181
-                       :started-at "2025-10-20T14:30:00Z"}
+                       :task-start-time "2025-10-20T14:30:00Z"}
                 state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
             (is (fs/exists? state-file)))
@@ -174,7 +174,7 @@
             (mcp-client/close! client)
             ((:stop server))))))
 
-    (testing "state file contains started-at timestamp for stale detection"
+    (testing "state file contains task-start-time timestamp for stale detection"
       (fixtures/write-config-file "{:use-git? false}")
 
       (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
@@ -182,14 +182,14 @@
           ;; Write state with timestamp
           (let [state {:story-id nil
                        :task-id 42
-                       :started-at "2025-10-20T10:00:00Z"}
+                       :task-start-time "2025-10-20T10:00:00Z"}
                 state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
             ;; Verify timestamp can be read for stale detection
             (let [read-state (edn/read-string (slurp state-file))]
-              (is (string? (:started-at read-state)))
-              (is (= "2025-10-20T10:00:00Z" (:started-at read-state)))))
+              (is (string? (:task-start-time read-state)))
+              (is (= "2025-10-20T10:00:00Z" (:task-start-time read-state)))))
 
           (finally
             (mcp-client/close! client)
@@ -203,7 +203,7 @@
           ;; Write state for story task
           (let [state {:story-id 177
                        :task-id 181
-                       :started-at "2025-10-20T14:30:00Z"}
+                       :task-start-time "2025-10-20T14:30:00Z"}
                 state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
@@ -224,7 +224,7 @@
           ;; Write state for standalone task
           (let [state {:story-id nil
                        :task-id 42
-                       :started-at "2025-10-20T15:00:00Z"}
+                       :task-start-time "2025-10-20T15:00:00Z"}
                 state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
             (spit state-file (pr-str state))
 
@@ -263,7 +263,7 @@
             ;; Simulate execution state being written when task starts
             (let [state {:story-id nil
                          :task-id 1
-                         :started-at "2025-10-20T14:30:00Z"}
+                         :task-start-time "2025-10-20T14:30:00Z"}
                   state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file) "State file should exist before completion"))
@@ -311,7 +311,7 @@
             ;; Simulate execution state
             (let [state {:story-id nil
                          :task-id 2
-                         :started-at "2025-10-20T14:35:00Z"}
+                         :task-start-time "2025-10-20T14:35:00Z"}
                   state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
@@ -332,7 +332,7 @@
               ((:stop server)))))))
 
     (testing "child task completion"
-      (testing "clears state with git disabled"
+      (testing "preserves story-level state with git disabled"
         (fixtures/write-config-file "{:use-git? false}")
 
         (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
@@ -363,7 +363,7 @@
             ;; Simulate execution state with story-id
             (let [state {:story-id 10
                          :task-id 11
-                         :started-at "2025-10-20T14:40:00Z"}
+                         :task-start-time "2025-10-20T14:40:00Z"}
                   state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
@@ -375,9 +375,13 @@
                             {:task-id 11})]
               (is (not (:isError result)))
 
-              ;; Verify state file was deleted
+              ;; Verify state file preserves story-id
               (let [state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
-                (is (not (fs/exists? state-file))))
+                (is (fs/exists? state-file))
+                (let [state (edn/read-string (slurp state-file))]
+                  (is (= 10 (:story-id state)))
+                  (is (nil? (:task-id state)))
+                  (is (some? (:task-start-time state)))))
 
               ;; Verify child was marked closed but stayed in tasks.ednl
               (let [tasks-file (io/file (fixtures/test-project-dir) ".mcp-tasks" "tasks.ednl")
@@ -390,7 +394,7 @@
               (mcp-client/close! client)
               ((:stop server))))))
 
-      (testing "clears state with git enabled"
+      (testing "preserves story-level state with git enabled"
         (fixtures/write-config-file "{:use-git? true}")
         (fixtures/init-test-git-repo)
 
@@ -422,7 +426,7 @@
             ;; Simulate execution state
             (let [state {:story-id 20
                          :task-id 21
-                         :started-at "2025-10-20T14:45:00Z"}
+                         :task-start-time "2025-10-20T14:45:00Z"}
                   state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
@@ -434,9 +438,13 @@
                             {:task-id 21})]
               (is (not (:isError result)))
 
-              ;; Verify state file was deleted
+              ;; Verify state file preserves story-id
               (let [state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
-                (is (not (fs/exists? state-file)))))
+                (is (fs/exists? state-file))
+                (let [state (edn/read-string (slurp state-file))]
+                  (is (= 20 (:story-id state)))
+                  (is (nil? (:task-id state)))
+                  (is (some? (:task-start-time state))))))
 
             (finally
               (mcp-client/close! client)
@@ -484,7 +492,7 @@
             ;; Simulate execution state
             (let [state {:story-id 30
                          :task-id 30
-                         :started-at "2025-10-20T14:50:00Z"}
+                         :task-start-time "2025-10-20T14:50:00Z"}
                   state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
@@ -545,7 +553,7 @@
             ;; Simulate execution state
             (let [state {:story-id 40
                          :task-id 40
-                         :started-at "2025-10-20T14:55:00Z"}
+                         :task-start-time "2025-10-20T14:55:00Z"}
                   state-file (io/file (fixtures/test-project-dir) ".mcp-tasks-current.edn")]
               (spit state-file (pr-str state))
               (is (fs/exists? state-file)))
@@ -581,10 +589,10 @@
           ;; Write different state to each worktree
           (let [state-1 {:story-id 100
                          :task-id 101
-                         :started-at "2025-10-20T14:00:00Z"}
+                         :task-start-time "2025-10-20T14:00:00Z"}
                 state-2 {:story-id 200
                          :task-id 201
-                         :started-at "2025-10-20T15:00:00Z"}
+                         :task-start-time "2025-10-20T15:00:00Z"}
                 state-file-1 (io/file base-dir-1 ".mcp-tasks-current.edn")
                 state-file-2 (io/file base-dir-2 ".mcp-tasks-current.edn")]
             (spit state-file-1 (pr-str state-1))
@@ -620,7 +628,7 @@
           ;; Write state to both worktrees
           (let [state {:story-id 50
                        :task-id 51
-                       :started-at "2025-10-20T12:00:00Z"}
+                       :task-start-time "2025-10-20T12:00:00Z"}
                 state-file-1 (io/file base-dir-1 ".mcp-tasks-current.edn")
                 state-file-2 (io/file base-dir-2 ".mcp-tasks-current.edn")]
             (spit state-file-1 (pr-str state))
