@@ -148,8 +148,8 @@
         ;; Get the updated task after marking complete
         (let [updated-task (tasks/get-task (:id task))]
           (tasks/save-tasks! tasks-file)
-          ;; Clear execution state after successful completion
-          (exec-state/clear-execution-state! (:base-dir config))
+          ;; Update execution state to remove task-id but preserve story-id
+          (exec-state/update-execution-state-for-child-completion! (:base-dir config))
 
           ;; Return intermediate data for git operations
           (merge (build-completion-result-base config context task [tasks-rel-path])
