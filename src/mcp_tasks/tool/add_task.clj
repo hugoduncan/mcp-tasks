@@ -61,8 +61,12 @@
                                                     (let [tasks-file sync-result
                                                           ;; Convert relations from JSON to EDN if provided
                                                           converted-relations (helpers/convert-relations-field relations)]
-                                                      ;; Validate parent-id exists if provided
-                                                      (or (when parent-id
+                                                      ;; Validate relation task IDs exist if relations provided
+                                                      (or (when (seq converted-relations)
+                                                            (validation/validate-relation-task-ids converted-relations "add-task" tasks-file))
+
+                                                          ;; Validate parent-id exists if provided
+                                                          (when parent-id
                                                             (validation/validate-parent-id-exists parent-id "add-task" nil tasks-file "Parent story not found"
                                                                                                   :additional-metadata {:title title :category category}))
 

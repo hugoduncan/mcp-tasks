@@ -460,3 +460,87 @@
             (is (= [{:id 1 :relates-to 1 :as-type :blocked-by}
                     {:id 2 :relates-to 2 :as-type :related}]
                    (:relations third-task)))))))))
+
+(deftest add-task-error-invalid-relation-task-id
+  ;; Test adding task with relation referencing non-existent task ID
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "returns error when relation references non-existent task ID"
+        (let [result (#'sut/add-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:category "test"
+                       :title "Task with invalid relation"
+                       :relations [{"id" 1
+                                    "relates-to" 999
+                                    "as-type" "blocked-by"}]})]
+          (is (true? (:isError result)))
+          (is (= 2 (count (:content result))))
+          ;; First content is error message
+          (let [text-content (first (:content result))]
+            (is (= "text" (:type text-content)))
+            (is (= "Task ID 999 referenced in relations does not exist" (:text text-content))))
+          ;; Second content is structured error data
+          (let [data-content (second (:content result))
+                data (json/parse-string (:text data-content) keyword)]
+            (is (= "text" (:type data-content)))
+            (is (contains? data :error))
+            (is (contains? data :metadata))
+            (is (= "Task ID 999 referenced in relations does not exist" (:error data)))
+            (let [metadata (:metadata data)]
+              (is (= "add-task" (:attempted-operation metadata)))
+              (is (= [999] (:missing-task-ids metadata)))
+              (is (contains? metadata :file)))))))))
+
+(deftest add-task-error-multiple-invalid-relation-task-ids
+  ;; Test adding task with multiple relations referencing non-existent task IDs
+  (h/with-test-setup [test-dir]
+    (testing "add-task"
+      (testing "returns error listing all non-existent task IDs"
+        ;; Create one valid task
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1
+            :parent-id nil
+            :title "Valid task"
+            :description ""
+            :design ""
+            :category "test"
+            :type :task
+            :status :open
+            :meta {}
+            :relations []}])
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+        ;; Attempt to add task with mix of valid and invalid relations
+        (let [result (#'sut/add-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:category "test"
+                       :title "Task with invalid relations"
+                       :relations [{"id" 1
+                                    "relates-to" 1
+                                    "as-type" "blocked-by"}
+                                   {"id" 2
+                                    "relates-to" 888
+                                    "as-type" "related"}
+                                   {"id" 3
+                                    "relates-to" 999
+                                    "as-type" "discovered-during"}]})]
+          (is (true? (:isError result)))
+          (is (= 2 (count (:content result))))
+          ;; First content is error message
+          (let [text-content (first (:content result))]
+            (is (= "text" (:type text-content)))
+            (is (= "Task IDs 888, 999 referenced in relations do not exist" (:text text-content))))
+          ;; Second content is structured error data
+          (let [data-content (second (:content result))
+                data (json/parse-string (:text data-content) keyword)]
+            (is (= "text" (:type data-content)))
+            (is (contains? data :error))
+            (is (contains? data :metadata))
+            (is (= "Task IDs 888, 999 referenced in relations do not exist" (:error data)))
+            (let [metadata (:metadata data)]
+              (is (= "add-task" (:attempted-operation metadata)))
+              (is (= [888 999] (:missing-task-ids metadata)))
+              (is (contains? metadata :file)))))))))
