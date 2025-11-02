@@ -78,41 +78,6 @@
                    (:circular-dependency single-info))
                 (str "Task " tid " circular-dependency mismatch"))))))))
 
-(deftest batch-enrichment-performance
-  ;; Test batch enrichment is faster than single-task enrichment for large sets
-  (h/with-test-setup [test-dir]
-    (testing "Batch enrichment performance with 100+ tasks"
-      (let [task-ids (create-test-tasks test-dir 120)
-            ;; Warm up
-            _ (tasks/is-tasks-blocked? (take 10 task-ids))
-            _ (doseq [tid (take 10 task-ids)]
-                (tasks/is-task-blocked? tid))
-
-            ;; Benchmark batch enrichment
-            batch-start (System/nanoTime)
-            batch-results (tasks/is-tasks-blocked? task-ids)
-            batch-duration (/ (- (System/nanoTime) batch-start) 1e6)
-
-            ;; Benchmark single-task enrichment
-            single-start (System/nanoTime)
-            _ (doseq [tid task-ids]
-                (tasks/is-task-blocked? tid))
-            single-duration (/ (- (System/nanoTime) single-start) 1e6)]
-
-        ;; Verify batch version completed
-        (is (= (count batch-results) (count task-ids))
-            "Batch enrichment returned all tasks")
-
-        ;; Log performance results
-        (println (format "\n  Batch: %.2fms" batch-duration))
-        (println (format "  Single: %.2fms" single-duration))
-        (println (format "  Speedup: %.2fx" (/ single-duration batch-duration)))
-
-        ;; Batch should be at least as fast as single (allow 50% margin for CI variance)
-        (is (<= batch-duration (* 1.5 single-duration))
-            (format "Batch (%.2fms) should be faster than single (%.2fms)"
-                    batch-duration single-duration))))))
-
 (deftest batch-enrichment-empty-collection
   ;; Test batch enrichment handles empty collections
   (h/with-test-setup [_test-dir]

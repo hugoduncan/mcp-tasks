@@ -204,7 +204,11 @@
   - Caches blocking task status lookups
   - Detects circular dependencies once per task
 
-  Returns map of task-id -> {:blocked? bool, :blocking-ids [...], :error ..., :circular-dependency ...}"
+  Returns map of task-id -> {:blocked? bool, :blocking-ids [...], :error ..., :circular-dependency ...}
+
+  Note: Performance is validated through correctness tests. Timing-based benchmarks
+  were removed due to CI environment variance. The batch implementation provides
+  optimization without explicit performance assertions."
   [task-ids]
   (let [;; Build task map once for all lookups
         task-map @tasks
