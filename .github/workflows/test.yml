@@ -83,3 +83,29 @@ jobs:
 
       - name: Smoke test - list tasks
         run: bb list --format json
+
+  install-scripts-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on Unix install script
+        run: shellcheck install
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: Run PSScriptAnalyzer on Windows install script
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Warning,Error
+          if ($results) {
+            $results | Format-Table -AutoSize
+            exit 1
+          }

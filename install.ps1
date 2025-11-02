@@ -57,6 +57,14 @@ function Download-File {
   catch {
     Write-Error "Error: Failed to download from $Url"
     Write-Error $_.Exception.Message
+    Write-Host ""
+    Write-Host "This could be caused by:" -ForegroundColor Yellow
+    Write-Host "  - Network connectivity issues" -ForegroundColor Yellow
+    Write-Host "  - The release not being available yet" -ForegroundColor Yellow
+    Write-Host "  - GitHub being temporarily unavailable" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Please check your internet connection and try again." -ForegroundColor Yellow
+    Write-Host "If the problem persists, visit: https://github.com/$GitHubRepo/releases" -ForegroundColor Yellow
     exit 1
   }
 }
@@ -99,7 +107,16 @@ function Install-Binary {
   catch {
     Write-Error "Error: Failed to install to $InstallDir"
     Write-Error $_.Exception.Message
-    Write-Host "You may need to run this script with administrator privileges" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "This could be caused by:" -ForegroundColor Yellow
+    Write-Host "  - Insufficient permissions to write to $InstallDir" -ForegroundColor Yellow
+    Write-Host "  - The binary is currently running" -ForegroundColor Yellow
+    Write-Host "  - The directory does not exist or is not accessible" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Try one of the following:" -ForegroundColor Yellow
+    Write-Host "  - Run this script with administrator privileges (right-click PowerShell and 'Run as administrator')" -ForegroundColor Yellow
+    Write-Host "  - Close any running instances of $BinaryName" -ForegroundColor Yellow
+    Write-Host "  - Set a custom installation directory: `$env:INSTALL_DIR='C:\path\to\dir'; .\install.ps1" -ForegroundColor Yellow
     exit 1
   }
 }
