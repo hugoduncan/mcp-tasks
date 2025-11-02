@@ -227,8 +227,10 @@ iwr -useb https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.
 The installation script automatically:
 - Detects your platform and architecture
 - Downloads both `mcp-tasks` and `mcp-tasks-server` binaries
-- Installs to `/usr/local/bin` (Unix) or a standard Windows location
-- Sets proper executable permissions
+- Installs to default location:
+  - **Unix (Linux/macOS)**: `/usr/local/bin`
+  - **Windows**: `%LOCALAPPDATA%\Programs\mcp-tasks`
+- Sets proper executable permissions (Unix)
 - Backs up existing binaries to `.old` before replacement
 
 **Supported Platforms:**
