@@ -13,7 +13,6 @@ BINARY_SERVER="mcp-tasks-server"
 
 # Supported platforms
 SUPPORTED_PLATFORMS="linux-amd64, macos-amd64, macos-arm64"
-SUPPORTED_ARCHITECTURES="amd64, arm64"
 
 # Check if command exists
 has() {
@@ -41,34 +40,23 @@ detect_platform() {
       ;;
   esac
 
-  # Detect architecture
-  case "$(uname -m)" in
-    x86_64)
+  # Detect architecture (OS-specific validation)
+  case "$os:$(uname -m)" in
+    linux:x86_64|macos:x86_64)
       arch="amd64"
       ;;
-    arm64|aarch64)
+    macos:arm64|macos:aarch64)
       arch="arm64"
       ;;
     *)
-      echo "Error: Unsupported architecture: $(uname -m)" >&2
-      echo "Supported architectures: $SUPPORTED_ARCHITECTURES" >&2
+      echo "Error: Unsupported platform: ${os} $(uname -m)" >&2
+      echo "Supported platforms: $SUPPORTED_PLATFORMS" >&2
       return 1
       ;;
   esac
 
   platform="${os}-${arch}"
-
-  # Validate against supported platforms
-  case "$platform" in
-    linux-amd64|macos-amd64|macos-arm64)
-      echo "$platform"
-      ;;
-    *)
-      echo "Error: Unsupported platform combination: $platform" >&2
-      echo "Supported platforms: $SUPPORTED_PLATFORMS" >&2
-      return 1
-      ;;
-  esac
+  echo "$platform"
 }
 
 # Download file using curl or wget
