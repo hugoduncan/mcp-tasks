@@ -743,3 +743,107 @@
             (is (some? task-b))
             (is (= [{:id 1 :relates-to 1 :as-type :blocked-by}]
                    (:relations task-b)))))))))
+
+(deftest ^:integration add-task-simulates-create-story-tasks-workflow
+  ;; Test simulating create-story-tasks workflow with dependencies.
+  ;; Verifies that tasks can be created with blocked-by relations and
+  ;; the dependency graph is correctly established.
+  (h/with-test-setup [test-dir]
+    (testing "create-story-tasks workflow"
+      (testing "creates tasks with dependencies in dependency order"
+        ;; Create story task
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id          100
+            :parent-id   nil
+            :title       "Add user authentication"
+            :description "Story description"
+            :design      ""
+            :category    "story"
+            :type        :story
+            :status      :open
+            :meta        {}
+            :relations   []}])
+        (tasks/load-tasks! (str test-dir "/.mcp-tasks/tasks.ednl"))
+
+        ;; Task 1: Create user model (no dependencies)
+        (let [result-1 (#'sut/add-task-impl
+                        (h/test-config test-dir)
+                        nil
+                        {:category    "simple"
+                         :title       "Create user model"
+                         :description "Define user schema and database table"
+                         :parent-id   100
+                         :relations   []})]
+          (is (false? (:isError result-1)))
+
+          ;; Get Task 1 ID
+          (let [tasks     (h/read-ednl-test-file test-dir "tasks.ednl")
+                task-1    (first (filter #(= "Create user model" (:title %)) tasks))
+                task-1-id (:id task-1)]
+
+            ;; Task 2: Create auth service (blocked-by Task 1)
+            (let [result-2 (#'sut/add-task-impl
+                            (h/test-config test-dir)
+                            nil
+                            {:category    "simple"
+                             :title       "Create auth service"
+                             :description "Implement authentication service"
+                             :parent-id   100
+                             :relations   [{"id"         1
+                                            "relates-to" task-1-id
+                                            "as-type"    "blocked-by"}]})]
+              (is (false? (:isError result-2)))
+
+              ;; Get Task 2 ID
+              (let [tasks     (h/read-ednl-test-file test-dir "tasks.ednl")
+                    task-2    (first (filter #(= "Create auth service" (:title %)) tasks))
+                    task-2-id (:id task-2)]
+
+                ;; Task 3: Add login endpoint (blocked-by Task 2)
+                (let [result-3 (#'sut/add-task-impl
+                                (h/test-config test-dir)
+                                nil
+                                {:category    "simple"
+                                 :title       "Add login endpoint"
+                                 :description "Add HTTP endpoint for login"
+                                 :parent-id   100
+                                 :relations   [{"id"         1
+                                                "relates-to" task-2-id
+                                                "as-type"    "blocked-by"}]})]
+                  (is (false? (:isError result-3)))
+
+                  ;; Verify all tasks were created
+                  (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")]
+                    (is (= 4 (count tasks))) ; Story + 3 tasks
+
+                    ;; Verify Task 1 has no relations
+                    (is (= [] (:relations task-1)))
+
+                    ;; Verify Task 2 is blocked-by Task 1
+                    (is (= [{:id 1 :relates-to task-1-id :as-type :blocked-by}]
+                           (:relations task-2)))
+
+                    ;; Verify Task 3 is blocked-by Task 2
+                    (let [task-3 (first (filter #(= "Add login endpoint" (:title %)) tasks))]
+                      (is (= [{:id 1 :relates-to task-2-id :as-type :blocked-by}]
+                             (:relations task-3))))
+
+                    ;; Verify all tasks have correct parent-id
+                    (is (= 100 (:parent-id task-1)))
+                    (is (= 100 (:parent-id task-2)))
+                    (let [task-3 (first (filter #(= "Add login endpoint" (:title %)) tasks))]
+                      (is (= 100 (:parent-id task-3))))
+
+                    ;; Verify dependency graph structure:
+                    ;; Task 1 (no deps) → Task 2 (blocked-by 1) → Task 3 (blocked-by 2)
+                    (is (some? (first (filter #(and (= "Create user model" (:title %))
+                                                    (empty? (:relations %)))
+                                              tasks))))
+                    (is (some? (first (filter #(and (= "Create auth service" (:title %))
+                                                    (= task-1-id (-> % :relations first :relates-to)))
+                                              tasks))))
+                    (is (some? (first (filter #(and (= "Add login endpoint" (:title %))
+                                                    (= task-2-id (-> % :relations first :relates-to)))
+                                              tasks))))))))))))))
