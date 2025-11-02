@@ -401,6 +401,31 @@
          :complete-rel-path complete-rel-path
          :base-dir (:base-dir config)}))))
 
+(defn convert-relations-field
+  "Convert relations from JSON structure to Clojure keyword-based structure.
+
+  Handles both keyword keys (from MCP JSON parsing) and string keys (from
+  direct function calls). Transforms string keys to keywords for :as-type field.
+  Returns [] if relations is nil.
+
+  Note: When updating a task's :relations field, the entire vector is
+  replaced, not appended or merged. This design decision ensures
+  predictable behavior - users provide the complete desired state rather
+  than incremental updates. This matches the story requirements and
+  simplifies the mental model for task updates."
+  [relations]
+  (if relations
+    (mapv (fn [rel]
+            (let [id (or (get rel :id) (get rel "id"))
+                  relates-to (or (get rel :relates-to) (get rel "relates-to"))
+                  as-type-val (or (get rel :as-type) (get rel "as-type"))
+                  as-type (if (keyword? as-type-val) as-type-val (keyword as-type-val))]
+              {:id id
+               :relates-to relates-to
+               :as-type as-type}))
+          relations)
+    []))
+
 (defn build-completion-response
   "Build standardized completion response with optional git integration.
 
@@ -412,7 +437,7 @@
   - task-data: Optional map with completed task data (for complete/delete operations)
 
   Returns response map with :content and :isError keys.
-  
+
   Response structure:
   - Git disabled, no task-data: 1 item (message)
   - Git disabled, with task-data: 2 items (message, task-data JSON)

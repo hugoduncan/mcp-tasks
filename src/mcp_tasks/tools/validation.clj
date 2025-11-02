@@ -6,6 +6,37 @@
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.helpers :as helpers]))
 
+;; Relation Validation
+
+(defn validate-relation-task-ids
+  "Validate that all task IDs referenced in relations exist.
+
+  Parameters:
+  - relations: Vector of relation maps with :relates-to keys
+  - operation: Operation name for error messages
+  - tasks-file: Path to tasks file for error metadata
+
+  Returns:
+  - Error response map if any referenced task ID doesn't exist
+  - nil if all task IDs are valid"
+  [relations operation tasks-file]
+  (let [invalid-rels (filterv (fn [rel]
+                                (let [relates-to (:relates-to rel)]
+                                  (not (tasks/get-task relates-to))))
+                              relations)]
+    (when (seq invalid-rels)
+      (let [missing-ids (mapv :relates-to invalid-rels)
+            plural? (> (count missing-ids) 1)]
+        (helpers/build-tool-error-response
+          (str "Task ID" (when plural? "s")
+               " " (str/join ", " missing-ids)
+               " referenced in relations "
+               (if plural? "do" "does")
+               " not exist")
+          operation
+          {:missing-task-ids missing-ids
+           :file tasks-file})))))
+
 (defn format-path-element
   "Format a single element from a Malli :in path.
 
