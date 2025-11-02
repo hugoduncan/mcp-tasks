@@ -205,6 +205,43 @@ For true standalone execution without any runtime dependencies, native binaries 
 
 For an alternative distribution option using Babashka, see the [Standalone Executable (Uberscript)](#standalone-executable-uberscript) section above.
 
+**Quick Install (Recommended):**
+
+The easiest way to install both binaries is using the automated installation script:
+
+**Unix (Linux/macOS):**
+```bash
+curl -sL https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install | bash
+```
+
+Or with wget:
+```bash
+wget -qO- https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+iwr -useb https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.ps1 | iex
+```
+
+The installation script automatically:
+- Detects your platform and architecture
+- Downloads both `mcp-tasks` and `mcp-tasks-server` binaries
+- Installs to default location:
+  - **Unix (Linux/macOS)**: `/usr/local/bin`
+  - **Windows**: `%LOCALAPPDATA%\Programs\mcp-tasks`
+- Sets proper executable permissions (Unix)
+- Backs up existing binaries to `.old` before replacement
+
+**Supported Platforms:**
+- Linux (amd64)
+- macOS (Intel/amd64, Apple Silicon/arm64)
+- Windows (amd64)
+
+**Manual Installation:**
+
+If you prefer manual installation or the automated script doesn't work for your setup, see the detailed instructions below.
+
 **Two Binary Types:**
 
 1. **CLI Binary** (`mcp-tasks`) - Task management commands from the terminal
@@ -318,38 +355,70 @@ bb build-native-server
 
 **Troubleshooting Native Binaries:**
 
-Common issues and solutions:
+Common installation and usage issues:
 
-1. **"Permission denied" errors (Unix)**
+1. **Installation script fails with "Permission denied" (Unix)**
+   - The default installation location `/usr/local/bin` requires elevated privileges
+   - Solution: The script will automatically prompt you to use sudo when needed
+   - Alternative: Install to a user-writable directory (manual installation)
+
+2. **Installation script fails with "curl/wget not found" (Unix)**
+   ```bash
+   # Install curl on Debian/Ubuntu
+   sudo apt-get install curl
+
+   # Install curl on macOS
+   brew install curl
+
+   # Or install wget as alternative
+   sudo apt-get install wget  # Debian/Ubuntu
+   brew install wget          # macOS
+   ```
+
+3. **Installation script fails with network errors**
+   - Check internet connection
+   - Verify GitHub is accessible: `curl -I https://github.com`
+   - Try manual download from [GitHub Releases](https://github.com/hugoduncan/mcp-tasks/releases)
+
+4. **"Permission denied" errors after manual installation (Unix)**
    ```bash
    chmod +x mcp-tasks
    ```
 
-2. **macOS "unidentified developer" warning**
+5. **macOS "unidentified developer" warning**
    ```bash
    # First run: Right-click → Open, then click "Open"
    # Or remove quarantine attribute:
    xattr -d com.apple.quarantine mcp-tasks
    ```
 
-3. **Windows SmartScreen warning**
+6. **Windows SmartScreen warning**
    - Click "More info" → "Run anyway"
    - Binaries are not code-signed (open source project)
 
-4. **"Library not found" errors**
+7. **"Library not found" errors**
    - Native binaries are statically linked and should work standalone
    - Ensure you downloaded the correct platform binary
    - Try re-downloading if file was corrupted
 
-5. **Build failures with GraalVM**
+8. **Post-installation verification**
+   ```bash
+   # Verify CLI installation
+   mcp-tasks --help
+
+   # Verify server installation
+   mcp-tasks-server --help
+   ```
+
+9. **Build failures with GraalVM**
    - Verify GraalVM 21+ is installed: `native-image --version`
    - Ensure `GRAALVM_HOME` points to GraalVM root directory
    - Check that native-image component is installed
    - Build CLI JAR first before building native binary
 
-6. **Malli validation warnings during build**
-   - Expected behavior - Malli validation is disabled for native builds
-   - Warnings don't affect functionality
+10. **Malli validation warnings during build**
+    - Expected behavior - Malli validation is disabled for native builds
+    - Warnings don't affect functionality
 
 **MCP Client Configuration:**
 

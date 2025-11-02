@@ -1,0 +1,236 @@
+# mcp-tasks Windows Installer
+# PowerShell installation script for mcp-tasks and mcp-tasks-server
+
+#Requires -Version 5.1
+
+# Stop on any error
+$ErrorActionPreference = 'Stop'
+
+# Configuration
+$DefaultInstallDir = "$env:LOCALAPPDATA\Programs\mcp-tasks"
+$InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { $DefaultInstallDir }
+$GitHubRepo = "hugoduncan/mcp-tasks"
+$BaseUrl = "https://github.com/$GitHubRepo/releases/latest/download"
+
+# Binary names
+$BinaryCli = "mcp-tasks"
+$BinaryServer = "mcp-tasks-server"
+
+# Platform constants
+$BinaryExtension = ".exe"
+$SupportedArchitectures = "amd64"
+
+# Detect architecture
+function Get-Architecture {
+  $arch = $env:PROCESSOR_ARCHITECTURE
+
+  switch ($arch) {
+    "AMD64" {
+      return "amd64"
+    }
+    "ARM64" {
+      Write-Error "Error: ARM64 architecture is not yet supported on Windows"
+      Write-Error "Supported architectures: $SupportedArchitectures"
+      exit 1
+    }
+    default {
+      Write-Error "Error: Unsupported architecture: $arch"
+      Write-Error "Supported architectures: $SupportedArchitectures"
+      exit 1
+    }
+  }
+}
+
+# Download file using Invoke-WebRequest
+function Receive-File {
+  param(
+    [string]$Url,
+    [string]$Output
+  )
+
+  try {
+    Write-Host "  Downloading from: $Url"
+    $ProgressPreference = 'SilentlyContinue'  # Speed up download
+    Invoke-WebRequest -Uri $Url -OutFile $Output -UseBasicParsing
+    $ProgressPreference = 'Continue'
+  }
+  catch {
+    Write-Error "Error: Failed to download from $Url"
+    Write-Error $_.Exception.Message
+    Write-Host ""
+    Write-Host "This could be caused by:" -ForegroundColor Yellow
+    Write-Host "  - Network connectivity issues" -ForegroundColor Yellow
+    Write-Host "  - The release not being available yet" -ForegroundColor Yellow
+    Write-Host "  - GitHub being temporarily unavailable" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Please check your internet connection and try again." -ForegroundColor Yellow
+    Write-Host "If the problem persists, visit: https://github.com/$GitHubRepo/releases" -ForegroundColor Yellow
+    exit 1
+  }
+}
+
+# Backup existing binary
+function Backup-Binary {
+  param(
+    [string]$BinaryPath
+  )
+
+  if (Test-Path $BinaryPath) {
+    $BackupPath = "$BinaryPath.old"
+    Write-Host "  Backing up existing binary: $BinaryPath -> $BackupPath"
+    Move-Item -Path $BinaryPath -Destination $BackupPath -Force
+  }
+}
+
+# Install a single binary
+function Install-Binary {
+  param(
+    [string]$BinaryName,
+    [string]$Architecture,
+    [string]$TempDir
+  )
+
+  $RemoteName = "$BinaryName-windows-$Architecture$BinaryExtension"
+  $DownloadUrl = "$BaseUrl/$RemoteName"
+  $TempFile = Join-Path $TempDir "$BinaryName$BinaryExtension"
+  $InstallPath = Join-Path $InstallDir "$BinaryName$BinaryExtension"
+
+  Write-Host "Downloading $BinaryName..."
+  Receive-File -Url $DownloadUrl -Output $TempFile
+
+  Backup-Binary -BinaryPath $InstallPath
+
+  Write-Host "  Installing $BinaryName to $InstallDir..."
+  try {
+    Move-Item -Path $TempFile -Destination $InstallPath -Force
+  }
+  catch {
+    Write-Error "Error: Failed to install to $InstallDir"
+    Write-Error $_.Exception.Message
+    Write-Host ""
+    Write-Host "This could be caused by:" -ForegroundColor Yellow
+    Write-Host "  - Insufficient permissions to write to $InstallDir" -ForegroundColor Yellow
+    Write-Host "  - The binary is currently running" -ForegroundColor Yellow
+    Write-Host "  - The directory does not exist or is not accessible" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Try one of the following:" -ForegroundColor Yellow
+    Write-Host "  - Run this script with administrator privileges (right-click PowerShell and 'Run as administrator')" -ForegroundColor Yellow
+    Write-Host "  - Close any running instances of $BinaryName" -ForegroundColor Yellow
+    Write-Host "  - Set a custom installation directory: `$env:INSTALL_DIR='C:\path\to\dir'; .\install.ps1" -ForegroundColor Yellow
+    exit 1
+  }
+}
+
+# Check if directory is in PATH
+function Test-InPath {
+  param(
+    [string]$Directory
+  )
+
+  $PathDirs = $env:Path -split ';'
+  return $PathDirs -contains $Directory
+}
+
+# Add directory to user PATH
+function Add-ToPath {
+  param(
+    [string]$Directory
+  )
+
+  Write-Host ""
+  Write-Host "The installation directory is not in your PATH." -ForegroundColor Yellow
+  Write-Host "Would you like to add it to your PATH? (Y/N): " -NoNewline -ForegroundColor Yellow
+  $response = Read-Host
+
+  if ($response -match '^[Yy]') {
+    try {
+      $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+      $NewPath = if ($UserPath) { "$UserPath;$Directory" } else { $Directory }
+      [Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
+
+      # Update current session PATH
+      $env:Path = "$env:Path;$Directory"
+
+      Write-Host "Added $Directory to your PATH" -ForegroundColor Green
+      Write-Host "You may need to restart your terminal for the change to take effect" -ForegroundColor Yellow
+    }
+    catch {
+      Write-Warning "Failed to add to PATH: $($_.Exception.Message)"
+      Write-Host "You can manually add $Directory to your PATH" -ForegroundColor Yellow
+    }
+  }
+  else {
+    Write-Host ""
+    Write-Host "Installation directory not added to PATH." -ForegroundColor Yellow
+    Write-Host "To use the binaries, either:"
+    Write-Host "  - Add $Directory to your PATH manually"
+    Write-Host "  - Run using full path: $Directory\$BinaryCli$BinaryExtension"
+  }
+}
+
+# Cleanup temporary directory
+function Remove-TempDirectory {
+  param(
+    [string]$TempDir
+  )
+
+  if ($TempDir -and (Test-Path $TempDir)) {
+    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
+# Main installation flow
+function Main {
+  Write-Host "mcp-tasks installer" -ForegroundColor Cyan
+  Write-Host ""
+
+  # Detect architecture
+  Write-Host "Detecting platform..."
+  $Architecture = Get-Architecture
+  Write-Host "Platform: windows-$Architecture"
+  Write-Host ""
+
+  # Create installation directory
+  if (-not (Test-Path $InstallDir)) {
+    Write-Host "Creating installation directory: $InstallDir"
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+  }
+
+  # Create temporary directory
+  $TempDir = Join-Path $env:TEMP "mcp-tasks-install-$(Get-Random)"
+  New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+
+  try {
+    # Install binaries
+    Install-Binary -BinaryName $BinaryCli -Architecture $Architecture -TempDir $TempDir
+    Write-Host ""
+    Install-Binary -BinaryName $BinaryServer -Architecture $Architecture -TempDir $TempDir
+    Write-Host ""
+
+    # Success message
+    Write-Host "Installation complete!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Binaries installed to: $InstallDir"
+    Write-Host "  - $BinaryCli$BinaryExtension"
+    Write-Host "  - $BinaryServer$BinaryExtension"
+    Write-Host ""
+
+    # Check PATH and offer to add
+    if (-not (Test-InPath -Directory $InstallDir)) {
+      Add-ToPath -Directory $InstallDir
+      Write-Host ""
+    }
+
+    Write-Host "You can now use the mcp-tasks CLI and server."
+    Write-Host "For more information, visit: https://github.com/$GitHubRepo"
+
+    exit 0
+  }
+  finally {
+    # Cleanup
+    Remove-TempDirectory -TempDir $TempDir
+  }
+}
+
+# Run main function
+Main
