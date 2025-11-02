@@ -65,4 +65,24 @@
              (do
                (println (str "Error: Source binary not found: " source))
                (println "Run 'bb build-uberscript' first to create the binary")
-               (System/exit 1))))}}}
+               (System/exit 1))))}
+
+  build-native-server
+  {:doc  "Build native server binary (requires GraalVM)"
+   :task (do
+           (let [graalvm-home (System/getenv "GRAALVM_HOME")]
+             (if graalvm-home
+               (do
+                 (println "Building native server binary...")
+                 (println (str "Using GraalVM at: " graalvm-home))
+                 (println "Step 1/2: Building server uberjar...")
+                 (shell "clj -T:build jar-server")
+                 (println "Step 2/2: Building native image (this may take several minutes)...")
+                 (shell "clj -T:build native-server")
+                 (println "✓ Native server binary built successfully"))
+               (do
+                 (binding [*out* *err*]
+                   (println "Error: GRAALVM_HOME environment variable not set")
+                   (println "Please set GRAALVM_HOME to your GraalVM installation directory")
+                   (println "Example: export GRAALVM_HOME=/Library/Java/JavaVirtualMachines/graalvm-jdk-23.jdk/Contents/Home"))
+                 (System/exit 1)))))}}}
