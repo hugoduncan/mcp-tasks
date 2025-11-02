@@ -12,11 +12,26 @@
 (def ExecutionState
   "Schema for current execution state.
 
-  Tracks which story and task are currently being executed by the agent."
-  [:map
-   [:story-id {:optional true} [:maybe :int]]
-   [:task-id :int]
-   [:started-at :string]])
+  Tracks which story and task are currently being executed by the agent.
+
+  Valid states:
+  - Story-level (after child task completion): {:story-id 123, :task-start-time \"...\"}
+  - Active task with story: {:story-id 123, :task-id 456, :task-start-time \"...\"}
+  - Standalone task: {:task-id 789, :task-start-time \"...\"}
+
+  Validation logic:
+  - :task-start-time is always required
+  - :task-id is optional when :story-id is present
+  - :task-id is required when :story-id is absent"
+  [:and
+   [:map
+    [:story-id {:optional true} [:maybe :int]]
+    [:task-id {:optional true} :int]
+    [:task-start-time :string]]
+   [:fn
+    {:error/message "task-id is required when story-id is absent"}
+    (fn [{:keys [story-id task-id]}]
+      (or (some? story-id) (some? task-id)))]])
 
 ;; Validation
 
