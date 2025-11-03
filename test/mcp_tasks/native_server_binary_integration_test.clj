@@ -112,7 +112,7 @@
                                        {:jsonrpc "2.0"
                                         :id 1
                                         :method "initialize"
-                                        :params {:protocolVersion "2024-11-05"
+                                        :params {:protocolVersion "2025-06-18"
                                                  :capabilities {}
                                                  :clientInfo {:name "test-client"
                                                               :version "1.0.0"}}})]
@@ -147,7 +147,7 @@
                         {:jsonrpc "2.0"
                          :id 1
                          :method "initialize"
-                         :params {:protocolVersion "2024-11-05"
+                         :params {:protocolVersion "2025-06-18"
                                   :capabilities {}
                                   :clientInfo {:name "test-client"
                                                :version "1.0.0"}}})
@@ -179,7 +179,7 @@
                                        {:jsonrpc "2.0"
                                         :id 1
                                         :method "initialize"
-                                        :params {:protocolVersion "2024-11-05"
+                                        :params {:protocolVersion "2025-06-18"
                                                  :capabilities {}
                                                  :clientInfo {:name "test-client"
                                                               :version "1.0.0"}}})]
@@ -204,13 +204,13 @@
                                        {:jsonrpc "2.0"
                                         :id 1
                                         :method "initialize"
-                                        :params {:protocolVersion "2024-11-05"
+                                        :params {:protocolVersion "2025-06-18"
                                                  :capabilities {}
                                                  :clientInfo {:name "test-client"
                                                               :version "1.0.0"}}})]
             (is (= "mcp-tasks" (get-in response [:result :serverInfo :name])))
             (is (some? (get-in response [:result :capabilities])))
-            (is (= "2024-11-05" (get-in response [:result :protocolVersion])))))
+            (is (= "2025-06-18" (get-in response [:result :protocolVersion])))))
 
         (testing "initialized notification"
           (send-jsonrpc proc
@@ -248,7 +248,7 @@
                       {:jsonrpc "2.0"
                        :id 1
                        :method "initialize"
-                       :params {:protocolVersion "2024-11-05"
+                       :params {:protocolVersion "2025-06-18"
                                 :capabilities {}
                                 :clientInfo {:name "test-client"
                                              :version "1.0.0"}}})
@@ -282,7 +282,7 @@
                       {:jsonrpc "2.0"
                        :id 1
                        :method "initialize"
-                       :params {:protocolVersion "2024-11-05"
+                       :params {:protocolVersion "2025-06-18"
                                 :capabilities {}
                                 :clientInfo {:name "test-client"
                                              :version "1.0.0"}}})
@@ -323,7 +323,7 @@
                             {:jsonrpc "2.0"
                              :id 1
                              :method "initialize"
-                             :params {:protocolVersion "2024-11-05"
+                             :params {:protocolVersion "2025-06-18"
                                       :capabilities {}
                                       :clientInfo {:name "test-client"
                                                    :version "1.0.0"}}})
