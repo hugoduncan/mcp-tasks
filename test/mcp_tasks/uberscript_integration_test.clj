@@ -56,7 +56,9 @@
          (println "Uberscript built successfully")
          (reset! uberscript-built? true))
        ~@body)
-     (println "Skipping uberscript integration test: bb (Babashka) not available")))
+     (do
+       (println "Skipping uberscript integration test: bb (Babashka) not available")
+       (is true "Skipping test: Babashka not available"))))
 
 (defn- setup-test-dir
   "Set up test directory with .mcp-tasks structure and copy uberscript.
