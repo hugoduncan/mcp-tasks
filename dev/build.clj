@@ -170,7 +170,9 @@
           jar-file (format "%s/%s-%s.jar" target-dir jar-basename v)
           binary-name (platform-binary-name binary-basename platform)
           output-binary (str target-dir "/" binary-name)
-          native-image-bin (str graalvm-home "/bin/native-image")]
+          native-image-bin (if (= (:os platform) :windows)
+                             (str graalvm-home "\\bin\\native-image.exe")
+                             (str graalvm-home "/bin/native-image"))]
 
       (when-not (fs/exists? native-image-bin)
         (throw (ex-info (format "native-image not found at %s. Please install native-image or verify GRAALVM_HOME is correct." native-image-bin)
