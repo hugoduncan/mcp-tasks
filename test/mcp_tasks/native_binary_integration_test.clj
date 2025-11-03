@@ -19,6 +19,8 @@
   [test-dir]
   (fs/create-dirs (io/file test-dir ".mcp-tasks"))
   (fs/create-dirs (io/file test-dir ".mcp-tasks/prompts"))
+  ;; Create config file
+  (spit (io/file test-dir ".mcp-tasks.edn") "{}")
   ;; Create a simple category prompt for testing
   (spit (io/file test-dir ".mcp-tasks/prompts/simple.md")
         "---\ndescription: Simple tasks\n---\nSimple task execution"))
@@ -88,6 +90,9 @@
                                 "add"
                                 "--category" "simple"
                                 "--title" "Smoke test task")]
+        (when (not= 0 (:exit result))
+          (println "STDERR:" (:err result))
+          (println "STDOUT:" (:out result)))
         (is (= 0 (:exit result))
             "Add command should succeed")
         (is (str/includes? (:out result) ":id 1")
@@ -104,6 +109,9 @@
       (let [result (call-binary "--format" "edn"
                                 "complete"
                                 "--task-id" "1")]
+        (when (not= 0 (:exit result))
+          (println "STDERR:" (:err result))
+          (println "STDOUT:" (:out result)))
         (is (= 0 (:exit result))
             "Complete command should succeed")
         (is (str/includes? (:out result) ":status \"closed\"")
