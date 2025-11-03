@@ -170,6 +170,11 @@
           jar-file (format "%s/%s-%s.jar" target-dir jar-basename v)
           binary-name (platform-binary-name binary-basename platform)
           output-binary (str target-dir "/" binary-name)
+          ;; For -o flag: on Windows, don't include .exe extension as native-image adds it automatically
+          ;; On other platforms, use the full binary name
+          output-name-for-native-image (if (= (:os platform) :windows)
+                                         (clojure.string/replace output-binary #"\.exe$" "")
+                                         output-binary)
           ;; Construct full path to native-image
           ;; Oracle GraalVM includes native-image by default in bin directory
           native-image-bin (if (= (:os platform) :windows)
@@ -193,7 +198,7 @@
                              "--no-fallback"
                              "-H:+ReportExceptionStackTraces"
                              "--initialize-at-build-time"
-                             "-o" output-binary]})
+                             "-o" output-name-for-native-image]})
 
       (println (format "✓ Native %s binary built: %s" binary-type output-binary))
       (println (format "  Platform: %s %s" (name (:os platform)) (name (:arch platform))))
