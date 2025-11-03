@@ -129,7 +129,10 @@
     {:transport transport
      :tools (tools/tools config)
      :prompts all-prompts
-     :resources all-resources}))
+     :resources all-resources
+     :server-info {:name "mcp-tasks"
+                   :version "0.1.124"
+                   :title "MCP Tasks Server"}}))
 
 (defn- exit-process
   "Exit the process with the given code.

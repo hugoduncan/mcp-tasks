@@ -169,6 +169,29 @@
           (finally
             (stop-server proc)))))))
 
+(deftest ^:native-binary smoke-test-server-info
+  ;; Verify server identifies itself correctly with proper name, version, and title
+  (testing "smoke-test-server-info"
+    (testing "server returns correct server-info in initialize response"
+      (let [proc (start-server)]
+        (try
+          (let [response (send-jsonrpc proc
+                                       {:jsonrpc "2.0"
+                                        :id 1
+                                        :method "initialize"
+                                        :params {:protocolVersion "2024-11-05"
+                                                 :capabilities {}
+                                                 :clientInfo {:name "test-client"
+                                                              :version "1.0.0"}}})]
+            (is (= "mcp-tasks" (get-in response [:result :serverInfo :name]))
+                "Server name should be 'mcp-tasks'")
+            (is (= "0.1.124" (get-in response [:result :serverInfo :version]))
+                "Server version should be '0.1.124'")
+            (is (= "MCP Tasks Server" (get-in response [:result :serverInfo :title]))
+                "Server title should be 'MCP Tasks Server'"))
+          (finally
+            (stop-server proc)))))))
+
 ;; Comprehensive Tests
 
 (deftest ^:native-binary ^:comprehensive comprehensive-mcp-protocol
