@@ -171,8 +171,11 @@
           binary-name (platform-binary-name binary-basename platform)
           output-binary (str target-dir "/" binary-name)
           ;; Use native-image from PATH since GraalVM setup-graalvm action
-          ;; adds it automatically for GraalVM >= 17
-          native-image-bin "native-image"]
+          ;; adds $GRAALVM_HOME/bin to PATH for GraalVM >= 17
+          ;; On Windows, we need the .exe extension
+          native-image-bin (if (= (:os platform) :windows)
+                             "native-image.exe"
+                             "native-image")]
 
       (println (format "Building native %s binary for %s %s..."
                        binary-type

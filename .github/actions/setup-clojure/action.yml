@@ -41,7 +41,6 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: 'graalvm'
         github-token: ${{ inputs.github-token }}
-        components: 'native-image'
         native-image-job-reports: 'true'
 
     - name: Install Clojure tools
