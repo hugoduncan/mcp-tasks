@@ -170,12 +170,11 @@
           jar-file (format "%s/%s-%s.jar" target-dir jar-basename v)
           binary-name (platform-binary-name binary-basename platform)
           output-binary (str target-dir "/" binary-name)
-          ;; Use native-image from PATH since GraalVM setup-graalvm action
-          ;; adds $GRAALVM_HOME/bin to PATH for GraalVM >= 17
-          ;; On Windows, we need the .exe extension
+          ;; Construct full path to native-image
+          ;; Oracle GraalVM includes native-image by default in bin directory
           native-image-bin (if (= (:os platform) :windows)
-                             "native-image.exe"
-                             "native-image")]
+                             (str graalvm-home "\\bin\\native-image.cmd")
+                             (str graalvm-home "/bin/native-image"))]
 
       (println (format "Building native %s binary for %s %s..."
                        binary-type
