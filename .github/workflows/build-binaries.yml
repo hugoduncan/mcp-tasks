@@ -64,6 +64,10 @@ jobs:
       - name: Build CLI JAR
         run: clojure -T:build jar-cli
 
+      - name: Setup Visual Studio environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build native CLI binary
         run: clojure -T:build native-cli
 
