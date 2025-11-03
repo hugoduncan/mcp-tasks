@@ -16,6 +16,7 @@
 (require 'mcp-tasks.tool.update-task)
 (require 'mcp-tasks.tool.delete-task)
 (require 'mcp-tasks.tool.reopen-task)
+(require 'mcp-tasks.story-prompts)
 (require 'mcp-tasks.main)
 
 (defn -main
