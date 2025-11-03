@@ -197,6 +197,7 @@
                              "-jar" jar-file
                              "--no-fallback"
                              "-H:+ReportExceptionStackTraces"
+                             "--initialize-at-build-time"
                              "-o" output-name-for-native-image]})
 
       (println (format "✓ Native %s binary built: %s" binary-type output-binary))
