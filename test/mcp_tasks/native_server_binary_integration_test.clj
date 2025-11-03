@@ -116,6 +116,13 @@
                                                  :capabilities {}
                                                  :clientInfo {:name "test-client"
                                                               :version "1.0.0"}}})]
+            (when-not response
+              ;; Print stderr if server didn't respond
+              (let [stderr-reader (io/reader (:err proc))]
+                (println "\n=== Server stderr output ===")
+                (doseq [line (line-seq stderr-reader)]
+                  (println line))
+                (println "=== End stderr output ===\n")))
             (is (some? response)
                 "Server should respond to initialize request")
             (is (= "2.0" (:jsonrpc response))
