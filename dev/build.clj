@@ -215,9 +215,10 @@
                        "-H:+ReportExceptionStackTraces"
                        "--initialize-at-build-time"
                        "-o" output-name-for-native-image]
-            ;; Add --target flag for cross-compilation
-            all-args (if cross-compile?
-                       (concat base-args ["--target" target-string])
+            ;; Add architecture flag for macOS cross-compilation
+            ;; For macOS, use -march=compatibility for cross-arch builds
+            all-args (if (and cross-compile? (= (:os target-platform) :macos))
+                       (concat base-args ["-march=compatibility"])
                        base-args)]
         (shell {:command-args all-args}))
 
