@@ -12,9 +12,7 @@
     (java.io
       RandomAccessFile)
     (java.nio.charset
-      StandardCharsets)
-    (mcp_tasks.tasks_file
-      LockedFileContext)))
+      StandardCharsets)))
 
 (defn file-exists?
   "Check if a file exists"
