@@ -351,8 +351,11 @@
                                    (read-file-via-raf random-access-file)
                                    "")
                     locked-file-data {:file-path tasks-file
-                                      :content file-content}]
-                (binding [tasks-file/*locked-file-content* locked-file-data]
+                                      :content file-content}
+                    locked-file-handle {:file-path tasks-file
+                                        :raf random-access-file}]
+                (binding [tasks-file/*locked-file-content* locked-file-data
+                          tasks-file/*locked-file-handle* locked-file-handle]
                   (f)))
               (catch Exception e
                 ;; Log stack trace for debugging

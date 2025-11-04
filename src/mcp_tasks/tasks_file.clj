@@ -20,6 +20,17 @@
   This avoids the need to open a second FileInputStream via slurp."
   nil)
 
+(def ^:dynamic *locked-file-handle*
+  "When bound, contains the RandomAccessFile handle for a locked file.
+
+  Used on Windows where exclusive file locks prevent moving/renaming the
+  locked file. The with-task-lock macro binds this to a map with:
+  - :file-path - absolute path of the locked file
+  - :raf - RandomAccessFile instance
+
+  Allows writing through the existing handle instead of atomic write."
+  nil)
+
 ;; Helper Functions
 
 (defn- ensure-parent-dir
@@ -54,13 +65,29 @@
 (defn- write-ednl-atomic
   "Write tasks to file atomically using temp file and rename.
 
+  On Windows, when the file is locked by with-task-lock, writes directly
+  through the locked RandomAccessFile handle to avoid mandatory locking
+  issues with file move operations.
+
   Creates parent directories if needed."
   [file-path tasks]
-  (ensure-parent-dir file-path)
-  (let [temp-file (str file-path ".tmp")
-        content (str/join "\n" (map pr-str tasks))]
-    (spit temp-file content)
-    (fs/move temp-file file-path {:replace-existing true})))
+  (let [use-locked-handle? (and *locked-file-handle*
+                                (= file-path (:file-path *locked-file-handle*)))]
+    (if use-locked-handle?
+      ;; Write through the locked RAF handle
+      (let [raf (:raf *locked-file-handle*)
+            content (str/join "\n" (map pr-str tasks))
+            bytes (.getBytes content java.nio.charset.StandardCharsets/UTF_8)]
+        (.seek raf 0)             ; Reset to start of file
+        (.write raf bytes)        ; Write content
+        (.setLength raf (alength bytes)))  ; Truncate to new size
+      ;; Normal atomic write via temp file
+      (do
+        (ensure-parent-dir file-path)
+        (let [temp-file (str file-path ".tmp")
+              content (str/join "\n" (map pr-str tasks))]
+          (spit temp-file content)
+          (fs/move temp-file file-path {:replace-existing true}))))))
 
 ;; Public API
 
