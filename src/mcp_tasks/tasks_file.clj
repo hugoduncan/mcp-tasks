@@ -9,6 +9,17 @@
     [clojure.string :as str]
     [mcp-tasks.schema :as schema]))
 
+(def ^:dynamic *locked-file-content*
+  "When bound, contains pre-read content of a locked file.
+
+  Used on Windows where exclusive file locks prevent opening additional
+  file handles. The with-task-lock macro binds this to a map with:
+  - :file-path - absolute path of the locked file
+  - :content - file content read through the locked RandomAccessFile
+
+  This avoids the need to open a second FileInputStream via slurp."
+  nil)
+
 ;; Helper Functions
 
 (defn- ensure-parent-dir
@@ -57,16 +68,25 @@
   "Read all tasks from an EDNL (EDN Lines) file.
 
   Returns vector of task maps. Missing files return empty vector.
-  Malformed or invalid lines are skipped with warnings."
+  Malformed or invalid lines are skipped with warnings.
+
+  On Windows, when the file is locked by with-task-lock, uses the
+  pre-read content from *locked-file-content* instead of opening
+  a new file handle via slurp. Only uses cached content if reading
+  the same file that was locked."
   [file-path]
-  (if (fs/exists? file-path)
-    (let [content (slurp file-path)
-          lines (str/split-lines content)]
-      (into []
-            (keep-indexed (fn [idx line]
-                            (read-task-line line (inc idx))))
-            lines))
-    []))
+  (let [use-cached? (and *locked-file-content*
+                         (= file-path (:file-path *locked-file-content*)))]
+    (if (or use-cached? (fs/exists? file-path))
+      (let [content (if use-cached?
+                      (:content *locked-file-content*)
+                      (slurp file-path))
+            lines (str/split-lines content)]
+        (into []
+              (keep-indexed (fn [idx line]
+                              (read-task-line line (inc idx))))
+              lines))
+      [])))
 
 (defn append-task
   "Append a task to the end of an EDNL file.

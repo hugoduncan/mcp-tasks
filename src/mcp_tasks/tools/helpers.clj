@@ -6,10 +6,13 @@
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-tasks.tasks :as tasks]
+    [mcp-tasks.tasks-file :as tasks-file]
     [mcp-tasks.tools.git :as git])
   (:import
     (java.io
-      RandomAccessFile)))
+      RandomAccessFile)
+    (java.nio.charset
+      StandardCharsets)))
 
 (defn file-exists?
   "Check if a file exists"
@@ -242,6 +245,21 @@
                                         error-metadata)})}]
    :isError true})
 
+(defn- read-file-via-raf
+  "Read file content through a RandomAccessFile handle.
+
+  On Windows, when a file is locked exclusively via RandomAccessFile,
+  we cannot open another FileInputStream to read it (mandatory locking).
+  This function reads through the existing RAF handle instead.
+
+  Returns the file content as a string."
+  [^RandomAccessFile raf]
+  (let [length (.length raf)
+        bytes (byte-array length)]
+    (.seek raf 0)  ; Reset to start of file
+    (.readFully raf bytes)
+    (String. bytes StandardCharsets/UTF_8)))
+
 (defn- try-acquire-lock-with-timeout
   "Attempt to acquire file lock with timeout using polling.
 
@@ -326,9 +344,16 @@
                                  poll-interval-ms)]
           (do
             (reset! lock acquired-lock)
-            ;; Lock acquired - execute function with error handling
+            ;; Lock acquired - read file content through RAF to avoid
+            ;; Windows mandatory locking issues, then execute function
             (try
-              (f)
+              (let [file-content (if (pos? (.length random-access-file))
+                                   (read-file-via-raf random-access-file)
+                                   "")
+                    locked-file-data {:file-path tasks-file
+                                      :content file-content}]
+                (binding [tasks-file/*locked-file-content* locked-file-data]
+                  (f)))
               (catch Exception e
                 ;; Log stack trace for debugging
                 (log/error :task-operation-error
