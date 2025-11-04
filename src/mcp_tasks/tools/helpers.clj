@@ -241,20 +241,34 @@
 
 (defn- try-acquire-lock-with-timeout
   "Attempt to acquire file lock with timeout using polling.
-  
+
   Polling is necessary because Java's FileChannel.tryLock() doesn't support
   timeout parameters - it either succeeds immediately or returns nil.
-  
+
+  On Windows, tryLock() can throw IOException even when no other process
+  holds the lock. This is a Windows-specific behavior where file locking
+  can temporarily fail due to OS-level file access conflicts. We retry
+  these transient errors until timeout.
+
   Returns the acquired lock on success, nil on timeout."
   [^java.nio.channels.FileChannel file-channel ^long timeout-ms ^long poll-interval-ms]
   (let [deadline (+ (System/currentTimeMillis) timeout-ms)]
     (loop []
-      (if-let [acquired-lock (.tryLock file-channel)]
-        acquired-lock
-        (let [now (System/currentTimeMillis)]
-          (when (< now deadline)
-            (Thread/sleep poll-interval-ms)
-            (recur)))))))
+      (let [lock-attempt (try
+                           (.tryLock file-channel)
+                           (catch java.io.IOException e
+                             ;; On Windows, tryLock can throw IOException for
+                             ;; transient locking conflicts. Treat as if lock
+                             ;; was unavailable and retry.
+                             (log/debug :lock-attempt-failed-retrying
+                                        {:error (.getMessage e)})
+                             nil))]
+        (if lock-attempt
+          lock-attempt
+          (let [now (System/currentTimeMillis)]
+            (when (< now deadline)
+              (Thread/sleep poll-interval-ms)
+              (recur))))))))
 
 (defn with-task-lock
   "Execute function f while holding an exclusive file lock on tasks.ednl.
