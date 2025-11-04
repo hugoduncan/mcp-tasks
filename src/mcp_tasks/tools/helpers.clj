@@ -19,6 +19,9 @@
 (defn ensure-file-exists!
   "Ensure a file exists, creating parent directories and empty file if needed.
 
+  On Windows, uses Java File.createNewFile() instead of spit to avoid
+  file locking conflicts when immediately opening with RandomAccessFile.
+
   Parameters:
   - file-path: Absolute path to the file
 
@@ -30,7 +33,7 @@
   [file-path]
   (when-not (file-exists? file-path)
     (fs/create-dirs (fs/parent file-path))
-    (spit file-path "")))
+    (.createNewFile (java.io.File. ^String file-path))))
 
 (defn task-path
   "Construct task directory paths using resolved tasks directory from config.
