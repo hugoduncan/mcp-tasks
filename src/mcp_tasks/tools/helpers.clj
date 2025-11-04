@@ -330,13 +330,20 @@
             (try
               (f)
               (catch Exception e
+                ;; Log stack trace for debugging
+                (log/error :task-operation-error
+                           {:file tasks-file
+                            :error-type (-> e class .getName)
+                            :message (.getMessage e)
+                            :stack-trace (with-out-str (.printStackTrace e))})
                 ;; Convert any exception from function execution to error map
                 (build-tool-error-response
                   (str "Error during task operation: " (.getMessage e))
                   "with-task-lock"
                   {:file tasks-file
                    :error-type (-> e class .getName)
-                   :message (.getMessage e)}))))
+                   :message (.getMessage e)
+                   :stack-trace (with-out-str (.printStackTrace e))}))))
           ;; Lock acquisition timed out
           (build-tool-error-response
             (str "Failed to acquire lock on tasks file after "
