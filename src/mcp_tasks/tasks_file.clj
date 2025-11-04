@@ -75,7 +75,7 @@
                                 (= file-path (:file-path *locked-file-handle*)))]
     (if use-locked-handle?
       ;; Write through the locked RAF handle
-      (let [raf (:raf *locked-file-handle*)
+      (let [^java.io.RandomAccessFile raf (:raf *locked-file-handle*)
             content (str/join "\n" (map pr-str tasks))
             bytes (.getBytes content java.nio.charset.StandardCharsets/UTF_8)]
         (.seek raf (long 0))             ; Reset to start of file
