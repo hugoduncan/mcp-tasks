@@ -347,12 +347,18 @@
              :timeout-ms lock-timeout-ms})))
 
       (catch java.io.IOException e
+        ;; Log full stack trace for debugging Windows file lock issues
+        (log/error :file-lock-io-error
+                   {:file tasks-file
+                    :message (.getMessage e)
+                    :stack-trace (with-out-str (.printStackTrace e))})
         (build-tool-error-response
           (str "Failed to access lock file: " (.getMessage e))
           "with-task-lock"
           {:file tasks-file
            :error-type "io-error"
-           :message (.getMessage e)}))
+           :message (.getMessage e)
+           :stack-trace (with-out-str (.printStackTrace e))}))
 
       (finally
         ;; Always release lock, close channel, and close RAF
