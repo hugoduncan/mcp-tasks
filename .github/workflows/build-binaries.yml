@@ -42,7 +42,7 @@ jobs:
             runner: ubuntu-latest
           - os: macos
             arch: amd64
-            runner: macos-13
+            runner: macos-latest
           - os: macos
             arch: arm64
             runner: macos-latest
@@ -126,7 +126,7 @@ jobs:
             test-focus: comprehensive
           - os: macos
             arch: amd64
-            runner: macos-13
+            runner: macos-latest
             test-focus: smoke
           - os: macos
             arch: arm64
