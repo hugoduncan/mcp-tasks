@@ -42,7 +42,7 @@ jobs:
             runner: ubuntu-latest
           - os: macos
             arch: amd64
-            runner: macos-latest
+            runner: macos-13
           - os: macos
             arch: arm64
             runner: macos-latest
