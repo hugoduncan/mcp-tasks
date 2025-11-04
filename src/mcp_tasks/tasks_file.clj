@@ -78,9 +78,9 @@
       (let [raf (:raf *locked-file-handle*)
             content (str/join "\n" (map pr-str tasks))
             bytes (.getBytes content java.nio.charset.StandardCharsets/UTF_8)]
-        (.seek raf 0)             ; Reset to start of file
-        (.write raf bytes)        ; Write content
-        (.setLength raf (alength bytes)))  ; Truncate to new size
+        (.seek raf (long 0))             ; Reset to start of file
+        (.write raf bytes)                ; Write content
+        (.setLength raf (long (alength bytes))))  ; Truncate to new size
       ;; Normal atomic write via temp file
       (do
         (ensure-parent-dir file-path)
