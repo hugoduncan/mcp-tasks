@@ -9,27 +9,8 @@
     [clojure.string :as str]
     [mcp-tasks.schema :as schema]))
 
-(def ^:dynamic *locked-file-content*
-  "When bound, contains pre-read content of a locked file.
-
-  Used on Windows where exclusive file locks prevent opening additional
-  file handles. The with-task-lock macro binds this to a map with:
-  - :file-path - absolute path of the locked file
-  - :content - file content read through the locked RandomAccessFile
-
-  This avoids the need to open a second FileInputStream via slurp."
-  nil)
-
-(def ^:dynamic *locked-file-handle*
-  "When bound, contains the RandomAccessFile handle for a locked file.
-
-  Used on Windows where exclusive file locks prevent moving/renaming the
-  locked file. The with-task-lock macro binds this to a map with:
-  - :file-path - absolute path of the locked file
-  - :raf - RandomAccessFile instance
-
-  Allows writing through the existing handle instead of atomic write."
-  nil)
+(defrecord LockedFileContext
+  [file-path content raf])
 
 ;; Helper Functions
 
@@ -69,13 +50,19 @@
   through the locked RandomAccessFile handle to avoid mandatory locking
   issues with file move operations.
 
-  Creates parent directories if needed."
-  [file-path tasks]
-  (let [use-locked-handle? (and *locked-file-handle*
-                                (= file-path (:file-path *locked-file-handle*)))]
+  Creates parent directories if needed.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - tasks: Collection of task maps to write
+  - file-context: Optional LockedFileContext record with :file-path, :content, and :raf"
+  [file-path tasks & {:keys [file-context]}]
+  (let [use-locked-handle? (and file-context
+                                (:raf file-context)
+                                (= file-path (:file-path file-context)))]
     (if use-locked-handle?
       ;; Write through the locked RAF handle
-      (let [^java.io.RandomAccessFile raf (:raf *locked-file-handle*)
+      (let [^java.io.RandomAccessFile raf (:raf file-context)
             content (str/join "\n" (map pr-str tasks))
             bytes (.getBytes content java.nio.charset.StandardCharsets/UTF_8)]
         (.seek raf (long 0))             ; Reset to start of file
@@ -98,15 +85,20 @@
   Malformed or invalid lines are skipped with warnings.
 
   On Windows, when the file is locked by with-task-lock, uses the
-  pre-read content from *locked-file-content* instead of opening
-  a new file handle via slurp. Only uses cached content if reading
-  the same file that was locked."
-  [file-path]
-  (let [use-cached? (and *locked-file-content*
-                         (= file-path (:file-path *locked-file-content*)))]
+  pre-read content from file-context instead of opening a new file
+  handle via slurp. Only uses cached content if reading the same file
+  that was locked.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - file-context: Optional LockedFileContext record with :file-path, :content, and :raf"
+  [file-path & {:keys [file-context]}]
+  (let [use-cached? (and file-context
+                         (:content file-context)
+                         (= file-path (:file-path file-context)))]
     (if (or use-cached? (fs/exists? file-path))
       (let [content (if use-cached?
-                      (:content *locked-file-content*)
+                      (:content file-context)
                       (slurp file-path))
             lines (str/split-lines content)]
         (into []
@@ -119,41 +111,56 @@
   "Append a task to the end of an EDNL file.
 
   Write operation is atomic. Validates task against schema before writing.
-  Creates parent directories if needed."
-  [file-path task]
+  Creates parent directories if needed.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - task: Task map to append
+  - file-context: Optional LockedFileContext record"
+  [file-path task & {:keys [file-context]}]
   (when-not (schema/valid-task? task)
     (throw (ex-info "Invalid task schema"
                     {:task task
                      :explanation (schema/explain-task task)})))
-  (let [existing-tasks (read-ednl file-path)
+  (let [existing-tasks (read-ednl file-path :file-context file-context)
         new-tasks (conj existing-tasks task)]
-    (write-ednl-atomic file-path new-tasks)))
+    (write-ednl-atomic file-path new-tasks :file-context file-context)))
 
 (defn prepend-task
   "Prepend a task to the beginning of an EDNL file.
 
   Write operation is atomic. Validates task against schema before writing.
-  Creates parent directories if needed."
-  [file-path task]
+  Creates parent directories if needed.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - task: Task map to prepend
+  - file-context: Optional LockedFileContext record"
+  [file-path task & {:keys [file-context]}]
   (when-not (schema/valid-task? task)
     (throw (ex-info "Invalid task schema"
                     {:task task
                      :explanation (schema/explain-task task)})))
-  (let [existing-tasks (read-ednl file-path)
+  (let [existing-tasks (read-ednl file-path :file-context file-context)
         new-tasks (into [task] existing-tasks)]
-    (write-ednl-atomic file-path new-tasks)))
+    (write-ednl-atomic file-path new-tasks :file-context file-context)))
 
 (defn replace-task
   "Replace a task by id in an EDNL file.
 
   Write operation is atomic. Validates task against schema before writing.
-  Throws ex-info if task id not found."
-  [file-path task]
+  Throws ex-info if task id not found.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - task: Task map with updated values (must include :id)
+  - file-context: Optional LockedFileContext record"
+  [file-path task & {:keys [file-context]}]
   (when-not (schema/valid-task? task)
     (throw (ex-info "Invalid task schema"
                     {:task task
                      :explanation (schema/explain-task task)})))
-  (let [existing-tasks (read-ednl file-path)
+  (let [existing-tasks (read-ednl file-path :file-context file-context)
         task-id (:id task)
         task-index (first (keep-indexed
                             (fn [idx t]
@@ -165,14 +172,19 @@
                       {:id task-id
                        :file file-path})))
     (let [new-tasks (assoc existing-tasks task-index task)]
-      (write-ednl-atomic file-path new-tasks))))
+      (write-ednl-atomic file-path new-tasks :file-context file-context))))
 
 (defn delete-task
   "Remove a task by id from an EDNL file.
 
-  Write operation is atomic. Throws ex-info if task id not found."
-  [file-path id]
-  (let [existing-tasks (read-ednl file-path)
+  Write operation is atomic. Throws ex-info if task id not found.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - id: Task ID to delete
+  - file-context: Optional LockedFileContext record"
+  [file-path id & {:keys [file-context]}]
+  (let [existing-tasks (read-ednl file-path :file-context file-context)
         new-tasks (into []
                         (remove #(= (:id %) id))
                         existing-tasks)]
@@ -180,17 +192,22 @@
       (throw (ex-info "Task not found"
                       {:id id
                        :file file-path})))
-    (write-ednl-atomic file-path new-tasks)))
+    (write-ednl-atomic file-path new-tasks :file-context file-context)))
 
 (defn write-tasks
   "Write a collection of tasks to an EDNL file.
 
   Write operation is atomic. Validates all tasks against schema before writing.
-  Creates parent directories if needed."
-  [file-path tasks]
+  Creates parent directories if needed.
+
+  Parameters:
+  - file-path: Path to the EDNL file
+  - tasks: Collection of task maps to write
+  - file-context: Optional LockedFileContext record"
+  [file-path tasks & {:keys [file-context]}]
   (doseq [task tasks]
     (when-not (schema/valid-task? task)
       (throw (ex-info "Invalid task schema"
                       {:task task
                        :explanation (schema/explain-task task)}))))
-  (write-ednl-atomic file-path tasks))
+  (write-ednl-atomic file-path tasks :file-context file-context))

@@ -12,7 +12,9 @@
     (java.io
       RandomAccessFile)
     (java.nio.charset
-      StandardCharsets)))
+      StandardCharsets)
+    (mcp_tasks.tasks_file
+      LockedFileContext)))
 
 (defn file-exists?
   "Check if a file exists"
@@ -106,13 +108,13 @@
 
   See also: `sync-and-prepare-task-file` for the syncing version used by
   modification tools."
-  [config]
+  [config & {:keys [file-context]}]
   (let [tasks-path (task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
         complete-path (task-path config ["complete.ednl"])
         complete-file (:absolute complete-path)]
     (when (file-exists? tasks-file)
-      (tasks/load-tasks! tasks-file :complete-file complete-file))
+      (tasks/load-tasks! tasks-file :complete-file complete-file :file-context file-context))
     tasks-file))
 
 (defn sync-and-prepare-task-file
@@ -182,11 +184,11 @@
   - Alternative: Use `prepare-task-file` for faster local-only operations
 
   See also: `prepare-task-file` for the simpler non-syncing version."
-  [config]
+  [config & {:keys [file-context]}]
   ;; Check if git sync is enabled
   (if-not (:enable-git-sync? config)
     ;; Sync disabled - skip git operations and just load tasks
-    (prepare-task-file config)
+    (prepare-task-file config :file-context file-context)
     ;; Sync enabled - proceed with git pull
     (let [tasks-dir (:resolved-tasks-dir config)
           branch-result (git/get-current-branch tasks-dir)]
@@ -196,7 +198,7 @@
           (if (or (str/includes? error-msg "not a git repository")
                   (str/includes? error-msg "unknown revision"))
             ;; Not a git repository or empty git repository - skip git sync and just load tasks
-            (prepare-task-file config)
+            (prepare-task-file config :file-context file-context)
             ;; Other git error - return error map
             {:success false
              :error error-msg
@@ -205,7 +207,7 @@
         (let [pull-result (git/pull-latest tasks-dir (:branch branch-result))]
           (if (:success pull-result)
             ;; Pull succeeded or no remote configured - proceed with loading tasks
-            (prepare-task-file config)
+            (prepare-task-file config :file-context file-context)
             ;; Pull failed - return error map
             {:success false
              :error (:error pull-result)
@@ -300,7 +302,8 @@
   Parameters:
   - config: Configuration map with optional :lock-timeout-ms (default 30000ms)
             and :lock-poll-interval-ms (default 100ms)
-  - f: Function to execute while holding the lock (no arguments)
+  - f: Function to execute while holding the lock. Called with a single argument:
+       a LockedFileContext record containing :file-path, :content, and :raf fields
 
   Returns:
   - Always returns a map (never throws exceptions)
@@ -350,13 +353,11 @@
               (let [file-content (if (pos? (.length random-access-file))
                                    (read-file-via-raf random-access-file)
                                    "")
-                    locked-file-data {:file-path tasks-file
-                                      :content file-content}
-                    locked-file-handle {:file-path tasks-file
-                                        :raf random-access-file}]
-                (binding [tasks-file/*locked-file-content* locked-file-data
-                          tasks-file/*locked-file-handle* locked-file-handle]
-                  (f)))
+                    file-context (tasks-file/->LockedFileContext
+                                   tasks-file
+                                   file-content
+                                   random-access-file)]
+                (f file-context))
               (catch Exception e
                 ;; Log stack trace for debugging
                 (log/error :task-operation-error

@@ -37,7 +37,7 @@
           ;; First operation: Add task and commit
           (helpers/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (let [sync-result (helpers/sync-and-prepare-task-file config)]
                 ;; Should return tasks file path (no remote configured)
                 (is (string? sync-result))
@@ -58,7 +58,7 @@
           ;; Second operation: Sync pulls the commit, then add another task
           (helpers/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (let [sync-result (helpers/sync-and-prepare-task-file config)]
                 ;; Should return tasks file path
                 (is (string? sync-result))
@@ -131,7 +131,7 @@
             ;; and fail when attempting to merge
             (let [result (helpers/with-task-lock
                            config
-                           (fn []
+                           (fn [_file-context]
                              (helpers/sync-and-prepare-task-file config)))]
               ;; Should get an error result from the conflicting pull
               (cond
@@ -169,7 +169,7 @@
           ;; Sync should work even without remote
           (helpers/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (let [sync-result (helpers/sync-and-prepare-task-file config)]
                 ;; Should return tasks file path (no remote is OK)
                 (is (string? sync-result))
@@ -210,7 +210,7 @@
           (dotimes [i 3]
             (helpers/with-task-lock
               config
-              (fn []
+              (fn [_file-context]
                 (let [sync-result (helpers/sync-and-prepare-task-file config)]
                   (is (string? sync-result))
                   (tasks/add-task {:id (inc i)

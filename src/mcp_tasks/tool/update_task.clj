@@ -116,9 +116,9 @@
   [config _context arguments]
   ;; Perform file operations inside lock
   (let [locked-result (helpers/with-task-lock config
-                                              (fn []
+                                              (fn [file-context]
                                                 ;; Sync with remote and load tasks
-                                                (let [sync-result (helpers/sync-and-prepare-task-file config)]
+                                                (let [sync-result (helpers/sync-and-prepare-task-file config :file-context file-context)]
                                                   (if (and (map? sync-result) (false? (:success sync-result)))
                                                     ;; sync-result is an error map
                                                     (let [{:keys [error error-type]} sync-result
@@ -136,7 +136,7 @@
                                                     ;; sync-result is the tasks-file path - proceed
                                                     (let [task-id (:task-id arguments)
                                                           tasks-file sync-result]
-                                                      (tasks/load-tasks! tasks-file)
+                                                      (tasks/load-tasks! tasks-file :file-context file-context)
                                                       (let [updates (extract-provided-updates arguments)]
                                                         (if (empty? updates)
                                                           (helpers/build-tool-error-response
@@ -154,7 +154,7 @@
                                                                 (validation/validate-task-schema updated-task "update-task" task-id tasks-file))
                                                               (do
                                                                 (tasks/update-task task-id updates)
-                                                                (tasks/save-tasks! tasks-file)
+                                                                (tasks/save-tasks! tasks-file :file-context file-context)
                                                                 (let [final-task (tasks/get-task task-id)
                                                                       tasks-path (helpers/task-path config ["tasks.ednl"])
                                                                       tasks-rel-path (:relative tasks-path)]
