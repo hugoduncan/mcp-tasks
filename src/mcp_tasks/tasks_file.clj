@@ -46,9 +46,8 @@
 (defn- write-ednl-atomic
   "Write tasks to file atomically using temp file and rename.
 
-  On Windows, when the file is locked by with-task-lock, writes directly
-  through the locked RandomAccessFile handle to avoid mandatory locking
-  issues with file move operations.
+  When the file is locked by with-task-lock, writes directly through
+  the locked RandomAccessFile handle to avoid file locking conflicts.
 
   Creates parent directories if needed.
 
@@ -67,18 +66,7 @@
             bytes (.getBytes content java.nio.charset.StandardCharsets/UTF_8)]
         (.seek raf (long 0))             ; Reset to start of file
         (.write raf bytes)                ; Write content
-        (.setLength raf (long (alength bytes)))  ; Truncate to new size
-        ;; On Windows, sync file descriptor and force channel before lock release
-        (try
-          (.sync (.getFD raf))            ; Flush RAF's buffered writes to OS
-          (catch Exception _e
-            ;; Sync may fail in restricted environments (e.g., Babashka/SCI)
-            nil))
-        (try
-          (.force (.getChannel raf) true) ; Force channel to commit to physical storage
-          (catch Exception _e
-            ;; Force may fail in restricted environments
-            nil)))
+        (.setLength raf (long (alength bytes))))  ; Truncate to new size
       ;; Normal atomic write via temp file
       (do
         (ensure-parent-dir file-path)
@@ -95,10 +83,9 @@
   Returns vector of task maps. Missing files return empty vector.
   Malformed or invalid lines are skipped with warnings.
 
-  On Windows, when the file is locked by with-task-lock, uses the
-  pre-read content from file-context instead of opening a new file
-  handle via slurp. Only uses cached content if reading the same file
-  that was locked.
+  When the file is locked by with-task-lock, uses the pre-read content
+  from file-context instead of opening a new file handle via slurp.
+  Only uses cached content if reading the same file that was locked.
 
   Parameters:
   - file-path: Path to the EDNL file

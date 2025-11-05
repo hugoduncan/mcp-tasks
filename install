@@ -12,7 +12,7 @@ BINARY_CLI="mcp-tasks"
 BINARY_SERVER="mcp-tasks-server"
 
 # Supported platforms
-SUPPORTED_PLATFORMS="linux-amd64, macos-amd64, macos-arm64"
+SUPPORTED_PLATFORMS="linux-amd64, macos-amd64, macos-arm64 (Windows not supported)"
 
 # Check if command exists
 has() {

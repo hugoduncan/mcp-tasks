@@ -22,8 +22,8 @@
 (defn ensure-file-exists!
   "Ensure a file exists, creating parent directories and empty file if needed.
 
-  On Windows, uses Java File.createNewFile() instead of spit to avoid
-  file locking conflicts when immediately opening with RandomAccessFile.
+  Uses Java File.createNewFile() to avoid file locking conflicts when
+  immediately opening with RandomAccessFile.
 
   Parameters:
   - file-path: Absolute path to the file
@@ -248,9 +248,9 @@
 (defn- read-file-via-raf
   "Read file content through a RandomAccessFile handle.
 
-  On Windows, when a file is locked exclusively via RandomAccessFile,
-  we cannot open another FileInputStream to read it (mandatory locking).
-  This function reads through the existing RAF handle instead.
+  When a file is locked exclusively via RandomAccessFile, we cannot
+  open another FileInputStream to read it. This function reads through
+  the existing RAF handle instead.
 
   Returns the file content as a string."
   [^RandomAccessFile raf]
@@ -266,10 +266,8 @@
   Polling is necessary because Java's FileChannel.tryLock() doesn't support
   timeout parameters - it either succeeds immediately or returns nil.
 
-  On Windows, tryLock() can throw IOException even when no other process
-  holds the lock. This is a Windows-specific behavior where file locking
-  can temporarily fail due to OS-level file access conflicts. We retry
-  these transient errors until timeout.
+  tryLock() can throw IOException in some cases even when no other process
+  holds the lock. We retry these transient errors until timeout.
 
   Returns the acquired lock on success, nil on timeout."
   [^java.nio.channels.FileChannel file-channel ^long timeout-ms ^long poll-interval-ms]
@@ -278,9 +276,9 @@
       (let [lock-attempt (try
                            (.tryLock file-channel)
                            (catch java.io.IOException e
-                             ;; On Windows, tryLock can throw IOException for
-                             ;; transient locking conflicts. Treat as if lock
-                             ;; was unavailable and retry.
+                             ;; tryLock can throw IOException for transient
+                             ;; locking conflicts. Treat as if lock was
+                             ;; unavailable and retry.
                              (log/debug :lock-attempt-failed-retrying
                                         {:error (.getMessage e)})
                              nil))]
@@ -346,7 +344,7 @@
           (do
             (reset! lock acquired-lock)
             ;; Lock acquired - read file content through RAF to avoid
-            ;; Windows mandatory locking issues, then execute function
+            ;; file locking conflicts, then execute function
             (try
               (let [file-content (if (pos? (.length random-access-file))
                                    (read-file-via-raf random-access-file)
@@ -381,7 +379,7 @@
              :timeout-ms lock-timeout-ms})))
 
       (catch java.io.IOException e
-        ;; Log full stack trace for debugging Windows file lock issues
+        ;; Log full stack trace for debugging file lock issues
         (log/error :file-lock-io-error
                    {:file tasks-file
                     :message (.getMessage e)
@@ -395,17 +393,6 @@
            :stack-trace (with-out-str (.printStackTrace e))}))
 
       (finally
-        ;; On Windows, sync and force before releasing lock to ensure all writes committed
-        (when (and @raf @channel)
-          (try
-            (let [r @raf
-                  ch @channel]
-              (try (.sync (.getFD r)) (catch Exception _))
-              (try (.force ch true) (catch Exception _)))
-            (catch Exception e
-              (log/debug :finally-sync-failed
-                         {:error (.getMessage e)
-                          :file tasks-file}))))
         ;; Release lock before closing handles
         ;; Lock must be released before closing the channel it's associated with
         (when-let [l @lock]

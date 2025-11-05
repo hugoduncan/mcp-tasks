@@ -107,10 +107,6 @@ jobs:
             MISSING+=("macos-arm64")
           fi
 
-          if [ ! -f "binaries/mcp-tasks-windows-amd64.exe/mcp-tasks-windows-amd64.exe" ]; then
-            MISSING+=("windows-amd64.exe")
-          fi
-
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "Error: Missing binary artifacts: ${MISSING[*]}"
             echo "Cannot proceed with release without all binaries"
@@ -148,7 +144,6 @@ jobs:
             binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64
             binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64
             binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64
-            binaries/mcp-tasks-windows-amd64.exe/mcp-tasks-windows-amd64.exe
           draft: false
           prerelease: false
         env:

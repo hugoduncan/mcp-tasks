@@ -26,14 +26,13 @@ For a deeper understanding, see **[Introduction to mcp-tasks](doc/introduction.m
 ```bash
 # Unix (Linux/macOS)
 curl -sL https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install | bash
-
-# Windows (PowerShell)
-iwr -useb https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.ps1 | iex
 ```
 
 This installs:
 - `mcp-tasks` CLI for terminal task management
 - `mcp-tasks-server` MCP server for AI agent integration
+
+**Note:** Windows native binaries are not currently supported due to file locking complexities. Windows users can use the Clojure git dependency installation method (see [Installation Guide](doc/install.md)).
 
 See **[Installation Guide](doc/install.md)** for alternative installation methods (Clojure git dependency, building from source).
 
