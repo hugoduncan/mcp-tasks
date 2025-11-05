@@ -65,9 +65,9 @@
    {:keys [category title description prepend type parent-id relations]}]
   ;; Perform file operations inside lock
   (let [locked-result (helpers/with-task-lock config
-                                              (fn []
+                                              (fn [file-context]
                                                 ;; Sync with remote and load tasks
-                                                (let [sync-result (helpers/sync-and-prepare-task-file config)]
+                                                (let [sync-result (helpers/sync-and-prepare-task-file config :file-context file-context)]
                                                   (if (and (map? sync-result) (false? (:success sync-result)))
                                                     ;; sync-result is an error map
                                                     (let [{:keys [error error-type]} sync-result
@@ -121,7 +121,7 @@
                                                               (let [tasks-path (helpers/task-path config ["tasks.ednl"])
                                                                     tasks-rel-path (:relative tasks-path)]
                                                                 ;; Save to EDNL file
-                                                                (tasks/save-tasks! tasks-file)
+                                                                (tasks/save-tasks! tasks-file :file-context file-context)
 
                                                                 ;; Return intermediate data for git operations
                                                                 {:created-task created-task

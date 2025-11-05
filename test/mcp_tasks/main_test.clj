@@ -416,4 +416,13 @@
             (fs/delete (io/file prompts-dir "simple.md"))
             (fs/delete prompts-dir)
             (fs/delete mcp-tasks-dir)
-            (fs/delete temp-dir)))))))
+            (fs/delete temp-dir))))))
+
+  (testing "includes correct server-info"
+    (let [config {:use-git? false}
+          transport {:type :in-memory}
+          server-config (sut/create-server-config config transport)]
+      (is (map? (:server-info server-config)))
+      (is (= "mcp-tasks" (get-in server-config [:server-info :name])))
+      (is (= "0.1.124" (get-in server-config [:server-info :version])))
+      (is (= "MCP Tasks Server" (get-in server-config [:server-info :title]))))))

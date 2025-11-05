@@ -2,42 +2,42 @@
 
  :deps
  {org.hugpduncan/mcp-clj-server
-  {:git/url "https://github.com/hugoduncan/mcp-clj"
-   :git/sha "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
+  {:git/url   "https://github.com/hugoduncan/mcp-clj"
+   :git/sha   "f647f11e6ecbbca916b9eda85d673c6006229785"
    :deps/root "projects/server"}
   org.clojure/clojure {:mvn/version "1.12.3"}
-  metosin/malli {:mvn/version "0.16.4"}
-  babashka/fs {:mvn/version "0.5.22"}
-  org.babashka/cli {:mvn/version "0.8.61"}
-  cheshire/cheshire {:mvn/version "5.13.0"}}
+  metosin/malli       {:mvn/version "0.16.4"}
+  babashka/fs         {:mvn/version "0.5.22"}
+  org.babashka/cli    {:mvn/version "0.8.61"}
+  cheshire/cheshire   {:mvn/version "5.13.0"}}
 
  :aliases
- {:cli {:main-opts ["-m" "mcp-tasks.cli"]}
-  :dev {:extra-paths ["test"]
-        :override-deps
-        {org.hugpduncan/mcp-clj-server
-         {:git/url "https://github.com/hugoduncan/mcp-clj"
-          :git/sha "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
-          :deps/root "projects/test-dep"}}}
-  :test {:extra-paths ["test" "dev"]
-         :extra-deps
-         {lambdaisland/kaocha {:mvn/version "1.91.1392"}
-          babashka/process {:mvn/version "0.5.22"}
-          io.github.clojure/tools.build {:mvn/version "0.10.5"}}
-         :override-deps
-         {org.hugpduncan/mcp-clj-server
-          {:git/url "https://github.com/hugoduncan/mcp-clj"
-           :git/sha "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
-           :deps/root "projects/test-dep"}}
-         :main-opts ["-m" "kaocha.runner"]}
-  :run {:exec-fn mcp-tasks.main/start
-        :main-opts ["-m" "mcp-tasks.main"]}
-  :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
-          :main-opts ["-m" "nrepl.cmdline"]}
-  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}
-                 babashka/fs {:mvn/version "0.5.22"}}
-          :paths ["dev"]
-          :ns-default build}
+ {:cli    {:main-opts ["-m" "mcp-tasks.cli"]}
+  :dev    {:extra-paths ["test"]
+           :override-deps
+           {org.hugpduncan/mcp-clj-server
+            {:git/url   "https://github.com/hugoduncan/mcp-clj"
+             :git/sha   "f647f11e6ecbbca916b9eda85d673c6006229785"
+             :deps/root "projects/test-dep"}}}
+  :test   {:extra-paths ["test" "dev"]
+           :extra-deps
+           {lambdaisland/kaocha           {:mvn/version "1.91.1392"}
+            babashka/process              {:mvn/version "0.5.22"}
+            io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+           :override-deps
+           {org.hugpduncan/mcp-clj-server
+            {:git/url   "https://github.com/hugoduncan/mcp-clj"
+             :git/sha   "f647f11e6ecbbca916b9eda85d673c6006229785"
+             :deps/root "projects/test-dep"}}
+           :main-opts   ["-m" "kaocha.runner"]}
+  :run    {:exec-fn   mcp-tasks.main/start
+           :main-opts ["-m" "mcp-tasks.main"]}
+  :nrepl  {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}}
+           :main-opts  ["-m" "nrepl.cmdline"]}
+  :build  {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.5"}
+                        babashka/fs                   {:mvn/version "0.5.22"}}
+           :paths      ["dev"]
+           :ns-default build}
   :deploy {:replace-deps {slipset/deps-deploy {:mvn/version "0.2.2"}}
-           :exec-fn deps-deploy.deps-deploy/deploy
-           :exec-args {:installer :remote}}}}
+           :exec-fn      deps-deploy.deps-deploy/deploy
+           :exec-args    {:installer :remote}}}}

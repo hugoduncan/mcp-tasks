@@ -850,10 +850,10 @@
         (let [sync-called (atom false)
               original-prepare @#'mcp-tasks.tools.helpers/prepare-task-file]
           (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
-                        (fn [config]
+                        (fn [config & {:keys [file-context]}]
                           (reset! sync-called true)
                           ;; Simulate successful sync by calling prepare-task-file
-                          (original-prepare config))]
+                          (original-prepare config :file-context file-context))]
             (let [result (#'sut/complete-task-impl
                           (h/git-test-config test-dir)
                           nil
@@ -869,7 +869,7 @@
 
         (testing "returns error on pull conflicts"
           (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
-                        (fn [_config]
+                        (fn [_config & {:keys [_file-context]}]
                           {:success false
                            :error "CONFLICT (content): Merge conflict in tasks.ednl"
                            :error-type :conflict})]
@@ -894,7 +894,7 @@
 
         (testing "returns error on network failure"
           (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
-                        (fn [_config]
+                        (fn [_config & {:keys [_file-context]}]
                           {:success false
                            :error "fatal: Could not resolve host: github.com"
                            :error-type :network})]
@@ -919,9 +919,9 @@
 
         (testing "continues normally when no remote configured"
           (with-redefs [mcp-tasks.tools.helpers/sync-and-prepare-task-file
-                        (fn [config]
+                        (fn [config & {:keys [file-context]}]
                           ;; Simulate no-remote scenario - still returns path
-                          (@#'mcp-tasks.tools.helpers/prepare-task-file config))]
+                          (@#'mcp-tasks.tools.helpers/prepare-task-file config :file-context file-context))]
             (h/write-ednl-test-file
               test-dir
               "tasks.ednl"

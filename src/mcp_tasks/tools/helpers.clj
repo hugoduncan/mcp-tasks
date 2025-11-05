@@ -6,10 +6,13 @@
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-tasks.tasks :as tasks]
+    [mcp-tasks.tasks-file :as tasks-file]
     [mcp-tasks.tools.git :as git])
   (:import
     (java.io
-      RandomAccessFile)))
+      RandomAccessFile)
+    (java.nio.charset
+      StandardCharsets)))
 
 (defn file-exists?
   "Check if a file exists"
@@ -18,6 +21,9 @@
 
 (defn ensure-file-exists!
   "Ensure a file exists, creating parent directories and empty file if needed.
+
+  Uses Java File.createNewFile() to avoid file locking conflicts when
+  immediately opening with RandomAccessFile.
 
   Parameters:
   - file-path: Absolute path to the file
@@ -30,7 +36,7 @@
   [file-path]
   (when-not (file-exists? file-path)
     (fs/create-dirs (fs/parent file-path))
-    (spit file-path "")))
+    (.createNewFile (java.io.File. ^String file-path))))
 
 (defn task-path
   "Construct task directory paths using resolved tasks directory from config.
@@ -100,13 +106,13 @@
 
   See also: `sync-and-prepare-task-file` for the syncing version used by
   modification tools."
-  [config]
+  [config & {:keys [file-context]}]
   (let [tasks-path (task-path config ["tasks.ednl"])
         tasks-file (:absolute tasks-path)
         complete-path (task-path config ["complete.ednl"])
         complete-file (:absolute complete-path)]
     (when (file-exists? tasks-file)
-      (tasks/load-tasks! tasks-file :complete-file complete-file))
+      (tasks/load-tasks! tasks-file :complete-file complete-file :file-context file-context))
     tasks-file))
 
 (defn sync-and-prepare-task-file
@@ -176,11 +182,11 @@
   - Alternative: Use `prepare-task-file` for faster local-only operations
 
   See also: `prepare-task-file` for the simpler non-syncing version."
-  [config]
+  [config & {:keys [file-context]}]
   ;; Check if git sync is enabled
   (if-not (:enable-git-sync? config)
     ;; Sync disabled - skip git operations and just load tasks
-    (prepare-task-file config)
+    (prepare-task-file config :file-context file-context)
     ;; Sync enabled - proceed with git pull
     (let [tasks-dir (:resolved-tasks-dir config)
           branch-result (git/get-current-branch tasks-dir)]
@@ -190,7 +196,7 @@
           (if (or (str/includes? error-msg "not a git repository")
                   (str/includes? error-msg "unknown revision"))
             ;; Not a git repository or empty git repository - skip git sync and just load tasks
-            (prepare-task-file config)
+            (prepare-task-file config :file-context file-context)
             ;; Other git error - return error map
             {:success false
              :error error-msg
@@ -199,7 +205,7 @@
         (let [pull-result (git/pull-latest tasks-dir (:branch branch-result))]
           (if (:success pull-result)
             ;; Pull succeeded or no remote configured - proceed with loading tasks
-            (prepare-task-file config)
+            (prepare-task-file config :file-context file-context)
             ;; Pull failed - return error map
             {:success false
              :error (:error pull-result)
@@ -239,22 +245,49 @@
                                         error-metadata)})}]
    :isError true})
 
+(defn- read-file-via-raf
+  "Read file content through a RandomAccessFile handle.
+
+  When a file is locked exclusively via RandomAccessFile, we cannot
+  open another FileInputStream to read it. This function reads through
+  the existing RAF handle instead.
+
+  Returns the file content as a string."
+  [^RandomAccessFile raf]
+  (let [length (.length raf)
+        bytes (byte-array length)]
+    (.seek raf 0)  ; Reset to start of file
+    (.readFully raf bytes)
+    (String. bytes StandardCharsets/UTF_8)))
+
 (defn- try-acquire-lock-with-timeout
   "Attempt to acquire file lock with timeout using polling.
-  
+
   Polling is necessary because Java's FileChannel.tryLock() doesn't support
   timeout parameters - it either succeeds immediately or returns nil.
-  
+
+  tryLock() can throw IOException in some cases even when no other process
+  holds the lock. We retry these transient errors until timeout.
+
   Returns the acquired lock on success, nil on timeout."
   [^java.nio.channels.FileChannel file-channel ^long timeout-ms ^long poll-interval-ms]
   (let [deadline (+ (System/currentTimeMillis) timeout-ms)]
     (loop []
-      (if-let [acquired-lock (.tryLock file-channel)]
-        acquired-lock
-        (let [now (System/currentTimeMillis)]
-          (when (< now deadline)
-            (Thread/sleep poll-interval-ms)
-            (recur)))))))
+      (let [lock-attempt (try
+                           (.tryLock file-channel)
+                           (catch java.io.IOException e
+                             ;; tryLock can throw IOException for transient
+                             ;; locking conflicts. Treat as if lock was
+                             ;; unavailable and retry.
+                             (log/debug :lock-attempt-failed-retrying
+                                        {:error (.getMessage e)})
+                             nil))]
+        (if lock-attempt
+          lock-attempt
+          (let [now (System/currentTimeMillis)]
+            (when (< now deadline)
+              (Thread/sleep poll-interval-ms)
+              (recur))))))))
 
 (defn with-task-lock
   "Execute function f while holding an exclusive file lock on tasks.ednl.
@@ -265,7 +298,8 @@
   Parameters:
   - config: Configuration map with optional :lock-timeout-ms (default 30000ms)
             and :lock-poll-interval-ms (default 100ms)
-  - f: Function to execute while holding the lock (no arguments)
+  - f: Function to execute while holding the lock. Called with a single argument:
+       a LockedFileContext record containing :file-path, :content, and :raf fields
 
   Returns:
   - Always returns a map (never throws exceptions)
@@ -309,17 +343,32 @@
                                  poll-interval-ms)]
           (do
             (reset! lock acquired-lock)
-            ;; Lock acquired - execute function with error handling
+            ;; Lock acquired - read file content through RAF to avoid
+            ;; file locking conflicts, then execute function
             (try
-              (f)
+              (let [file-content (if (pos? (.length random-access-file))
+                                   (read-file-via-raf random-access-file)
+                                   "")
+                    file-context (tasks-file/->LockedFileContext
+                                   tasks-file
+                                   file-content
+                                   random-access-file)]
+                (f file-context))
               (catch Exception e
+                ;; Log stack trace for debugging
+                (log/error :task-operation-error
+                           {:file tasks-file
+                            :error-type (-> e class .getName)
+                            :message (.getMessage e)
+                            :stack-trace (with-out-str (.printStackTrace e))})
                 ;; Convert any exception from function execution to error map
                 (build-tool-error-response
                   (str "Error during task operation: " (.getMessage e))
                   "with-task-lock"
                   {:file tasks-file
                    :error-type (-> e class .getName)
-                   :message (.getMessage e)}))))
+                   :message (.getMessage e)
+                   :stack-trace (with-out-str (.printStackTrace e))}))))
           ;; Lock acquisition timed out
           (build-tool-error-response
             (str "Failed to acquire lock on tasks file after "
@@ -330,15 +379,22 @@
              :timeout-ms lock-timeout-ms})))
 
       (catch java.io.IOException e
+        ;; Log full stack trace for debugging file lock issues
+        (log/error :file-lock-io-error
+                   {:file tasks-file
+                    :message (.getMessage e)
+                    :stack-trace (with-out-str (.printStackTrace e))})
         (build-tool-error-response
           (str "Failed to access lock file: " (.getMessage e))
           "with-task-lock"
           {:file tasks-file
            :error-type "io-error"
-           :message (.getMessage e)}))
+           :message (.getMessage e)
+           :stack-trace (with-out-str (.printStackTrace e))}))
 
       (finally
-        ;; Always release lock, close channel, and close RAF
+        ;; Release lock before closing handles
+        ;; Lock must be released before closing the channel it's associated with
         (when-let [l @lock]
           (try
             (.release l)

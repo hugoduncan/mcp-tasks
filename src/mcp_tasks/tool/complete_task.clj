@@ -86,20 +86,21 @@
 
 (defn- complete-regular-task-
   "Completes a regular task by marking it :status :closed and moving to complete.ednl.
-  
+
   Parameters:
   - config: Configuration map
   - context: Context map from setup-completion-context
   - task: Task map to complete
   - completion-comment: Optional comment to append to task description
-  
+  - file-context: LockedFileContext for locked file operations
+
   Returns intermediate data map for git operations and response building."
-  [config context task completion-comment]
+  [config context task completion-comment file-context]
   (let [{:keys [tasks-file complete-file tasks-rel-path complete-rel-path]} context]
     (tasks/mark-complete (:id task) completion-comment)
     ;; Get the updated task after marking complete
     (let [updated-task (tasks/get-task (:id task))]
-      (tasks/move-task! (:id task) tasks-file complete-file)
+      (tasks/move-task! (:id task) tasks-file complete-file :file-context file-context)
       ;; Clear execution state after successful completion
       (exec-state/clear-execution-state! (:base-dir config))
 
@@ -111,17 +112,18 @@
 
 (defn- complete-child-task-
   "Completes a story child task by marking it :status :closed but keeping it in tasks.ednl.
-  
+
   Parameters:
   - config: Configuration map
   - context: Context map from setup-completion-context
   - task: Task map to complete (must have :parent-id)
   - completion-comment: Optional comment to append to task description
-  
+  - file-context: LockedFileContext for locked file operations
+
   Returns either:
   - Error response if parent validation fails
   - Intermediate data map for git operations and response building"
-  [config context task completion-comment]
+  [config context task completion-comment file-context]
   (let [{:keys [tasks-file tasks-rel-path]} context
         parent (tasks/get-task (:parent-id task))]
     (cond
@@ -147,7 +149,7 @@
         (tasks/mark-complete (:id task) completion-comment)
         ;; Get the updated task after marking complete
         (let [updated-task (tasks/get-task (:id task))]
-          (tasks/save-tasks! tasks-file)
+          (tasks/save-tasks! tasks-file :file-context file-context)
           ;; Update execution state to remove task-id but preserve story-id
           (exec-state/update-execution-state-for-child-completion! (:base-dir config))
 
@@ -161,17 +163,18 @@
 (defn- complete-story-task-
   "Completes a story by validating all children are :status :closed, then atomically
   archiving the story and all its children to complete.ednl.
-  
+
   Parameters:
   - config: Configuration map
   - context: Context map from setup-completion-context
   - task: Story task map to complete (must have :type :story)
   - completion-comment: Optional comment to append to task description
-  
+  - file-context: LockedFileContext for locked file operations
+
   Returns either:
   - Error response if children are not all closed
   - Intermediate data map for git operations and response building"
-  [config context task completion-comment]
+  [config context task completion-comment file-context]
   (let [{:keys [tasks-file complete-file tasks-rel-path complete-rel-path]} context
         children (tasks/get-children (:id task))
         ;; Only open, in-progress, and blocked tasks prevent completion
@@ -200,7 +203,7 @@
               all-ids (cons (:id task) (mapv :id children))
               child-count (count children)]
           ;; Move story and all children to complete.ednl atomically
-          (tasks/move-tasks! all-ids tasks-file complete-file)
+          (tasks/move-tasks! all-ids tasks-file complete-file :file-context file-context)
           ;; Clear execution state after successful completion
           (exec-state/clear-execution-state! (:base-dir config))
 
@@ -308,9 +311,9 @@
 
         ;; Perform file operations inside lock
         locked-result (helpers/with-task-lock config
-                                              (fn []
+                                              (fn [file-context]
                                                 ;; Sync with remote and load tasks
-                                                (let [sync-result (helpers/sync-and-prepare-task-file config)]
+                                                (let [sync-result (helpers/sync-and-prepare-task-file config :file-context file-context)]
                                                   (if (and (map? sync-result) (false? (:success sync-result)))
                                                     ;; sync-result is an error map
                                                     (let [{:keys [error error-type]} sync-result
@@ -362,13 +365,13 @@
 
                                                                 ;; All validations passed - dispatch to appropriate completion function
                                                                 (= (:type task) :story)
-                                                                (complete-story-task- config context task completion-comment)
+                                                                (complete-story-task- config context task completion-comment file-context)
 
                                                                 (some? (:parent-id task))
-                                                                (complete-child-task- config context task completion-comment)
+                                                                (complete-child-task- config context task completion-comment file-context)
 
                                                                 :else
-                                                                (complete-regular-task- config context task completion-comment)))))))))))]
+                                                                (complete-regular-task- config context task completion-comment file-context)))))))))))]
     ;; Check if locked section returned an error
     (if (:isError locked-result)
       locked-result

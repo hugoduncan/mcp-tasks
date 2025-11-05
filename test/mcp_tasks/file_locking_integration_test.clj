@@ -31,7 +31,7 @@
         (let [config (assoc (h/test-config test-dir) :lock-timeout-ms 0)
               result (helpers/with-task-lock
                        config
-                       (fn []
+                       (fn [_file-context]
                          ;; Should execute immediately with 0 timeout
                          :executed))]
 
@@ -54,7 +54,7 @@
           ;; First operation
           (let [result1 (helpers/with-task-lock
                           config
-                          (fn []
+                          (fn [_file-context]
                             (swap! execution-count inc)
                             :first))]
             (is (= :first result1))
@@ -63,7 +63,7 @@
           ;; Second operation - should succeed if lock was released
           (let [result2 (helpers/with-task-lock
                           config
-                          (fn []
+                          (fn [_file-context]
                             (swap! execution-count inc)
                             :second))]
             (is (= :second result2))
@@ -72,7 +72,7 @@
           ;; Third operation
           (let [result3 (helpers/with-task-lock
                           config
-                          (fn []
+                          (fn [_file-context]
                             (swap! execution-count inc)
                             :third))]
             (is (= :third result3))
@@ -89,7 +89,7 @@
           ;; Operation that throws exception - should return error map
           (let [result (helpers/with-task-lock
                          config
-                         (fn []
+                         (fn [_file-context]
                            (throw (ex-info "Test exception" {:test true}))))]
             ;; Should get error map, not exception
             (is (map? result))
@@ -98,7 +98,7 @@
           ;; Verify lock was released by acquiring it again
           (let [result (helpers/with-task-lock
                          config
-                         (fn []
+                         (fn [_file-context]
                            :lock-acquired))]
             (is (= :lock-acquired result))))))))
 
@@ -115,7 +115,7 @@
           ;; Perform multiple task operations in sequence
           (helpers/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (helpers/prepare-task-file config)
               (tasks/add-task {:title "Task 1"
                                :description "First task"
@@ -129,7 +129,7 @@
 
           (helpers/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (helpers/prepare-task-file config)
               (tasks/add-task {:title "Task 2"
                                :description "Second task"
@@ -144,7 +144,7 @@
           ;; Verify both tasks were added
           (helpers/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (helpers/prepare-task-file config)
               (let [all-tasks (tasks/get-tasks)]
                 (is (= 2 (count all-tasks)))
@@ -168,7 +168,7 @@
           (try
             (let [result (helpers/with-task-lock
                            config
-                           (fn []
+                           (fn [_file-context]
                              :should-not-execute))]
               ;; If we get a result, it should be an error
               (is (map? result))

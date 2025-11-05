@@ -4,25 +4,24 @@ This guide describes how to install the mcp-tasks MCP server for use with variou
 
 ## Prerequisites
 
-Binary installation requires no prerequisites. For Clojure git dependency installation (alternative method), you need Clojure CLI tools installed.
+Binary installation requires no prerequisites (Linux/macOS only). For Clojure git dependency installation (alternative method, works on all platforms including Windows), you need Clojure CLI tools installed.
 
-## Binary Installation (Recommended)
+## Binary Installation (Linux/macOS Only)
 
-The recommended installation method is using the pre-built native binaries, which provide the best performance and simplest setup.
+The recommended installation method for Linux and macOS is using the pre-built native binaries, which provide the best performance and simplest setup.
 
 **Quick Install (Unix/macOS):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install | bash
 ```
 
-**Quick Install (Windows PowerShell):**
-```powershell
-iwr -useb https://raw.githubusercontent.com/hugoduncan/mcp-tasks/master/install.ps1 | iex
-```
+**Note:** Windows native binaries are not currently supported due to file locking complexities. Windows users should use the Clojure git dependency installation method below.
 
 For manual installation and troubleshooting, see the [Installation section in README.md](../README.md#installation). For building from source, see [build.md](build.md).
 
-## Alternative: Clojure Git Dependency
+## Alternative: Clojure Git Dependency (All Platforms)
+
+This method works on all platforms including Windows and is the recommended installation method for Windows users.
 
 ### Configure Global Clojure Alias
 

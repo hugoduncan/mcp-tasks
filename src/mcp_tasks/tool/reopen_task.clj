@@ -9,10 +9,10 @@
 
 (defn- reopen-from-tasks-ednl
   "Reopens a closed task that's still in tasks.ednl (not archived)."
-  [config context task]
+  [config context task file-context]
   (let [{:keys [tasks-file tasks-rel-path]} context]
     (tasks/mark-open (:id task))
-    (tasks/save-tasks! tasks-file)
+    (tasks/save-tasks! tasks-file :file-context file-context)
     {:use-git? (:use-git? config)
      :base-dir (:base-dir config)
      :commit-msg (str "Reopen task #" (:id task) ": " (:title task))
@@ -24,13 +24,13 @@
 
 (defn- reopen-from-complete-ednl
   "Reopens an archived task from complete.ednl by moving it back to tasks.ednl."
-  [config context task]
+  [config context task file-context]
   (let [{:keys [tasks-file complete-file tasks-rel-path complete-rel-path]} context
         task-id (:id task)]
     (tasks/mark-open task-id)
     (let [reopened-task (tasks/get-task task-id)]
-      (tasks-file/delete-task complete-file task-id)
-      (tasks-file/append-task tasks-file reopened-task)
+      (tasks-file/delete-task complete-file task-id :file-context file-context)
+      (tasks-file/append-task tasks-file reopened-task :file-context file-context)
       (tasks/move-task-to-active task-id)
       {:use-git? (:use-git? config)
        :base-dir (:base-dir config)
@@ -45,8 +45,8 @@
   "Implementation of reopen-task tool."
   [config _context {:keys [task-id title]}]
   (let [locked-result (helpers/with-task-lock config
-                                              (fn []
-                                                (let [sync-result (helpers/sync-and-prepare-task-file config)]
+                                              (fn [file-context]
+                                                (let [sync-result (helpers/sync-and-prepare-task-file config :file-context file-context)]
                                                   (if (and (map? sync-result) (false? (:success sync-result)))
                                                     (let [{:keys [error error-type]} sync-result
                                                           tasks-dir (:resolved-tasks-dir config)]
@@ -78,9 +78,9 @@
                                                                    :status (:status task)
                                                                    :file tasks-file})
                                                                 archived?
-                                                                (reopen-from-complete-ednl config context task)
+                                                                (reopen-from-complete-ednl config context task file-context)
                                                                 :else
-                                                                (reopen-from-tasks-ednl config context task)))))))))))]
+                                                                (reopen-from-tasks-ednl config context task file-context)))))))))))]
     (if (:isError locked-result)
       locked-result
       (let [{:keys [updated-task tasks-file modified-files use-git? base-dir commit-msg msg-text source-file]} locked-result

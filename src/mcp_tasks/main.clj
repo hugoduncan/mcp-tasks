@@ -129,7 +129,10 @@
     {:transport transport
      :tools (tools/tools config)
      :prompts all-prompts
-     :resources all-resources}))
+     :resources all-resources
+     :server-info {:name "mcp-tasks"
+                   :version "0.1.124"
+                   :title "MCP Tasks Server"}}))
 
 (defn- exit-process
   "Exit the process with the given code.
@@ -145,7 +148,7 @@
   traversing up the directory tree until found or reaching filesystem root."
   [{:as _args}]
   (try
-    (let [config (load-and-validate-config)
+    (let [config        (load-and-validate-config)
           server-config (create-server-config config {:type :stdio})]
       (log/info :stdio-server {:msg "Starting MCP Tasks server"})
       (with-open [server (mcp-server/create-server server-config)]
@@ -158,7 +161,8 @@
         (block-forever)))
     (catch Exception e
       (binding [*out* *err*]
-        (println "Error starting server:" (.getMessage e)))
+        (println "Error starting server:" (.getMessage e))
+        (.printStackTrace e))
       (exit-process 1))))
 
 (defn- index-of

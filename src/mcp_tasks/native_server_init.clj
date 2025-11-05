@@ -16,6 +16,11 @@
 (require 'mcp-tasks.tool.update-task)
 (require 'mcp-tasks.tool.delete-task)
 (require 'mcp-tasks.tool.reopen-task)
+(require 'mcp-tasks.task-prompts)
+(require 'mcp-tasks.story-prompts)
+
+;; Explicitly require mcp-clj transport implementation for stdio
+(require 'mcp-clj.json-rpc.stdio-server)
 (require 'mcp-tasks.main)
 
 (defn -main

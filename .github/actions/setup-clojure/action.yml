@@ -47,8 +47,13 @@ runs:
       uses: DeLaGuardo/setup-clojure@12.5
       with:
         cli: latest
+        bb: latest
         cljstyle: ${{ inputs.install-linters == 'true' && '0.17.642' || '' }}
         clj-kondo: ${{ inputs.install-linters == 'true' && 'latest' || '' }}
+
+    - name: Add Clojure tools to PATH
+      shell: bash
+      run: echo "$CLOJURE_INSTALL_DIR/bin" >> $GITHUB_PATH
 
     - name: Cache Clojure dependencies
       uses: actions/cache@v4

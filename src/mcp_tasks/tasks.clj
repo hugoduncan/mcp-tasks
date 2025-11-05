@@ -529,14 +529,15 @@
 
   Options:
   - :complete-file - Path to complete.ednl to also load completed tasks
+  - :file-context - Optional LockedFileContext for locked file operations
 
   Returns number of tasks loaded from primary file."
-  [file-path & {:keys [complete-file]}]
+  [file-path & {:keys [complete-file file-context]}]
   (reset-state!)
-  (let [task-coll (tasks-file/read-ednl file-path)
+  (let [task-coll (tasks-file/read-ednl file-path :file-context file-context)
         ;; Also load completed tasks if complete-file is provided
         complete-coll (when complete-file
-                        (tasks-file/read-ednl complete-file))
+                        (tasks-file/read-ednl complete-file :file-context file-context))
         ;; Combine both collections for parent-child map building
         all-tasks (concat task-coll complete-coll)
         [pc-map cp-map] (build-parent-child-maps all-tasks)
@@ -562,13 +563,17 @@
   "Save in-memory tasks to EDNL file.
 
   Writes tasks in task-ids order to maintain disk ordering.
+
+  Options:
+  - :file-context - Optional LockedFileContext for locked file operations
+
   Returns number of tasks saved."
-  [file-path]
+  [file-path & {:keys [file-context]}]
   (let [ids @task-ids
         task-map @tasks
         task-coll (mapv #(get task-map %) ids)]
     ;; Write all tasks atomically
-    (tasks-file/write-tasks file-path task-coll)
+    (tasks-file/write-tasks file-path task-coll :file-context file-context)
     (count task-coll)))
 
 (defn move-task!
@@ -577,15 +582,18 @@
   Atomically removes task from source file and appends to destination file.
   Updates in-memory state by removing the task (since in-memory state represents
   only tasks.ednl, not complete.ednl).
-  Throws ex-info if task not found."
-  [id from-file to-file]
+  Throws ex-info if task not found.
+
+  Options:
+  - :file-context - Optional LockedFileContext for locked file operations"
+  [id from-file to-file & {:keys [file-context]}]
   (when-not (get-task id)
     (throw (ex-info "Task not found" {:id id})))
   (let [task (get-task id)]
     ;; Delete from source file
-    (tasks-file/delete-task from-file id)
+    (tasks-file/delete-task from-file id :file-context file-context)
     ;; Append to destination file
-    (tasks-file/append-task to-file task)
+    (tasks-file/append-task to-file task :file-context file-context)
     ;; Remove from in-memory state since it's no longer in tasks.ednl
     (delete-task id)
     task))
@@ -596,8 +604,11 @@
   Removes all tasks from source file and appends to destination file.
   Updates in-memory state by removing all tasks (since in-memory state represents
   only tasks.ednl, not complete.ednl).
-  Throws ex-info if any task not found."
-  [ids from-file to-file]
+  Throws ex-info if any task not found.
+
+  Options:
+  - :file-context - Optional LockedFileContext for locked file operations"
+  [ids from-file to-file & {:keys [file-context]}]
   ;; Validate all tasks exist first
   (doseq [id ids]
     (when-not (get-task id)
@@ -607,13 +618,13 @@
   (let [tasks-to-move (mapv get-task ids)]
     ;; Delete all from source file atomically
     (let [remaining-tasks (remove #(contains? (set ids) (:id %))
-                                  (tasks-file/read-ednl from-file))]
-      (tasks-file/write-tasks from-file remaining-tasks))
+                                  (tasks-file/read-ednl from-file :file-context file-context))]
+      (tasks-file/write-tasks from-file remaining-tasks :file-context file-context))
 
     ;; Append all to destination file atomically
-    (let [existing-tasks (tasks-file/read-ednl to-file)
+    (let [existing-tasks (tasks-file/read-ednl to-file :file-context file-context)
           all-tasks (into existing-tasks tasks-to-move)]
-      (tasks-file/write-tasks to-file all-tasks))
+      (tasks-file/write-tasks to-file all-tasks :file-context file-context))
 
     ;; Remove all from in-memory state
     (doseq [id ids]

@@ -15,7 +15,7 @@
         (let [executed? (atom false)
               result (sut/with-task-lock
                        (h/test-config test-dir)
-                       (fn []
+                       (fn [_file-context]
                          (reset! executed? true)
                          :success))]
           (is (true? @executed?))
@@ -31,7 +31,7 @@
               exception-thrown? (atom false)
               result (sut/with-task-lock
                        config
-                       (fn []
+                       (fn [_file-context]
                          (reset! exception-thrown? true)
                          (throw (ex-info "Test error" {}))))]
           ;; Function was executed (exception was thrown)
@@ -42,7 +42,7 @@
           ;; Verify we can acquire the lock again (proves it was released)
           (let [result2 (sut/with-task-lock
                           config
-                          (fn [] :acquired-again))]
+                          (fn [_file-context] :acquired-again))]
             (is (= :acquired-again result2))))))))
 
 (deftest with-task-lock-creates-file-if-missing-test
@@ -59,7 +59,7 @@
           ;; Execute with-task-lock
           (sut/with-task-lock
             config
-            (fn [] :done))
+            (fn [_file-context] :done))
           ;; Verify file was created
           (is (sut/file-exists? tasks-file)))))))
 
@@ -74,17 +74,17 @@
           ;; First lock
           (sut/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (swap! results conj :first)))
           ;; Second lock
           (sut/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (swap! results conj :second)))
           ;; Third lock
           (sut/with-task-lock
             config
-            (fn []
+            (fn [_file-context]
               (swap! results conj :third)))
           ;; Verify all executed in order
           (is (= [:first :second :third] @results)))))))
@@ -97,7 +97,7 @@
         (let [config (h/test-config test-dir)
               result (sut/with-task-lock
                        config
-                       (fn [] {:status :ok :value 42}))]
+                       (fn [_file-context] {:status :ok :value 42}))]
           (is (= {:status :ok :value 42} result)))))))
 
 (deftest with-task-lock-custom-timeout-config-test
@@ -109,7 +109,7 @@
         (let [config (assoc (h/test-config test-dir) :lock-timeout-ms 5000)
               result (sut/with-task-lock
                        config
-                       (fn [] :ok))]
+                       (fn [_file-context] :ok))]
           ;; Just verify it works with custom timeout config
           (is (= :ok result)))))))
 
@@ -126,7 +126,7 @@
                                        :pulled? true
                                        :error nil
                                        :error-type nil})
-                    sut/prepare-task-file (fn [config]
+                    sut/prepare-task-file (fn [config & {:keys [_file-context]}]
                                             (is (map? config))
                                             "/test/.mcp-tasks/tasks.ednl")]
         (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
@@ -141,7 +141,7 @@
                                        :pulled? false
                                        :error nil
                                        :error-type :no-remote})
-                    sut/prepare-task-file (fn [_]
+                    sut/prepare-task-file (fn [_ & {:keys [_file-context]}]
                                             "/test/.mcp-tasks/tasks.ednl")]
         (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
                       :enable-git-sync? true}
@@ -150,7 +150,7 @@
 
     (testing "succeeds when directory is not a git repository"
       (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: not a git repository"})
-                    sut/prepare-task-file (fn [_]
+                    sut/prepare-task-file (fn [_ & {:keys [_file-context]}]
                                             "/test/.mcp-tasks/tasks.ednl")]
         (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
                       :enable-git-sync? true}
@@ -159,7 +159,7 @@
 
     (testing "succeeds when git repository is empty (no commits)"
       (with-redefs [git/get-current-branch (fn [_] {:success false :branch nil :error "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree."})
-                    sut/prepare-task-file (fn [_]
+                    sut/prepare-task-file (fn [_ & {:keys [_file-context]}]
                                             "/test/.mcp-tasks/tasks.ednl")]
         (let [config {:resolved-tasks-dir "/test/.mcp-tasks"
                       :enable-git-sync? true}

@@ -158,29 +158,49 @@
   Parameters:
   - jar-basename: The JAR file prefix (e.g., 'mcp-tasks-cli', 'mcp-tasks-server')
   - binary-basename: The binary file prefix (e.g., 'mcp-tasks', 'mcp-tasks-server')
-  - binary-type: Human-readable type for messages (e.g., 'CLI', 'server')"
-  [jar-basename binary-basename binary-type]
+  - binary-type: Human-readable type for messages (e.g., 'CLI', 'server')
+  - opts: Optional map with:
+    - :target-platform - Override platform for cross-compilation (e.g., {:os :macos :arch :amd64})"
+  [jar-basename binary-basename binary-type & [opts]]
   (let [graalvm-home (System/getenv "GRAALVM_HOME")]
     (when-not graalvm-home
       (throw (ex-info "GRAALVM_HOME environment variable not set. Please set it to your GraalVM installation directory."
                       {:required "GRAALVM_HOME"})))
 
-    (let [platform (detect-platform)
+    (let [host-platform (detect-platform)
+          target-platform (or (:target-platform opts) host-platform)
+          cross-compile? (not= host-platform target-platform)
           v (version nil)
           jar-file (format "%s/%s-%s.jar" target-dir jar-basename v)
-          binary-name (platform-binary-name binary-basename platform)
+          binary-name (platform-binary-name binary-basename target-platform)
           output-binary (str target-dir "/" binary-name)
-          native-image-bin (str graalvm-home "/bin/native-image")]
+          ;; For -o flag: on Windows, don't include .exe extension as native-image adds it automatically
+          ;; On other platforms, use the full binary name
+          output-name-for-native-image (if (= (:os target-platform) :windows)
+                                         (clojure.string/replace output-binary #"\.exe$" "")
+                                         output-binary)
+          ;; Construct full path to native-image
+          ;; Oracle GraalVM includes native-image by default in bin directory
+          native-image-bin (if (= (:os host-platform) :windows)
+                             (str graalvm-home "\\bin\\native-image.cmd")
+                             (str graalvm-home "/bin/native-image"))
+          ;; Build target string for cross-compilation (e.g., "darwin-amd64")
+          target-string (when cross-compile?
+                          (format "%s-%s"
+                                  (name (:os target-platform))
+                                  (name (:arch target-platform))))]
 
-      (when-not (fs/exists? native-image-bin)
-        (throw (ex-info (format "native-image not found at %s. Please install native-image or verify GRAALVM_HOME is correct." native-image-bin)
-                        {:graalvm-home graalvm-home
-                         :native-image-bin native-image-bin})))
+      (when cross-compile?
+        (println (format "Cross-compiling from %s %s to %s %s"
+                         (name (:os host-platform))
+                         (name (:arch host-platform))
+                         (name (:os target-platform))
+                         (name (:arch target-platform)))))
 
       (println (format "Building native %s binary for %s %s..."
                        binary-type
-                       (name (:os platform))
-                       (name (:arch platform))))
+                       (name (:os target-platform))
+                       (name (:arch target-platform))))
 
       (when-not (fs/exists? jar-file)
         (throw (ex-info (format "%s JAR file not found. Run 'clj -T:build jar-%s' first."
@@ -189,15 +209,21 @@
                         {:jar-file jar-file})))
 
       (println "Running native-image (this may take several minutes)...")
-      (shell {:command-args [native-image-bin
-                             "-jar" jar-file
-                             "--no-fallback"
-                             "-H:+ReportExceptionStackTraces"
-                             "--initialize-at-build-time"
-                             "-o" output-binary]})
+      (let [base-args [native-image-bin
+                       "-jar" jar-file
+                       "--no-fallback"
+                       "-H:+ReportExceptionStackTraces"
+                       "--initialize-at-build-time"
+                       "-o" output-name-for-native-image]
+            ;; Add architecture flag for macOS cross-compilation
+            ;; For macOS, use -march=compatibility for cross-arch builds
+            all-args (if (and cross-compile? (= (:os target-platform) :macos))
+                       (concat base-args ["-march=compatibility"])
+                       base-args)]
+        (shell {:command-args all-args}))
 
       (println (format "✓ Native %s binary built: %s" binary-type output-binary))
-      (println (format "  Platform: %s %s" (name (:os platform)) (name (:arch platform))))
+      (println (format "  Platform: %s %s" (name (:os target-platform)) (name (:arch target-platform))))
       (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
 
 (defn native-cli
@@ -206,9 +232,18 @@
   Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
   Output: target/mcp-tasks-<platform>-<arch> (e.g., target/mcp-tasks-macos-arm64)
 
-  The native binary provides a standalone CLI without requiring JVM or Babashka."
-  [_]
-  (build-native-binary "mcp-tasks-cli" "mcp-tasks" "CLI"))
+  The native binary provides a standalone CLI without requiring JVM or Babashka.
+
+  Options:
+  - :target-os - Target OS for cross-compilation (:macos, :linux, :windows)
+  - :target-arch - Target architecture (:amd64, :arm64)"
+  [opts]
+  (let [target-platform (when (or (:target-os opts) (:target-arch opts))
+                          {:os (:target-os opts)
+                           :arch (:target-arch opts)})
+        build-opts (when target-platform
+                     {:target-platform target-platform})]
+    (build-native-binary "mcp-tasks-cli" "mcp-tasks" "CLI" build-opts)))
 
 (defn native-server
   "Build native server binary using GraalVM native-image.
@@ -216,6 +251,15 @@
   Requires GraalVM with native-image installed and GRAALVM_HOME environment variable set.
   Output: target/mcp-tasks-server-<platform>-<arch> (e.g., target/mcp-tasks-server-macos-arm64)
 
-  The native binary provides a standalone MCP server without requiring JVM or Babashka."
-  [_]
-  (build-native-binary "mcp-tasks-server" "mcp-tasks-server" "server"))
+  The native binary provides a standalone MCP server without requiring JVM or Babashka.
+
+  Options:
+  - :target-os - Target OS for cross-compilation (:macos, :linux, :windows)
+  - :target-arch - Target architecture (:amd64, :arm64)"
+  [opts]
+  (let [target-platform (when (or (:target-os opts) (:target-arch opts))
+                          {:os (:target-os opts)
+                           :arch (:target-arch opts)})
+        build-opts (when target-platform
+                     {:target-platform target-platform})]
+    (build-native-binary "mcp-tasks-server" "mcp-tasks-server" "server" build-opts)))
