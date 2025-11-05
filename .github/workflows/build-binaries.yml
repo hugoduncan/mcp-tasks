@@ -180,8 +180,14 @@ jobs:
 
       - name: Run smoke tests
         if: matrix.test-focus == 'smoke'
+        env:
+          BINARY_TARGET_OS: ${{ matrix.os }}
+          BINARY_TARGET_ARCH: ${{ matrix.arch }}
         run: clojure -M:dev:test --focus :native-binary --skip-meta :comprehensive
 
       - name: Run comprehensive tests
         if: matrix.test-focus == 'comprehensive'
+        env:
+          BINARY_TARGET_OS: ${{ matrix.os }}
+          BINARY_TARGET_ARCH: ${{ matrix.arch }}
         run: clojure -M:dev:test --focus :native-binary

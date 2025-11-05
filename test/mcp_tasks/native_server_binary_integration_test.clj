@@ -48,15 +48,25 @@
 
 (defn- binary-test-fixture
   "Test fixture that sets up temporary directory and locates binary.
-  Throws an exception to explicitly skip tests if binary is not found."
+  Throws an exception to explicitly skip tests if binary is not found.
+
+  Uses BINARY_TARGET_OS and BINARY_TARGET_ARCH environment variables if available
+  (set by CI to test cross-compiled binaries), otherwise detects current platform."
   [f]
-  (let [platform (build/detect-platform)
+  (let [;; Check for env vars first (for CI cross-platform testing)
+        target-os (System/getenv "BINARY_TARGET_OS")
+        target-arch (System/getenv "BINARY_TARGET_ARCH")
+        platform (if (and target-os target-arch)
+                   {:os (keyword target-os)
+                    :arch (keyword target-arch)}
+                   (build/detect-platform))
         binary-name (build/platform-binary-name "mcp-tasks-server" platform)
         binary (io/file "target" binary-name)]
     (when-not (.exists binary)
       (throw (ex-info "Native server binary not found - build with: bb build-native-server"
                       {:type ::binary-not-found
-                       :binary-path (.getAbsolutePath binary)})))
+                       :binary-path (.getAbsolutePath binary)
+                       :platform platform})))
     (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-native-server-"}))]
       (try
         (setup-test-dir test-dir)
