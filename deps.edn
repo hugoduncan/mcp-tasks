@@ -3,7 +3,8 @@
  :deps
  {org.hugpduncan/mcp-clj-server
   {:git/url   "https://github.com/hugoduncan/mcp-clj"
-   :git/sha   "f647f11e6ecbbca916b9eda85d673c6006229785"
+   :git/tag   "v0.1.66"
+   :git/sha   "08ec63b"
    :deps/root "projects/server"}
   org.clojure/clojure {:mvn/version "1.12.3"}
   metosin/malli       {:mvn/version "0.16.4"}
@@ -17,7 +18,8 @@
            :override-deps
            {org.hugpduncan/mcp-clj-server
             {:git/url   "https://github.com/hugoduncan/mcp-clj"
-             :git/sha   "f647f11e6ecbbca916b9eda85d673c6006229785"
+             :git/tag   "v0.1.66"
+             :git/sha   "08ec63b"
              :deps/root "projects/test-dep"}}}
   :test   {:extra-paths ["test" "dev"]
            :extra-deps
@@ -27,7 +29,8 @@
            :override-deps
            {org.hugpduncan/mcp-clj-server
             {:git/url   "https://github.com/hugoduncan/mcp-clj"
-             :git/sha   "f647f11e6ecbbca916b9eda85d673c6006229785"
+             :git/tag   "v0.1.66"
+             :git/sha   "08ec63b"
              :deps/root "projects/test-dep"}}
            :main-opts   ["-m" "kaocha.runner"]}
   :run    {:exec-fn   mcp-tasks.main/start

@@ -2,7 +2,8 @@
 
  :deps {org.hugpduncan/mcp-clj-server
         {:git/url   "https://github.com/hugoduncan/mcp-clj"
-         :git/sha   "50a2d1ab100c27b76e80b5674d6c2ee567b079b6"
+         :git/tag   "v0.1.66"
+         :git/sha   "08ec63b"
          :deps/root "projects/server"}
         metosin/malli     {:mvn/version "0.16.4"}
         cheshire/cheshire {:mvn/version "5.13.0"}
