@@ -1,4 +1,8 @@
+/.clojure-mcp/
+/.clojure/
+/.deps.clj/
+/.mcp-tasks-current.edn
 /.mcp-tasks/
-/target/
-.mcp-tasks-current.edn
+/.mcp.json
 /mcp-tasks
+/target/
