@@ -67,7 +67,18 @@
             bytes (.getBytes content java.nio.charset.StandardCharsets/UTF_8)]
         (.seek raf (long 0))             ; Reset to start of file
         (.write raf bytes)                ; Write content
-        (.setLength raf (long (alength bytes))))  ; Truncate to new size
+        (.setLength raf (long (alength bytes)))  ; Truncate to new size
+        ;; On Windows, sync file descriptor and force channel before lock release
+        (try
+          (.sync (.getFD raf))            ; Flush RAF's buffered writes to OS
+          (catch Exception _e
+            ;; Sync may fail in restricted environments (e.g., Babashka/SCI)
+            nil))
+        (try
+          (.force (.getChannel raf) true) ; Force channel to commit to physical storage
+          (catch Exception _e
+            ;; Force may fail in restricted environments
+            nil)))
       ;; Normal atomic write via temp file
       (do
         (ensure-parent-dir file-path)

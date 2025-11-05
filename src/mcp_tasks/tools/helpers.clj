@@ -395,15 +395,19 @@
            :stack-trace (with-out-str (.printStackTrace e))}))
 
       (finally
-        ;; Always release lock, close channel, and close RAF
-        ;; On Windows, force pending I/O before closing to ensure file is fully released
-        (when-let [ch @channel]
+        ;; On Windows, sync and force before releasing lock to ensure all writes committed
+        (when (and @raf @channel)
           (try
-            (.force ch true)  ; Force metadata updates to disk before closing
+            (let [r @raf
+                  ch @channel]
+              (try (.sync (.getFD r)) (catch Exception _))
+              (try (.force ch true) (catch Exception _)))
             (catch Exception e
-              (log/warn :channel-force-failed
-                        {:error (.getMessage e)
-                         :file tasks-file}))))
+              (log/debug :finally-sync-failed
+                         {:error (.getMessage e)
+                          :file tasks-file}))))
+        ;; Release lock before closing handles
+        ;; Lock must be released before closing the channel it's associated with
         (when-let [l @lock]
           (try
             (.release l)
