@@ -69,26 +69,24 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Build native CLI binary
-        run: |
-          if [ "${{ matrix.cross-compile }}" = "true" ]; then
-            clojure -T:build native-cli :target-os :${{ matrix.os }} :target-arch :${{ matrix.arch }}
-          else
-            clojure -T:build native-cli
-          fi
-        shell: bash
+      - name: Build native CLI binary (cross-compile)
+        if: matrix.cross-compile == true
+        run: clojure -T:build native-cli :target-os :${{ matrix.os }} :target-arch :${{ matrix.arch }}
+
+      - name: Build native CLI binary (native)
+        if: matrix.cross-compile != true
+        run: clojure -T:build native-cli
 
       - name: Build Server JAR
         run: clojure -T:build jar-server
 
-      - name: Build native server binary
-        run: |
-          if [ "${{ matrix.cross-compile }}" = "true" ]; then
-            clojure -T:build native-server :target-os :${{ matrix.os }} :target-arch :${{ matrix.arch }}
-          else
-            clojure -T:build native-server
-          fi
-        shell: bash
+      - name: Build native server binary (cross-compile)
+        if: matrix.cross-compile == true
+        run: clojure -T:build native-server :target-os :${{ matrix.os }} :target-arch :${{ matrix.arch }}
+
+      - name: Build native server binary (native)
+        if: matrix.cross-compile != true
+        run: clojure -T:build native-server
 
       - name: Set binary name (Unix)
         if: runner.os != 'Windows'
