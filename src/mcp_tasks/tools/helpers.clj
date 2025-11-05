@@ -396,6 +396,14 @@
 
       (finally
         ;; Always release lock, close channel, and close RAF
+        ;; On Windows, force pending I/O before closing to ensure file is fully released
+        (when-let [ch @channel]
+          (try
+            (.force ch true)  ; Force metadata updates to disk before closing
+            (catch Exception e
+              (log/warn :channel-force-failed
+                        {:error (.getMessage e)
+                         :file tasks-file}))))
         (when-let [l @lock]
           (try
             (.release l)
