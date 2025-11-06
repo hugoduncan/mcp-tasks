@@ -2,7 +2,8 @@
   (:require
     [babashka.fs :as fs]
     [clojure.string]
-    [clojure.tools.build.api :as b]))
+    [clojure.tools.build.api :as b]
+    [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'org.hugoduncan/mcp-tasks)
 (def version-base "0.1")
@@ -69,9 +70,12 @@
 (defn deploy
   "Deploy JAR to Clojars using deps-deploy.
 
+  Options:
+  - :dry-run - If true, validate but don't deploy (default: false)
+
   Requires CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables.
   CLOJARS_PASSWORD should contain your deploy token, not your actual password."
-  [_]
+  [{:keys [dry-run] :or {dry-run false}}]
   (let [v (version nil)
         jar-file (format "%s/mcp-tasks-%s.jar" target-dir v)
         pom-file (format "%s/classes/META-INF/maven/%s/%s/pom.xml"
@@ -85,9 +89,20 @@
     (validate-deployment-files jar-file pom-file)
     (validate-credentials)
 
-    ;; deps-deploy will be called via clojure -X:deploy from CI
-    ;; This function just validates the files exist
-    (println "Files validated for deployment")))
+    (if dry-run
+      (println "Dry-run mode: Skipping deployment")
+      (try
+        (println "Calling deps-deploy...")
+        (dd/deploy {:installer :remote
+                    :artifact jar-file
+                    :pom-file pom-file})
+        (println "Successfully deployed to Clojars")
+        (catch Exception e
+          (throw (ex-info (format "Deployment failed: %s" (.getMessage e))
+                          {:jar-file jar-file
+                           :pom-file pom-file
+                           :cause e}
+                          e)))))))
 
 ;; Native Image Build
 
