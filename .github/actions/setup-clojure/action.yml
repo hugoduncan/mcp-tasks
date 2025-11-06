@@ -67,6 +67,10 @@ runs:
         GRAALVM_HOME_X86_64="$INSTALL_DIR/Contents/Home"
         echo "GRAALVM_HOME_X86_64=$GRAALVM_HOME_X86_64" >> $GITHUB_ENV
         
+        # Make binaries executable
+        echo "Making binaries executable..."
+        chmod +x "$GRAALVM_HOME_X86_64"/bin/*
+        
         # Verify installation under Rosetta
         echo "Verifying x86_64 GraalVM installation..."
         arch -x86_64 "$GRAALVM_HOME_X86_64/bin/java" -version
