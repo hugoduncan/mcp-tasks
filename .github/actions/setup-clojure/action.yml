@@ -43,6 +43,53 @@ runs:
         github-token: ${{ inputs.github-token }}
         native-image-job-reports: 'true'
 
+    - name: Setup x86_64 GraalVM for macOS universal binaries
+      if: inputs.java-distribution == 'graalvm' && runner.os == 'macOS'
+      shell: bash
+      run: |
+        echo "Installing x86_64 GraalVM for building AMD64 slice under Rosetta..."
+        
+        # Download x86_64 Oracle GraalVM (matches the ARM64 version installed by setup-graalvm)
+        GRAALVM_URL="https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_macos-x64_bin.tar.gz"
+        
+        echo "Downloading from: $GRAALVM_URL"
+        curl -L -o /tmp/graalvm-x64.tar.gz "$GRAALVM_URL"
+        
+        # Create installation directory
+        INSTALL_DIR="/Users/runner/hostedtoolcache/graalvm-jdk-21_macos-x86_64_bin/21.0.0/x64"
+        mkdir -p "$INSTALL_DIR"
+        
+        # Extract with preserve permissions
+        echo "Extracting to: $INSTALL_DIR"
+        tar -xzpf /tmp/graalvm-x64.tar.gz -C "$INSTALL_DIR" --strip-components=1
+        
+        # Set environment variable for subsequent steps
+        GRAALVM_HOME_X86_64="$INSTALL_DIR/Contents/Home"
+        echo "GRAALVM_HOME_X86_64=$GRAALVM_HOME_X86_64" >> $GITHUB_ENV
+        
+        # Ensure binaries are executable (tar should preserve this, but double-check)
+        echo "Ensuring binaries are executable..."
+        chmod -R +x "$GRAALVM_HOME_X86_64"/bin/
+        
+        # Verify installation under Rosetta
+        echo "Verifying x86_64 GraalVM installation..."
+        arch -x86_64 "$GRAALVM_HOME_X86_64/bin/java" -version
+        
+        # Check if native-image is already available
+        if [ -f "$GRAALVM_HOME_X86_64/bin/native-image" ]; then
+          echo "✓ native-image already included in Oracle GraalVM distribution"
+        else
+          # Install native-image component using gu
+          echo "Installing native-image component..."
+          arch -x86_64 "$GRAALVM_HOME_X86_64/bin/gu" install native-image
+        fi
+        
+        # Verify native-image
+        echo "Verifying native-image..."
+        arch -x86_64 "$GRAALVM_HOME_X86_64/bin/native-image" --version
+        
+        echo "✓ x86_64 GraalVM installed successfully at: $GRAALVM_HOME_X86_64"
+
     - name: Install Clojure tools
       uses: DeLaGuardo/setup-clojure@12.5
       with:

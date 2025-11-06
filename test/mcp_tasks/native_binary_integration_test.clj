@@ -7,6 +7,7 @@
   (:require
     [babashka.fs :as fs]
     [babashka.process :as process]
+    [build :as build]
     [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -27,17 +28,29 @@
 
 (defn- binary-test-fixture
   "Test fixture that sets up temporary directory and locates binary.
-  Skips tests gracefully if binary is not found (e.g., during unit test runs)."
+  Skips tests gracefully if binary is not found (e.g., during unit test runs).
+
+  Uses BINARY_TARGET_OS and BINARY_TARGET_ARCH environment variables if available
+  (set by CI to test cross-compiled binaries), otherwise detects current platform."
   [f]
-  ;; Find binary - check legacy fallback name then platform-specific names
-  ;; mcp-tasks-cli is legacy, current builds use mcp-tasks-<platform>-<arch>
-  (let [binary-locations [(io/file "target/mcp-tasks-cli")
-                          (io/file "target/mcp-tasks-linux-amd64")
-                          (io/file "target/mcp-tasks-macos-amd64")
-                          (io/file "target/mcp-tasks-macos-arm64")
-                          (io/file "target/mcp-tasks-windows-amd64.exe")]
-        binary (some #(when (.exists %) %) binary-locations)]
-    (if-not binary
+  (let [;; Check for env vars first (for CI cross-platform testing)
+        target-os (System/getenv "BINARY_TARGET_OS")
+        target-arch (System/getenv "BINARY_TARGET_ARCH")
+        binary (if (and target-os target-arch)
+                 ;; Use env vars to construct binary name
+                 (let [platform {:os (keyword target-os)
+                                 :arch (keyword target-arch)}
+                       binary-name (build/platform-binary-name "mcp-tasks" platform)]
+                   (io/file "target" binary-name))
+                 ;; Fall back to legacy detection for local testing
+                 (let [binary-locations [(io/file "target/mcp-tasks-cli")
+                                         (io/file "target/mcp-tasks-linux-amd64")
+                                         (io/file "target/mcp-tasks-macos-amd64")
+                                         (io/file "target/mcp-tasks-macos-arm64")
+                                         (io/file "target/mcp-tasks-macos-universal")
+                                         (io/file "target/mcp-tasks-windows-amd64.exe")]]
+                   (some #(when (.exists %) %) binary-locations)))]
+    (if-not (and binary (.exists binary))
       ;; Binary not found - skip test silently (happens during unit/integration test runs)
       (println "Skipping native binary test - binary not found. Build with: clj -T:build native-cli")
       ;; Binary found - run test with proper setup
