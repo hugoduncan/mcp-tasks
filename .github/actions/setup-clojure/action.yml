@@ -75,9 +75,14 @@ runs:
         echo "Verifying x86_64 GraalVM installation..."
         arch -x86_64 "$GRAALVM_HOME_X86_64/bin/java" -version
         
-        # Install native-image component
-        echo "Installing native-image component..."
-        arch -x86_64 "$GRAALVM_HOME_X86_64/bin/gu" install native-image
+        # Check if native-image is already available
+        if [ -f "$GRAALVM_HOME_X86_64/bin/native-image" ]; then
+          echo "✓ native-image already included in Oracle GraalVM distribution"
+        else
+          # Install native-image component using gu
+          echo "Installing native-image component..."
+          arch -x86_64 "$GRAALVM_HOME_X86_64/bin/gu" install native-image
+        fi
         
         # Verify native-image
         echo "Verifying native-image..."
