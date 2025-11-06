@@ -57,13 +57,13 @@ The story can be specified in multiple ways:
        - if completed-task-count is zero:
          - if the story is not refined, suggest the user refines the story
          - else if the story is refined, suggest the user creates story tasks
-	   for the story
+        for the story.
          - stop - do not take any further actions
    - If no category is found for the task, inform the user and stop
    - show the task to the user
 
-3. Set up task environment and execute the task:
-   - First, set up the task environment using the `work-on` tool:
+3. Set up task environment:
+   - Set up the task environment using the `work-on` tool:
      - Call `mcp__mcp-tasks__work-on` with:
        - `task-id`: <task-id-from-step-2>
      - The tool will automatically:
@@ -84,28 +84,34 @@ Worktree: mcp-tasks-fix-bug
 Directory: /Users/duncan/projects/mcp-tasks-fix-bug
 Branch: fix-bug
    ```
-   - While executing the task, watch for issues beyond the current task scope:
-     - Create new tasks immediately using `add-task` tool
-     - Link them with `:discovered-during` relation using `update-task`
-     - Example relation: `{:id 1, :relates-to <current-task-id>, :as-type :discovered-during}`
-     - Continue with the current task without getting sidetracked
-     - Do a final check before completion to capture all discoveries
-     - See "Discovering Issues Beyond Current Scope" guidance in execute-task prompt for details
-   - Then execute the task using the category workflow:
-     - Do NOT check the refinement status of the task
-     - Execute the `catgeory-<category>` prompt from the `mcp-tasks` server
-     - For example, if category is "simple", execute the `category-simple` prompt
-     - Run `/mcp-tasks:category-<category>` or use the
-       `prompt://category-<category>` resource to access the prompt
-     - The task is already in the tasks queue
-     - Complete all implementation steps according to the category workflow
 
-4. Mark the task as complete:
+4. Execute the task using the category workflow:
+   - Do NOT check the refinement status of the task
+   - Execute the `category-<category>` prompt from the `mcp-tasks` server
+   - For example, if category is "simple", execute the `category-simple` prompt
+   - Run `/mcp-tasks:category-<category>` or use the
+     `prompt://category-<category>` resource to access the prompt
+   - The task is already in the tasks queue
+   - Complete all implementation steps according to the category workflow
+
+   **While executing**: Watch for issues beyond the current task scope:
+   - Create new tasks immediately using `add-task` tool
+   - Link them with `:discovered-during` relation using `update-task`
+   - Example relation: `{:id 1, :relates-to <current-task-id>, :as-type :discovered-during}`
+   - Continue with the current task without getting sidetracked
+   - Do a final check before completion to capture all discoveries
+   - See "Discovering Issues Beyond Current Scope" guidance in execute-task prompt for details
+
+5. Mark the task as complete:
    - After task execution completes successfully, use the `complete-task`
      tool
    - Parameters: category (from step 2), title (partial match from
      beginning of task), and optionally completion-comment
    - The tool will automatically clear the execution state
+
+   **IMPORTANT: DO NOT mark the story itself as complete**
+   - Even if all child tasks are completed, the user needs to review the story before declaring it complete
+   - Only mark the individual child task as complete, never the parent story task
 
 ## Notes
 
