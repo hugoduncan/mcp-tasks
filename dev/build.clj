@@ -42,6 +42,30 @@
             :main 'mcp-tasks.main})
     (println "JAR built successfully:" jar-file)))
 
+(defn- validate-deployment-files
+  "Validate that JAR and POM files exist for deployment.
+
+  Throws ex-info with helpful error message if files are missing."
+  [jar-file pom-file]
+  (when-not (fs/exists? jar-file)
+    (throw (ex-info "JAR file not found. Run 'clj -T:build jar' first."
+                    {:jar-file jar-file})))
+  (when-not (fs/exists? pom-file)
+    (throw (ex-info "POM file not found. Run 'clj -T:build jar' first."
+                    {:pom-file pom-file}))))
+
+(defn- validate-credentials
+  "Validate that CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables are set.
+
+  Throws ex-info with helpful error message if credentials are missing."
+  []
+  (when-not (System/getenv "CLOJARS_USERNAME")
+    (throw (ex-info "CLOJARS_USERNAME environment variable not set.\nSet your Clojars username: export CLOJARS_USERNAME=your-username"
+                    {:missing-env-var "CLOJARS_USERNAME"})))
+  (when-not (System/getenv "CLOJARS_PASSWORD")
+    (throw (ex-info "CLOJARS_PASSWORD environment variable not set.\nSet your Clojars deploy token: export CLOJARS_PASSWORD=your-token\nNote: Use your deploy token, not your password."
+                    {:missing-env-var "CLOJARS_PASSWORD"}))))
+
 (defn deploy
   "Deploy JAR to Clojars using deps-deploy.
 
@@ -56,14 +80,13 @@
                          (name lib))]
     (println "Deploying to Clojars:" jar-file)
     (println "POM file:" pom-file)
+
+    ;; Validate files and credentials
+    (validate-deployment-files jar-file pom-file)
+    (validate-credentials)
+
     ;; deps-deploy will be called via clojure -X:deploy from CI
     ;; This function just validates the files exist
-    (when-not (fs/exists? jar-file)
-      (throw (ex-info "JAR file not found. Run 'clj -T:build jar' first."
-                      {:jar-file jar-file})))
-    (when-not (fs/exists? pom-file)
-      (throw (ex-info "POM file not found. Run 'clj -T:build jar' first."
-                      {:pom-file pom-file})))
     (println "Files validated for deployment")))
 
 ;; Native Image Build
