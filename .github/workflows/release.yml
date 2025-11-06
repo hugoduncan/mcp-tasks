@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: Release
     needs: build-binaries
+    permissions:
+      contents: write
     if: github.ref == 'refs/heads/master'
 
     steps:
