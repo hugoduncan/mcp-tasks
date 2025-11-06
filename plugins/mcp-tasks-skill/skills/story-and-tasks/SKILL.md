@@ -167,7 +167,7 @@ Example: Story #408 "Improve mcp-tasks skill" with multiple child tasks.
 - Updates story with `update-task` tool
 - Sets `meta: {"refined": "true"}`
 
-**Note:** `create-story-tasks` warns if story is not refined.
+**Note:** The `create-story-tasks` prompt will halt and require explicit user confirmation to proceed if story is unrefined. Agents must never proceed automatically.
 
 #### 2. Create Story Tasks
 
@@ -267,6 +267,27 @@ Or if automatic cleanup enabled, it happens on last task completion.
 - Custom workflows outside standard execute prompts
 - Debugging execution state issues
 - Setting up environment without executing task
+
+### When Agents Should Call work-on Directly
+
+Agents must call the `work-on` tool explicitly when the user instructs them to work on a specific task or story:
+
+**User instruction patterns requiring explicit work-on call:**
+- "Work on task 123"
+- "Start working on task 123"
+- "Work on story 59"
+- "Begin task 123"
+- Similar direct instructions to start working on a specific task/story
+
+**Process:**
+1. Parse user instruction to identify task/story ID
+2. Call `mcp__mcp-tasks__work-on` with the task ID
+3. Display working environment context (worktree, branch if present)
+4. Proceed with task execution according to the category workflow
+
+**Contrast with execute prompts:**
+- Execute prompts (e.g., `/mcp-tasks:execute-story-task`) call `work-on` automatically
+- When user gives direct instruction to work on a task, agent must call `work-on` before proceeding
 
 ### Return Value Specification
 
@@ -554,6 +575,8 @@ External tools detect stale executions via `:started-at` timestamp in `.mcp-task
 - Match task complexity to category
 - Use `parent-id` when creating story tasks
 - Monitor execution via `resource://current-execution`
+- Never create story child tasks for unrefined stories without explicit user confirmation
+- Always call work-on tool when user instructs you to work on a specific task or story
 
 ## File Locations
 
