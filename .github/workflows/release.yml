@@ -98,15 +98,27 @@ jobs:
           MISSING=()
 
           if [ ! -f "binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64" ]; then
-            MISSING+=("linux-amd64")
+            MISSING+=("mcp-tasks-linux-amd64")
           fi
 
           if [ ! -f "binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64" ]; then
-            MISSING+=("macos-amd64")
+            MISSING+=("mcp-tasks-macos-amd64")
           fi
 
           if [ ! -f "binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64" ]; then
-            MISSING+=("macos-arm64")
+            MISSING+=("mcp-tasks-macos-arm64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-server-linux-amd64/mcp-tasks-server-linux-amd64" ]; then
+            MISSING+=("mcp-tasks-server-linux-amd64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-server-macos-amd64/mcp-tasks-server-macos-amd64" ]; then
+            MISSING+=("mcp-tasks-server-macos-amd64")
+          fi
+
+          if [ ! -f "binaries/mcp-tasks-server-macos-arm64/mcp-tasks-server-macos-arm64" ]; then
+            MISSING+=("mcp-tasks-server-macos-arm64")
           fi
 
           if [ ${#MISSING[@]} -gt 0 ]; then
@@ -144,6 +156,9 @@ jobs:
             binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64
             binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64
             binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64
+            binaries/mcp-tasks-server-linux-amd64/mcp-tasks-server-linux-amd64
+            binaries/mcp-tasks-server-macos-amd64/mcp-tasks-server-macos-amd64
+            binaries/mcp-tasks-server-macos-arm64/mcp-tasks-server-macos-arm64
           draft: false
           prerelease: false
         env:
