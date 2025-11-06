@@ -72,19 +72,32 @@ jobs:
         run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
 
       - name: Verify binary architecture
-        if: matrix.os == 'macos' && matrix.arch == 'universal'
         run: |
-          echo "Verifying universal binary contains both architectures..."
-          file target/${{ steps.binary-name.outputs.binary-name }}
-          if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "x86_64"; then
-            echo "Error: Binary missing x86_64 architecture"
-            exit 1
+          if [ "${{ matrix.os }}" = "macos" ] && [ "${{ matrix.arch }}" = "universal" ]; then
+            echo "Verifying universal binary contains both architectures..."
+            file target/${{ steps.binary-name.outputs.binary-name }}
+            if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "x86_64"; then
+              echo "Error: Binary missing x86_64 architecture"
+              exit 1
+            fi
+            if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "arm64"; then
+              echo "Error: Binary missing arm64 architecture"
+              exit 1
+            fi
+            echo "✓ Universal binary verified: contains both x86_64 and arm64"
+          elif [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
+            echo "Verifying Linux binary is x86_64..."
+            file target/${{ steps.binary-name.outputs.binary-name }}
+            if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "x86-64"; then
+              echo "Error: Binary is not x86_64 architecture"
+              exit 1
+            fi
+            if file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "arm64\|aarch64"; then
+              echo "Error: Binary incorrectly contains ARM architecture"
+              exit 1
+            fi
+            echo "✓ Linux binary verified: x86_64 architecture"
           fi
-          if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "arm64"; then
-            echo "Error: Binary missing arm64 architecture"
-            exit 1
-          fi
-          echo "✓ Universal binary verified: contains both x86_64 and arm64"
 
       - name: Upload CLI binary artifact
         uses: actions/upload-artifact@v4
@@ -98,19 +111,32 @@ jobs:
         run: echo "server-binary-name=mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
 
       - name: Verify server binary architecture
-        if: matrix.os == 'macos' && matrix.arch == 'universal'
         run: |
-          echo "Verifying universal server binary contains both architectures..."
-          file target/${{ steps.server-binary-name.outputs.server-binary-name }}
-          if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "x86_64"; then
-            echo "Error: Server binary missing x86_64 architecture"
-            exit 1
+          if [ "${{ matrix.os }}" = "macos" ] && [ "${{ matrix.arch }}" = "universal" ]; then
+            echo "Verifying universal server binary contains both architectures..."
+            file target/${{ steps.server-binary-name.outputs.server-binary-name }}
+            if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "x86_64"; then
+              echo "Error: Server binary missing x86_64 architecture"
+              exit 1
+            fi
+            if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "arm64"; then
+              echo "Error: Server binary missing arm64 architecture"
+              exit 1
+            fi
+            echo "✓ Universal server binary verified: contains both x86_64 and arm64"
+          elif [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
+            echo "Verifying Linux server binary is x86_64..."
+            file target/${{ steps.server-binary-name.outputs.server-binary-name }}
+            if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "x86-64"; then
+              echo "Error: Server binary is not x86_64 architecture"
+              exit 1
+            fi
+            if file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "arm64\|aarch64"; then
+              echo "Error: Server binary incorrectly contains ARM architecture"
+              exit 1
+            fi
+            echo "✓ Linux server binary verified: x86_64 architecture"
           fi
-          if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "arm64"; then
-            echo "Error: Server binary missing arm64 architecture"
-            exit 1
-          fi
-          echo "✓ Universal server binary verified: contains both x86_64 and arm64"
 
       - name: Upload server binary artifact
         uses: actions/upload-artifact@v4
