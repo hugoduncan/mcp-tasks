@@ -728,6 +728,22 @@
       ;; If worktree management requires directory switch, return early with message
       (if (and worktree-info (:needs-directory-switch? worktree-info))
         (let [worktree-path (:worktree-path worktree-info)
+              ;; Write execution state to worktree before early return
+              task-start-time (java.time.Instant/now)
+              state (if (= (:type task) :story)
+                      ;; Working on a story directly
+                      {:story-id task-id
+                       :task-start-time (str task-start-time)}
+                      ;; Working on a regular task
+                      {:task-id task-id
+                       :story-id (:parent-id task)
+                       :task-start-time (str task-start-time)})
+              _ (try
+                  (execution-state/write-execution-state! worktree-path state)
+                  (catch Exception e
+                    ;; Silently ignore write failures (e.g., directory doesn't exist yet)
+                    ;; This is acceptable as execution state is best-effort
+                    nil))
               response-data (cond-> {:task-id (:id task)
                                      :title (:title task)
                                      :category (:category task)
