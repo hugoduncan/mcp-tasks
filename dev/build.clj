@@ -35,7 +35,21 @@
                   :lib lib
                   :version v
                   :basis basis
-                  :src-dirs ["src"]})
+                  :src-dirs ["src"]
+                  :scm {:url "https://github.com/hugoduncan/mcp-tasks"
+                        :connection "scm:git:git://github.com/hugoduncan/mcp-tasks.git"
+                        :developerConnection "scm:git:ssh://git@github.com/hugoduncan/mcp-tasks.git"
+                        :tag (str "v" v)}
+                  :pom-data [[:description "Task-based workflow management for AI agents via Model Context Protocol (MCP)"]
+                             [:url "https://github.com/hugoduncan/mcp-tasks"]
+                             [:licenses
+                              [:license
+                               [:name "Eclipse Public License 2.0"]
+                               [:url "https://www.eclipse.org/legal/epl-2.0/"]
+                               [:distribution "repo"]]]
+                             [:developers
+                              [:developer
+                               [:name "Hugo Duncan"]]]]})
     (b/copy-dir {:src-dirs ["src"]
                  :target-dir class-dir})
     (b/jar {:class-dir class-dir
@@ -166,7 +180,21 @@
                   :lib lib
                   :version v
                   :basis basis
-                  :src-dirs ["src"]})
+                  :src-dirs ["src"]
+                  :scm {:url "https://github.com/hugoduncan/mcp-tasks"
+                        :connection "scm:git:git://github.com/hugoduncan/mcp-tasks.git"
+                        :developerConnection "scm:git:ssh://git@github.com/hugoduncan/mcp-tasks.git"
+                        :tag (str "v" v)}
+                  :pom-data [[:description "Task-based workflow management for AI agents via Model Context Protocol (MCP)"]
+                             [:url "https://github.com/hugoduncan/mcp-tasks"]
+                             [:licenses
+                              [:license
+                               [:name "Eclipse Public License 2.0"]
+                               [:url "https://www.eclipse.org/legal/epl-2.0/"]
+                               [:distribution "repo"]]]
+                             [:developers
+                              [:developer
+                               [:name "Hugo Duncan"]]]]})
     (b/copy-dir {:src-dirs ["src" "resources"]
                  :target-dir class-dir})
     (b/compile-clj {:basis basis
