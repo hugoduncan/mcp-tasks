@@ -6,9 +6,11 @@
   (:require
     [babashka.fs :as fs]
     [cheshire.core :as json]
+    [clojure.edn :as edn]
     [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.work-on :as sut]))
@@ -338,3 +340,176 @@
           (let [worktree-list (list-worktrees base-dir)]
             (is (str/includes? worktree-list actual-worktree-path)
                 "Worktree should appear in git worktree list")))))))
+
+(deftest ^:integration work-on-creates-execution-state-file
+  ;; Test that work-on actually creates the execution state file on disk
+  ;; with valid content that passes schema validation
+  (testing "creates execution state file with valid content"
+    (h/with-test-setup [test-dir]
+      (let [base-dir (str test-dir)
+            config-file (str base-dir "/.mcp-tasks.edn")]
+
+        ;; Initialize main git repo
+        (init-main-git-repo base-dir)
+
+        ;; Initialize .mcp-tasks with git
+        (h/init-git-repo base-dir)
+
+        ;; Enable worktree management
+        (spit config-file "{:worktree-management? true}")
+
+        (testing "for a story task"
+          (let [add-result (#'add-task/add-task-impl
+                            (h/test-config base-dir)
+                            nil
+                            {:category "story"
+                             :title "Test Story"
+                             :type "story"})
+                add-response (json/parse-string
+                               (get-in add-result [:content 1 :text])
+                               keyword)
+                story-id (get-in add-response [:task :id])
+
+                result (#'sut/work-on-impl
+                        (assoc (h/git-test-config base-dir)
+                               :worktree-management? true
+                               :main-repo-dir base-dir)
+                        nil
+                        {:task-id story-id})
+                response (json/parse-string
+                           (get-in result [:content 0 :text])
+                           keyword)
+                worktree-path (:worktree-path response)
+                exec-state-file-path (str worktree-path "/.mcp-tasks-current.edn")]
+
+            ;; Verify response indicates success
+            (is (false? (:isError result))
+                "work-on should succeed")
+            (is (= exec-state-file-path (:execution-state-file response))
+                "Response should include execution state file path")
+
+            ;; Verify file actually exists on disk
+            (is (fs/exists? exec-state-file-path)
+                "Execution state file should exist on disk")
+
+            ;; Verify file contains valid EDN
+            (let [file-content (slurp exec-state-file-path)
+                  state (edn/read-string file-content)]
+              (is (map? state)
+                  "File should contain an EDN map")
+
+              ;; Verify state has correct structure for story
+              (is (= story-id (:story-id state))
+                  "State should have correct story-id")
+              (is (nil? (:task-id state))
+                  "State should not have task-id when working on story directly")
+              (is (string? (:task-start-time state))
+                  "State should have task-start-time as string")
+
+              ;; Verify state passes schema validation
+              (is (execution-state/valid-execution-state? state)
+                  "State should pass ExecutionState schema validation")
+              (is (nil? (execution-state/explain-execution-state state))
+                  "State should have no validation errors"))))
+
+        (testing "for a child task with parent story"
+          (let [;; Create story
+                story-result (#'add-task/add-task-impl
+                              (h/test-config base-dir)
+                              nil
+                              {:category "story"
+                               :title "Parent Story"
+                               :type "story"})
+                story-response (json/parse-string
+                                 (get-in story-result [:content 1 :text])
+                                 keyword)
+                story-id (get-in story-response [:task :id])
+
+                ;; Create child task
+                task-result (#'add-task/add-task-impl
+                             (h/test-config base-dir)
+                             nil
+                             {:category "simple"
+                              :title "Child Task"
+                              :type "task"
+                              :parent-id story-id})
+                task-response (json/parse-string
+                                (get-in task-result [:content 1 :text])
+                                keyword)
+                task-id (get-in task-response [:task :id])
+
+                result (#'sut/work-on-impl
+                        (assoc (h/git-test-config base-dir)
+                               :worktree-management? true
+                               :main-repo-dir base-dir)
+                        nil
+                        {:task-id task-id})
+                response (json/parse-string
+                           (get-in result [:content 0 :text])
+                           keyword)
+                worktree-path (:worktree-path response)
+                exec-state-file-path (str worktree-path "/.mcp-tasks-current.edn")]
+
+            ;; Verify file exists
+            (is (fs/exists? exec-state-file-path)
+                "Execution state file should exist for child task")
+
+            ;; Verify file content
+            (let [state (edn/read-string (slurp exec-state-file-path))]
+              ;; Child task should have both story-id and task-id
+              (is (= story-id (:story-id state))
+                  "State should have parent story-id")
+              (is (= task-id (:task-id state))
+                  "State should have child task-id")
+              (is (string? (:task-start-time state))
+                  "State should have task-start-time")
+
+              ;; Validate schema
+              (is (execution-state/valid-execution-state? state)
+                  "Child task state should pass schema validation")
+              (is (nil? (execution-state/explain-execution-state state))
+                  "Child task state should have no validation errors"))))
+
+        (testing "for a standalone task without parent"
+          (let [task-result (#'add-task/add-task-impl
+                             (h/test-config base-dir)
+                             nil
+                             {:category "simple"
+                              :title "Standalone Task"
+                              :type "task"})
+                task-response (json/parse-string
+                                (get-in task-result [:content 1 :text])
+                                keyword)
+                task-id (get-in task-response [:task :id])
+
+                result (#'sut/work-on-impl
+                        (assoc (h/git-test-config base-dir)
+                               :worktree-management? true
+                               :main-repo-dir base-dir)
+                        nil
+                        {:task-id task-id})
+                response (json/parse-string
+                           (get-in result [:content 0 :text])
+                           keyword)
+                worktree-path (:worktree-path response)
+                exec-state-file-path (str worktree-path "/.mcp-tasks-current.edn")]
+
+            ;; Verify file exists
+            (is (fs/exists? exec-state-file-path)
+                "Execution state file should exist for standalone task")
+
+            ;; Verify file content
+            (let [state (edn/read-string (slurp exec-state-file-path))]
+              ;; Standalone task should have only task-id (no story-id)
+              (is (nil? (:story-id state))
+                  "State should not have story-id for standalone task")
+              (is (= task-id (:task-id state))
+                  "State should have task-id")
+              (is (string? (:task-start-time state))
+                  "State should have task-start-time")
+
+              ;; Validate schema
+              (is (execution-state/valid-execution-state? state)
+                  "Standalone task state should pass schema validation")
+              (is (nil? (execution-state/explain-execution-state state))
+                  "Standalone task state should have no validation errors"))))))))
