@@ -101,24 +101,16 @@ jobs:
             MISSING+=("mcp-tasks-linux-amd64")
           fi
 
-          if [ ! -f "binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64" ]; then
-            MISSING+=("mcp-tasks-macos-amd64")
-          fi
-
-          if [ ! -f "binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64" ]; then
-            MISSING+=("mcp-tasks-macos-arm64")
+          if [ ! -f "binaries/mcp-tasks-macos-universal/mcp-tasks-macos-universal" ]; then
+            MISSING+=("macos-universal")
           fi
 
           if [ ! -f "binaries/mcp-tasks-server-linux-amd64/mcp-tasks-server-linux-amd64" ]; then
-            MISSING+=("mcp-tasks-server-linux-amd64")
+            MISSING+=("server-linux-amd64")
           fi
 
-          if [ ! -f "binaries/mcp-tasks-server-macos-amd64/mcp-tasks-server-macos-amd64" ]; then
-            MISSING+=("mcp-tasks-server-macos-amd64")
-          fi
-
-          if [ ! -f "binaries/mcp-tasks-server-macos-arm64/mcp-tasks-server-macos-arm64" ]; then
-            MISSING+=("mcp-tasks-server-macos-arm64")
+          if [ ! -f "binaries/mcp-tasks-server-macos-universal/mcp-tasks-server-macos-universal" ]; then
+            MISSING+=("server-macos-universal")
           fi
 
           if [ ${#MISSING[@]} -gt 0 ]; then
@@ -154,11 +146,9 @@ jobs:
           files: |
             target/mcp-tasks-${{ steps.version.outputs.version }}.jar
             binaries/mcp-tasks-linux-amd64/mcp-tasks-linux-amd64
-            binaries/mcp-tasks-macos-amd64/mcp-tasks-macos-amd64
-            binaries/mcp-tasks-macos-arm64/mcp-tasks-macos-arm64
+            binaries/mcp-tasks-macos-universal/mcp-tasks-macos-universal
             binaries/mcp-tasks-server-linux-amd64/mcp-tasks-server-linux-amd64
-            binaries/mcp-tasks-server-macos-amd64/mcp-tasks-server-macos-amd64
-            binaries/mcp-tasks-server-macos-arm64/mcp-tasks-server-macos-arm64
+            binaries/mcp-tasks-server-macos-universal/mcp-tasks-server-macos-universal
           draft: false
           prerelease: false
         env:
