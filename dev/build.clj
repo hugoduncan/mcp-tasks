@@ -157,7 +157,7 @@
 
 (defn platform-binary-name
   "Generate platform-specific binary name.
-  Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64, mcp-tasks-windows-amd64.exe"
+  Examples: mcp-tasks-linux-amd64, mcp-tasks-macos-arm64, mcp-tasks-macos-universal, mcp-tasks-windows-amd64.exe"
   ([platform] (platform-binary-name "mcp-tasks" platform))
   ([basename {:keys [os arch]}]
    (let [base-name (format "%s-%s-%s" basename (name os) (name arch))]
@@ -206,6 +206,70 @@
              :main main-ns})
     (println (format "%s uberjar built successfully: %s" basename jar-file))))
 
+(defn- verify-rosetta-available
+  "Check if Rosetta 2 is available on the system.
+  Returns true if Rosetta is installed and functional."
+  []
+  (try
+    (let [result (b/process {:command-args ["arch" "-x86_64" "/usr/bin/true"]})]
+      (zero? (:exit result)))
+    (catch Exception _
+      false)))
+
+(defn- build-macos-arch-binary
+  "Build a single-architecture macOS native binary.
+  
+  Parameters:
+  - graalvm-home: Path to GraalVM installation
+  - jar-file: Path to input JAR file
+  - arch: Target architecture (:arm64 or :amd64)
+  - output-path: Path for output binary
+  
+  For :arm64 - builds natively
+  For :amd64 - builds under Rosetta using arch -x86_64 prefix"
+  [graalvm-home jar-file arch output-path]
+  (let [native-image-bin (str graalvm-home "/bin/native-image")
+        base-args [native-image-bin
+                   "-jar" jar-file
+                   "--no-fallback"
+                   "-H:+ReportExceptionStackTraces"
+                   "--initialize-at-build-time"
+                   "-o" output-path]
+        ;; For amd64, prefix with arch -x86_64 to run under Rosetta
+        final-args (if (= arch :amd64)
+                     (concat ["arch" "-x86_64"] base-args)
+                     base-args)]
+    (println (format "  Building %s slice..." (name arch)))
+    (shell {:command-args final-args})
+    output-path))
+
+(defn- combine-universal-binary
+  "Combine arm64 and amd64 binaries into a universal binary using lipo.
+  
+  Parameters:
+  - arm64-binary: Path to arm64 binary
+  - amd64-binary: Path to amd64 binary  
+  - output-path: Path for universal binary output
+  
+  Cleans up intermediate binaries after successful combination."
+  [arm64-binary amd64-binary output-path]
+  (println "  Combining architectures with lipo...")
+  (shell {:command-args ["lipo" "-create"
+                         arm64-binary
+                         amd64-binary
+                         "-output" output-path]})
+
+  ;; Verify the universal binary
+  (println "  Verifying universal binary...")
+  (shell {:command-args ["lipo" "-info" output-path]})
+
+  ;; Clean up intermediate binaries
+  (println "  Cleaning up intermediate binaries...")
+  (fs/delete-if-exists arm64-binary)
+  (fs/delete-if-exists amd64-binary)
+
+  output-path)
+
 (defn jar-cli
   "Build uberjar for CLI with mcp-tasks.native-init as Main-Class"
   [_]
@@ -226,7 +290,8 @@
   - binary-basename: The binary file prefix (e.g., 'mcp-tasks', 'mcp-tasks-server')
   - binary-type: Human-readable type for messages (e.g., 'CLI', 'server')
   - opts: Optional map with:
-    - :target-platform - Override platform for cross-compilation (e.g., {:os :macos :arch :amd64})"
+    - :target-platform - Override platform for cross-compilation (e.g., {:os :macos :arch :amd64})
+    - :universal - Build macOS universal binary containing both arm64 and amd64 (requires macOS host with Rosetta)"
   [jar-basename binary-basename binary-type & [opts]]
   (let [graalvm-home (System/getenv "GRAALVM_HOME")]
     (when-not graalvm-home
@@ -234,39 +299,16 @@
                       {:required "GRAALVM_HOME"})))
 
     (let [host-platform (detect-platform)
-          target-platform (or (:target-platform opts) host-platform)
+          universal? (:universal opts)
+          target-platform (cond
+                            universal? {:os :macos :arch :universal}
+                            (:target-platform opts) (:target-platform opts)
+                            :else host-platform)
           cross-compile? (not= host-platform target-platform)
           v (version nil)
           jar-file (format "%s/%s-%s.jar" target-dir jar-basename v)
           binary-name (platform-binary-name binary-basename target-platform)
-          output-binary (str target-dir "/" binary-name)
-          ;; For -o flag: on Windows, don't include .exe extension as native-image adds it automatically
-          ;; On other platforms, use the full binary name
-          output-name-for-native-image (if (= (:os target-platform) :windows)
-                                         (clojure.string/replace output-binary #"\.exe$" "")
-                                         output-binary)
-          ;; Construct full path to native-image
-          ;; Oracle GraalVM includes native-image by default in bin directory
-          native-image-bin (if (= (:os host-platform) :windows)
-                             (str graalvm-home "\\bin\\native-image.cmd")
-                             (str graalvm-home "/bin/native-image"))
-          ;; Build target string for cross-compilation (e.g., "darwin-amd64")
-          target-string (when cross-compile?
-                          (format "%s-%s"
-                                  (name (:os target-platform))
-                                  (name (:arch target-platform))))]
-
-      (when cross-compile?
-        (println (format "Cross-compiling from %s %s to %s %s"
-                         (name (:os host-platform))
-                         (name (:arch host-platform))
-                         (name (:os target-platform))
-                         (name (:arch target-platform)))))
-
-      (println (format "Building native %s binary for %s %s..."
-                       binary-type
-                       (name (:os target-platform))
-                       (name (:arch target-platform))))
+          output-binary (str target-dir "/" binary-name)]
 
       (when-not (fs/exists? jar-file)
         (throw (ex-info (format "%s JAR file not found. Run 'clj -T:build jar-%s' first."
@@ -274,23 +316,75 @@
                                 (clojure.string/lower-case binary-type))
                         {:jar-file jar-file})))
 
-      (println "Running native-image (this may take several minutes)...")
-      (let [base-args [native-image-bin
-                       "-jar" jar-file
-                       "--no-fallback"
-                       "-H:+ReportExceptionStackTraces"
-                       "--initialize-at-build-time"
-                       "-o" output-name-for-native-image]
-            ;; Add architecture flag for macOS cross-compilation
-            ;; For macOS, use -march=compatibility for cross-arch builds
-            all-args (if (and cross-compile? (= (:os target-platform) :macos))
-                       (concat base-args ["-march=compatibility"])
-                       base-args)]
-        (shell {:command-args all-args}))
+      ;; Handle universal binary build separately
+      (if universal?
+        (do
+          (when-not (= (:os host-platform) :macos)
+            (throw (ex-info "Universal binaries can only be built on macOS"
+                            {:host-platform host-platform})))
 
-      (println (format "✓ Native %s binary built: %s" binary-type output-binary))
-      (println (format "  Platform: %s %s" (name (:os target-platform)) (name (:arch target-platform))))
-      (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))
+          (when-not (verify-rosetta-available)
+            (throw (ex-info "Rosetta 2 is required to build universal binaries but is not available. Install with: softwareupdate --install-rosetta"
+                            {:rosetta-required true})))
+
+          (println (format "Building universal %s binary for macOS (arm64 + amd64)..." binary-type))
+          (println "This may take several minutes as both architectures are built...")
+
+          ;; Build both architectures
+          (let [arm64-binary (str target-dir "/" binary-basename "-arm64-temp")
+                amd64-binary (str target-dir "/" binary-basename "-amd64-temp")]
+            (try
+              (build-macos-arch-binary graalvm-home jar-file :arm64 arm64-binary)
+              (build-macos-arch-binary graalvm-home jar-file :amd64 amd64-binary)
+              (combine-universal-binary arm64-binary amd64-binary output-binary)
+
+              (println (format "✓ Universal %s binary built: %s" binary-type output-binary))
+              (println (format "  Platform: macOS (universal: arm64 + amd64)"))
+              (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0)))
+
+              (catch Exception e
+                ;; Clean up on error
+                (fs/delete-if-exists arm64-binary)
+                (fs/delete-if-exists amd64-binary)
+                (throw e)))))
+
+        ;; Single-architecture build (original logic)
+        (let [output-name-for-native-image (if (= (:os target-platform) :windows)
+                                             (clojure.string/replace output-binary #"\.exe$" "")
+                                             output-binary)
+              native-image-bin (if (= (:os host-platform) :windows)
+                                 (str graalvm-home "\\bin\\native-image.cmd")
+                                 (str graalvm-home "/bin/native-image"))]
+
+          (when cross-compile?
+            (println (format "Cross-compiling from %s %s to %s %s"
+                             (name (:os host-platform))
+                             (name (:arch host-platform))
+                             (name (:os target-platform))
+                             (name (:arch target-platform)))))
+
+          (println (format "Building native %s binary for %s %s..."
+                           binary-type
+                           (name (:os target-platform))
+                           (name (:arch target-platform))))
+
+          (println "Running native-image (this may take several minutes)...")
+          (let [base-args [native-image-bin
+                           "-jar" jar-file
+                           "--no-fallback"
+                           "-H:+ReportExceptionStackTraces"
+                           "--initialize-at-build-time"
+                           "-o" output-name-for-native-image]
+                ;; Add architecture flag for macOS cross-compilation
+                ;; For macOS, use -march=compatibility for cross-arch builds
+                all-args (if (and cross-compile? (= (:os target-platform) :macos))
+                           (concat base-args ["-march=compatibility"])
+                           base-args)]
+            (shell {:command-args all-args}))
+
+          (println (format "✓ Native %s binary built: %s" binary-type output-binary))
+          (println (format "  Platform: %s %s" (name (:os target-platform)) (name (:arch target-platform))))
+          (println (format "  Size: %.1f MB" (/ (fs/size output-binary) 1024.0 1024.0))))))))
 
 (defn native-cli
   "Build native CLI binary using GraalVM native-image.
@@ -301,14 +395,19 @@
   The native binary provides a standalone CLI without requiring JVM or Babashka.
 
   Options:
+  - :universal - Build macOS universal binary (arm64 + amd64) instead of single-architecture
   - :target-os - Target OS for cross-compilation (:macos, :linux, :windows)
   - :target-arch - Target architecture (:amd64, :arm64)"
   [opts]
-  (let [target-platform (when (or (:target-os opts) (:target-arch opts))
+  (let [universal? (:universal opts)
+        target-platform (when (and (not universal?)
+                                   (or (:target-os opts) (:target-arch opts)))
                           {:os (:target-os opts)
                            :arch (:target-arch opts)})
-        build-opts (when target-platform
-                     {:target-platform target-platform})]
+        build-opts (cond
+                     universal? {:universal true}
+                     target-platform {:target-platform target-platform}
+                     :else nil)]
     (build-native-binary "mcp-tasks-cli" "mcp-tasks" "CLI" build-opts)))
 
 (defn native-server
@@ -320,12 +419,17 @@
   The native binary provides a standalone MCP server without requiring JVM or Babashka.
 
   Options:
+  - :universal - Build macOS universal binary (arm64 + amd64) instead of single-architecture
   - :target-os - Target OS for cross-compilation (:macos, :linux, :windows)
   - :target-arch - Target architecture (:amd64, :arm64)"
   [opts]
-  (let [target-platform (when (or (:target-os opts) (:target-arch opts))
+  (let [universal? (:universal opts)
+        target-platform (when (and (not universal?)
+                                   (or (:target-os opts) (:target-arch opts)))
                           {:os (:target-os opts)
                            :arch (:target-arch opts)})
-        build-opts (when target-platform
-                     {:target-platform target-platform})]
+        build-opts (cond
+                     universal? {:universal true}
+                     target-platform {:target-platform target-platform}
+                     :else nil)]
     (build-native-binary "mcp-tasks-server" "mcp-tasks-server" "server" build-opts)))
