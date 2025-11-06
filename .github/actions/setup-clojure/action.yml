@@ -59,17 +59,17 @@ runs:
         INSTALL_DIR="/Users/runner/hostedtoolcache/graalvm-jdk-21_macos-x86_64_bin/21.0.0/x64"
         mkdir -p "$INSTALL_DIR"
         
-        # Extract
+        # Extract with preserve permissions
         echo "Extracting to: $INSTALL_DIR"
-        tar -xzf /tmp/graalvm-x64.tar.gz -C "$INSTALL_DIR" --strip-components=1
+        tar -xzpf /tmp/graalvm-x64.tar.gz -C "$INSTALL_DIR" --strip-components=1
         
         # Set environment variable for subsequent steps
         GRAALVM_HOME_X86_64="$INSTALL_DIR/Contents/Home"
         echo "GRAALVM_HOME_X86_64=$GRAALVM_HOME_X86_64" >> $GITHUB_ENV
         
-        # Make binaries executable
-        echo "Making binaries executable..."
-        chmod +x "$GRAALVM_HOME_X86_64"/bin/*
+        # Ensure binaries are executable (tar should preserve this, but double-check)
+        echo "Ensuring binaries are executable..."
+        chmod -R +x "$GRAALVM_HOME_X86_64"/bin/
         
         # Verify installation under Rosetta
         echo "Verifying x86_64 GraalVM installation..."
