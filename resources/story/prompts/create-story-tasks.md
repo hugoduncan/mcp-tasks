@@ -41,9 +41,10 @@ The story can be specified in multiple ways:
 2. Check story refinement status:
    - Check if the story's `:meta` map contains `"refined": "true"`
    - If not refined:
-     - Display warning: "⚠️ This story has not been refined. Creating tasks from unrefined stories may lead to unclear or incomplete task breakdowns."
+     - Display warning: "⚠️ **STOP**: This story has not been refined. Creating tasks from unrefined stories may lead to unclear or incomplete task breakdowns."
      - Use `AskUserQuestion` tool to ask: "Do you want to proceed anyway?"
        - Options: "Yes, proceed" and "No, refine first"
+     - You must not proceed without explicit user approval.
      - If user declines, stop execution and suggest running `/mcp-tasks:refine-task <story-id>` first
      - If user accepts, continue with task creation
 
@@ -55,12 +56,24 @@ The story can be specified in multiple ways:
      logically grouped
    - Don't create lots of very simple tasks, try and group them
 
+   - **Self-Contained Tasks with Verification**:
+     - Each task should be complete and self-contained:
+       - Include both implementation AND verification of that implementation
+       - Verification confirms the task's work in isolation (unit tests, manual testing)
+       - Avoid splitting "implement X" and "test X" into separate tasks
+       - Examples:
+         - ❌ Bad: "Implement user authentication" + separate "Test user authentication"
+         - ✅ Good: "Implement user authentication and verify it works"
+         - ❌ Bad: "Add validation logic" + separate "Write tests for validation"
+         - ✅ Good: "Add validation logic with unit tests"
+
    - Each task description should:
       - be concrete and achievable
       - be clear, precise, and unambiguous
       - contain enough context to implement it without
         any other context.
-      - instruct to update unit tests if needed, as part of the task
+      - include verification that the implementation works (unit tests, manual testing)
+      - verification should confirm the task's specific work, not broader system integration
 
    - Each task should have an appropriate category (the add-task
      description contains a description of the categories)
