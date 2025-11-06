@@ -12,7 +12,7 @@ BINARY_CLI="mcp-tasks"
 BINARY_SERVER="mcp-tasks-server"
 
 # Supported platforms
-SUPPORTED_PLATFORMS="linux-amd64, macos-amd64, macos-arm64 (Windows not supported)"
+SUPPORTED_PLATFORMS="linux-amd64, macos-universal (Windows not supported)"
 
 # Check if command exists
 has() {
@@ -40,13 +40,14 @@ detect_platform() {
       ;;
   esac
 
-  # Detect architecture (OS-specific validation)
+  # Detect architecture
+  # macOS uses universal binaries (both x86_64 and arm64 in single file)
   case "$os:$(uname -m)" in
-    linux:x86_64|macos:x86_64)
+    linux:x86_64)
       arch="amd64"
       ;;
-    macos:arm64|macos:aarch64)
-      arch="arm64"
+    macos:x86_64|macos:arm64|macos:aarch64)
+      arch="universal"
       ;;
     *)
       echo "Error: Unsupported platform: ${os} $(uname -m)" >&2
