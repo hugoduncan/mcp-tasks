@@ -193,6 +193,9 @@ jobs:
           name: mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}
           path: target/
 
+      - name: Debug - List target directory
+        run: ls -la target/
+
       - name: Make CLI binary executable
         run: chmod +x target/mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}
 
