@@ -476,8 +476,6 @@
               ;; Verify execution state file path is returned
               (is (= exec-state-path (:execution-state-file response))))))))))
 
-
-
 (testing "work-on writes execution state to worktree when working on a child task"
   (h/with-test-setup [test-dir]
     (let [base-dir (:base-dir (h/test-config test-dir))
