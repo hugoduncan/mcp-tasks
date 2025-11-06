@@ -740,7 +740,7 @@
                        :task-start-time (str task-start-time)})
               _ (try
                   (execution-state/write-execution-state! worktree-path state)
-                  (catch Exception e
+                  (catch Exception _
                     ;; Silently ignore write failures (e.g., directory doesn't exist yet)
                     ;; This is acceptable as execution state is best-effort
                     nil))
@@ -752,7 +752,8 @@
                                      :worktree-path (str worktree-path)
                                      :worktree-created? (:worktree-created? worktree-info)
                                      :branch-name (:branch-name worktree-info)
-                                     :message (:message worktree-info)}
+                                     :message (:message worktree-info)
+                                     :execution-state-file (str worktree-path "/.mcp-tasks-current.edn")}
                               worktree-path
                               (assoc :worktree-name (extract-worktree-name worktree-path)))]
           {:content [{:type "text"
