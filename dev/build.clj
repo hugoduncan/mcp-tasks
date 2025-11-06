@@ -2,7 +2,8 @@
   (:require
     [babashka.fs :as fs]
     [clojure.string]
-    [clojure.tools.build.api :as b]))
+    [clojure.tools.build.api :as b]
+    [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'org.hugoduncan/mcp-tasks)
 (def version-base "0.1")
@@ -42,12 +43,39 @@
             :main 'mcp-tasks.main})
     (println "JAR built successfully:" jar-file)))
 
+(defn- validate-deployment-files
+  "Validate that JAR and POM files exist for deployment.
+
+  Throws ex-info with helpful error message if files are missing."
+  [jar-file pom-file]
+  (when-not (fs/exists? jar-file)
+    (throw (ex-info "JAR file not found. Run 'clj -T:build jar' first."
+                    {:jar-file jar-file})))
+  (when-not (fs/exists? pom-file)
+    (throw (ex-info "POM file not found. Run 'clj -T:build jar' first."
+                    {:pom-file pom-file}))))
+
+(defn- validate-credentials
+  "Validate that CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables are set.
+
+  Throws ex-info with helpful error message if credentials are missing."
+  []
+  (when-not (System/getenv "CLOJARS_USERNAME")
+    (throw (ex-info "CLOJARS_USERNAME environment variable not set.\nSet your Clojars username: export CLOJARS_USERNAME=your-username"
+                    {:missing-env-var "CLOJARS_USERNAME"})))
+  (when-not (System/getenv "CLOJARS_PASSWORD")
+    (throw (ex-info "CLOJARS_PASSWORD environment variable not set.\nSet your Clojars deploy token: export CLOJARS_PASSWORD=your-token\nNote: Use your deploy token, not your password."
+                    {:missing-env-var "CLOJARS_PASSWORD"}))))
+
 (defn deploy
   "Deploy JAR to Clojars using deps-deploy.
 
+  Options:
+  - :dry-run - If true, validate but don't deploy (default: false)
+
   Requires CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables.
   CLOJARS_PASSWORD should contain your deploy token, not your actual password."
-  [_]
+  [{:keys [dry-run] :or {dry-run false}}]
   (let [v (version nil)
         jar-file (format "%s/mcp-tasks-%s.jar" target-dir v)
         pom-file (format "%s/classes/META-INF/maven/%s/%s/pom.xml"
@@ -56,15 +84,25 @@
                          (name lib))]
     (println "Deploying to Clojars:" jar-file)
     (println "POM file:" pom-file)
-    ;; deps-deploy will be called via clojure -X:deploy from CI
-    ;; This function just validates the files exist
-    (when-not (fs/exists? jar-file)
-      (throw (ex-info "JAR file not found. Run 'clj -T:build jar' first."
-                      {:jar-file jar-file})))
-    (when-not (fs/exists? pom-file)
-      (throw (ex-info "POM file not found. Run 'clj -T:build jar' first."
-                      {:pom-file pom-file})))
-    (println "Files validated for deployment")))
+
+    ;; Validate files and credentials
+    (validate-deployment-files jar-file pom-file)
+    (validate-credentials)
+
+    (if dry-run
+      (println "Dry-run mode: Skipping deployment")
+      (try
+        (println "Calling deps-deploy...")
+        (dd/deploy {:installer :remote
+                    :artifact jar-file
+                    :pom-file pom-file})
+        (println "Successfully deployed to Clojars")
+        (catch Exception e
+          (throw (ex-info (format "Deployment failed: %s" (.getMessage e))
+                          {:jar-file jar-file
+                           :pom-file pom-file
+                           :cause e}
+                          e)))))))
 
 ;; Native Image Build
 

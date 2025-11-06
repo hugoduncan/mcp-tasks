@@ -130,9 +130,7 @@ jobs:
         env:
           CLOJARS_USERNAME: ${{ secrets.CLOJARS_USERNAME }}
           CLOJARS_PASSWORD: ${{ secrets.CLOJARS_PASSWORD }}
-        run: |
-          clojure -T:build deploy
-          clojure -X:deploy
+        run: clojure -T:build deploy
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}

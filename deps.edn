@@ -25,7 +25,8 @@
            :extra-deps
            {lambdaisland/kaocha           {:mvn/version "1.91.1392"}
             babashka/process              {:mvn/version "0.5.22"}
-            io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+            io.github.clojure/tools.build {:mvn/version "0.10.5"}
+            slipset/deps-deploy           {:mvn/version "0.2.2"}}
            :override-deps
            {org.hugpduncan/mcp-clj-server
             {:git/url   "https://github.com/hugoduncan/mcp-clj"
@@ -38,7 +39,8 @@
   :nrepl  {:extra-deps {nrepl/nrepl {:mvn/version "1.5.1"}}
            :main-opts  ["-m" "nrepl.cmdline"]}
   :build  {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.5"}
-                        babashka/fs                   {:mvn/version "0.5.22"}}
+                        babashka/fs                   {:mvn/version "0.5.22"}
+                        slipset/deps-deploy           {:mvn/version "0.2.2"}}
            :paths      ["dev"]
            :ns-default build}
   :deploy {:replace-deps {slipset/deps-deploy {:mvn/version "0.2.2"}}
