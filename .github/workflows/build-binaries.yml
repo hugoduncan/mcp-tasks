@@ -59,13 +59,23 @@ jobs:
         run: clojure -T:build jar-cli
 
       - name: Build native CLI binary
-        run: clojure -T:build native-cli
+        run: |
+          if [ "${{ matrix.arch }}" = "universal" ]; then
+            clojure -T:build native-cli :universal true
+          else
+            clojure -T:build native-cli
+          fi
 
       - name: Build Server JAR
         run: clojure -T:build jar-server
 
       - name: Build native server binary
-        run: clojure -T:build native-server
+        run: |
+          if [ "${{ matrix.arch }}" = "universal" ]; then
+            clojure -T:build native-server :universal true
+          else
+            clojure -T:build native-server
+          fi
 
       - name: Set binary name
         id: binary-name
