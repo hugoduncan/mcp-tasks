@@ -41,11 +41,7 @@ jobs:
             arch: amd64
             runner: ubuntu-latest
           - os: macos
-            arch: amd64
-            runner: macos-latest
-            cross-compile: true
-          - os: macos
-            arch: arm64
+            arch: universal
             runner: macos-latest
 
     steps:
@@ -62,28 +58,33 @@ jobs:
       - name: Build CLI JAR
         run: clojure -T:build jar-cli
 
-      - name: Build native CLI binary (cross-compile)
-        if: matrix.cross-compile == true
-        run: clojure -T:build native-cli :target-os :${{ matrix.os }} :target-arch :${{ matrix.arch }}
-
-      - name: Build native CLI binary (native)
-        if: matrix.cross-compile != true
+      - name: Build native CLI binary
         run: clojure -T:build native-cli
 
       - name: Build Server JAR
         run: clojure -T:build jar-server
 
-      - name: Build native server binary (cross-compile)
-        if: matrix.cross-compile == true
-        run: clojure -T:build native-server :target-os :${{ matrix.os }} :target-arch :${{ matrix.arch }}
-
-      - name: Build native server binary (native)
-        if: matrix.cross-compile != true
+      - name: Build native server binary
         run: clojure -T:build native-server
 
       - name: Set binary name
         id: binary-name
         run: echo "binary-name=mcp-tasks-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+      - name: Verify binary architecture
+        if: matrix.os == 'macos' && matrix.arch == 'universal'
+        run: |
+          echo "Verifying universal binary contains both architectures..."
+          file target/${{ steps.binary-name.outputs.binary-name }}
+          if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "x86_64"; then
+            echo "Error: Binary missing x86_64 architecture"
+            exit 1
+          fi
+          if ! file target/${{ steps.binary-name.outputs.binary-name }} | grep -q "arm64"; then
+            echo "Error: Binary missing arm64 architecture"
+            exit 1
+          fi
+          echo "✓ Universal binary verified: contains both x86_64 and arm64"
 
       - name: Upload CLI binary artifact
         uses: actions/upload-artifact@v4
@@ -95,6 +96,21 @@ jobs:
       - name: Set server binary name
         id: server-binary-name
         run: echo "server-binary-name=mcp-tasks-server-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+      - name: Verify server binary architecture
+        if: matrix.os == 'macos' && matrix.arch == 'universal'
+        run: |
+          echo "Verifying universal server binary contains both architectures..."
+          file target/${{ steps.server-binary-name.outputs.server-binary-name }}
+          if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "x86_64"; then
+            echo "Error: Server binary missing x86_64 architecture"
+            exit 1
+          fi
+          if ! file target/${{ steps.server-binary-name.outputs.server-binary-name }} | grep -q "arm64"; then
+            echo "Error: Server binary missing arm64 architecture"
+            exit 1
+          fi
+          echo "✓ Universal server binary verified: contains both x86_64 and arm64"
 
       - name: Upload server binary artifact
         uses: actions/upload-artifact@v4
@@ -115,11 +131,7 @@ jobs:
             runner: ubuntu-latest
             test-focus: comprehensive
           - os: macos
-            arch: amd64
-            runner: macos-latest
-            test-focus: smoke
-          - os: macos
-            arch: arm64
+            arch: universal
             runner: macos-latest
             test-focus: smoke
 
