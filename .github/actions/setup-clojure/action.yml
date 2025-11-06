@@ -49,10 +49,8 @@ runs:
       run: |
         echo "Installing x86_64 GraalVM for building AMD64 slice under Rosetta..."
         
-        # Download x86_64 GraalVM
-        GRAALVM_VERSION="21.0.5"
-        GRAALVM_BUILD="11.1"
-        GRAALVM_URL="https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-${GRAALVM_VERSION}/graalvm-community-jdk-${GRAALVM_VERSION}_macos-x64_bin.tar.gz"
+        # Download x86_64 Oracle GraalVM (matches the ARM64 version installed by setup-graalvm)
+        GRAALVM_URL="https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_macos-x64_bin.tar.gz"
         
         echo "Downloading from: $GRAALVM_URL"
         curl -L -o /tmp/graalvm-x64.tar.gz "$GRAALVM_URL"
