@@ -30,12 +30,14 @@ The story can be specified in multiple ways:
 
 ## Process
 
-1. Find the story and its first unblocked incomplete child task:
-   - First, use `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true` to find the story task
+1. Find the story task:
+   - Use `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true` to find the story task
    - Handle errors:
      - **No match**: Inform user no story found, suggest checking available stories
      - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
-   - Then use `select-tasks` with `parent-id` filter, `blocked: false`, and `:limit 1` to get the first unblocked incomplete child
+
+2. Find the first unblocked incomplete child task:
+   - Use `select-tasks` with `parent-id` filter, `blocked: false`, and `:limit 1` to get the first unblocked incomplete child
    - The tool returns :tasks (a vector) and :metadata
    - use :open-task-count and :completed-task-count to show story progress,
      like "2 of 5 tasks completed", where 2 is :completed-task-count
@@ -55,15 +57,15 @@ The story can be specified in multiple ways:
        - if completed-task-count is zero:
          - if the story is not refined, suggest the user refines the story
          - else if the story is refined, suggest the user creates story tasks
-		   for the story
+	   for the story
          - stop - do not take any further actions
    - If no category is found for the task, inform the user and stop
    - show the task to the user
 
-2. Set up task environment and execute the task:
+3. Set up task environment and execute the task:
    - First, set up the task environment using the `work-on` tool:
      - Call `mcp__mcp-tasks__work-on` with:
-       - `task-id`: <task-id-from-step-1>
+       - `task-id`: <task-id-from-step-2>
      - The tool will automatically:
        - Write execution state with story-id and timestamp
        - Handle branch management if configured
@@ -98,10 +100,10 @@ Branch: fix-bug
      - The task is already in the tasks queue
      - Complete all implementation steps according to the category workflow
 
-3. Mark the task as complete:
+4. Mark the task as complete:
    - After task execution completes successfully, use the `complete-task`
      tool
-   - Parameters: category (from step 1), title (partial match from
+   - Parameters: category (from step 2), title (partial match from
      beginning of task), and optionally completion-comment
    - The tool will automatically clear the execution state
 
