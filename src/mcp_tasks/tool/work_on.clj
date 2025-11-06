@@ -183,6 +183,26 @@
   (when worktree-path
     (fs/file-name worktree-path)))
 
+(defn- build-execution-state
+  "Build execution state map based on task type.
+
+  Parameters:
+  - task: The task map
+  - task-id: The task ID
+  - task-start-time: The start time instant
+
+  Returns:
+  - Execution state map with :story-id and/or :task-id and :task-start-time"
+  [task task-id task-start-time]
+  (if (= (:type task) :story)
+    ;; Working on a story directly
+    {:story-id task-id
+     :task-start-time (str task-start-time)}
+    ;; Working on a regular task
+    {:task-id task-id
+     :story-id (:parent-id task)
+     :task-start-time (str task-start-time)}))
+
 (defn- current-working-directory
   "Get the current working directory as a canonical path.
 
@@ -730,14 +750,7 @@
         (let [worktree-path (:worktree-path worktree-info)
               ;; Write execution state to worktree before early return
               task-start-time (java.time.Instant/now)
-              state (if (= (:type task) :story)
-                      ;; Working on a story directly
-                      {:story-id task-id
-                       :task-start-time (str task-start-time)}
-                      ;; Working on a regular task
-                      {:task-id task-id
-                       :story-id (:parent-id task)
-                       :task-start-time (str task-start-time)})
+              state (build-execution-state task task-id task-start-time)
               _ (try
                   (execution-state/write-execution-state! worktree-path state)
                   (catch Exception _
@@ -762,14 +775,7 @@
 
         ;; Otherwise proceed with execution state and normal response
         (let [task-start-time (java.time.Instant/now)
-              state (if (= (:type task) :story)
-                      ;; Working on a story directly
-                      {:story-id task-id
-                       :task-start-time (str task-start-time)}
-                      ;; Working on a regular task
-                      {:task-id task-id
-                       :story-id (:parent-id task)
-                       :task-start-time (str task-start-time)})
+              state (build-execution-state task task-id task-start-time)
               _ (execution-state/write-execution-state! base-dir state)
               state-file-path (str base-dir "/.mcp-tasks-current.edn")]
           (build-success-response task branch-info worktree-info state-file-path))))

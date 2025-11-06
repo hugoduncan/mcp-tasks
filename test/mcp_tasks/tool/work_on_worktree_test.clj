@@ -4,6 +4,7 @@
     [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
+    [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.test-helpers :as h]
     [mcp-tasks.tool.add-task :as add-task]
     [mcp-tasks.tool.work-on :as sut]
@@ -474,45 +475,93 @@
               (is (= expected-worktree-path (:worktree-path response)))
               (is (true? (:worktree-created? response)))
               ;; Verify execution state file path is returned
-              (is (= exec-state-path (:execution-state-file response))))))))))
+              (is (= exec-state-path (:execution-state-file response))))))))
 
-(testing "work-on writes execution state to worktree when working on a child task"
-  (h/with-test-setup [test-dir]
-    (let [base-dir (:base-dir (h/test-config test-dir))
-          config-file (str base-dir "/.mcp-tasks.edn")
-          expected-worktree-path (h/derive-test-worktree-path base-dir "Parent Story")]
-      (spit config-file "{:worktree-management? true}")
+    (testing "work-on writes execution state to worktree when working on a child task"
+      (h/with-test-setup [test-dir]
+        (let [base-dir (:base-dir (h/test-config test-dir))
+              config-file (str base-dir "/.mcp-tasks.edn")
+              expected-worktree-path (h/derive-test-worktree-path base-dir "Parent Story")]
+          (spit config-file "{:worktree-management? true}")
 
-      ;; Create a story and a child task
-      (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Parent Story" :type "story"})
-            story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
-            story-id (get-in story-response [:task :id])
+          ;; Create a story and a child task
+          (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Parent Story" :type "story"})
+                story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
+                story-id (get-in story-response [:task :id])
 
-            task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Child Task" :type "task" :parent-id story-id})
-            task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
-            task-id (get-in task-response [:task :id])]
+                task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Child Task" :type "task" :parent-id story-id})
+                task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
+                task-id (get-in task-response [:task :id])]
 
-        (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
-                      git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
-                      git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
-                      git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
-                      git/checkout-branch (fn [_ _] {:success true :error nil})
-                      git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
-                      git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
-                      git/derive-project-name (fn [_] {:success true :name "mcp-tasks" :error nil})
-                      git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
-                      git/worktree-exists? (fn [_ _] {:success true :exists? false :worktree nil :error nil})
-                      git/create-worktree (fn [_ _ _ _] {:success true :error nil})]
+            (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
+                          git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                          git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                          git/checkout-branch (fn [_ _] {:success true :error nil})
+                          git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                          git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                          git/derive-project-name (fn [_] {:success true :name "mcp-tasks" :error nil})
+                          git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
+                          git/worktree-exists? (fn [_ _] {:success true :exists? false :worktree nil :error nil})
+                          git/create-worktree (fn [_ _ _ _] {:success true :error nil})]
 
-          (let [result (#'sut/work-on-impl
-                        (assoc (h/test-config test-dir) :worktree-management? true)
-                        nil
-                        {:task-id task-id})
-                response (json/parse-string (get-in result [:content 0 :text]) keyword)
-                exec-state-path (str expected-worktree-path "/.mcp-tasks-current.edn")]
+              (let [result (#'sut/work-on-impl
+                            (assoc (h/test-config test-dir) :worktree-management? true)
+                            nil
+                            {:task-id task-id})
+                    response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                    exec-state-path (str expected-worktree-path "/.mcp-tasks-current.edn")]
 
-            (is (false? (:isError result)))
-            (is (= expected-worktree-path (:worktree-path response)))
-            (is (true? (:worktree-created? response)))
-            ;; Verify execution state file path is returned
-            (is (= exec-state-path (:execution-state-file response)))))))))
+                (is (false? (:isError result)))
+                (is (= expected-worktree-path (:worktree-path response)))
+                (is (true? (:worktree-created? response)))
+                ;; Verify execution state file path is returned
+                (is (= exec-state-path (:execution-state-file response)))))))))))
+
+(deftest work-on-handles-execution-state-write-failure
+  ;; Test graceful degradation when write-execution-state! throws an exception
+  (testing "work-on continues successfully even when execution state write fails"
+    (h/with-test-setup [test-dir]
+      (let [base-dir (:base-dir (h/test-config test-dir))
+            config-file (str base-dir "/.mcp-tasks.edn")
+            expected-worktree-path (h/derive-test-worktree-path base-dir "Write Failure Task")]
+        (spit config-file "{:worktree-management? true}")
+
+        ;; Create a task
+        (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Write Failure Task" :type "task"})
+              add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
+              task-id (get-in add-response [:task :id])
+              write-state-called (atom false)]
+
+          (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
+                        git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
+                        git/check-uncommitted-changes (fn [_] {:success true :has-changes? false :error nil})
+                        git/get-default-branch (fn [_] {:success true :branch "main" :error nil})
+                        git/checkout-branch (fn [_ _] {:success true :error nil})
+                        git/pull-latest (fn [_ _] {:success true :pulled? true :error nil})
+                        git/branch-exists? (fn [_ _] {:success true :exists? false :error nil})
+                        git/derive-project-name (fn [_] {:success true :name "mcp-tasks" :error nil})
+                        git/derive-worktree-path (fn [_ _ _ _] {:success true :path expected-worktree-path :error nil})
+                        git/worktree-exists? (fn [_ _] {:success true :exists? false :worktree nil :error nil})
+                        git/create-worktree (fn [_ _ _ _] {:success true :error nil})
+                        ;; Mock execution-state/write-execution-state! to throw an exception
+                        mcp-tasks.execution-state/write-execution-state!
+                        (fn [_ _]
+                          (reset! write-state-called true)
+                          (throw (ex-info "Simulated write failure" {})))]
+
+            (let [result (#'sut/work-on-impl
+                          (assoc (h/test-config test-dir) :worktree-management? true)
+                          nil
+                          {:task-id task-id})
+                  response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+
+              ;; Verify write-execution-state! was called
+              (is (true? @write-state-called))
+              ;; Operation should succeed despite write failure
+              (is (false? (:isError result)))
+              (is (= expected-worktree-path (:worktree-path response)))
+              (is (true? (:worktree-created? response)))
+              ;; Execution state file path should still be returned
+              (is (= (str expected-worktree-path "/.mcp-tasks-current.edn")
+                     (:execution-state-file response))))))))))
