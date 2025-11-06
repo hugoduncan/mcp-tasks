@@ -220,22 +220,24 @@
   "Build a single-architecture macOS native binary.
   
   Parameters:
-  - graalvm-home: Path to GraalVM installation
+  - graalvm-home-arm64: Path to ARM64 GraalVM installation
+  - graalvm-home-x86_64: Path to x86_64 GraalVM installation
   - jar-file: Path to input JAR file
   - arch: Target architecture (:arm64 or :amd64)
   - output-path: Path for output binary
   
-  For :arm64 - builds natively
-  For :amd64 - builds under Rosetta using arch -x86_64 prefix"
-  [graalvm-home jar-file arch output-path]
-  (let [native-image-bin (str graalvm-home "/bin/native-image")
+  For :arm64 - builds natively using ARM64 GraalVM
+  For :amd64 - builds under Rosetta using x86_64 GraalVM with arch -x86_64 prefix"
+  [graalvm-home-arm64 graalvm-home-x86_64 jar-file arch output-path]
+  (let [graalvm-home (if (= arch :amd64) graalvm-home-x86_64 graalvm-home-arm64)
+        native-image-bin (str graalvm-home "/bin/native-image")
         base-args [native-image-bin
                    "-jar" jar-file
                    "--no-fallback"
                    "-H:+ReportExceptionStackTraces"
                    "--initialize-at-build-time"
                    "-o" output-path]
-        ;; For amd64, prefix with arch -x86_64 to run under Rosetta
+        ;; For amd64, prefix with arch -x86_64 to run x86_64 native-image under Rosetta
         final-args (if (= arch :amd64)
                      (concat ["arch" "-x86_64"] base-args)
                      base-args)]
@@ -293,7 +295,8 @@
     - :target-platform - Override platform for cross-compilation (e.g., {:os :macos :arch :amd64})
     - :universal - Build macOS universal binary containing both arm64 and amd64 (requires macOS host with Rosetta)"
   [jar-basename binary-basename binary-type & [opts]]
-  (let [graalvm-home (System/getenv "GRAALVM_HOME")]
+  (let [graalvm-home (System/getenv "GRAALVM_HOME")
+        graalvm-home-x86-64 (System/getenv "GRAALVM_HOME_X86_64")]
     (when-not graalvm-home
       (throw (ex-info "GRAALVM_HOME environment variable not set. Please set it to your GraalVM installation directory."
                       {:required "GRAALVM_HOME"})))
@@ -333,9 +336,12 @@
           ;; Build both architectures
           (let [arm64-binary (str target-dir "/" binary-basename "-arm64-temp")
                 amd64-binary (str target-dir "/" binary-basename "-amd64-temp")]
+            (when-not graalvm-home-x86-64
+              (throw (ex-info "GRAALVM_HOME_X86_64 environment variable not set. Required for building universal binaries with AMD64 slice."
+                              {:required "GRAALVM_HOME_X86_64"})))
             (try
-              (build-macos-arch-binary graalvm-home jar-file :arm64 arm64-binary)
-              (build-macos-arch-binary graalvm-home jar-file :amd64 amd64-binary)
+              (build-macos-arch-binary graalvm-home graalvm-home-x86-64 jar-file :arm64 arm64-binary)
+              (build-macos-arch-binary graalvm-home graalvm-home-x86-64 jar-file :amd64 amd64-binary)
               (combine-universal-binary arm64-binary amd64-binary output-binary)
 
               (println (format "✓ Universal %s binary built: %s" binary-type output-binary))
