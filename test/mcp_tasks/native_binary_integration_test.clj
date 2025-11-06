@@ -36,19 +36,12 @@
   (let [;; Check for env vars first (for CI cross-platform testing)
         target-os (System/getenv "BINARY_TARGET_OS")
         target-arch (System/getenv "BINARY_TARGET_ARCH")
-        _ (println "DEBUG: target-os=" target-os "target-arch=" target-arch)
-        _ (println "DEBUG: user.dir=" (System/getProperty "user.dir"))
         binary (if (and target-os target-arch)
                  ;; Use env vars to construct binary name
                  (let [platform {:os (keyword target-os)
                                  :arch (keyword target-arch)}
-                       binary-name (build/platform-binary-name "mcp-tasks" platform)
-                       _ (println "DEBUG: binary-name=" binary-name)
-                       binary-file (io/file "target" binary-name)
-                       _ (println "DEBUG: binary-file path=" (.getPath binary-file))
-                       _ (println "DEBUG: binary-file absolute=" (.getAbsolutePath binary-file))
-                       _ (println "DEBUG: binary-file exists=" (.exists binary-file))]
-                   binary-file)
+                       binary-name (build/platform-binary-name "mcp-tasks" platform)]
+                   (io/file "target" binary-name))
                  ;; Fall back to legacy detection for local testing
                  (let [binary-locations [(io/file "target/mcp-tasks-cli")
                                          (io/file "target/mcp-tasks-linux-amd64")
