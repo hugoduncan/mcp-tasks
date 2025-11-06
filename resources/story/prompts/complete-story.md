@@ -26,20 +26,29 @@ Use this tool after all story tasks are complete and the implementation has been
    - If incomplete tasks remain, inform the user and list them
    - Do not proceed with story completion until all tasks are done
 
-3. Complete the story using the `complete-task` tool:
+3. Request user confirmation before completing:
+   - Use the `AskUserQuestion` tool to confirm the user wants to archive the story
+   - Question format: "All story tasks are complete. Archive story #<id> '<title>'?"
+   - Provide two options:
+     - "Yes, archive story" (description: "Mark story as complete and move to archive")
+     - "No, not yet" (description: "Keep story open for now")
+   - If user selects "No, not yet", stop execution without completing the story
+   - If user selects "Yes, archive story", proceed to step 4
+
+4. Complete the story using the `complete-task` tool:
    - Use the story's task-id or exact title
    - Include the completion comment if provided
    - The story will be marked with `:status :closed` and moved from `tasks.ednl` to `complete.ednl`
 
-4. Complete all child tasks (if not already done):
+5. Complete all child tasks (if not already done):
    - For each child task of the story, use `complete-task`
    - This moves each task from `tasks.ednl` to `complete.ednl`
 
-5. If git workflow is enabled:
+6. If git workflow is enabled:
    - Stage the changes to `.mcp-tasks/tasks.ednl` and `.mcp-tasks/complete.ednl`
    - Return the modified file paths for commit
 
-6. Confirm completion to the user
+7. Confirm completion to the user
 
 ## When to Use
 
