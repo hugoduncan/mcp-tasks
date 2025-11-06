@@ -167,6 +167,28 @@
           (is (some? state))
           (is (= task-id (:task-id state)))
           (is (= story-id (:story-id state)))
+          (is (string? (:task-start-time state)))))
+
+      (testing "writes execution state when working on story directly"
+        ;; Create a story
+        (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Direct Story" :type "story"})
+              story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
+              story-id (get-in story-response [:task :id])
+
+              result (#'sut/work-on-impl (h/test-config test-dir) nil {:task-id story-id})
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)
+
+              ;; Read execution state
+              base-dir (:base-dir (h/test-config test-dir))
+              state (execution-state/read-execution-state base-dir)]
+
+          (is (false? (:isError result)))
+          (is (str/includes? (:message response) "execution state written"))
+
+          ;; Verify execution state has story-id but NOT task-id
+          (is (some? state))
+          (is (nil? (:task-id state)))
+          (is (= story-id (:story-id state)))
           (is (string? (:task-start-time state))))))))
 
 (deftest work-on-idempotency

@@ -744,11 +744,15 @@
            :isError false})
 
         ;; Otherwise proceed with execution state and normal response
-        (let [story-id (:parent-id task)
-              task-start-time (java.time.Instant/now)
-              state {:task-id task-id
-                     :story-id story-id
-                     :task-start-time (str task-start-time)}
+        (let [task-start-time (java.time.Instant/now)
+              state (if (= (:type task) :story)
+                      ;; Working on a story directly
+                      {:story-id task-id
+                       :task-start-time (str task-start-time)}
+                      ;; Working on a regular task
+                      {:task-id task-id
+                       :story-id (:parent-id task)
+                       :task-start-time (str task-start-time)})
               _ (execution-state/write-execution-state! base-dir state)
               state-file-path (str base-dir "/.mcp-tasks-current.edn")]
           (build-success-response task branch-info worktree-info state-file-path))))
