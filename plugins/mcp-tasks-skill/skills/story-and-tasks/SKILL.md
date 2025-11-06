@@ -242,6 +242,7 @@ Task #412: Add error recovery section (category: simple, parent-id: 408)
 ```
 
 **What happens:**
+- Requires user confirmation before archiving. Never complete a story without explicit user approval.
 - Moves story and all child tasks to archive
 - Preserves implementation history
 
@@ -577,6 +578,7 @@ External tools detect stale executions via `:started-at` timestamp in `.mcp-task
 - Monitor execution via `resource://current-execution`
 - Never create story child tasks for unrefined stories without explicit user confirmation
 - Always call work-on tool when user instructs you to work on a specific task or story
+- Never complete stories without explicit user confirmation
 
 ## File Locations
 
