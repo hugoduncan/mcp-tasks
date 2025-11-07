@@ -108,7 +108,8 @@ for file in "${FILES[@]}"; do
       sed -i.tmp "s/:git\/tag \"[^\"]*\"/:git\/tag \"$TAG\"/g" "$file"
     else
       # Add :git/tag before :git/sha line using perl for better newline handling
-      perl -i.tmp -pe "s/( *):git\/sha/\$1:git\/tag \"$TAG\"\n\$1:git\/sha/g" "$file"
+      # Only match when :git/sha has a quoted value (to avoid matching prose text)
+      perl -i.tmp -pe "s/( *):git\/sha \"([^\"]+)\"/\$1:git\/tag \"$TAG\"\n\$1:git\/sha \"\$2\"/g" "$file"
     fi
   fi
 
