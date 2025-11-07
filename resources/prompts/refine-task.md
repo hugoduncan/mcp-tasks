@@ -55,7 +55,12 @@ The task can be specified in multiple ways:
      - Potential scope concerns (if any)
 
 4. Enter an interactive refinement loop:
-   - Suggest specific improvements (e.g., clarify requirements, add acceptance criteria, break down complexity)
+   - Suggest specific improvements:
+     - Clarify requirements
+     - Remove ambiguity
+     - Reduce complexity
+     - Add acceptance criteria
+     - Describe implementation approach
    - Present suggestions to the user
    - Get user feedback on the suggestions
    - If user approves changes, update the working copy of the task content
@@ -75,11 +80,28 @@ The task can be specified in multiple ways:
        - Example: If task has `{"priority": "high"}`, result should be `{"priority": "high", "refined": "true"}`
    - Confirm the save operation to the user, noting that the task has been marked as refined
 
+## Scope Boundaries
+
+**What refine-task SHOULD do:**
+- Clarify requirements and acceptance criteria
+- Identify forgotten aspects or missing context
+- Describe implementation phases or approach within the task description/design
+- Improve clarity, completeness, and actionability
+- Add technical design notes
+
+**What refine-task MUST NOT do:**
+- Create child tasks or subtasks (use separate task breakdown workflows)
+- Include time estimates or effort estimates
+- Expand scope beyond the original intent without explicit user confirmation
+
 ## Notes
 
 - Tasks are stored in `tasks.ednl` with various `:type` values (`:story`, `:task`, `:bug`, `:feature`, `:chore`)
 - The `:description` field contains the main task content
 - The `:design` field contains design notes and technical details
+- The `:design` field is ideal for describing implementation phases, technical approach, and architectural considerations
+- Implementation phases help clarify the approach without creating separate tasks
+- Example design content: "Phase 1: Update prompt file, Phase 2: Update documentation, Phase 3: Verify behavior"
 - The refinement process should be collaborative and iterative
 - Always get explicit user approval before making changes
 - Focus on improving clarity, completeness, and actionability of the task

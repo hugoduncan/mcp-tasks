@@ -1,128 +1,80 @@
 ---
-title: Execute Story Task
+title: Execute Story Child
 description: Execute the next task from a story's task list
 argument-hint: [story-specification] [additional-context...]
 ---
 
 Execute the next incomplete task from the story.
 
-Parse the arguments: $ARGUMENTS
-- The first word/token is the story specification
-- Everything after is additional context to consider when executing the task
+Parse arguments from $ARGUMENTS: first word/token is story specification, remainder is additional context.
 
-### Story Specification Formats
+## Parse Story Specification
 
-The story can be specified in multiple ways:
-- **By ID**: "#59", "59", "story 59" (numeric formats)
-- **By title pattern**: "Make story prompts flexible" (text matching)
+| Format | Example | Treatment |
+|--------|---------|-----------|
+| Numeric | "59" | Use as task-id |
+| Hash-prefixed | "#59" | Strip "#", use as task-id |
+| Story N pattern | "story 59" | Extract N, use as task-id |
+| Text | "Make prompts flexible" | Use as title-pattern |
 
-### Parsing Logic
-
-1. **Extract the first token** from $ARGUMENTS as the story specification
-2. **Determine specification type**:
-   - If the token is numeric (e.g., "59") → treat as task-id
-   - If the token starts with "#" (e.g., "#59") → strip "#" and treat as task-id
-   - If the token matches "story N" pattern → extract N and treat as task-id
-   - Otherwise → treat as title-pattern
-3. **Use appropriate select-tasks filter**:
-   - For task-id: `task-id: N, type: story, unique: true`
-   - For title-pattern: `title-pattern: "...", type: story, unique: true`
+Call `select-tasks`:
+- For task-id: `task-id: N, type: story, unique: true`
+- For title-pattern: `title-pattern: "...", type: story, unique: true`
+- If no match: Inform user, suggest checking available stories
+- If multiple matches: List with IDs, ask for clarification
 
 ## Process
 
-1. Find the story task:
-   - Use `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true` to find the story task
-   - Handle errors:
-     - **No match**: Inform user no story found, suggest checking available stories
-     - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
+**1. Find first unblocked incomplete child:**
 
-2. Find the first unblocked incomplete child task:
-   - Use `select-tasks` with `parent-id` filter, `blocked: false`, and `:limit 1` to get the first unblocked incomplete child
-   - The tool returns :tasks (a vector) and :metadata
-   - use :open-task-count and :completed-task-count to show story progress,
-     like "2 of 5 tasks completed", where 2 is :completed-task-count
-     and 5 is (+ :open-task-count :completed-task-count)
-   - If no unblocked tasks found:
-     - Check if there are any incomplete tasks at all by calling `select-tasks` again with `parent-id` filter but without `blocked: false`
-     - If incomplete tasks exist but all are blocked:
-       - Inform user: "All remaining tasks are blocked. Blocked tasks:"
-       - List each blocked task with its ID, title, and blocking task IDs (from `:blocking-task-ids` field)
-       - Suggest completing blocking tasks first
-       - Stop - do not take any further actions
-     - If no incomplete tasks exist:
-       - if completed-task-count is positive:
-         - inform the user that all tasks are complete
-         - suggest the user reviews the story implementation or creates a PR
-         - stop - do not take any further actions
-       - if completed-task-count is zero:
-         - if the story is not refined, suggest the user refines the story
-         - else if the story is refined, suggest the user creates story tasks
-        for the story.
-         - stop - do not take any further actions
-   - If no category is found for the task, inform the user and stop
-   - show the task to the user
+Call `select-tasks` with `parent-id: <story-id>`, `blocked: false`, `limit: 1`.
 
-3. Set up task environment:
-   - Set up the task environment using the `work-on` tool:
-     - Call `mcp__mcp-tasks__work-on` with:
-       - `task-id`: <task-id-from-step-2>
-     - The tool will automatically:
-       - Write execution state with story-id and timestamp
-       - Handle branch management if configured
-       - Handle worktree management if configured
-   - After calling the work-on tool, display the working environment context:
-     - If the response includes `:worktree-name` and `:worktree-path`, display:
-           Worktree: <worktree-name>
-           Directory: <worktree-path>
-     - If the response includes `:branch-name`, display:
-           "Branch: <branch-name>"
-     - Format this as a clear header before proceeding with task execution
+Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
 
-   Example output:
-   ```
-Worktree: mcp-tasks-fix-bug
-Directory: /Users/duncan/projects/mcp-tasks-fix-bug
-Branch: fix-bug
-   ```
+**If no unblocked tasks returned:**
+- Call `select-tasks` again with `parent-id` only (no `blocked` filter)
+- If incomplete tasks exist (all blocked):
+  - Display: "All remaining tasks are blocked. Blocked tasks:"
+  - List each: ID, title, blocking task IDs (from `:blocking-task-ids`)
+  - Suggest completing blockers first
+  - Stop
+- If no incomplete tasks:
+  - If `:completed-task-count` > 0:
+    - Inform all tasks complete
+    - Suggest reviewing implementation or creating PR
+    - Stop
+  - If `:completed-task-count` = 0:
+    - If story not refined: suggest refining story
+    - If story refined: suggest creating story tasks
+    - Stop
 
-4. Execute the task using the category workflow:
-   - Do NOT check the refinement status of the task
-   - Execute the `category-<category>` prompt from the `mcp-tasks` server
-   - For example, if category is "simple", execute the `category-simple` prompt
-   - Run `/mcp-tasks:category-<category>` or use the
-     `prompt://category-<category>` resource to access the prompt
-   - The task is already in the tasks queue
-   - Complete all implementation steps according to the category workflow
+**If task has no category:** Inform user, stop
 
-   **While executing**: Watch for issues beyond the current task scope:
-   - Create new tasks immediately using `add-task` tool
-   - Link them with `:discovered-during` relation using `update-task`
-   - Example relation: `{:id 1, :relates-to <current-task-id>, :as-type :discovered-during}`
-   - Continue with the current task without getting sidetracked
-   - Do a final check before completion to capture all discoveries
-   - See "Discovering Issues Beyond Current Scope" guidance in execute-task prompt for details
+Display the task to user.
 
-5. Mark the task as complete:
-   - After task execution completes successfully, use the `complete-task`
-     tool
-   - Parameters: category (from step 2), title (partial match from
-     beginning of task), and optionally completion-comment
-   - The tool will automatically clear the execution state
+**2. Set up environment:**
 
-   **IMPORTANT: DO NOT mark the story itself as complete**
-   - Even if all child tasks are completed, the user needs to review the story before declaring it complete
-   - Only mark the individual child task as complete, never the parent story task
+Call `work-on` with `task-id: <story-id>`.
 
-## Notes
+Display environment context (if present in response):
+- Worktree: `<worktree-name>` at `<worktree-path>`
+- Branch: `<branch-name>`
 
-- Story tasks are child tasks with :parent-id pointing to the story
-- The category workflow will find and execute the task by its position
-  in the queue
-- If task execution fails, do not mark the task as complete
+**3. Execute task:**
 
-## Error Handling
+Do NOT check task refinement status. Story tasks are already in the queue and the category workflow will find them. Execute the task by following the `prompt://category-<category>` resource prompt.
 
-- If task execution fails or is interrupted:
-  - The execution state remains in place (managed by work-on tool)
-  - External tools can detect stale execution via the `:task-start-time` timestamp
-  - When starting a new task, work-on will overwrite the execution state automatically
+**While executing:** Watch for out-of-scope issues:
+- Create tasks immediately with `add-task`
+- Link via `update-task` with `:discovered-during` relation: `{:id 1, :relates-to <current-task-id>, :as-type :discovered-during}`
+- Continue current task without sidetracking
+- Final check before completion to capture all discoveries
+- See execute-task prompt's "Discovering Issues Beyond Current Scope" for details
+
+**4. Complete task:**
+
+Call `complete-task` with `task-id: <task-id>` and optional `completion-comment`.
+
+**IMPORTANT:** Never complete the parent story task. Only complete individual child tasks. User must review before declaring story complete.
+
+**On failure/interruption:** Execution state persists (managed by `work-on`). External tools detect stale execution via `:task-start-time`. Starting new task overwrites state automatically.
