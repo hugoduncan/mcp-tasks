@@ -95,7 +95,7 @@ The skill documents:
 - `refine-task` - Interactively refine task specifications
 - `next-<category>` - Execute next task for a specific category
 - `create-story-tasks` - Break down stories into tasks
-- `execute-story-task` - Execute next task from a story
+- `execute-story-child` - Execute next task from a story
 - `review-story-implementation` - Review completed story
 - `complete-story` - Mark story as complete and archive
 - `create-story-pr` - Create pull request for story
@@ -127,7 +127,7 @@ See the full skill content for detailed documentation of each tool, prompt, and 
 /mcp-tasks:create-story-tasks 59
 
 # 2. Execute tasks one by one
-/mcp-tasks:execute-story-task 59
+/mcp-tasks:execute-story-child 59
 
 # 3. Review implementation
 /mcp-tasks:review-story-implementation 59

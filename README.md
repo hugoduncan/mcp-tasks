@@ -158,7 +158,7 @@ See **[Glossary](doc/glossary.md)** and **[Workflow Documentation](doc/workflow.
 /mcp-tasks:create-story-tasks "User Authentication System"
 
 # Execute tasks sequentially
-/mcp-tasks:execute-story-task "User Authentication System"
+/mcp-tasks:execute-story-child "User Authentication System"
 ```
 
 See **[Workflow Documentation](doc/workflow.md)** for advanced patterns including git worktrees and parallel task execution.

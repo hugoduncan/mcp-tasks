@@ -42,7 +42,7 @@
               (is (pos? (count (str/trim message-text)))))))
 
         (testing "story prompt includes argument-hint in frontmatter"
-          (let [read-response @(mcp-client/read-resource client "prompt://execute-story-task")
+          (let [read-response @(mcp-client/read-resource client "prompt://execute-story-child")
                 text (-> read-response :contents first :text)]
             (is (not (:isError read-response)))
             (is (str/starts-with? text "---\n"))
@@ -53,7 +53,7 @@
         (testing "multiple prompts return distinct content"
           (let [simple-response @(mcp-client/read-resource client "prompt://next-simple")
                 simple-text (-> simple-response :contents first :text)
-                story-response @(mcp-client/read-resource client "prompt://execute-story-task")
+                story-response @(mcp-client/read-resource client "prompt://execute-story-child")
                 story-text (-> story-response :contents first :text)]
             (is (not (:isError simple-response)))
             (is (not (:isError story-response)))
@@ -188,7 +188,7 @@
     (fixtures/init-test-git-repo)
 
     (let [{:keys [server client]} (fixtures/create-test-server-and-client)
-          story-prompt-names ["execute-story-task"
+          story-prompt-names ["execute-story-child"
                               "create-story-tasks"
                               "review-story-implementation"
                               "complete-story"

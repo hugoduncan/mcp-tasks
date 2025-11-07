@@ -6247,7 +6247,7 @@ EXAMPLES:
 (defn story-prompts
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts.
 
-  For execute-story-task prompt, tailors content based on
+  For execute-story-child prompt, tailors content based on
   config :branch-management?.
 
   Returns a map of prompt names to prompt definitions, suitable for registering
@@ -6263,12 +6263,12 @@ EXAMPLES:
             (let [prompt-name (name (symbol v))
                   prompt-content @v
                   {:keys [metadata content]} (parse-frontmatter prompt-content)
-                  ;; Tailor execute-story-task content based on config
+                  ;; Tailor execute-story-child content based on config
                   tailored-content
                   (append-management-instructions
                     content
                     prompt-name
-                    "execute-story-task"
+                    "execute-story-child"
                     config)
                   description (or (get metadata "description")
                                   (:doc (meta v))

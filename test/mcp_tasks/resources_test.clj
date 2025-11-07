@@ -113,10 +113,10 @@
           (is (fn? (:implementation resource)))))
 
       (testing "includes resources for story prompts"
-        (is (contains? resources-map "prompt://execute-story-task"))
-        (let [resource (get resources-map "prompt://execute-story-task")]
-          (is (= "execute-story-task" (:name resource)))
-          (is (= "prompt://execute-story-task" (:uri resource)))
+        (is (contains? resources-map "prompt://execute-story-child"))
+        (let [resource (get resources-map "prompt://execute-story-child")]
+          (is (= "execute-story-child" (:name resource)))
+          (is (= "prompt://execute-story-child" (:uri resource)))
           (is (= "text/markdown" (:mime-type resource)))
           (is (string? (:description resource)))
           (is (fn? (:implementation resource)))))
@@ -187,22 +187,22 @@
                  (-> result :contents first :text)))))
 
       (testing "story prompt resource contains expected content"
-        (let [resource (get resources-map "prompt://execute-story-task")
+        (let [resource (get resources-map "prompt://execute-story-child")
               implementation (:implementation resource)
-              result (implementation nil "prompt://execute-story-task")
+              result (implementation nil "prompt://execute-story-child")
               contents (:contents result)]
           (is (not (:isError result)))
           (let [content (first contents)
                 text (:text content)]
-            (is (= "prompt://execute-story-task" (:uri content)))
+            (is (= "prompt://execute-story-child" (:uri content)))
             (is (= "text/markdown" (:mimeType content)))
             (is (string? text))
             (is (str/includes? text "Execute the next incomplete task")))))
 
       (testing "story prompt with arguments includes argument-hint in frontmatter"
-        (let [resource (get resources-map "prompt://execute-story-task")
+        (let [resource (get resources-map "prompt://execute-story-child")
               implementation (:implementation resource)
-              result (implementation nil "prompt://execute-story-task")
+              result (implementation nil "prompt://execute-story-child")
               text (-> result :contents first :text)
               lines (str/split-lines text)
               frontmatter-lines (take-while #(not= "---" %) (rest lines))

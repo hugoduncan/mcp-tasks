@@ -124,14 +124,14 @@
 (deftest ^:integ story-task-branch-management-test
   ;; Test that story task execution continues to work with new branch management location.
   (testing "story task branch management"
-    (testing "execute-story-task prompt includes branch management with new config"
+    (testing "execute-story-child prompt includes branch management with new config"
       (fixtures/write-config-file "{:use-git? false :branch-management? true}")
       (fixtures/init-test-git-repo)
 
       (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
         (try
-          ;; Get execute-story-task prompt
-          (let [prompt-response @(mcp-client/get-prompt client "execute-story-task" {})
+          ;; Get execute-story-child prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-story-child" {})
                 content (get-in prompt-response [:messages 0 :content :text])]
             (is (not (:isError prompt-response)))
             (is (string? content))
@@ -143,14 +143,14 @@
             (mcp-client/close! client)
             ((:stop server))))))
 
-    (testing "execute-story-task prompt excludes branch management when config is false"
+    (testing "execute-story-child prompt excludes branch management when config is false"
       (fixtures/write-config-file "{:use-git? false :branch-management? false}")
       (fixtures/init-test-git-repo)
 
       (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
         (try
-          ;; Get execute-story-task prompt
-          (let [prompt-response @(mcp-client/get-prompt client "execute-story-task" {})
+          ;; Get execute-story-child prompt
+          (let [prompt-response @(mcp-client/get-prompt client "execute-story-child" {})
                 content (get-in prompt-response [:messages 0 :content :text])]
             (is (not (:isError prompt-response)))
             (is (string? content))

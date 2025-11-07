@@ -118,7 +118,7 @@ The story can be specified in multiple ways:
 7. Confirm task creation to the user:
    - Report how many tasks were created
    - Report how many dependencies were established
-   - Mention they can be executed with `/mcp-tasks:execute-story-task <story-name>`
+   - Mention they can be executed with `/mcp-tasks:execute-story-child <story-name>`
 
 ## Notes
 

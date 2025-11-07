@@ -389,7 +389,7 @@ Examples:
 ```
 prompt://refine-task
 prompt://create-story-tasks
-prompt://execute-story-task
+prompt://execute-story-child
 ```
 
 ### Resource Format

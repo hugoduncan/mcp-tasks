@@ -164,7 +164,7 @@ Break the refined story into executable tasks:
 Execute story tasks one at a time:
 
 ```
-/mcp-tasks:execute-story-task <story-name>
+/mcp-tasks:execute-story-child <story-name>
 ```
 
 **Process:**
@@ -177,7 +177,7 @@ Execute story tasks one at a time:
 
 **Example execution:**
 ```
-User: /mcp-tasks:execute-story-task user-auth
+User: /mcp-tasks:execute-story-child user-auth
 
 Agent: Found story: User Authentication Story (ID: 13)
        Found next task: "Set up JWT library dependencies" (ID: 40)
@@ -227,7 +227,7 @@ the system automatically manages git branches for stories:
 echo '{:use-git? true :branch-management? true}' > .mcp-tasks.edn
 
 # Start story work - automatically creates/switches to user-auth branch
-# Run: /mcp-tasks:execute-story-task user-auth
+# Run: /mcp-tasks:execute-story-child user-auth
 
 # All subsequent task executions stay on user-auth branch until story is complete
 ```
@@ -251,10 +251,10 @@ echo '{:use-git? true :branch-management? true}' > .mcp-tasks.edn
 # Tasks are created in tasks.ednl with :parent-id 50
 
 # 4. Execute tasks one by one
-# Run: /mcp-tasks:execute-story-task "User Authentication"
+# Run: /mcp-tasks:execute-story-child "User Authentication"
 # [First task executes and moves to complete.ednl]
 
-# Run: /mcp-tasks:execute-story-task "User Authentication"
+# Run: /mcp-tasks:execute-story-child "User Authentication"
 # [Second task executes and moves to complete.ednl]
 
 # ... repeat until all tasks complete
@@ -276,7 +276,7 @@ Override the default story prompts by creating files in
 **Available prompts to override:**
 - `refine-task.md` - Task refinement instructions
 - `create-story-tasks.md` - Task breakdown instructions
-- `execute-story-task.md` - Task execution workflow
+- `execute-story-child.md` - Task execution workflow
 
 ### Frontmatter Format
 
@@ -363,7 +363,7 @@ Story prompts and category prompts serve different purposes:
 - Guide story-level operations (refine, break down, execute)
 - Handle the story workflow and task distribution
 - Route tasks to appropriate categories
-- Three prompts: refine-task, create-story-tasks, execute-story-task
+- Three prompts: refine-task, create-story-tasks, execute-story-child
 
 **Category prompts** (`.mcp-tasks/prompts/<category>.md`):
 - Define how to execute individual tasks within a category
@@ -372,8 +372,8 @@ Story prompts and category prompts serve different purposes:
 - One prompt per category (simple, medium, large, etc.)
 
 **Interaction:**
-When you run `/mcp-tasks:execute-story-task user-auth`:
-1. The `execute-story-task` **story prompt** finds the next story task
+When you run `/mcp-tasks:execute-story-child user-auth`:
+1. The `execute-story-child` **story prompt** finds the next story task
 2. It extracts the task's CATEGORY (e.g., "simple")
 3. It adds the task to that category's queue
 4. The task executes using the `simple` **category prompt** from
