@@ -91,7 +91,7 @@
               (let [resource-names (set (map :name resources))]
                 ;; Check for some known prompts
                 (is (contains? resource-names "next-simple"))
-                (is (contains? resource-names "execute-story-task"))
+                (is (contains? resource-names "execute-story-child"))
                 (is (contains? resource-names "execute-task"))))))
 
         (testing "can read resource content"

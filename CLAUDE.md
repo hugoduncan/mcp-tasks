@@ -95,7 +95,7 @@ The `work-on` tool also returns `:is-blocked` and `:blocking-task-ids` fields in
 
 **Story and Task Execution:**
 
-When executing stories, the `execute-story-task` prompt automatically finds the first **unblocked** incomplete child task using `select-tasks` with `blocked: false` parameter. If all incomplete tasks are blocked, the prompt informs the user with details about blocking tasks and suggests completing blocking tasks first.
+When executing stories, the `execute-story-child` prompt automatically finds the first **unblocked** incomplete child task using `select-tasks` with `blocked: false` parameter. If all incomplete tasks are blocked, the prompt informs the user with details about blocking tasks and suggests completing blocking tasks first.
 
 When executing individual tasks, the `execute-task` prompt validates whether the task is blocked before proceeding and asks for user confirmation if blocked.
 

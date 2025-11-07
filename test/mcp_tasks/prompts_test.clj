@@ -311,23 +311,23 @@
         (is (some? create-prompt))
         (is (some? (:description create-prompt)))))))
 
-(deftest execute-story-task-prompt-test
-  ;; Test that the execute-story-task built-in prompt is properly defined
+(deftest execute-story-child-prompt-test
+  ;; Test that the execute-story-child built-in prompt is properly defined
   ;; with correct metadata and content structure including task execution,
   ;; queue management, and branch management instructions.
-  (testing "execute-story-task prompt"
+  (testing "execute-story-child prompt"
     (testing "is available via get-story-prompt"
-      (let [prompt (sut/get-story-prompt "execute-story-task")]
+      (let [prompt (sut/get-story-prompt "execute-story-child")]
         (is (some? prompt))
-        (is (= "execute-story-task" (:name prompt)))))
+        (is (= "execute-story-child" (:name prompt)))))
 
     (testing "has description metadata"
-      (let [prompt (sut/get-story-prompt "execute-story-task")]
+      (let [prompt (sut/get-story-prompt "execute-story-child")]
         (is (some? (:description prompt)))
         (is (string? (:description prompt)))))
 
     (testing "has content with key instructions"
-      (let [prompt (sut/get-story-prompt "execute-story-task")
+      (let [prompt (sut/get-story-prompt "execute-story-child")
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
@@ -336,14 +336,14 @@
         (is (re-find #"category" content))))
 
     (testing "includes task execution workflow"
-      (let [prompt (sut/get-story-prompt "execute-story-task")
+      (let [prompt (sut/get-story-prompt "execute-story-child")
             content (:content prompt)]
         (is (re-find #"select-tasks" content))
         (is (re-find #"complete-task" content))))
 
     (testing "appears in list-story-prompts"
       (let [prompts (sut/list-story-prompts)
-            execute-prompt (first (filter #(= "execute-story-task" (:name %)) prompts))]
+            execute-prompt (first (filter #(= "execute-story-child" (:name %)) prompts))]
         (is (some? execute-prompt))
         (is (some? (:description execute-prompt)))))))
 
@@ -461,13 +461,13 @@
 
     (testing "deduplicates when both override and built-in exist"
       (let [test-file (create-test-override-file
-                        "execute-story-task"
-                        "---\ndescription: Overridden execute-story-task\n---\n\nOverride content")]
+                        "execute-story-child"
+                        "---\ndescription: Overridden execute-story-child\n---\n\nOverride content")]
         (try
           (let [prompts (sut/list-story-prompts)
-                execute-prompts (filter #(= "execute-story-task" (:name %)) prompts)]
+                execute-prompts (filter #(= "execute-story-child" (:name %)) prompts)]
             (is (= 1 (count execute-prompts)))
-            (is (= "Overridden execute-story-task" (:description (first execute-prompts)))))
+            (is (= "Overridden execute-story-child" (:description (first execute-prompts)))))
           (finally
             (delete-test-file test-file)))))
 
@@ -485,11 +485,11 @@
 
 (deftest story-prompts-branch-management-test
   ;; Test that story-prompts conditionally includes branch management
-  ;; instructions in execute-story-task prompt based on config.
+  ;; instructions in execute-story-child prompt based on config.
   (testing "story-prompts branch management"
     (testing "includes branch management when :branch-management? is true"
       (let [prompts (sut/story-prompts {:branch-management? true})
-            execute-prompt (get prompts "execute-story-task")]
+            execute-prompt (get prompts "execute-story-child")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (re-find #"Branch Management" content))
@@ -498,7 +498,7 @@
 
     (testing "excludes branch management when :branch-management? is false"
       (let [prompts (sut/story-prompts {:branch-management? false})
-            execute-prompt (get prompts "execute-story-task")]
+            execute-prompt (get prompts "execute-story-child")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (not (re-find #"Branch Management" content)))
@@ -506,7 +506,7 @@
 
     (testing "excludes branch management when config key is not present"
       (let [prompts (sut/story-prompts {})
-            execute-prompt (get prompts "execute-story-task")]
+            execute-prompt (get prompts "execute-story-child")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (not (re-find #"Branch Management" content)))
@@ -663,11 +663,11 @@
 
 (deftest story-prompts-worktree-management-test
   ;; Test that story-prompts conditionally includes worktree management
-  ;; instructions in execute-story-task prompt based on config.
+  ;; instructions in execute-story-child prompt based on config.
   (testing "story-prompts worktree management"
     (testing "includes worktree management when :worktree-management? is true"
       (let [prompts (sut/story-prompts {:worktree-management? true})
-            execute-prompt (get prompts "execute-story-task")]
+            execute-prompt (get prompts "execute-story-child")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (re-find #"Worktree Management" content))
@@ -676,7 +676,7 @@
 
     (testing "excludes worktree management when :worktree-management? is false"
       (let [prompts (sut/story-prompts {:worktree-management? false})
-            execute-prompt (get prompts "execute-story-task")]
+            execute-prompt (get prompts "execute-story-child")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (not (re-find #"Worktree Management" content)))
@@ -684,7 +684,7 @@
 
     (testing "excludes worktree management when config key is not present"
       (let [prompts (sut/story-prompts {})
-            execute-prompt (get prompts "execute-story-task")]
+            execute-prompt (get prompts "execute-story-child")]
         (is (some? execute-prompt))
         (let [content (get-in execute-prompt [:messages 0 :content :text])]
           (is (not (re-find #"Worktree Management" content)))

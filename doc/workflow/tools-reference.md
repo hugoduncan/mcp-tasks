@@ -212,7 +212,7 @@ into discrete tasks, assign categories, and create them using the add-task tool
 after your approval.
 ```
 
-### execute-story-task
+### execute-story-child
 
 Execute the next task from a story.
 
@@ -263,7 +263,7 @@ If `:branch-management?` is false (default):
 
 **Usage example:**
 ```
-/mcp-tasks:execute-story-task "User Authentication"
+/mcp-tasks:execute-story-child "User Authentication"
 
 The agent will find the next incomplete task from the User Authentication story
 in tasks.ednl, execute it using that category's workflow, and mark it complete

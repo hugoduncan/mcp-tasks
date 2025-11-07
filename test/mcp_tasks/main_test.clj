@@ -324,7 +324,7 @@
         (try
           (is (map? (:prompts server-config)))
           (is (contains? (:prompts server-config) "create-story-tasks"))
-          (is (contains? (:prompts server-config) "execute-story-task"))
+          (is (contains? (:prompts server-config) "execute-story-child"))
           (is (contains? (:prompts server-config) "review-story-implementation"))
           (is (contains? (:prompts server-config) "create-story-pr"))
           (is (map? (get (:prompts server-config) "create-story-tasks")))

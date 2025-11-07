@@ -36,7 +36,7 @@ The mcp-tasks MCP server provides:
 | `refine-task` | Interactively refine task | `[task-spec] [context...]` | By ID: "#59", "59", "task 59". By pattern: "Update prompt" |
 | `next-<category>` | Execute next task for category | None | N/A |
 | `create-story-tasks` | Break story into tasks | `[story-spec] [context...]` | By ID: "#59", "59", "story 59". By pattern: "Story title" |
-| `execute-story-task` | Execute next story task | `[story-spec] [context...]` | Same as create-story-tasks |
+| `execute-story-child` | Execute next story task | `[story-spec] [context...]` | Same as create-story-tasks |
 | `review-story-implementation` | Review completed story | `[story-spec]` | Same as create-story-tasks |
 | `complete-story` | Archive completed story | `[story-spec]` | Same as create-story-tasks |
 | `create-story-pr` | Create PR for story | `[story-spec]` | Same as create-story-tasks |
@@ -58,7 +58,7 @@ The mcp-tasks MCP server provides:
 **Story workflow:**
 ```
 /mcp-tasks:create-story-tasks 59       # Break into tasks
-/mcp-tasks:execute-story-task 59       # Execute (repeat for each task)
+/mcp-tasks:execute-story-child 59       # Execute (repeat for each task)
 /mcp-tasks:review-story-implementation 59
 /mcp-tasks:complete-story 59
 ```
@@ -196,7 +196,7 @@ Task #412: Add error recovery section (category: simple, parent-id: 408)
 #### 3. Execute Story Tasks (Repeat for Each Task)
 
 ```bash
-/mcp-tasks:execute-story-task 408
+/mcp-tasks:execute-story-child 408
 ```
 
 **What happens:**
@@ -287,7 +287,7 @@ Agents must call the `work-on` tool explicitly when the user instructs them to w
 4. Proceed with task execution according to the category workflow
 
 **Contrast with execute prompts:**
-- Execute prompts (e.g., `/mcp-tasks:execute-story-task`) call `work-on` automatically
+- Execute prompts (e.g., `/mcp-tasks:execute-story-child`) call `work-on` automatically
 - When user gives direct instruction to work on a task, agent must call `work-on` before proceeding
 
 ### Return Value Specification

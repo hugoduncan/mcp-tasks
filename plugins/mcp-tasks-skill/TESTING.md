@@ -146,7 +146,7 @@ Based on Claude Code documentation:
 2. **Prompt Reference Verification**:
    - Verify all documented prompts are listed:
      - Category prompts (simple, medium, large, clarify-task)
-     - Story prompts (refine-story, create-story-tasks, execute-story-task, etc.)
+     - Story prompts (refine-story, create-story-tasks, execute-story-child, etc.)
 
 3. **Workflow Examples**:
    - Follow one of the documented workflows (e.g., "Execute a Simple Task")
