@@ -51,6 +51,24 @@ jobs:
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Update SHA references in documentation
+        run: |
+          # Run standalone script to update SHA references
+          ./scripts/update-sha-refs.sh "${{ github.sha }}"
+
+          # Commit changes (gracefully handle no changes case)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add doc/install.md plugins/mcp-tasks-skill/README.md
+
+          # Only commit if there are actual changes
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: update git SHA to ${{ github.sha }}"
+            echo "Documentation updated with SHA ${{ github.sha }}"
+          else
+            echo "No SHA updates needed - documentation already current"
+          fi
+
       - name: Run smoke test
         run: |
           OUTPUT=$(clojure -M -m mcp-tasks.main --list-prompts)
