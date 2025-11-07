@@ -380,7 +380,6 @@
                            "--no-fallback"
                            "-H:+ReportExceptionStackTraces"
                            "--initialize-at-build-time"
-                           "-H:IncludeResources=prompts/.*\\.md"
                            "-o" output-name-for-native-image]
                 ;; Add architecture flag for macOS cross-compilation
                 ;; For macOS, use -march=compatibility for cross-arch builds
