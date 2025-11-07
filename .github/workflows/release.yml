@@ -53,9 +53,8 @@ jobs:
 
       - name: Update SHA references in documentation
         run: |
-          # Update both documentation files with current commit SHA
-          sed -i 's/:git\/sha "[0-9a-f]\{40\}"/:git\/sha "${{ github.sha }}"/g' doc/install.md
-          sed -i 's/:git\/sha "[0-9a-f]\{40\}"/:git\/sha "${{ github.sha }}"/g' plugins/mcp-tasks-skill/README.md
+          # Run standalone script to update SHA references
+          ./scripts/update-sha-refs.sh "${{ github.sha }}"
 
           # Commit changes (gracefully handle no changes case)
           git config user.name "github-actions[bot]"
