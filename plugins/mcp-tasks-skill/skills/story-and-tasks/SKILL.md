@@ -45,8 +45,30 @@ The mcp-tasks MCP server provides:
 
 ## MCP Resources
 
-- `prompt://category-<category>` - Category-specific execution instructions
+All prompts and resources are accessible via the `ReadMcpResourceTool`:
+
+**Story and Task Prompts:**
+- `prompt://execute-task` - Execute task by selection criteria
+- `prompt://refine-task` - Interactively refine task
+- `prompt://create-story-tasks` - Break story into tasks
+- `prompt://execute-story-child` - Execute next story task
+- `prompt://create-story-pr` - Create PR for story
+
+**Category Instructions:**
+- `prompt://category-<category>` - Category-specific execution instructions (e.g., `prompt://category-simple`)
+
+**Execution State:**
 - `resource://current-execution` - Current execution state (`story-id`, `task-id`, `started-at`)
+
+**Accessing resources:**
+```clojure
+;; Example: Access execute-task prompt
+(ReadMcpResourceTool
+  :server "mcp-tasks"
+  :uri "prompt://execute-task")
+```
+
+This allows agents to programmatically retrieve and execute prompt workflows without using slash commands.
 
 ## Common Workflows
 
