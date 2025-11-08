@@ -90,8 +90,8 @@
 
   Requires CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables.
   CLOJARS_PASSWORD should contain your deploy token, not your actual password."
-  [{:keys [version dry-run] :or {dry-run false}}]
-  (let [v (or version (version nil))
+  [{version-str :version :keys [dry-run] :or {dry-run false}}]
+  (let [v (or version-str (version nil))
         jar-file (format "%s/mcp-tasks-%s.jar" target-dir v)
         pom-file (format "%s/classes/META-INF/maven/%s/%s/pom.xml"
                          target-dir
