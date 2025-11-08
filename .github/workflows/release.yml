@@ -20,7 +20,7 @@ jobs:
     needs: build-binaries
     permissions:
       contents: write
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' || inputs.dry-run
 
     steps:
       - name: Checkout code
