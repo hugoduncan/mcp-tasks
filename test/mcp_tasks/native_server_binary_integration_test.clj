@@ -401,17 +401,17 @@
                   "Server should respond to prompts/list")
               (is (vector? (get-in prompts-response [:result :prompts]))
                   "Response should contain prompts array")
-              (is (some #(= "execute-story-task" (:name %))
+              (is (some #(= "execute-story-child" (:name %))
                         (get-in prompts-response [:result :prompts]))
-                  "Prompts should include execute-story-task")))
+                  "Prompts should include execute-story-child")))
 
-          ;; Get execute-story-task prompt and verify it includes management instructions
-          (testing "execute-story-task prompt includes management instructions"
+          ;; Get execute-story-child prompt and verify it includes management instructions
+          (testing "execute-story-child prompt includes management instructions"
             (let [prompt-response (send-jsonrpc proc
                                                 {:jsonrpc "2.0"
                                                  :id 3
                                                  :method "prompts/get"
-                                                 :params {:name "execute-story-task"
+                                                 :params {:name "execute-story-child"
                                                           :arguments {}}})]
               (is (some? prompt-response)
                   "Server should respond to prompts/get")
