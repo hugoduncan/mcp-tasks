@@ -249,7 +249,7 @@
                   read-response @(mcp-client/read-resource client uri)
                   text (-> read-response :contents first :text)]
               (testing (str story-prompt-name " documents parsing logic or argument flexibility")
-                (is (or (str/includes? text "Parsing Logic")
+                (is (or (str/includes? text "Parse `$ARGUMENTS`")
                         (str/includes? text "Parse the arguments")
                         (str/includes? text "optional"))
                     (str story-prompt-name " should document argument parsing or flexibility"))))))

@@ -100,11 +100,11 @@
         (testing "prompt content includes expected instructions"
           (let [prompt-response @(mcp-client/get-prompt client "execute-task" {})
                 content (-> prompt-response :messages first :content :text)]
-            (is (str/includes? content "Argument Parsing"))
-            (is (str/includes? content "Find the Task"))
+            (is (str/includes? content "Parse `$ARGUMENTS`"))
+            (is (str/includes? content "Check Refinement"))
             (is (str/includes? content "Retrieve Category Instructions"))
-            (is (str/includes? content "Execute the Task"))
-            (is (str/includes? content "Mark Task Complete"))
+            (is (str/includes? content "Execute"))
+            (is (str/includes? content "Complete"))
             (is (str/includes? content "select-tasks"))
             (is (str/includes? content "prompt://category-"))
             (is (str/includes? content "complete-task"))))

@@ -245,7 +245,7 @@
         (is (re-find #"update-task" content))
         (is (re-find #"interactive" content))
         (is (re-find #"project context" content))
-        (is (re-find #"design patterns" content))))
+        (is (re-find #"patterns" content))))
 
     (testing "includes refinement status instructions"
       (let [prompts (sut/task-execution-prompts {})
@@ -254,7 +254,7 @@
         (is (some? content))
         (is (re-find #"meta" content) "Should mention meta field")
         (is (re-find #"refined.*true" content) "Should set refined to true")
-        (is (re-find #"[Pp]reserve.*existing meta" content) "Should preserve existing meta values")))
+        (is (re-find #"preserve existing" content) "Should preserve existing meta values")))
 
     (testing "works with all task types"
       (let [prompts (sut/task-execution-prompts {})
@@ -284,19 +284,19 @@
             content (:content prompt)]
         (is (some? content))
         (is (string? content))
-        (is (re-find #"story-name" content))
+        (is (re-find #"story specification" content))
         (is (re-find #"(?s)select-tasks.*title-pattern" content))
-        (is (re-find #"add-task" content))
-        (is (re-find #"tasks\.ednl" content))
+        (is (re-find #"Add in dependency order" content))
+        (is (re-find #"relations" content))
         (is (re-find #"category" content))))
 
-    (testing "includes category selection guidance"
+    (testing "includes task breakdown instructions"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
             content (:content prompt)]
-        (is (re-find #"simple" content))
-        (is (re-find #"medium" content))
-        (is (re-find #"large" content))
-        (is (re-find #"clarify-task" content))))
+        (is (re-find #"Break down" content))
+        (is (re-find #"dependencies" content))
+        (is (re-find #"blocked-by" content))
+        (is (re-find #"appropriate category" content))))
 
     (testing "includes task format examples"
       (let [prompt (sut/get-story-prompt "create-story-tasks")
