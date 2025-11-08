@@ -54,7 +54,7 @@ jobs:
       - name: Update SHA references in documentation
         run: |
           # Run standalone script to update SHA references
-          ./scripts/update-sha-refs.sh "${{ github.sha }}"
+          ./scripts/update-sha-refs.sh --tag "${{ steps.version.outputs.tag }}" --sha "${{ github.sha }}"
 
           # Commit changes (gracefully handle no changes case)
           git config user.name "github-actions[bot]"
