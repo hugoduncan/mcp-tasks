@@ -28,39 +28,72 @@ The mcp-tasks MCP server provides:
 - Actions: Records execution state, manages branches/worktrees (if configured)
 - Returns: Task info (`:task-id`, `:category`, `:type`, `:title`, `:status`), environment info (`:worktree-path`, `:worktree-name`, `:branch-name`, `:worktree-clean?`, `:worktree-created?`), state file path
 
-## Available Prompts
+## Available Activities
 
-| Prompt | Purpose | Arguments | Specification Formats |
-|--------|---------|-----------|----------------------|
-| `execute-task` | Execute task by criteria | `[selection-criteria...]` | `category=X`, `parent-id=N`, `type=X` (combinable) |
-| `refine-task` | Interactively refine task | `[task-spec] [context...]` | By ID: "#59", "59", "task 59". By pattern: "Update prompt" |
-| `next-<category>` | Execute next task for category | None | N/A |
-| `create-story-tasks` | Break story into tasks | `[story-spec] [context...]` | By ID: "#59", "59", "story 59". By pattern: "Story title" |
-| `execute-story-child` | Execute next story task | `[story-spec] [context...]` | Same as create-story-tasks |
-| `review-story-implementation` | Review completed story | `[story-spec]` | Same as create-story-tasks |
-| `complete-story` | Archive completed story | `[story-spec]` | Same as create-story-tasks |
-| `create-story-pr` | Create PR for story | `[story-spec]` | Same as create-story-tasks |
+Each activity can be invoked via slash command or by programmatically accessing the MCP resource using `ReadMcpResourceTool`.
 
-**Common workflow:** All execution prompts follow pattern: Find task → Call work-on → Execute category workflow → Mark complete
+### Task Activities
 
-## MCP Resources
+**Execute task by criteria**
+- Slash command: `/mcp-tasks:execute-task [selection-criteria...]`
+- Arguments: `category=X`, `parent-id=N`, `type=X` (combinable)
+- MCP resource: `prompt://execute-task`
+- Implementation: Use slash command OR read resource and follow prompt instructions
 
-All prompts and resources are accessible via the `ReadMcpResourceTool`:
+**Execute next task for category**
+- Slash command: `/mcp-tasks:next-<category>`
+- Arguments: None
+- MCP resource: `prompt://next-<category>`
+- Implementation: Use slash command OR read resource and follow prompt instructions
 
-**Story and Task Prompts:**
-- `prompt://execute-task` - Execute task by selection criteria
-- `prompt://refine-task` - Interactively refine task
-- `prompt://create-story-tasks` - Break story into tasks
-- `prompt://execute-story-child` - Execute next story task
-- `prompt://create-story-pr` - Create PR for story
+**Refine task**
+- Slash command: `/mcp-tasks:refine-task [task-spec] [context...]`
+- Arguments: Task ID ("#59", "59", "task 59") or pattern ("Update prompt")
+- MCP resource: `prompt://refine-task`
+- Implementation: Use slash command OR read resource and follow prompt instructions
 
-**Category Instructions:**
-- `prompt://category-<category>` - Category-specific execution instructions (e.g., `prompt://category-simple`)
+### Story Activities
 
-**Execution State:**
+**Create story tasks**
+- Slash command: `/mcp-tasks:create-story-tasks [story-spec] [context...]`
+- Arguments: Story ID ("#59", "59", "story 59") or pattern ("Story title")
+- MCP resource: `prompt://create-story-tasks`
+- Implementation: Use slash command OR read resource and follow prompt instructions
+
+**Execute story task**
+- Slash command: `/mcp-tasks:execute-story-child [story-spec] [context...]`
+- Arguments: Same as create-story-tasks
+- MCP resource: `prompt://execute-story-child`
+- Implementation: Use slash command OR read resource and follow prompt instructions
+
+**Create story PR**
+- Slash command: `/mcp-tasks:create-story-pr [story-spec]`
+- Arguments: Same as create-story-tasks
+- MCP resource: `prompt://create-story-pr`
+- Implementation: Use slash command OR read resource and follow prompt instructions
+
+**Review story implementation**
+- Slash command: `/mcp-tasks:review-story-implementation [story-spec]`
+- Arguments: Same as create-story-tasks
+- MCP resource: `prompt://review-story-implementation`
+- Implementation: Use slash command OR read resource and follow prompt instructions
+
+**Complete story**
+- Slash command: `/mcp-tasks:complete-story [story-spec]`
+- Arguments: Same as create-story-tasks
+- MCP resource: `prompt://complete-story`
+- Implementation: Use slash command OR read resource and follow prompt instructions
+
+### Other Resources
+
+**Category instructions:**
+- `prompt://category-<category>` - Execution instructions for specific category (e.g., `prompt://category-simple`)
+
+**Execution state:**
 - `resource://current-execution` - Current execution state (`story-id`, `task-id`, `started-at`)
 
-**Accessing resources:**
+### Accessing MCP Resources Programmatically
+
 ```clojure
 ;; Example: Access execute-task prompt
 (ReadMcpResourceTool
@@ -68,7 +101,7 @@ All prompts and resources are accessible via the `ReadMcpResourceTool`:
   :uri "prompt://execute-task")
 ```
 
-This allows agents to programmatically retrieve and execute prompt workflows without using slash commands.
+**Common workflow:** All execution activities follow: Find task → Call work-on → Execute category workflow → Mark complete
 
 ## Common Workflows
 
