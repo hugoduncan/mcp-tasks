@@ -71,7 +71,7 @@ jobs:
           fi
 
       - name: Build JAR
-        run: clojure -T:build jar
+        run: clojure -T:build jar :version '"${{ steps.version.outputs.version }}"'
 
       - name: Debug JAR build output
         run: |

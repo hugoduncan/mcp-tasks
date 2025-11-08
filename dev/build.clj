@@ -25,11 +25,15 @@
   (b/delete {:path target-dir}))
 
 (defn jar
-  "Build JAR file with Main-Class manifest"
-  [_]
-  (let [v (version nil)
+  "Build JAR file with Main-Class manifest
+
+  Options:
+  - :version - Version string to use (default: calculated from git)"
+  [{version-str :version}]
+  (let [v (or version-str (version nil))
         basis (b/create-basis {:project "deps.edn"})
         jar-file (format "%s/mcp-tasks-%s.jar" target-dir v)]
+    (println "Version:" v)
     (println "Building JAR:" jar-file)
     (b/write-pom {:class-dir class-dir
                   :lib lib
