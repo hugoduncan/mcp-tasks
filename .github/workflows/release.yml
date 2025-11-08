@@ -40,14 +40,22 @@ jobs:
           sudo mv git-cliff-2.7.0/git-cliff /usr/local/bin/
           git-cliff --version
 
+      - name: Calculate version
+        id: version
+        run: |
+          VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
       - name: Update SHA references in documentation
         run: |
-          # Calculate preliminary version for SHA updates
-          PRELIM_VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
-          PRELIM_TAG="v$PRELIM_VERSION"
+          # Use the calculated version from previous step
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v$VERSION"
 
           # Run standalone script to update SHA references
-          ./scripts/update-sha-refs.sh --tag "$PRELIM_TAG" --sha "${{ github.sha }}"
+          ./scripts/update-sha-refs.sh --tag "$TAG" --sha "${{ github.sha }}"
 
           # Commit changes (gracefully handle no changes case)
           git config user.name "github-actions[bot]"
@@ -56,19 +64,11 @@ jobs:
 
           # Only commit if there are actual changes
           if ! git diff --cached --quiet; then
-            git commit -m "docs: update git SHA to ${{ github.sha }}"
-            echo "Documentation updated with SHA ${{ github.sha }}"
+            git commit -m "docs: update to $TAG (${{ github.sha }})"
+            echo "Documentation updated with tag $TAG and SHA ${{ github.sha }}"
           else
             echo "No SHA updates needed - documentation already current"
           fi
-
-      - name: Calculate version
-        id: version
-        run: |
-          VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
 
       - name: Build JAR
         run: clojure -T:build jar
@@ -156,7 +156,7 @@ jobs:
         env:
           CLOJARS_USERNAME: ${{ secrets.CLOJARS_USERNAME }}
           CLOJARS_PASSWORD: ${{ secrets.CLOJARS_PASSWORD }}
-        run: clojure -T:build deploy
+        run: clojure -T:build deploy :version '"${{ steps.version.outputs.version }}"'
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}
