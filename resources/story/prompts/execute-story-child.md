@@ -6,22 +6,14 @@ argument-hint: [story-specification] [additional-context...]
 
 Execute the next incomplete task from the story.
 
-Parse arguments from $ARGUMENTS: first word/token is story specification, remainder is additional context.
+Parse `$ARGUMENTS`: first token is story specification, rest is context.
 
-## Parse Story Specification
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "story N" | 59, #59, story 59 | `task-id: N, type: story, unique: true` |
+| Text | "Make prompts flexible" | `title-pattern: "...", type: story, unique: true` |
 
-| Format | Example | Treatment |
-|--------|---------|-----------|
-| Numeric | "59" | Use as task-id |
-| Hash-prefixed | "#59" | Strip "#", use as task-id |
-| Story N pattern | "story 59" | Extract N, use as task-id |
-| Text | "Make prompts flexible" | Use as title-pattern |
-
-Call `select-tasks`:
-- For task-id: `task-id: N, type: story, unique: true`
-- For title-pattern: `title-pattern: "...", type: story, unique: true`
-- If no match: Inform user, suggest checking available stories
-- If multiple matches: List with IDs, ask for clarification
+Handle no match or multiple matches by informing user.
 
 ## Process
 
@@ -31,50 +23,29 @@ Call `select-tasks` with `parent-id: <story-id>`, `blocked: false`, `limit: 1`.
 
 Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
 
-**If no unblocked tasks returned:**
-- Call `select-tasks` again with `parent-id` only (no `blocked` filter)
-- If incomplete tasks exist (all blocked):
-  - Display: "All remaining tasks are blocked. Blocked tasks:"
-  - List each: ID, title, blocking task IDs (from `:blocking-task-ids`)
-  - Suggest completing blockers first
-  - Stop
-- If no incomplete tasks:
-  - If `:completed-task-count` > 0:
-    - Inform all tasks complete
-    - Suggest reviewing implementation or creating PR
-    - Stop
-  - If `:completed-task-count` = 0:
-    - If story not refined: suggest refining story
-    - If story refined: suggest creating story tasks
-    - Stop
+**If no unblocked tasks:** Call `select-tasks` with `parent-id` only:
+- Incomplete tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
+- No incomplete + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
+- No incomplete + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
 
-**If task has no category:** Inform user, stop
+**If task lacks category:** Inform user; stop
 
-Display the task to user.
+Display task to user.
 
 **2. Set up environment:**
 
-Call `work-on` with `task-id: <story-id>`.
-
-Display environment context (if present in response):
-- Worktree: `<worktree-name>` at `<worktree-path>`
-- Branch: `<branch-name>`
+Call `work-on` with `task-id: <child-task-id>`. Display environment: worktree name/path, branch (if present).
 
 **3. Execute task:**
 
-Do NOT check task refinement status. Story tasks are already in the queue and the category workflow will find them. Execute the task by following the `prompt://category-<category>` resource prompt.
+Skip refinement check. Execute by following `prompt://category-<category>` resource.
 
-**While executing:** Watch for out-of-scope issues:
-- Create tasks immediately with `add-task`
-- Link via `update-task` with `:discovered-during` relation: `{:id 1, :relates-to <current-task-id>, :as-type :discovered-during}`
-- Continue current task without sidetracking
-- Final check before completion to capture all discoveries
-- See execute-task prompt's "Discovering Issues Beyond Current Scope" for details
+**While executing:** For out-of-scope issues, create task with `add-task`, link with `:discovered-during` relation via `update-task`. Continue current task. See execute-task prompt for details.
 
-**4. Complete task:**
+**4. Complete:**
 
-Call `complete-task` with `task-id: <task-id>` and optional `completion-comment`.
+Call `complete-task` with `task-id`, optional `completion-comment`.
 
-**IMPORTANT:** Never complete the parent story task. Only complete individual child tasks. User must review before declaring story complete.
+**Never complete the parent story.** Only complete child tasks. User reviews before story completion.
 
-**On failure/interruption:** Execution state persists (managed by `work-on`). External tools detect stale execution via `:task-start-time`. Starting new task overwrites state automatically.
+**On failure:** Execution state persists. Starting new task overwrites automatically.

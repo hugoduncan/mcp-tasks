@@ -6,104 +6,38 @@ argument-hint: [task-specification] [additional-context...]
 
 Refine the task through an interactive process.
 
-Parse the arguments: $ARGUMENTS
-- The first word/token is the task specification
-- Everything after is additional context to consider when refining
+Parse `$ARGUMENTS`: first token is task specification, rest is context.
 
-### Task Specification Formats
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "task N" | 59, #59, task 59 | `task-id: N, unique: true` |
+| Text | "Update prompt file" | `title-pattern: "...", unique: true` |
 
-The task can be specified in multiple ways:
-- **By ID**: "#59", "59", "task 59" (numeric formats)
-- **By title pattern**: "Update prompt file" (text matching)
-
-### Parsing Logic
-
-1. **Extract the first token** from $ARGUMENTS as the task specification
-2. **Determine specification type**:
-   - If the token is numeric (e.g., "59") → treat as task-id
-   - If the token starts with "#" (e.g., "#59") → strip "#" and treat as task-id
-   - If the token matches "task N" pattern → extract N and treat as task-id
-   - Otherwise → treat as title-pattern
-3. **Use appropriate select-tasks filter**:
-   - For task-id: `task-id: N, unique: true`
-   - For title-pattern: `title-pattern: "...", unique: true`
+Handle no match or multiple matches by informing user.
 
 ## Process
 
-1. Find the task using `select-tasks` with the appropriate filter (task-id or title-pattern) and `unique: true`
-   - Handle errors:
-     - **No match**: Inform user no task found, suggest checking available tasks
-     - **Multiple matches** (if using title-pattern without unique): List matching tasks with IDs and ask for clarification
-   - Extract the task's `:id`, `:title`, `:description`, `:design`, and `:type` fields
+1. Find task via `select-tasks` (unique). Extract `:id`, `:title`, `:description`, `:design`, `:type`.
 
-2. **Analyze the task in project context:**
-   - Review the task description and design notes
-   - Research any design patterns or exemplars mentioned in the task
-   - Examine relevant parts of the codebase to understand context
-   - Adapt analysis based on task type (story, feature, bug, chore, task)
-   - Identify aspects the user may have forgotten to mention
-   - Check for unintended scope expansion
+2. Analyze in project context: review description/design, research patterns/exemplars, examine codebase, identify forgotten aspects, check scope.
 
-3. Display the current task content to the user:
-   - Show the task type and title
-   - Show the description
-   - Show the design notes (if any)
-   - Present your analysis including:
-     - Project context findings, includding files that will be effected.
-     - Relevant design patterns or exemplars found
-     - Any forgotten aspects identified
-     - Potential scope concerns (if any)
+3. Display task (type, title, description, design) and analysis (context findings, affected files, patterns, forgotten aspects, scope concerns).
 
-4. Enter an interactive refinement loop:
-   - Suggest specific improvements:
-     - Clarify requirements
-     - Remove ambiguity
-     - Reduce complexity
-     - Add acceptance criteria
-     - Describe implementation approach
-   - Present suggestions to the user
-   - Get user feedback on the suggestions
-   - If user approves changes, update the working copy of the task content
-   - If user requests modifications, incorporate their feedback
-   - Continue until user is satisfied
-   - **Important**: Do not expand scope without explicit user intent
+4. Interactive refinement:
+   - Suggest improvements: clarify requirements, remove ambiguity, reduce complexity, add acceptance criteria, describe implementation
+   - Get user feedback, update working copy if approved
+   - Continue until satisfied
+   - Don't expand scope without explicit intent
 
-5. Once refinement is complete:
-   - Show the final refined task to the user for approval
-   - If approved, use `update-task` tool to save changes:
-     - `task-id`: the task's `:id`
-     - `description`: the refined description
-     - `design`: the refined design notes
-     - `meta`: Merge existing meta with refinement status:
-       - Preserve all existing meta values from the task's `:meta` field
-       - Add or update `"refined": "true"` to mark the task as refined
-       - Example: If task has `{"priority": "high"}`, result should be `{"priority": "high", "refined": "true"}`
-   - Confirm the save operation to the user, noting that the task has been marked as refined
+5. Save:
+   - Show final task for approval
+   - Call `update-task`: `task-id`, `description`, `design`, `meta` (preserve existing, add `"refined": "true"`)
+   - Confirm save
 
-## Scope Boundaries
+## Scope
 
-**What refine-task SHOULD do:**
-- Clarify requirements and acceptance criteria
-- Identify forgotten aspects or missing context
-- Describe implementation phases or approach within the task description/design
-- Improve clarity, completeness, and actionability
-- Add technical design notes
+**Do:** Clarify requirements/acceptance criteria, identify missing context, describe implementation phases in `:design`, improve clarity/completeness, add technical notes.
 
-**What refine-task MUST NOT do:**
-- Create child tasks or subtasks (use separate task breakdown workflows)
-- Include time estimates or effort estimates
-- Expand scope beyond the original intent without explicit user confirmation
+**Don't:** Create child tasks, add time estimates, expand scope without confirmation.
 
-## Notes
-
-- Tasks are stored in `tasks.ednl` with various `:type` values (`:story`, `:task`, `:bug`, `:feature`, `:chore`)
-- The `:description` field contains the main task content
-- The `:design` field contains design notes and technical details
-- The `:design` field is ideal for describing implementation phases, technical approach, and architectural considerations
-- Implementation phases help clarify the approach without creating separate tasks
-- Example design content: "Phase 1: Update prompt file, Phase 2: Update documentation, Phase 3: Verify behavior"
-- The refinement process should be collaborative and iterative
-- Always get explicit user approval before making changes
-- Focus on improving clarity, completeness, and actionability of the task
-- Do not make assumptions about requirements - ask the user for clarification
-- Adapt your analysis and suggestions based on the task type and project context
+`:design` field is ideal for implementation phases/approach. Be collaborative, get approval before changes, adapt to task type/context.
