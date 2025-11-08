@@ -40,21 +40,14 @@ jobs:
           sudo mv git-cliff-2.7.0/git-cliff /usr/local/bin/
           git-cliff --version
 
-      - name: Build JAR
-        run: clojure -T:build jar
-
-      - name: Calculate version
-        id: version
-        run: |
-          VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-
       - name: Update SHA references in documentation
         run: |
+          # Calculate preliminary version for SHA updates
+          PRELIM_VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
+          PRELIM_TAG="v$PRELIM_VERSION"
+
           # Run standalone script to update SHA references
-          ./scripts/update-sha-refs.sh --tag "${{ steps.version.outputs.tag }}" --sha "${{ github.sha }}"
+          ./scripts/update-sha-refs.sh --tag "$PRELIM_TAG" --sha "${{ github.sha }}"
 
           # Commit changes (gracefully handle no changes case)
           git config user.name "github-actions[bot]"
@@ -68,6 +61,17 @@ jobs:
           else
             echo "No SHA updates needed - documentation already current"
           fi
+
+      - name: Calculate version
+        id: version
+        run: |
+          VERSION=$(clojure -T:build version | grep "Version:" | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Build JAR
+        run: clojure -T:build jar
 
       - name: Run smoke test
         run: |
