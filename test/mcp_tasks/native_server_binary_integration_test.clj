@@ -32,6 +32,7 @@
     [build :as build]
     [cheshire.core :as json]
     [clojure.java.io :as io]
+    [clojure.string]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
 (def ^:dynamic *test-dir* nil)
@@ -345,5 +346,88 @@
         (try
           (is (< elapsed-ms 1000)
               (str "Server should initialize in under 1000ms (took " elapsed-ms "ms)"))
+          (finally
+            (stop-server proc)))))))
+
+(deftest ^:native-binary test-branch-and-worktree-management-resources
+  ;; Verify native binary includes branch and worktree management resources
+  ;; and can load them when those features are enabled in config
+  (testing "test-branch-and-worktree-management-resources"
+    (testing "server starts with branch and worktree management enabled"
+      ;; Override config to enable branch and worktree management
+      (spit (io/file *test-dir* ".mcp-tasks.edn")
+            "{:branch-management? true\n :worktree-management? true}")
+
+      ;; Start server
+      (let [proc (process/process [*binary-path*]
+                                  {:dir *test-dir*
+                                   :in :stream
+                                   :out :stream
+                                   :err :stream})]
+        (try
+          ;; Initialize
+          (let [init-response (send-jsonrpc proc
+                                            {:jsonrpc "2.0"
+                                             :id 1
+                                             :method "initialize"
+                                             :params {:protocolVersion "2025-06-18"
+                                                      :capabilities {}
+                                                      :clientInfo {:name "test-client"
+                                                                   :version "1.0.0"}}})]
+            (when-not init-response
+              ;; Print stderr if server didn't respond
+              (let [stderr-reader (io/reader (:err proc))]
+                (println "\n=== Server stderr output ===")
+                (doseq [line (line-seq stderr-reader)]
+                  (println line))
+                (println "=== End stderr output ===\n")))
+            (is (some? init-response)
+                "Server should start successfully with management features enabled")
+            (is (nil? (:error init-response))
+                "Initialize should not return error"))
+
+          ;; Send initialized notification
+          (send-jsonrpc proc
+                        {:jsonrpc "2.0"
+                         :method "initialized"})
+
+          ;; List prompts and verify they're available
+          (testing "prompts list includes story prompts"
+            (let [prompts-response (send-jsonrpc proc
+                                                 {:jsonrpc "2.0"
+                                                  :id 2
+                                                  :method "prompts/list"})]
+              (is (some? prompts-response)
+                  "Server should respond to prompts/list")
+              (is (vector? (get-in prompts-response [:result :prompts]))
+                  "Response should contain prompts array")
+              (is (some #(= "execute-story-task" (:name %))
+                        (get-in prompts-response [:result :prompts]))
+                  "Prompts should include execute-story-task")))
+
+          ;; Get execute-story-task prompt and verify it includes management instructions
+          (testing "execute-story-task prompt includes management instructions"
+            (let [prompt-response (send-jsonrpc proc
+                                                {:jsonrpc "2.0"
+                                                 :id 3
+                                                 :method "prompts/get"
+                                                 :params {:name "execute-story-task"
+                                                          :arguments {}}})]
+              (is (some? prompt-response)
+                  "Server should respond to prompts/get")
+              (is (nil? (:error prompt-response))
+                  "prompts/get should not return error")
+              (let [messages (get-in prompt-response [:result :messages])]
+                (is (vector? messages)
+                    "Prompt should contain messages array")
+                (is (pos? (count messages))
+                    "Prompt should have at least one message")
+                ;; Check that the content includes branch management text
+                (let [content (get-in messages [0 :content :text])]
+                  (is (string? content)
+                      "Message should have text content")
+                  (is (re-find #"branch" (clojure.string/lower-case content))
+                      "Prompt content should mention branch management")))))
+
           (finally
             (stop-server proc)))))))
