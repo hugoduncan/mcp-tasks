@@ -67,6 +67,67 @@
                                             :relates-to 3
                                             :as-type :blocked-by}]})))
 
+    (testing "validates tasks with shared-context field"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Test task"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []
+                               :shared-context []}))
+      (is (schema/valid-task? {:id 2
+                               :parent-id 1
+                               :status :open
+                               :title "Story task"
+                               :description "Story desc"
+                               :design "Story design"
+                               :category "large"
+                               :type :story
+                               :meta {}
+                               :relations []
+                               :shared-context ["Task 1: API endpoint is https://api.example.com"
+                                                "Task 2: Implemented JWT auth"]})))
+
+    (testing "validates tasks without shared-context field (backward compatibility)"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Legacy task"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []})))
+
+    (testing "rejects tasks with invalid shared-context types"
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :shared-context "not a vector"})))
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :shared-context [123 456]}))))
+
     (testing "validates all status values"
       (doseq [status [:open :closed :in-progress :blocked]]
         (is (schema/valid-task? {:id 1

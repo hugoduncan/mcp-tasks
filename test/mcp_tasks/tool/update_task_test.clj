@@ -533,3 +533,192 @@
           (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
                 task2 (second tasks)]
             (is (= [{:id 1 :relates-to 1 :as-type :related}] (:relations task2)))))))))
+
+(deftest update-task-appends-shared-context-with-automatic-prefixing
+  ;; Tests that shared-context entries are appended with automatic task ID prefix
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "appends to shared-context with automatic task ID prefix"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :shared-context ["Task 10: First entry"]}
+           {:id 2 :parent-id 1 :title "task" :description "desc" :design "" :category "test" :type :task :status :open :meta {} :relations []}])
+        ;; Write execution state with task-id 2
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 2 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context ["Second entry"]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Task 10: First entry" "Task 2: Second entry"] (:shared-context story)))))))))
+
+(deftest update-task-appends-shared-context-without-prefix-when-no-execution-state
+  ;; Tests that shared-context entries are added without prefix when execution state is missing
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "appends to shared-context without prefix when no execution state"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :shared-context ["Task 10: First entry"]}])
+        ;; No execution state file
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context ["Manual entry"]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Task 10: First entry" "Manual entry"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-appends-to-empty-context
+  ;; Tests that shared-context can be added to tasks with no existing context
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "initializes and appends to empty shared-context"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        ;; Write execution state
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 2 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context ["First entry"]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Task 2: First entry"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-multiple-appends
+  ;; Tests that multiple shared-context updates preserve all entries in order
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "preserves all entries across multiple appends"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        ;; First append with task 2
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 2 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (#'sut/update-task-impl
+         (h/test-config test-dir)
+         nil
+         {:task-id 1 :shared-context ["Entry from task 2"]})
+        ;; Second append with task 3
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 3 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context ["Entry from task 3"]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Task 2: Entry from task 2" "Task 3: Entry from task 3"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-enforces-size-limit
+  ;; Tests that shared-context size is limited to 50KB
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "enforces 50KB size limit on shared-context"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        ;; Create a large entry that will exceed 50KB
+        (let [large-entry (apply str (repeat 52000 "x"))
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context [large-entry]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Shared context size limit (50KB) exceeded")))))))
+
+(deftest update-task-shared-context-works-with-other-fields
+  ;; Tests that shared-context can be updated alongside other fields
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "updates shared-context alongside other fields"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "old title" :description "old desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 2 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :title "new title" :description "new desc" :shared-context ["Context entry"]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= "new title" (:title story)))
+            (is (= "new desc" (:description story)))
+            (is (= ["Task 2: Context entry"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-accepts-string-input
+  ;; Tests that shared-context accepts a single string and wraps it in a vector
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "accepts string input for shared-context"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 2 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context "Single string entry"})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Task 2: Single string entry"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-accepts-string-without-execution-state
+  ;; Tests that string input works without execution state
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "accepts string input without execution state"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        ;; No execution state file
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context "Manual string entry"})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Manual string entry"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-string-appends-to-existing
+  ;; Tests that string input appends to existing context
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "string input appends to existing context"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :shared-context ["Task 5: First entry"]}])
+        (spit (str test-dir "/.mcp-tasks-current.edn")
+              (pr-str {:task-id 10 :story-id 1 :task-start-time "2025-01-01T00:00:00Z"}))
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context "Second entry"})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            (is (= ["Task 5: First entry" "Task 10: Second entry"] (:shared-context story)))))))))

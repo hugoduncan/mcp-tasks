@@ -36,13 +36,70 @@ Display task to user.
 
 Call `work-on` with `task-id: <child-task-id>`. Display environment: worktree name/path, branch (if present).
 
+**Display parent shared context:**
+
+If the parent story has `:parent-shared-context`, display it to provide context from previous tasks:
+
+```
+**Shared Context from Previous Tasks:**
+
+<parent-shared-context>
+```
+
+**Context precedence:** Shared context takes precedence over static fields like `:description` or `:design` when there are conflicts or updates from previous task execution.
+
 **3. Execute task:**
 
 Skip refinement check. Execute by following `prompt://category-<category>` resource.
 
 **While executing:** For out-of-scope issues, create task with `add-task`, link with `:discovered-during` relation via `update-task`. Continue current task. See execute-task prompt for details.
 
-**4. Complete:**
+**Updating shared context:**
+
+During task execution, update the parent story's shared context to record important information for subsequent tasks:
+
+```clojure
+;; Update parent story shared context
+(update-task 
+  {:task-id <parent-story-id>
+   :shared-context "Your update text here"})
+```
+
+The system automatically prefixes your update with "Task NNN:" where NNN is the current task ID. Multiple updates accumulate with newest first.
+
+**Security Note:** Do not store sensitive data (passwords, API keys, tokens, PII) in shared context. Context is stored in task files and may appear in git history and PR descriptions.
+
+**What to add to shared context:**
+- Key decisions made and their rationale
+- Implementation discoveries (e.g., "function X now returns Y format")
+- API or schema changes
+- Dependencies added or modified
+- Edge cases handled
+- Deviations from original design
+
+**When to update:**
+- Update context **during execution**, not just at completion
+- Add entries as you make significant decisions or discoveries
+- Ask yourself: "What would the next tasks need to know?"
+
+**Example updates:**
+```clojure
+;; After adding a new field
+(update-task 
+  {:task-id 604
+   :shared-context "Added :parent-shared-context field to Task schema"})
+
+;; After discovering implementation details
+(update-task 
+  {:task-id 604
+   :shared-context "select-tasks tool now returns :parent-shared-context in response"})
+```
+
+**4. Finalize shared context:**
+
+Before completing the task, review what future tasks need to know and add any missing context to the parent story.
+
+**5. Complete:**
 
 Call `complete-task` with `task-id`, optional `completion-comment`.
 

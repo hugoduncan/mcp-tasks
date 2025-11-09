@@ -42,6 +42,8 @@
 
 **Resource URI**: A unique identifier for an MCP resource, such as `prompt://next-simple` or `prompt://refine-task`.
 
+**Shared Context**: A vector of strings stored in story tasks (`:shared-context` field) that enables inter-task communication during story execution. Child tasks read their parent story's shared context via the `:parent-shared-context` field returned by `select-tasks`. Tasks append to the parent story's shared context using `update-task`. The system automatically prefixes each entry with "Task NNN: " by reading the current `:task-id` from the execution state file (`.mcp-tasks-current.edn`). Shared context takes precedence over a task's static `:description` and `:design` fields when there are conflicts or new information. Limited to 50KB total size. See also: **Execution State**, **Task Schema**.
+
 **Task**: A task is a unot of work that can be executed in a single
 agent session without exceeding its context limits.  Represented by an
 EDN map with fields defined by the Task schema in

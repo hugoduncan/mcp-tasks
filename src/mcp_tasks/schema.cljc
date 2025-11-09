@@ -29,7 +29,8 @@
    [:category :string]
    [:type [:enum :task :bug :feature :story :chore]]
    [:meta [:map-of :string :string]]
-   [:relations [:vector Relation]]])
+   [:relations [:vector Relation]]
+   [:shared-context {:optional true} [:vector :string]]])
 
 (def blocking-statuses
   "Set of task statuses that prevent completion or deletion of parent tasks.
