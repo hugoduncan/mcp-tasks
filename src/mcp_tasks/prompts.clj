@@ -3,12 +3,13 @@
   (:require
     [babashka.fs :as fs]
     [clojure.java.io :as io]
+    [clojure.set :as set]
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.prompts :as prompts]))
 
 ;; Path constants for prompt resources and user overrides
-(def ^:private builtin-category-prompts-dir "category-prompts")
+(def builtin-category-prompts-dir "category-prompts")
 (def ^:private builtin-prompts-dir "prompts")
 (def ^:private builtin-infrastructure-dir "prompts/infrastructure")
 
@@ -249,7 +250,7 @@
         new-categories (set (discover-prompt-files new-dir))
         deprecated-categories (set (discover-prompt-files deprecated-dir))
         ;; Find categories that only exist in deprecated location
-        deprecated-only (clojure.set/difference deprecated-categories new-categories)]
+        deprecated-only (set/difference deprecated-categories new-categories)]
     ;; Log warning for each deprecated-only category
     (doseq [category deprecated-only]
       (log/warn :category-prompt-deprecated-location
