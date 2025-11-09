@@ -19,6 +19,103 @@
 (def ^:private deprecated-user-category-prompts-dir "prompts")
 (def ^:private deprecated-user-workflow-prompts-dir "story/prompts")
 
+(defn- resolve-paths
+  "Pure path resolution function without side effects.
+
+  Checks which of the given paths exist and returns resolution metadata.
+
+  Parameters:
+  - new-path: Path to check in new location (absolute)
+  - deprecated-path: Path to check in deprecated location (absolute)
+
+  Returns:
+  - Map with :path (absolute path), :location (:new, :deprecated, or :none),
+    and :both-exist? boolean
+  - Location is :none if neither path exists"
+  [new-path deprecated-path]
+  (let [new-exists? (fs/exists? new-path)
+        deprecated-exists? (fs/exists? deprecated-path)]
+    (cond
+      (and new-exists? deprecated-exists?)
+      {:path new-path
+       :location :new
+       :both-exist? true}
+
+      new-exists?
+      {:path new-path
+       :location :new
+       :both-exist? false}
+
+      deprecated-exists?
+      {:path deprecated-path
+       :location :deprecated
+       :both-exist? false}
+
+      :else
+      {:path nil
+       :location :none
+       :both-exist? false})))
+
+(defn- log-path-resolution
+  "Log warnings/info based on path resolution result.
+
+  Parameters:
+  - resolution: Map returned from resolve-paths
+  - new-path: Path that was checked in new location
+  - deprecated-path: Path that was checked in deprecated location
+  - identifier: Name for logging (e.g., category name or prompt name)
+  - log-event-prefix: Keyword prefix for log events
+  - migration-message: Message explaining how to migrate
+
+  Side effects:
+  - Logs warning if deprecated location is used
+  - Logs info if file exists in both locations"
+  [resolution new-path deprecated-path identifier log-event-prefix migration-message]
+  (case (:location resolution)
+    :new
+    (when (:both-exist? resolution)
+      (log/info (keyword (str (name log-event-prefix) "-both-locations"))
+                {:identifier identifier
+                 :new-path new-path
+                 :deprecated-path deprecated-path
+                 :message (str (name log-event-prefix) " found in both new and deprecated locations. Using new location.")}))
+
+    :deprecated
+    (log/warn (keyword (str (name log-event-prefix) "-deprecated-location"))
+              {:identifier identifier
+               :deprecated-path deprecated-path
+               :new-path new-path
+               :message migration-message})
+
+    :none
+    nil))
+
+(defn- resolve-prompt-path-with-fallback
+  "Generic path resolution with fallback to deprecated location.
+
+  Checks for file in new location first, then deprecated location with warning.
+
+  Parameters:
+  - new-path: Path to check in new location (absolute)
+  - deprecated-path: Path to check in deprecated location (absolute)
+  - identifier: Name for logging (e.g., category name or prompt name)
+  - log-event-prefix: Keyword prefix for log events (e.g., :category-prompt or :workflow-prompt)
+  - migration-message: Message explaining how to migrate
+
+  Returns:
+  - Map with :path (absolute path) and :location (:new or :deprecated)
+  - nil if file not found in either location
+
+  Side effects:
+  - Logs warning if deprecated location is used
+  - Logs info if file exists in both locations (new takes precedence)"
+  [new-path deprecated-path identifier log-event-prefix migration-message]
+  (let [resolution (resolve-paths new-path deprecated-path)]
+    (log-path-resolution resolution new-path deprecated-path identifier log-event-prefix migration-message)
+    (when-not (= :none (:location resolution))
+      {:path (:path resolution)
+       :location (:location resolution)})))
+
 (defn- resolve-category-prompt-path
   "Resolve category prompt path with fallback to deprecated location.
 
@@ -39,34 +136,14 @@
   - Logs info if file exists in both locations (new takes precedence)"
   [resolved-tasks-dir category]
   (let [new-path (str resolved-tasks-dir "/" user-category-prompts-dir "/" category ".md")
-        deprecated-path (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir "/" category ".md")
-        new-exists? (fs/exists? new-path)
-        deprecated-exists? (fs/exists? deprecated-path)]
-    (cond
-      (and new-exists? deprecated-exists?)
-      (do
-        (log/info :category-prompt-both-locations
-                  {:category category
-                   :new-path new-path
-                   :deprecated-path deprecated-path
-                   :message "Category prompt found in both new and deprecated locations. Using new location."})
-        {:path new-path :location :new})
-
-      new-exists?
-      {:path new-path :location :new}
-
-      deprecated-exists?
-      (do
-        (log/warn :category-prompt-deprecated-location
-                  {:category category
-                   :deprecated-path deprecated-path
-                   :new-path new-path
-                   :message (str "Category prompt found in deprecated location. "
-                                 "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/")})
-        {:path deprecated-path :location :deprecated})
-
-      :else
-      nil)))
+        deprecated-path (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir "/" category ".md")]
+    (resolve-prompt-path-with-fallback
+      new-path
+      deprecated-path
+      category
+      :category-prompt
+      (str "Category prompt found in deprecated location. "
+           "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/"))))
 
 (defn- resolve-workflow-prompt-path
   "Resolve workflow prompt path with fallback to deprecated location.
@@ -88,34 +165,14 @@
   - Logs info if file exists in both locations (new takes precedence)"
   [resolved-tasks-dir prompt-name]
   (let [new-path (str resolved-tasks-dir "/" user-prompt-overrides-dir "/" prompt-name ".md")
-        deprecated-path (str resolved-tasks-dir "/" deprecated-user-workflow-prompts-dir "/" prompt-name ".md")
-        new-exists? (fs/exists? new-path)
-        deprecated-exists? (fs/exists? deprecated-path)]
-    (cond
-      (and new-exists? deprecated-exists?)
-      (do
-        (log/info :workflow-prompt-both-locations
-                  {:prompt-name prompt-name
-                   :new-path new-path
-                   :deprecated-path deprecated-path
-                   :message "Workflow prompt found in both new and deprecated locations. Using new location."})
-        {:path new-path :location :new})
-
-      new-exists?
-      {:path new-path :location :new}
-
-      deprecated-exists?
-      (do
-        (log/warn :workflow-prompt-deprecated-location
-                  {:prompt-name prompt-name
-                   :deprecated-path deprecated-path
-                   :new-path new-path
-                   :message (str "Workflow prompt found in deprecated location. "
-                                 "Please move from .mcp-tasks/story/prompts/ to .mcp-tasks/prompt-overrides/")})
-        {:path deprecated-path :location :deprecated})
-
-      :else
-      nil)))
+        deprecated-path (str resolved-tasks-dir "/" deprecated-user-workflow-prompts-dir "/" prompt-name ".md")]
+    (resolve-prompt-path-with-fallback
+      new-path
+      deprecated-path
+      prompt-name
+      :workflow-prompt
+      (str "Workflow prompt found in deprecated location. "
+           "Please move from .mcp-tasks/story/prompts/ to .mcp-tasks/prompt-overrides/"))))
 
 (defn- parse-frontmatter
   "Parse simple 'field: value' frontmatter from markdown text.
