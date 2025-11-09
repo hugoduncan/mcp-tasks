@@ -857,7 +857,14 @@
         (is (some? (:content result)))))))
 
 (deftest backward-compat-empty-directories-test
-  ;; Test that empty deprecated directories don't cause issues
+  ;; Verify that empty deprecated directories don't trigger deprecation warnings.
+  ;; This is important for user experience during migration - if users create
+  ;; new directory structures but haven't moved files yet, we shouldn't warn.
+  ;;
+  ;; The implementation correctly avoids warnings because:
+  ;; 1. discover-prompt-files returns empty vector for directories with no .md files
+  ;; 2. discover-categories only warns for categories in deprecated-only set
+  ;; 3. resolve-prompt-path-with-fallback only warns when specific file exists
   (testing "empty deprecated directories"
     (testing "empty deprecated prompts/ directory doesn't affect discover-categories"
       (let [config {:resolved-tasks-dir ".mcp-tasks"}
@@ -865,7 +872,9 @@
         (.mkdirs deprecated-dir)
         (try
           (let [categories (sut/discover-categories config)]
-            (is (vector? categories)))
+            ;; Should discover built-in categories without warnings
+            (is (vector? categories))
+            (is (seq categories) "Should find built-in categories"))
           (finally
             (fs/delete-tree deprecated-dir)))))
 
@@ -874,6 +883,8 @@
         (.mkdirs deprecated-dir)
         (try
           (let [result (sut/get-story-prompt "create-story-tasks")]
-            (is (some? result)))
+            ;; Should find built-in prompt without warnings
+            (is (some? result))
+            (is (some? (:content result))))
           (finally
             (fs/delete-tree (io/file ".mcp-tasks" "story"))))))))
