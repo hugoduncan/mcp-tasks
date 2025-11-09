@@ -634,35 +634,35 @@
         (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug" 123
                                                {:worktree-prefix :project-name :branch-title-words 4})]
           (is (true? (:success result)))
-          (is (= "/Users/test/mcp-tasks-123-fix-parser-bug" (:path result)))
+          (is (= "/Users/test/test-123-fix-parser-bug" (:path result)))
           (is (nil? (:error result)))))
 
       (testing "sanitizes title with special characters and includes ID"
         (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "Add Git Worktree Management (Option)!" 456
                                                {:worktree-prefix :project-name :branch-title-words 4})]
           (is (true? (:success result)))
-          (is (= "/Users/test/mcp-tasks-456-add-git-worktree-management" (:path result)))
+          (is (= "/Users/test/test-456-add-git-worktree-management" (:path result)))
           (is (nil? (:error result)))))
 
       (testing "respects word limit configuration"
         (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug in production" 789
                                                {:worktree-prefix :project-name :branch-title-words 2})]
           (is (true? (:success result)))
-          (is (= "/Users/test/mcp-tasks-789-fix-parser" (:path result)))
+          (is (= "/Users/test/test-789-fix-parser" (:path result)))
           (is (nil? (:error result)))))
 
       (testing "uses default word limit of 4 when not configured"
         (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "one two three four five" 100
                                                {:worktree-prefix :project-name})]
           (is (true? (:success result)))
-          (is (= "/Users/test/mcp-tasks-100-one-two-three-four" (:path result)))
+          (is (= "/Users/test/test-100-one-two-three-four" (:path result)))
           (is (nil? (:error result)))))
 
       (testing "handles multiple spaces"
         (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix    multiple   spaces" 999
                                                {:worktree-prefix :project-name :branch-title-words 4})]
           (is (true? (:success result)))
-          (is (= "/Users/test/mcp-tasks-999-fix-multiple-spaces" (:path result)))
+          (is (= "/Users/test/test-999-fix-multiple-spaces" (:path result)))
           (is (nil? (:error result))))))
 
     (testing "with :none prefix"
@@ -707,7 +707,7 @@
     (testing "uses default :project-name when config missing key"
       (let [result (sut/derive-worktree-path "/Users/test/mcp-tasks" "fix parser bug" 42 {})]
         (is (true? (:success result)))
-        (is (= "/Users/test/mcp-tasks-42-fix-parser-bug" (:path result)))
+        (is (= "/Users/test/test-42-fix-parser-bug" (:path result)))
         (is (nil? (:error result)))))
 
     (testing "handles empty title after sanitization"
@@ -715,7 +715,7 @@
                                              {:worktree-prefix :project-name})]
         (is (true? (:success result)))
         ;; sanitize-branch-name returns "task-99" as fallback for empty titles
-        (is (= "/Users/test/mcp-tasks-task-99" (:path result)))
+        (is (= "/Users/test/test-task-99" (:path result)))
         (is (nil? (:error result)))))))
 
 (deftest list-worktrees-test

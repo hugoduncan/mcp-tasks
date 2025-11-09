@@ -20,6 +20,22 @@
 (defn cleanup-test-project
   [dir]
   (when (and dir (fs/exists? dir))
+    ;; Clean up any worktrees created during tests
+    ;; Worktrees are in sibling directories with format: <parent-name>-<id>-<slug>
+    (let [parent-dir (fs/parent dir)
+          parent-name (fs/file-name parent-dir)]
+      ;; Find and remove worktrees matching the pattern
+      (doseq [sibling (fs/list-dir parent-dir)]
+        (let [sibling-name (fs/file-name sibling)]
+          (when (and (fs/directory? sibling)
+                     (not= sibling-name (fs/file-name dir))
+                     (re-matches (re-pattern (str parent-name "-\\d+-.*")) sibling-name))
+            ;; Try to remove worktree via git first (cleaner)
+            (let [result (sh/sh "git" "-C" (str dir) "worktree" "remove" "--force" (str sibling))]
+              ;; If git worktree remove fails, fall back to directory deletion
+              (when-not (zero? (:exit result))
+                (fs/delete-tree sibling)))))))
+    ;; Clean up the test project directory itself
     (doseq [file (reverse (file-seq (io/file dir)))]
       (fs/delete file))))
 

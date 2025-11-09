@@ -80,21 +80,28 @@
   Parameters:
   - base-dir: Test base directory (from *test-dir*)
   - title: Task or story title
-  - config: Optional config map (default uses :worktree-prefix :project-name)
+  - task-id: Task ID (for ID-prefixed worktree names)
+  - config: Optional config map (default uses :worktree-prefix :project-name, :branch-title-words 4)
 
   Returns the expected worktree path string."
-  ([base-dir title]
-   (derive-test-worktree-path base-dir title {:worktree-prefix :project-name}))
-  ([base-dir title config]
+  ([base-dir title task-id]
+   (derive-test-worktree-path base-dir title task-id {:worktree-prefix :project-name :branch-title-words 4}))
+  ([base-dir title task-id config]
    (let [worktree-prefix (:worktree-prefix config :project-name)
-         sanitized (-> title
-                       str/lower-case
-                       (str/replace #"\s+" "-")
+         word-limit (get config :branch-title-words 4)
+         ;; Sanitize title with word limit and task ID prefix
+         words (str/split (str/lower-case title) #"\s+")
+         limited-words (if word-limit (take word-limit words) words)
+         sanitized (-> (str/join "-" limited-words)
                        (str/replace #"[^a-z0-9-]" ""))
-         parent-dir (fs/parent base-dir)]
+         id-slug (if (str/blank? sanitized)
+                   (str "task-" task-id)
+                   (str task-id "-" sanitized))
+         parent-dir (fs/parent base-dir)
+         parent-name (fs/file-name parent-dir)]
      (if (= worktree-prefix :none)
-       (str parent-dir "/" sanitized)
-       (str parent-dir "/mcp-tasks-" sanitized)))))
+       (str parent-dir "/" id-slug)
+       (str parent-dir "/" parent-name "-" id-slug)))))
 
 (defn with-test-setup*
   [f]

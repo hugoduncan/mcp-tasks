@@ -82,8 +82,8 @@ EDN map with fields defined by the Task schema in
 **Worktree Cleanup**: Automatic removal of git worktrees after task completion when `:worktree-management?` is enabled. The `complete-task` tool performs safety checks (no uncommitted changes, all commits pushed) before removing the worktree. The branch is preserved after cleanup. Task completion succeeds even if cleanup fails, with a warning message indicating the reason.
 
 **Worktree Naming Convention**: Worktree directories are named based on the branch naming convention with an optional project prefix:
-- With `:worktree-prefix :project-name`: `<project>-<id>-<title-slug>`
+- With `:worktree-prefix :project-name`: `<parent-dir-name>-<id>-<title-slug>` (where parent-dir-name is the name of the parent directory containing the project)
 - With `:worktree-prefix :none`: `<id>-<title-slug>`
-- Example: Task 123 "Fix authentication bug" with project "mcp-tasks" → `mcp-tasks-123-fix-authentication-bug`
+- Example: Given project at `/Users/dev/mcp-tasks/`, task 123 "Fix authentication bug" → parent directory is `mcp-tasks`, resulting in `mcp-tasks-123-fix-authentication-bug`
 
 **Worktree Workflow**: Using git worktrees to isolate task execution by category in separate directories.

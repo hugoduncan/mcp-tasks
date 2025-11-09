@@ -21,7 +21,7 @@
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Fix Parser Bug" :type "task"})
               add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
-              expected-worktree-path (h/derive-test-worktree-path base-dir "Fix Parser Bug")]
+              expected-worktree-path (h/derive-test-worktree-path base-dir "Fix Parser Bug" task-id)]
 
           ;; Mock git and file operations
           (with-redefs [git/find-worktree-for-branch
@@ -71,7 +71,7 @@
               (is (= expected-worktree-path (:worktree-path response)))
               (is (true? (:worktree-created? response)))
               (is (= (str task-id "-fix-parser-bug") (:branch-name response)))
-              (is (= "mcp-tasks-fix-parser-bug" (:worktree-name response)))
+              (is (= (fs/file-name expected-worktree-path) (:worktree-name response)))
               (is (str/includes? (:message response) "Worktree created"))
               (is (str/includes? (:message response) expected-worktree-path))
               ;; Execution state file should be written to worktree before directory switch
@@ -83,13 +83,13 @@
     (testing "work-on reuses existing worktree and checks clean status"
       (testing "detects when in worktree with uncommitted changes"
         (let [base-dir (:base-dir (h/test-config test-dir))
-              config-file (str base-dir "/.mcp-tasks.edn")
-              expected-worktree-path (h/derive-test-worktree-path base-dir "Add Feature")]
+              config-file (str base-dir "/.mcp-tasks.edn")]
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Add Feature" :type "task"})
                 add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
-                task-id (get-in add-response [:task :id])]
+                task-id (get-in add-response [:task :id])
+                expected-worktree-path (h/derive-test-worktree-path base-dir "Add Feature" task-id)]
 
             (with-redefs [git/find-worktree-for-branch
                           (fn find-worktree-for-branch
@@ -141,20 +141,20 @@
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
                 (is (false? (:worktree-created? response)))
-                (is (= "mcp-tasks-add-feature" (:worktree-name response)))
+                (is (= (fs/file-name expected-worktree-path) (:worktree-name response)))
                 (is (str/includes? (:message response) "Please start a new Claude Code session"))
                 ;; Execution state file should be written to worktree before directory switch
                 (is (= (str expected-worktree-path "/.mcp-tasks-current.edn") (:execution-state-file response))))))))
 
       (testing "detects existing worktree"
         (let [base-dir (:base-dir (h/test-config test-dir))
-              config-file (str base-dir "/.mcp-tasks.edn")
-              expected-worktree-path (h/derive-test-worktree-path base-dir "Clean Task")]
+              config-file (str base-dir "/.mcp-tasks.edn")]
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Clean Task" :type "task"})
                 add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
-                task-id (get-in add-response [:task :id])]
+                task-id (get-in add-response [:task :id])
+                expected-worktree-path (h/derive-test-worktree-path base-dir "Clean Task" task-id)]
 
             (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
                           git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
@@ -178,7 +178,7 @@
                 (is (false? (:isError result)))
                 (is (= expected-worktree-path (:worktree-path response)))
                 (is (false? (:worktree-created? response)))
-                (is (= "mcp-tasks-clean-task" (:worktree-name response)))
+                (is (= (fs/file-name expected-worktree-path) (:worktree-name response)))
                 (is (str/includes? (:message response) "Please start a new Claude Code session"))
                 ;; Execution state file should be written to worktree before directory switch
                 (is (= (str expected-worktree-path "/.mcp-tasks-current.edn")
@@ -233,7 +233,7 @@
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Switch Dir Task" :type "task"})
               add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
-              expected-worktree-path (h/derive-test-worktree-path base-dir "Switch Dir Task")]
+              expected-worktree-path (h/derive-test-worktree-path base-dir "Switch Dir Task" task-id)]
 
           ;; Mock to simulate worktree exists but we're not in it
           (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
@@ -299,13 +299,13 @@
 
       (testing "creates new worktree when branch not in any worktree"
         (let [base-dir (:base-dir (h/test-config test-dir))
-              config-file (str base-dir "/.mcp-tasks.edn")
-              expected-worktree-path (h/derive-test-worktree-path base-dir "New Worktree")]
+              config-file (str base-dir "/.mcp-tasks.edn")]
           (spit config-file "{:worktree-management? true}")
 
           (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "New Worktree" :type "task"})
                 add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
-                task-id (get-in add-response [:task :id])]
+                task-id (get-in add-response [:task :id])
+                expected-worktree-path (h/derive-test-worktree-path base-dir "New Worktree" task-id)]
 
             (with-redefs [git/find-worktree-for-branch (fn find-worktree-for-branch
                                                          [_ branch-name]
@@ -443,14 +443,14 @@
   (testing "work-on writes execution state to worktree when working on a story"
     (h/with-test-setup [test-dir]
       (let [base-dir (:base-dir (h/test-config test-dir))
-            config-file (str base-dir "/.mcp-tasks.edn")
-            expected-worktree-path (h/derive-test-worktree-path base-dir "Story Task")]
+            config-file (str base-dir "/.mcp-tasks.edn")]
         (spit config-file "{:worktree-management? true}")
 
         ;; Create a story task
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Story Task" :type "story"})
               add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
-              story-id (get-in add-response [:task :id])]
+              story-id (get-in add-response [:task :id])
+              expected-worktree-path (h/derive-test-worktree-path base-dir "Story Task" story-id)]
 
           (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
                         git/get-current-branch (fn [_] {:success true :branch "main" :error nil})
@@ -480,14 +480,14 @@
     (testing "work-on writes execution state to worktree when working on a child task"
       (h/with-test-setup [test-dir]
         (let [base-dir (:base-dir (h/test-config test-dir))
-              config-file (str base-dir "/.mcp-tasks.edn")
-              expected-worktree-path (h/derive-test-worktree-path base-dir "Parent Story")]
+              config-file (str base-dir "/.mcp-tasks.edn")]
           (spit config-file "{:worktree-management? true}")
 
           ;; Create a story and a child task
           (let [story-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "story" :title "Parent Story" :type "story"})
                 story-response (json/parse-string (get-in story-result [:content 1 :text]) keyword)
                 story-id (get-in story-response [:task :id])
+                expected-worktree-path (h/derive-test-worktree-path base-dir "Parent Story" story-id)
 
                 task-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Child Task" :type "task" :parent-id story-id})
                 task-response (json/parse-string (get-in task-result [:content 1 :text]) keyword)
@@ -523,14 +523,14 @@
   (testing "work-on continues successfully even when execution state write fails"
     (h/with-test-setup [test-dir]
       (let [base-dir (:base-dir (h/test-config test-dir))
-            config-file (str base-dir "/.mcp-tasks.edn")
-            expected-worktree-path (h/derive-test-worktree-path base-dir "Write Failure Task")]
+            config-file (str base-dir "/.mcp-tasks.edn")]
         (spit config-file "{:worktree-management? true}")
 
         ;; Create a task
         (let [add-result (#'add-task/add-task-impl (h/test-config test-dir) nil {:category "simple" :title "Write Failure Task" :type "task"})
               add-response (json/parse-string (get-in add-result [:content 1 :text]) keyword)
               task-id (get-in add-response [:task :id])
+              expected-worktree-path (h/derive-test-worktree-path base-dir "Write Failure Task" task-id)
               write-state-called (atom false)]
 
           (with-redefs [git/find-worktree-for-branch (fn [_ _] {:success true :worktree nil :error nil})
