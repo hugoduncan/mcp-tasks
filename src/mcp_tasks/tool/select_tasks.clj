@@ -44,6 +44,26 @@
                        :blocking-task-ids (:blocking-ids blocking-info))))
             tasks-coll))))
 
+(defn- enrich-tasks-with-parent-context
+  "Enrich tasks with parent story's shared context.
+
+  For each task with :parent-id:
+  - Looks up parent task (may be in tasks.ednl or complete.ednl)
+  - Adds :parent-shared-context field with parent's :shared-context (or [] if missing)
+  
+  For tasks without :parent-id:
+  - No :parent-shared-context field is added
+  
+  If parent task is not found, :parent-shared-context is set to []."
+  [tasks-coll]
+  (mapv (fn [task]
+          (if-let [parent-id (:parent-id task)]
+            (let [parent-task (tasks/get-task parent-id)
+                  parent-context (get parent-task :shared-context [])]
+              (assoc task :parent-shared-context parent-context))
+            task))
+        tasks-coll))
+
 (defn- select-tasks-impl
   "Implementation of select-tasks tool.
 
@@ -141,8 +161,10 @@
                               :completed-task-count nil})
               non-closed-tasks (:tasks query-result)
               completed-count (:completed-task-count query-result)
-              ;; Enrich all tasks with blocked status (batch for performance)
-              enriched-tasks (enrich-tasks-with-blocked-status non-closed-tasks)
+              ;; Enrich all tasks with blocked status and parent context (batch for performance)
+              enriched-tasks (-> non-closed-tasks
+                                 enrich-tasks-with-blocked-status
+                                 enrich-tasks-with-parent-context)
               ;; Apply blocked filter if specified
               filtered-tasks (cond
                                (true? blocked) (filterv :is-blocked enriched-tasks)

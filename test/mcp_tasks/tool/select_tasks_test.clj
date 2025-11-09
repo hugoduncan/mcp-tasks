@@ -937,3 +937,182 @@
             (is (= 1 (count tasks)))
             (is (false? (:is-blocked (first tasks))))
             (is (= [] (:blocking-task-ids (first tasks))))))))))
+
+(deftest select-tasks-enriches-child-task-with-parent-shared-context
+  ;; Test that child tasks receive parent's shared-context
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with parent-id"
+      (testing "enriches child task with parent's shared-context"
+        (let [story {:id 1
+                     :type :story
+                     :title "Story with context"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []
+                     :shared-context ["Task 10: First context entry"
+                                      "Task 11: Second context entry"]}
+              child-task {:id 2
+                          :parent-id 1
+                          :type :task
+                          :title "Child task"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :meta {}
+                          :relations []}]
+          (write-tasks-ednl test-dir [story child-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:parent-id 1})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                task (first (:tasks response))]
+            (is (false? (:isError result)))
+            (is (= 2 (:id task)))
+            (is (= ["Task 10: First context entry"
+                    "Task 11: Second context entry"]
+                   (:parent-shared-context task)))))))))
+
+(deftest select-tasks-child-task-with-missing-parent-shared-context
+  ;; Test that child tasks get empty vector when parent has no shared-context
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with parent-id"
+      (testing "returns empty vector when parent lacks shared-context"
+        (let [story {:id 1
+                     :type :story
+                     :title "Story without context"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []}
+              child-task {:id 2
+                          :parent-id 1
+                          :type :task
+                          :title "Child task"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :meta {}
+                          :relations []}]
+          (write-tasks-ednl test-dir [story child-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:parent-id 1})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                task (first (:tasks response))]
+            (is (false? (:isError result)))
+            (is (= 2 (:id task)))
+            (is (= [] (:parent-shared-context task)))))))))
+
+(deftest select-tasks-child-task-with-nonexistent-parent
+  ;; Test that child tasks get empty vector when parent doesn't exist
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with orphaned child"
+      (testing "returns empty vector when parent not found"
+        (let [child-task {:id 2
+                          :parent-id 999
+                          :type :task
+                          :title "Orphaned child"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :meta {}
+                          :relations []}]
+          (write-tasks-ednl test-dir [child-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 2})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                task (first (:tasks response))]
+            (is (false? (:isError result)))
+            (is (= 2 (:id task)))
+            (is (= [] (:parent-shared-context task)))))))))
+
+(deftest select-tasks-non-child-task-has-no-parent-shared-context
+  ;; Test that tasks without parent-id don't get parent-shared-context field
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks for non-child task"
+      (testing "does not include parent-shared-context field"
+        (let [task {:id 1
+                    :type :task
+                    :title "Standalone task"
+                    :description ""
+                    :design ""
+                    :category "simple"
+                    :status :open
+                    :meta {}
+                    :relations []}]
+          (write-tasks-ednl test-dir [task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 1})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                returned-task (first (:tasks response))]
+            (is (false? (:isError result)))
+            (is (= 1 (:id returned-task)))
+            (is (not (contains? returned-task :parent-shared-context)))))))))
+
+(deftest select-tasks-story-includes-own-shared-context
+  ;; Test that querying a story directly includes its shared-context field
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks for story"
+      (testing "includes story's own shared-context"
+        (let [story {:id 1
+                     :type :story
+                     :title "Story with context"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :open
+                     :meta {}
+                     :relations []
+                     :shared-context ["Context entry 1" "Context entry 2"]}]
+          (write-tasks-ednl test-dir [story])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 1})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                returned-story (first (:tasks response))]
+            (is (false? (:isError result)))
+            (is (= 1 (:id returned-story)))
+            (is (= ["Context entry 1" "Context entry 2"]
+                   (:shared-context returned-story)))
+            (is (not (contains? returned-story :parent-shared-context)))))))))
+
+(deftest select-tasks-child-task-with-completed-parent
+  ;; Test that child tasks can access shared-context from completed parent stories
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with completed parent story"
+      (testing "child task gets parent's shared-context from complete.ednl"
+        (let [story {:id 1
+                     :type :story
+                     :title "Completed story"
+                     :description ""
+                     :design ""
+                     :category "story"
+                     :status :closed
+                     :meta {}
+                     :relations []
+                     :shared-context ["Completed task context"]}
+              child-task {:id 2
+                          :parent-id 1
+                          :type :task
+                          :title "Child of completed story"
+                          :description ""
+                          :design ""
+                          :category "simple"
+                          :status :open
+                          :meta {}
+                          :relations []}]
+          (write-tasks-ednl test-dir [child-task])
+          (h/write-ednl-test-file test-dir "complete.ednl" [story])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 2})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                task (first (:tasks response))]
+            (is (false? (:isError result)))
+            (is (= 2 (:id task)))
+            (is (= ["Completed task context"]
+                   (:parent-shared-context task)))))))))
