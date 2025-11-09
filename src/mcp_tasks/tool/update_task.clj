@@ -8,6 +8,7 @@
   - parent-id: Task hierarchy (can be set to nil to remove parent)
   - meta: Key-value metadata map (replaces entire map)
   - relations: Task relationships vector (replaces entire vector)
+  - shared-context: Story shared context vector (appends new entries with automatic prefixing)
 
   The tool validates all field values and handles type conversions from
   JSON to EDN formats. Only provided fields are updated; others remain
@@ -18,6 +19,7 @@
   (:require
     [cheshire.core :as json]
     [clojure.string :as str]
+    [mcp-tasks.execution-state :as es]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
@@ -77,6 +79,48 @@
                          (swap! tasks/tasks assoc task-id old-task)))]
           result)))))
 
+(defn- apply-shared-context-update
+  "Apply shared-context update with append semantics and size validation.
+
+  Appends new entries to existing shared-context vector and validates that
+  the total serialized EDN size doesn't exceed 50KB.
+
+  Returns updated task map or error map if size limit exceeded."
+  [task updates]
+  (if (contains? updates :shared-context)
+    (let [existing-context (get task :shared-context [])
+          new-entries (get updates :shared-context)
+          combined-context (into existing-context new-entries)
+          serialized (pr-str combined-context)
+          size-bytes (count (.getBytes serialized "UTF-8"))]
+      (if (> size-bytes 51200) ; 50KB = 50 * 1024 = 51200 bytes
+        {:error true
+         :message "Shared context size limit (50KB) exceeded. Consider summarizing or removing old entries."
+         :size-bytes size-bytes
+         :limit-bytes 51200}
+        (assoc task :shared-context combined-context)))
+    task))
+
+(defn- convert-shared-context-field
+  "Convert and prefix shared-context entries with task ID from execution state.
+
+  Accepts either a single string or a vector of strings. If a string is provided,
+  it is wrapped in a vector before processing.
+
+  Reads the execution state file to get the current :task-id and prefixes
+  each entry with 'Task NNN: '. If execution state is missing or has no
+  :task-id, entries are added without prefix (manual update case).
+
+  Returns vector of prefixed strings, or [] if value is nil."
+  [base-dir value]
+  (when (and value (if (string? value) (seq value) (seq value)))
+    (let [entries (if (string? value) [value] value)
+          exec-state (es/read-execution-state base-dir)
+          task-id (:task-id exec-state)]
+      (if task-id
+        (mapv #(str "Task " task-id ": " %) entries)
+        (vec entries)))))
+
 (defn- extract-provided-updates
   "Extract and convert provided fields from arguments map.
 
@@ -87,17 +131,19 @@
   - :status, :type - string to keyword
   - :meta - nil becomes {}, replaces entire map (does not merge)
   - :relations - nil becomes [], replaces entire vector (does not append)
+  - :shared-context - appends to existing context with automatic prefixing
 
   Note: The :meta and :relations fields use replacement semantics rather
-  than merge/append. This design ensures predictable behavior where users
-  specify the complete desired state in a single update operation."
-  [arguments]
+  than merge/append. The :shared-context field uses append semantics with
+  automatic task ID prefixing based on execution state."
+  [base-dir arguments]
   (let [conversions {:status convert-enum-field
                      :type convert-enum-field
                      :meta convert-meta-field
-                     :relations helpers/convert-relations-field}
+                     :relations helpers/convert-relations-field
+                     :shared-context (partial convert-shared-context-field base-dir)}
         updatable-fields [:title :description :design :parent-id
-                          :status :category :type :meta :relations]]
+                          :status :category :type :meta :relations :shared-context]]
     (reduce (fn [updates field-key]
               (if (contains? arguments field-key)
                 (let [value (get arguments field-key)
@@ -135,9 +181,10 @@
 
                                                     ;; sync-result is the tasks-file path - proceed
                                                     (let [task-id (:task-id arguments)
-                                                          tasks-file sync-result]
+                                                          tasks-file sync-result
+                                                          base-dir (:base-dir config)]
                                                       (tasks/load-tasks! tasks-file :file-context file-context)
-                                                      (let [updates (extract-provided-updates arguments)]
+                                                      (let [updates (extract-provided-updates base-dir arguments)]
                                                         (if (empty? updates)
                                                           (helpers/build-tool-error-response
                                                             "No fields to update"
@@ -150,19 +197,35 @@
                                                               (when (contains? updates :relations)
                                                                 (validate-circular-dependencies task-id (:relations updates) tasks-file))
                                                               (let [old-task (tasks/get-task task-id)
-                                                                    updated-task (merge old-task updates)]
-                                                                (validation/validate-task-schema updated-task "update-task" task-id tasks-file))
-                                                              (do
-                                                                (tasks/update-task task-id updates)
-                                                                (tasks/save-tasks! tasks-file :file-context file-context)
-                                                                (let [final-task (tasks/get-task task-id)
-                                                                      tasks-path (helpers/task-path config ["tasks.ednl"])
-                                                                      tasks-rel-path (:relative tasks-path)]
-                                                                  ;; Return intermediate data for git operations
-                                                                  {:final-task final-task
-                                                                   :tasks-file tasks-file
-                                                                   :tasks-rel-path tasks-rel-path
-                                                                   :task-id task-id}))))))))))]
+                                                                    ;; Apply shared-context with append semantics and size validation
+                                                                    context-result (apply-shared-context-update old-task updates)]
+                                                                (if (:error context-result)
+                                                                  ;; Size limit exceeded
+                                                                  (helpers/build-tool-error-response
+                                                                    (:message context-result)
+                                                                    "update-task"
+                                                                    {:task-id task-id
+                                                                     :file tasks-file
+                                                                     :size-bytes (:size-bytes context-result)
+                                                                     :limit-bytes (:limit-bytes context-result)})
+                                                                  ;; Continue with validation and update
+                                                                  (let [task-with-context context-result
+                                                                        ;; Merge other updates (excluding :shared-context since it's already applied)
+                                                                        other-updates (dissoc updates :shared-context)
+                                                                        updated-task (merge task-with-context other-updates)]
+                                                                    (or (validation/validate-task-schema updated-task "update-task" task-id tasks-file)
+                                                                        (do
+                                                                          ;; Update with the fully merged task
+                                                                          (tasks/update-task task-id (dissoc updated-task :id))
+                                                                          (tasks/save-tasks! tasks-file :file-context file-context)
+                                                                          (let [final-task (tasks/get-task task-id)
+                                                                                tasks-path (helpers/task-path config ["tasks.ednl"])
+                                                                                tasks-rel-path (:relative tasks-path)]
+                                                                            ;; Return intermediate data for git operations
+                                                                            {:final-task final-task
+                                                                             :tasks-file tasks-file
+                                                                             :tasks-rel-path tasks-rel-path
+                                                                             :task-id task-id}))))))))))))))]
     ;; Check if locked section returned an error
     (if (:isError locked-result)
       locked-result
@@ -207,7 +270,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "update-task"
-   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, and relations. Pass nil for optional fields (parent-id, meta, relations) to clear their values."
+   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, and shared-context. Pass nil for optional fields (parent-id, meta, relations) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing."
    :inputSchema
    {:type "object"
     :properties
@@ -248,6 +311,10 @@
                            "as-type" {:type "string"
                                       :enum ["blocked-by" "related" "discovered-during"]}}
               :required ["id" "relates-to" "as-type"]}
-      :description "New relations vector (optional). Pass null to clear. Replaces entire vector, does not merge."}}
+      :description "New relations vector (optional). Pass null to clear. Replaces entire vector, does not merge."}
+     "shared-context"
+     {:type ["string" "array"]
+      :items {:type "string"}
+      :description "String or vector of strings to append to the task's shared context (optional). If a string is provided, it is wrapped in a vector. Entries are automatically prefixed with 'Task NNN: ' based on the current execution state. New entries are appended to existing context. Limited to 50KB total size."}}
     :required ["task-id"]}
    :implementation (partial update-task-impl config)})
