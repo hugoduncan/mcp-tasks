@@ -25,11 +25,15 @@
   (b/delete {:path target-dir}))
 
 (defn jar
-  "Build JAR file with Main-Class manifest"
-  [_]
-  (let [v (version nil)
+  "Build JAR file with Main-Class manifest
+
+  Options:
+  - :version - Version string to use (default: calculated from git)"
+  [{version-str :version}]
+  (let [v (or version-str (version nil))
         basis (b/create-basis {:project "deps.edn"})
         jar-file (format "%s/mcp-tasks-%s.jar" target-dir v)]
+    (println "Version:" v)
     (println "Building JAR:" jar-file)
     (b/write-pom {:class-dir class-dir
                   :lib lib
@@ -85,19 +89,21 @@
   "Deploy JAR to Clojars using deps-deploy.
 
   Options:
-  - :version  - Version string to use (default: calculated from git)
+  - :version  - Version string (required - must match JAR build version)
   - :dry-run  - If true, validate but don't deploy (default: false)
 
   Requires CLOJARS_USERNAME and CLOJARS_PASSWORD environment variables.
   CLOJARS_PASSWORD should contain your deploy token, not your actual password."
   [{version-str :version :keys [dry-run] :or {dry-run false}}]
-  (let [v (or version-str (version nil))
-        jar-file (format "%s/mcp-tasks-%s.jar" target-dir v)
+  (when-not version-str
+    (throw (ex-info "Version parameter is required. Pass :version from workflow."
+                    {:missing-param :version})))
+  (let [jar-file (format "%s/mcp-tasks-%s.jar" target-dir version-str)
         pom-file (format "%s/classes/META-INF/maven/%s/%s/pom.xml"
                          target-dir
                          (namespace lib)
                          (name lib))]
-    (println "Version:" v)
+    (println "Version:" version-str)
     (println "Deploying to Clojars:" jar-file)
     (println "POM file:" pom-file)
 

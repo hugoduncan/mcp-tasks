@@ -71,7 +71,24 @@ jobs:
           fi
 
       - name: Build JAR
-        run: clojure -T:build jar
+        run: clojure -T:build jar :version '"${{ steps.version.outputs.version }}"'
+
+      - name: Validate JAR artifact
+        run: |
+          echo "Listing target directory contents:"
+          ls -lh target/ || echo "Target directory not found"
+
+          JAR_FILE="target/mcp-tasks-${{ steps.version.outputs.version }}.jar"
+          if [ -f "$JAR_FILE" ]; then
+            echo "JAR file found: $JAR_FILE"
+            echo "Size: $(stat -c%s "$JAR_FILE") bytes"
+            echo "SHA256: $(sha256sum "$JAR_FILE" | cut -d' ' -f1)"
+          else
+            echo "ERROR: JAR file not found at expected location: $JAR_FILE"
+            echo "Expected JAR file: $JAR_FILE"
+            echo "Build step may have failed silently or produced output in unexpected location"
+            exit 1
+          fi
 
       - name: Run smoke test
         run: |
