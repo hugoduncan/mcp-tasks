@@ -67,6 +67,8 @@ During task execution, update the parent story's shared context to record import
 
 The system automatically prefixes your update with "Task NNN:" where NNN is the current task ID. Multiple updates accumulate with newest first.
 
+**Security Note:** Do not store sensitive data (passwords, API keys, tokens, PII) in shared context. Context is stored in task files and may appear in git history and PR descriptions.
+
 **What to add to shared context:**
 - Key decisions made and their rationale
 - Implementation discoveries (e.g., "function X now returns Y format")
@@ -78,7 +80,7 @@ The system automatically prefixes your update with "Task NNN:" where NNN is the 
 **When to update:**
 - Update context **during execution**, not just at completion
 - Add entries as you make significant decisions or discoveries
-- Consider: "What would the next task need to know?"
+- Ask yourself: "What would the next tasks need to know?"
 
 **Example updates:**
 ```clojure
