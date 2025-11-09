@@ -88,7 +88,7 @@
         ;; Clean target directory to ensure files don't exist
         (fs/delete-tree sut/target-dir)
         (try
-          (sut/deploy {:dry-run true})
+          (sut/deploy {:version "0.1.999" :dry-run true})
           (is false "Expected exception for missing JAR")
           (catch clojure.lang.ExceptionInfo e
             (is (re-find #"JAR file not found" (.getMessage e)))))))))
@@ -104,9 +104,9 @@
     (testing "in dry-run mode succeeds with valid files and credentials"
       (if (and (System/getenv "CLOJARS_USERNAME")
                (System/getenv "CLOJARS_PASSWORD"))
-        (do
+        (let [v (sut/version nil)]
           (create-mock-jar-and-pom)
           ;; Should not throw, should print dry-run message
-          (sut/deploy {:dry-run true})
+          (sut/deploy {:version v :dry-run true})
           (is true "Dry-run deployment completed"))
         (is true "Skipping test: CLOJARS_USERNAME and CLOJARS_PASSWORD env vars not set")))))
