@@ -61,7 +61,7 @@ claude mcp add mcp-tasks -- /usr/local/bin/mcp-tasks-server
 **Initialize task directories in your project:**
 
 ```bash
-mkdir -p .mcp-tasks/prompts
+mkdir -p .mcp-tasks/category-prompts
 
 # Optional: Initialize as git repository for version control
 cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..

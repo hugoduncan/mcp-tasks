@@ -26,7 +26,8 @@ When updating documentation:
 **Task Storage Structure:**
 - `.mcp-tasks/tasks.ednl` - All incomplete tasks stored as EDN records
 - `.mcp-tasks/complete.ednl` - All completed tasks archive
-- `.mcp-tasks/prompts/<category-name>.md` - Category-specific execution prompts
+- `.mcp-tasks/category-prompts/<category-name>.md` - Category-specific execution prompts
+- `.mcp-tasks/prompt-overrides/<name>.md` - Custom workflow prompt overrides (optional)
 
 **Task File Format:**
 Tasks are stored in EDNL (EDN Lines) format where each line is a valid EDN map representing a Task record. The Task schema (defined in `src/mcp_tasks/schema.clj`) includes:
@@ -258,7 +259,7 @@ The system provides story support for managing larger features or initiatives th
 **Story Storage Structure:**
 - Stories are stored as tasks in `.mcp-tasks/tasks.ednl` with `:type :story`
 - Completed stories are moved to `.mcp-tasks/complete.ednl` with `:status :closed`
-- `.mcp-tasks/story/prompts/<story-name>.md` - Custom story-specific prompts (optional)
+- `.mcp-tasks/prompt-overrides/<name>.md` - Custom workflow prompt overrides for story operations (optional)
 
 **Story Workflow:**
 
