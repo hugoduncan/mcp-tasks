@@ -4,6 +4,7 @@
     [babashka.fs :as fs]
     [clojure.java.io :as io]
     [clojure.string :as str]
+    [mcp-clj.log :as log]
     [mcp-clj.mcp-server.prompts :as prompts]))
 
 ;; Path constants for prompt resources and user overrides
@@ -13,6 +14,108 @@
 
 (def ^:private user-category-prompts-dir "category-prompts")
 (def ^:private user-prompt-overrides-dir "prompt-overrides")
+
+;; Deprecated directory paths for backward compatibility
+(def ^:private deprecated-user-category-prompts-dir "prompts")
+(def ^:private deprecated-user-workflow-prompts-dir "story/prompts")
+
+(defn- resolve-category-prompt-path
+  "Resolve category prompt path with fallback to deprecated location.
+
+  Checks for category prompt file in this order:
+  1. .mcp-tasks/category-prompts/<category>.md (new location)
+  2. .mcp-tasks/prompts/<category>.md (deprecated, with warning)
+
+  Parameters:
+  - resolved-tasks-dir: Base directory containing .mcp-tasks
+  - category: Category name (without .md extension)
+
+  Returns:
+  - Map with :path (absolute path) and :location (:new or :deprecated)
+  - nil if file not found in either location
+
+  Side effects:
+  - Logs warning if deprecated location is used
+  - Logs info if file exists in both locations (new takes precedence)"
+  [resolved-tasks-dir category]
+  (let [new-path (str resolved-tasks-dir "/" user-category-prompts-dir "/" category ".md")
+        deprecated-path (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir "/" category ".md")
+        new-exists? (fs/exists? new-path)
+        deprecated-exists? (fs/exists? deprecated-path)]
+    (cond
+      (and new-exists? deprecated-exists?)
+      (do
+        (log/info :category-prompt-both-locations
+                  {:category category
+                   :new-path new-path
+                   :deprecated-path deprecated-path
+                   :message "Category prompt found in both new and deprecated locations. Using new location."})
+        {:path new-path :location :new})
+
+      new-exists?
+      {:path new-path :location :new}
+
+      deprecated-exists?
+      (do
+        (log/warn :category-prompt-deprecated-location
+                  {:category category
+                   :deprecated-path deprecated-path
+                   :new-path new-path
+                   :message (str "Category prompt found in deprecated location. "
+                                 "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/")})
+        {:path deprecated-path :location :deprecated})
+
+      :else
+      nil)))
+
+(defn- resolve-workflow-prompt-path
+  "Resolve workflow prompt path with fallback to deprecated location.
+
+  Checks for workflow prompt file in this order:
+  1. .mcp-tasks/prompt-overrides/<name>.md (new location)
+  2. .mcp-tasks/story/prompts/<name>.md (deprecated, with warning)
+
+  Parameters:
+  - resolved-tasks-dir: Base directory containing .mcp-tasks
+  - prompt-name: Prompt name (without .md extension)
+
+  Returns:
+  - Map with :path (absolute path) and :location (:new or :deprecated)
+  - nil if file not found in either location
+
+  Side effects:
+  - Logs warning if deprecated location is used
+  - Logs info if file exists in both locations (new takes precedence)"
+  [resolved-tasks-dir prompt-name]
+  (let [new-path (str resolved-tasks-dir "/" user-prompt-overrides-dir "/" prompt-name ".md")
+        deprecated-path (str resolved-tasks-dir "/" deprecated-user-workflow-prompts-dir "/" prompt-name ".md")
+        new-exists? (fs/exists? new-path)
+        deprecated-exists? (fs/exists? deprecated-path)]
+    (cond
+      (and new-exists? deprecated-exists?)
+      (do
+        (log/info :workflow-prompt-both-locations
+                  {:prompt-name prompt-name
+                   :new-path new-path
+                   :deprecated-path deprecated-path
+                   :message "Workflow prompt found in both new and deprecated locations. Using new location."})
+        {:path new-path :location :new})
+
+      new-exists?
+      {:path new-path :location :new}
+
+      deprecated-exists?
+      (do
+        (log/warn :workflow-prompt-deprecated-location
+                  {:prompt-name prompt-name
+                   :deprecated-path deprecated-path
+                   :new-path new-path
+                   :message (str "Workflow prompt found in deprecated location. "
+                                 "Please move from .mcp-tasks/story/prompts/ to .mcp-tasks/prompt-overrides/")})
+        {:path deprecated-path :location :deprecated})
+
+      :else
+      nil)))
 
 (defn- parse-frontmatter
   "Parse simple 'field: value' frontmatter from markdown text.
@@ -78,11 +181,28 @@
 
   Takes config containing :resolved-tasks-dir. Returns a sorted vector of
   category names (filenames without .md extension) found in the category-prompts
-  subdirectory."
+  subdirectory.
+
+  Supports backward compatibility by also checking deprecated prompts/ directory.
+  Categories found in both locations are deduplicated (new location takes precedence)."
   [config]
   (let [resolved-tasks-dir (:resolved-tasks-dir config)
-        prompts-dir (str resolved-tasks-dir "/" user-category-prompts-dir)]
-    (discover-prompt-files prompts-dir)))
+        new-dir (str resolved-tasks-dir "/" user-category-prompts-dir)
+        deprecated-dir (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir)
+        new-categories (set (discover-prompt-files new-dir))
+        deprecated-categories (set (discover-prompt-files deprecated-dir))
+        ;; Find categories that only exist in deprecated location
+        deprecated-only (clojure.set/difference deprecated-categories new-categories)]
+    ;; Log warning for each deprecated-only category
+    (doseq [category deprecated-only]
+      (log/warn :category-prompt-deprecated-location
+                {:category category
+                 :deprecated-path (str deprecated-dir "/" category ".md")
+                 :new-path (str new-dir "/" category ".md")
+                 :message (str "Category prompt found in deprecated location. "
+                               "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/")}))
+    ;; Return combined sorted vector
+    (vec (sort (clojure.set/union new-categories deprecated-categories)))))
 
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category.
@@ -130,12 +250,14 @@
   nil if it doesn't.
 
   The :metadata key contains parsed frontmatter (may be nil),
-  and :content contains the prompt text with frontmatter stripped."
+  and :content contains the prompt text with frontmatter stripped.
+
+  Supports backward compatibility by checking deprecated prompts/ directory
+  with deprecation warning."
   [config category]
-  (let [resolved-tasks-dir (:resolved-tasks-dir config)
-        prompt-file (str resolved-tasks-dir "/" user-category-prompts-dir "/" category ".md")]
-    (when (fs/exists? prompt-file)
-      (parse-frontmatter (slurp prompt-file)))))
+  (let [resolved-tasks-dir (:resolved-tasks-dir config)]
+    (when-let [resolved (resolve-category-prompt-path resolved-tasks-dir category)]
+      (parse-frontmatter (slurp (:path resolved))))))
 
 (defn create-prompts
   "Generate MCP prompts for task categories.
@@ -215,29 +337,34 @@
   "Get a story prompt by name, with file override support.
 
   Checks for override file at `.mcp-tasks/prompt-overrides/<name>.md` first.
-  If not found, falls back to built-in prompt from resources/prompts.
+  If not found, falls back to deprecated `.mcp-tasks/story/prompts/<name>.md`.
+  If not found in either location, falls back to built-in prompt from resources/prompts.
 
   Returns a map with:
   - :name - the prompt name
   - :description - from frontmatter
   - :content - the prompt text (with frontmatter stripped)
 
-  Returns nil if prompt is not found in either location."
+  Returns nil if prompt is not found in any location.
+
+  Supports backward compatibility by checking deprecated story/prompts/ directory
+  with deprecation warning."
   [prompt-name]
-  (let [override-file (str ".mcp-tasks/" user-prompt-overrides-dir "/" prompt-name ".md")]
-    (if (fs/exists? override-file)
-      (let [file-content (slurp override-file)
+  (if-let [resolved (resolve-workflow-prompt-path ".mcp-tasks" prompt-name)]
+    ;; Found override (new or deprecated location)
+    (let [file-content (slurp (:path resolved))
+          {:keys [metadata content]} (parse-frontmatter file-content)]
+      {:name prompt-name
+       :description (get metadata "description")
+       :content content})
+    ;; No override found, check builtin
+    (when-let [resource-path (io/resource
+                               (str builtin-prompts-dir "/" prompt-name ".md"))]
+      (let [file-content (slurp resource-path)
             {:keys [metadata content]} (parse-frontmatter file-content)]
         {:name prompt-name
          :description (get metadata "description")
-         :content content})
-      (when-let [resource-path (io/resource
-                                 (str builtin-prompts-dir "/" prompt-name ".md"))]
-        (let [file-content (slurp resource-path)
-              {:keys [metadata content]} (parse-frontmatter file-content)]
-          {:name prompt-name
-           :description (get metadata "description")
-           :content content})))))
+         :content content}))))
 
 (defn list-story-prompts
   "List all available story prompts.
