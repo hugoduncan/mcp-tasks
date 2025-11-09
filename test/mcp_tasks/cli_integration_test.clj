@@ -18,9 +18,9 @@
 (defn- setup-test-dir
   [test-dir]
   (fs/create-dirs (io/file test-dir ".mcp-tasks"))
-  (fs/create-dirs (io/file test-dir ".mcp-tasks/prompts"))
+  (fs/create-dirs (io/file test-dir ".mcp-tasks/category-prompts"))
   ;; Create a simple category prompt for testing
-  (spit (io/file test-dir ".mcp-tasks/prompts/simple.md")
+  (spit (io/file test-dir ".mcp-tasks/category-prompts/simple.md")
         "---\ndescription: Simple tasks\n---\nSimple task execution"))
 
 (defn- cli-test-fixture

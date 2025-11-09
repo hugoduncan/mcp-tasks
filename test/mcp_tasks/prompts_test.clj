@@ -8,23 +8,23 @@
 
 (deftest discover-categories-test
   ;; Test that discover-categories finds categories from the
-  ;; prompts subdirectory, returning them sorted without .md extensions.
+  ;; category-prompts subdirectory, returning them sorted without .md extensions.
   (testing "discover-categories"
     (let [config {:resolved-tasks-dir ".mcp-tasks"}]
-      (testing "returns sorted categories from prompts directory"
+      (testing "returns sorted categories from category-prompts directory"
         (let [categories (sut/discover-categories config)]
           (is (vector? categories))
           (is (every? string? categories))
           (is (= categories (sort categories)))
           (is (not-any? #(re-find #"\.md$" %) categories))))
 
-      (testing "finds categories from prompts subdirectory"
+      (testing "finds categories from category-prompts subdirectory"
         (let [categories (sut/discover-categories config)
               category-set (set categories)]
-          ;; Should find "simple" which exists in prompts
+          ;; Should find "simple" which exists in category-prompts
           (is (contains? category-set "simple"))))
 
-      (testing "returns categories only from prompts subdirectory"
+      (testing "returns categories only from category-prompts subdirectory"
         (let [categories (sut/discover-categories config)]
           ;; Each category should appear exactly once
           (is (= (count categories) (count (set categories)))))))))
@@ -351,7 +351,7 @@
   "Create a temporary override file for testing.
   Returns the file object for cleanup."
   [prompt-name content]
-  (let [override-dir (io/file ".mcp-tasks" "story" "prompts")
+  (let [override-dir (io/file ".mcp-tasks" "prompt-overrides")
         override-file (io/file override-dir (str prompt-name ".md"))]
     (.mkdirs override-dir)
     (spit override-file content)
@@ -524,7 +524,7 @@
   ;; Validates URI format, content extraction, and frontmatter handling.
   (testing "category-prompt-resources"
     (let [temp-dir (str (System/getProperty "java.io.tmpdir") "/mcp-tasks-test-" (System/currentTimeMillis))
-          prompts-dir (io/file temp-dir ".mcp-tasks" "prompts")
+          prompts-dir (io/file temp-dir ".mcp-tasks" "category-prompts")
           config {:base-dir temp-dir
                   :resolved-tasks-dir (str temp-dir "/.mcp-tasks")}]
       (try

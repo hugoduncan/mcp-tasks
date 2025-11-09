@@ -41,10 +41,10 @@
 (defn- setup-test-dir
   [test-dir]
   (fs/create-dirs (io/file test-dir ".mcp-tasks"))
-  (fs/create-dirs (io/file test-dir ".mcp-tasks/prompts"))
+  (fs/create-dirs (io/file test-dir ".mcp-tasks/category-prompts"))
   ;; Create config file
   (spit (io/file test-dir ".mcp-tasks.edn") "{}")
-  (spit (io/file test-dir ".mcp-tasks/prompts/simple.md")
+  (spit (io/file test-dir ".mcp-tasks/category-prompts/simple.md")
         "---\ndescription: Simple tasks\n---\nSimple task execution"))
 
 (defn- binary-test-fixture

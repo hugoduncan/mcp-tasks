@@ -44,10 +44,10 @@
   (let [temp-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-test-"}))
         mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
         tasks-dir (io/file mcp-tasks-dir "tasks")
-        prompts-dir (io/file mcp-tasks-dir "prompts")]
+        prompts-dir (io/file mcp-tasks-dir "category-prompts")]
     (.mkdirs tasks-dir)
     (.mkdirs prompts-dir)
-    ;; Create a simple.md file in prompts dir with proper frontmatter
+    ;; Create a simple.md file in category-prompts dir with proper frontmatter
     (spit (io/file prompts-dir "simple.md")
           "---\ndescription: Test category for simple tasks\n---\nTest execution instructions\n")
     ;; Also create a simple.md in tasks for backward compatibility with other tests

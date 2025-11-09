@@ -6,6 +6,14 @@
     [clojure.string :as str]
     [mcp-clj.mcp-server.prompts :as prompts]))
 
+;; Path constants for prompt resources and user overrides
+(def ^:private builtin-category-prompts-dir "category-prompts")
+(def ^:private builtin-prompts-dir "prompts")
+(def ^:private builtin-infrastructure-dir "prompts/infrastructure")
+
+(def ^:private user-category-prompts-dir "category-prompts")
+(def ^:private user-prompt-overrides-dir "prompt-overrides")
+
 (defn- parse-frontmatter
   "Parse simple 'field: value' frontmatter from markdown text.
 
@@ -66,14 +74,14 @@
     []))
 
 (defn discover-categories
-  "Discover task categories by reading prompts subdirectory from resolved tasks dir.
+  "Discover task categories by reading category-prompts subdirectory from resolved tasks dir.
 
   Takes config containing :resolved-tasks-dir. Returns a sorted vector of
-  category names (filenames without .md extension) found in the prompts
+  category names (filenames without .md extension) found in the category-prompts
   subdirectory."
   [config]
   (let [resolved-tasks-dir (:resolved-tasks-dir config)
-        prompts-dir (str resolved-tasks-dir "/prompts")]
+        prompts-dir (str resolved-tasks-dir "/" user-category-prompts-dir)]
     (discover-prompt-files prompts-dir)))
 
 (defn- read-task-prompt-text
@@ -92,7 +100,7 @@
 (defn- default-prompt-text
   "Generate default execution instructions for a category."
   []
-  (slurp (io/resource "prompts/default-prompt-text.md")))
+  (slurp (io/resource (str builtin-infrastructure-dir "/default-prompt-text.md"))))
 
 (defn- complete-task-prompt-text
   "Generate prompt text for completing and tracking a task.
@@ -114,7 +122,7 @@
       base-text)))
 
 (defn- read-prompt-instructions
-  "Read custom prompt instructions from prompts subdirectory in resolved tasks dir.
+  "Read custom prompt instructions from category-prompts subdirectory in resolved tasks dir.
 
   Takes config containing :resolved-tasks-dir and category name.
 
@@ -125,7 +133,7 @@
   and :content contains the prompt text with frontmatter stripped."
   [config category]
   (let [resolved-tasks-dir (:resolved-tasks-dir config)
-        prompt-file (str resolved-tasks-dir "/prompts/" category ".md")]
+        prompt-file (str resolved-tasks-dir "/" user-category-prompts-dir "/" category ".md")]
     (when (fs/exists? prompt-file)
       (parse-frontmatter (slurp prompt-file)))))
 
@@ -198,16 +206,16 @@
   "List all built-in story prompts available in resources.
 
   Returns a sequence of prompt names (without .md extension) found in
-  resources/story/prompts directory."
+  resources/prompts directory."
   []
-  (when-let [prompts-url (io/resource "story/prompts")]
+  (when-let [prompts-url (io/resource builtin-prompts-dir)]
     (discover-prompt-files (io/file (.toURI prompts-url)))))
 
 (defn get-story-prompt
   "Get a story prompt by name, with file override support.
 
-  Checks for override file at `.mcp-tasks/story/prompts/<name>.md` first.
-  If not found, falls back to built-in prompt from resources/story/prompts.
+  Checks for override file at `.mcp-tasks/prompt-overrides/<name>.md` first.
+  If not found, falls back to built-in prompt from resources/prompts.
 
   Returns a map with:
   - :name - the prompt name
@@ -216,7 +224,7 @@
 
   Returns nil if prompt is not found in either location."
   [prompt-name]
-  (let [override-file (str ".mcp-tasks/story/prompts/" prompt-name ".md")]
+  (let [override-file (str ".mcp-tasks/" user-prompt-overrides-dir "/" prompt-name ".md")]
     (if (fs/exists? override-file)
       (let [file-content (slurp override-file)
             {:keys [metadata content]} (parse-frontmatter file-content)]
@@ -224,7 +232,7 @@
          :description (get metadata "description")
          :content content})
       (when-let [resource-path (io/resource
-                                 (str "story/prompts/" prompt-name ".md"))]
+                                 (str builtin-prompts-dir "/" prompt-name ".md"))]
         (let [file-content (slurp resource-path)
               {:keys [metadata content]} (parse-frontmatter file-content)]
           {:name prompt-name
@@ -242,7 +250,7 @@
                               :when prompt]
                           {:name (:name prompt)
                            :description (:description prompt)})
-        story-dir ".mcp-tasks/story/prompts"
+        story-dir (str ".mcp-tasks/" user-prompt-overrides-dir)
         override-prompts (when (fs/exists? story-dir)
                            (for [file (fs/list-dir story-dir)
                                  :when (and (fs/regular-file? file)
@@ -319,10 +327,10 @@
   (cond-> content
     (and (= prompt-name target-prompt-name)
          (:branch-management? config))
-    (str "\n\n" (slurp (io/resource "prompts/branch-management.md")))
+    (str "\n\n" (slurp (io/resource (str builtin-infrastructure-dir "/branch-management.md"))))
     (and (= prompt-name target-prompt-name)
          (:worktree-management? config))
-    (str "\n\n" (slurp (io/resource "prompts/worktree-management.md")))))
+    (str "\n\n" (slurp (io/resource (str builtin-infrastructure-dir "/worktree-management.md"))))))
 
 (defn story-prompts
   "Generate MCP prompts from story prompt vars in mcp-tasks.story-prompts.
@@ -367,24 +375,18 @@
 (defn task-execution-prompts
   "Generate MCP prompts for general task execution workflows.
 
-  Discovers prompt files from resources/prompts/ directory, excluding:
-  - Category instruction files (simple.md, medium.md, etc.)
-  - Internal files (default-prompt-text.md)
+  Discovers prompt files from resources/prompts/ directory.
 
   Returns a map of prompt names to prompt definitions."
   [config]
-  (when-let [prompts-url (io/resource "prompts")]
+  (when-let [prompts-url (io/resource builtin-prompts-dir)]
     (let [prompts-dir (io/file (.toURI prompts-url))
           all-prompts (discover-prompt-files prompts-dir)
-          ;; Get category names to filter out
-          categories (set (discover-categories config))
-          ;; Filter out category instruction files and internal files
-          excluded-names (conj categories "default-prompt-text")
-          task-prompts (remove excluded-names all-prompts)
-          prompts-data (for [prompt-name task-prompts
+          prompts-data (for [prompt-name all-prompts
                              :let [resource-path (io/resource
                                                    (str
-                                                     "prompts/"
+                                                     builtin-prompts-dir
+                                                     "/"
                                                      prompt-name
                                                      ".md"))]
                              :when resource-path]
