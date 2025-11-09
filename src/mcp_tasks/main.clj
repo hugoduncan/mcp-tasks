@@ -3,13 +3,17 @@
   (:gen-class)
   (:require
     [babashka.fs :as fs]
+    [clojure.java.io :as io]
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.core :as mcp-server]
     [mcp-tasks.config :as config]
     [mcp-tasks.prompts :as tp]
     [mcp-tasks.resources :as resources]
-    [mcp-tasks.tools :as tools]))
+    [mcp-tasks.tools :as tools])
+  (:import
+    (java.io
+      File)))
 
 (defn- get-prompt-vars
   "Get all prompt vars from the task-prompts and story-prompts namespaces.
@@ -39,34 +43,60 @@
       (println (str prompt-name ": " docstring))))
   0)
 
+(defn- list-builtin-categories
+  "List all built-in category prompt names.
+
+  Returns a set of category names (strings) found in resources/category-prompts/."
+  []
+  (let [resource-dir "category-prompts"]
+    (->> (io/resource resource-dir)
+         io/file
+         file-seq
+         (filter #(and (.isFile ^File %)
+                       (str/ends-with? (.getName ^File %) ".md")))
+         (map #(str/replace (.getName ^File %) #"\.md$" ""))
+         set)))
+
 (defn- install-prompt
-  "Install a single prompt to .mcp-tasks/prompt/<name>.md.
+  "Install a single prompt to appropriate directory based on type.
+
+  Auto-detects whether the prompt is a category or workflow prompt:
+  - Categories go to .mcp-tasks/category-prompts/<name>.md
+  - Workflows go to .mcp-tasks/prompt-overrides/<name>.md
 
   Returns 0 if successful, 1 if the prompt was not found or installation failed."
   [prompt-name]
   (let [prompt-vars (get-prompt-vars)
-        prompt-var (first (filter #(= prompt-name (name (symbol %))) prompt-vars))]
+        prompt-var (first (filter #(= prompt-name (name (symbol %))) prompt-vars))
+        builtin-categories (list-builtin-categories)
+        is-category? (contains? builtin-categories prompt-name)
+        target-dir (if is-category?
+                     ".mcp-tasks/category-prompts"
+                     ".mcp-tasks/prompt-overrides")
+        target-file (str target-dir "/" prompt-name ".md")]
     (if-not prompt-var
       (do
         (println (str "Warning: Prompt '" prompt-name "' not found"))
         1)
-      (let [target-file (str ".mcp-tasks/prompts/" prompt-name ".md")]
-        (if (fs/exists? target-file)
-          (do
-            (println (str "Skipping " prompt-name ": file already exists"))
-            0)
-          (try
-            (when-let [parent (fs/parent target-file)]
-              (fs/create-dirs parent))
-            (spit target-file @prompt-var)
-            (println (str "Installed " prompt-name))
-            0
-            (catch Exception e
-              (println (str "Warning: Failed to install " prompt-name ": " (.getMessage e)))
-              1)))))))
+      (if (fs/exists? target-file)
+        (do
+          (println (str "Skipping " prompt-name ": file already exists at " target-file))
+          0)
+        (try
+          (when-let [parent (fs/parent target-file)]
+            (fs/create-dirs parent))
+          (spit target-file @prompt-var)
+          (println (str "Installed " prompt-name " to " target-file))
+          0
+          (catch Exception e
+            (println (str "Warning: Failed to install " prompt-name ": " (.getMessage e)))
+            1))))))
 
 (defn- install-prompts
-  "Install prompts to .mcp-tasks/prompt/ directory.
+  "Install prompts to appropriate directories.
+
+  Categories are installed to .mcp-tasks/category-prompts/
+  Workflow prompts are installed to .mcp-tasks/prompt-overrides/
 
   If prompt-names is nil or empty, installs all prompts.
   Otherwise, installs only the specified prompts.
@@ -177,8 +207,10 @@
   Supports:
     --list-prompts: List available prompt names and descriptions
 
-    --install-prompts [names]: Install prompts (comma-separated or all
-                               if omitted)
+    --install-prompts [names]: Install prompts to appropriate directories.
+                               Categories go to .mcp-tasks/category-prompts/
+                               Workflows go to .mcp-tasks/prompt-overrides/
+                               Accepts comma-separated names or installs all if omitted.
 
   No args: Start the MCP server
 

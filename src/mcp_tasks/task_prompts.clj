@@ -1,5 +1,8 @@
 (ns mcp-tasks.task-prompts
-  "Default task prompt templates for installation to .mcp-tasks/category-prompts/"
+  "Task prompt templates for category and workflow prompts.
+
+  Category prompts define execution workflows for different task complexities.
+  Workflow prompts define specific task operations (execute, refine, etc.)."
   (:require
     [clojure.java.io :as io]))
 
@@ -18,3 +21,11 @@
 (def large
   "Execute large tasks with detailed analysis, design, and user interaction"
   (slurp (io/resource "category-prompts/large.md")))
+
+(def execute-task
+  "Execute a task with category-specific workflow and validation"
+  (slurp (io/resource "prompts/execute-task.md")))
+
+(def refine-task
+  "Interactively refine a task to improve clarity and completeness"
+  (slurp (io/resource "prompts/refine-task.md")))
