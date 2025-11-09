@@ -86,7 +86,11 @@ Each activity can be invoked via slash command or by programmatically accessing 
 
 ### Story Shared Context
 
-Stories maintain a **shared context** (`:shared-context` field) that enables inter-task communication during story execution. This allows child tasks to coordinate by reading context from previous tasks and appending discoveries, decisions, and important information for subsequent tasks.
+Stories maintain a **shared context** (`:shared-context` field) that
+enables inter-task communication during story execution. This allows
+child tasks to coordinate by reading context from previous tasks and
+appending discoveries, decisions, and important information for
+subsequent tasks.
 
 **How It Works:**
 
@@ -97,64 +101,24 @@ Stories maintain a **shared context** (`:shared-context` field) that enables int
 
 **Context Precedence Rule:**
 
-Shared context takes precedence over a task's static `:description` and `:design` fields when conflicts exist or new information emerges. This ensures tasks work with the most current state.
+Shared context takes precedence over a task's static `:description` and
+`:design` fields when conflicts exist or new information emerges. This
+ensures tasks work with the most current state.
 
 **When to Update Shared Context:**
 
-Update during execution (not just at completion) when you:
+Update during execution when you:
 - Make architectural or design decisions
 - Discover important information (API endpoints, configuration, constraints)
 - Find edge cases or issues
 - Implement features that subsequent tasks depend on
 - Choose between alternatives that affect later work
 
-**Example Workflow:**
-
-```clojure
-;; Story #408 "Implement user authentication" has three child tasks
-
-;; Task #410 execution (First task)
-;; Read parent context
-(select-tasks :task-id 410)
-;; Returns: {:parent-shared-context [] ...}  ; Empty - first task
-
-;; During implementation, append decision
-(update-task
-  :task-id 408  ; Parent story ID
-  :shared-context ["Researched API options. Chose REST endpoint https://api.example.com over GraphQL for simplicity."])
-
-;; Stored as: ["Task 410: Researched API options. Chose REST endpoint https://api.example.com over GraphQL for simplicity."]
-
-;; Task #411 execution (Second task)
-;; Read parent context
-(select-tasks :task-id 411)
-;; Returns: {:parent-shared-context ["Task 410: Researched API options. Chose REST endpoint https://api.example.com over GraphQL for simplicity."] ...}
-
-;; Agent reads context, knows to use REST endpoint approach
-;; During implementation, append new information
-(update-task
-  :task-id 408
-  :shared-context ["Implemented JWT authentication. Token expires in 1 hour. Refresh logic in auth.clj:45."])
-
-;; Stored as: ["Task 410: Researched API options...", "Task 411: Implemented JWT authentication. Token expires in 1 hour. Refresh logic in auth.clj:45."]
-
-;; Task #412 execution (Third task)
-;; Read parent context
-(select-tasks :task-id 412)
-;; Returns: {:parent-shared-context ["Task 410: Researched API...", "Task 411: Implemented JWT auth..."] ...}
-
-;; Agent reads context, knows about endpoint and auth implementation
-;; During implementation, append discovery
-(update-task
-  :task-id 408
-  :shared-context ["Found edge case - empty user input crashes parser. Added validation in input.clj:23."])
-
-;; Final context: ["Task 410: Researched API...", "Task 411: Implemented JWT...", "Task 412: Found edge case - empty user input crashes parser..."]
-```
+The system automatically prefixes your update with "Task NNN:" where NNN
+is the current task ID. Multiple updates accumulate with newest first.
 
 **Key Points:**
 
-- **No Manual Prefix**: Don't add "Task NNN:" yourself - the system adds it automatically
 - **Append Only**: New entries are appended to existing context (not replaced)
 - **Chronological Order**: Entries maintain order with task ID prefix showing sequence
 - **Size Limit**: 50KB total serialized EDN (enforced by `update-task`)
