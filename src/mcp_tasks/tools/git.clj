@@ -612,12 +612,11 @@
           ;; Build path based on prefix mode
           worktree-path (if (= worktree-prefix :none)
                           (str parent-dir "/" id-slug)
-                          (let [name-result (derive-project-name project-dir)]
-                            (if-not (:success name-result)
-                              (throw (ex-info (:error name-result)
-                                              {:operation "derive-project-name"}))
-                              (let [project-name (:name name-result)]
-                                (str parent-dir "/" project-name "-" id-slug)))))]
+                          (let [parent-name (fs/file-name parent-dir)]
+                            (if (str/blank? parent-name)
+                              (throw (ex-info "Could not extract parent directory name"
+                                              {:operation "derive-parent-name"}))
+                              (str parent-dir "/" parent-name "-" id-slug))))]
 
       {:success true
        :path worktree-path

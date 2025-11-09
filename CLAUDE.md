@@ -407,7 +407,7 @@ The `work-on` tool returns a map containing task and environment information:
 - `:worktree-name` - The worktree directory name (only present when `:worktree-path` is present)
   - Extracted as the final path component (e.g., `/Users/duncan/projects/mcp-tasks-123-fix-bug/` → `mcp-tasks-123-fix-bug`)
   - Format depends on `:worktree-prefix` config:
-    - With `:project-name`: `<project>-<id>-<title-slug>`
+    - With `:project-name`: `<parent-dir-name>-<id>-<title-slug>` (where parent-dir-name is the name of the parent directory containing the project)
     - With `:none`: `<id>-<title-slug>`
 - `:branch-name` - The current branch name (only present when branch management is active)
 - `:worktree-clean?` - Boolean indicating if the worktree has uncommitted changes
