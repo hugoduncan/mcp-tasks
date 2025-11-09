@@ -36,6 +36,10 @@ Display task to user.
 
 Call `work-on` with `task-id: <child-task-id>`. Display environment: worktree name/path, branch (if present).
 
+**3. Retrieve Category Instructions:**
+
+Use `ReadMcpResourceTool` with server "mcp-tasks", uri `prompt://category-<category>`. If missing, inform user and stop.
+
 **Display parent shared context:**
 
 If the parent story has `:parent-shared-context`, display it to provide context from previous tasks:
@@ -48,7 +52,7 @@ If the parent story has `:parent-shared-context`, display it to provide context 
 
 **Context precedence:** Shared context takes precedence over static fields like `:description` or `:design` when there are conflicts or updates from previous task execution.
 
-**3. Execute task:**
+**4. Execute task:**
 
 Skip refinement check. Execute by following `prompt://category-<category>` resource.
 
@@ -95,11 +99,11 @@ The system automatically prefixes your update with "Task NNN:" where NNN is the 
    :shared-context "select-tasks tool now returns :parent-shared-context in response"})
 ```
 
-**4. Finalize shared context:**
+**5. Finalize shared context:**
 
 Before completing the task, review what future tasks need to know and add any missing context to the parent story.
 
-**5. Complete:**
+**6. Complete:**
 
 Call `complete-task` with `task-id`, optional `completion-comment`.
 
