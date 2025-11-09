@@ -54,7 +54,9 @@ If the parent story has `:parent-shared-context`, display it to provide context 
 
 **4. Execute task:**
 
-Skip refinement check. Execute by following `prompt://category-<category>` resource.
+**IMPORTANT: Treat the category prompt as the primary execution guide.** You MUST follow the workflow steps defined in `prompt://category-<category>` in their specified order. Category workflows are mandatory and define the required process for executing this task. Do not deviate from the category workflow unless there are legitimate blockers or errors.
+
+Skip refinement check. Execute by strictly adhering to the `prompt://category-<category>` resource instructions.
 
 **While executing:** For out-of-scope issues, create task with `add-task`, link with `:discovered-during` relation via `update-task`. Continue current task. See execute-task prompt for details.
 
@@ -110,3 +112,26 @@ Call `complete-task` with `task-id`, optional `completion-comment`.
 **Never complete the parent story.** Only complete child tasks. User reviews before story completion.
 
 **On failure:** Execution state persists. Starting new task overwrites automatically.
+
+## Category Adherence
+
+**Category prompts define the required execution workflow.** Each category specifies mandatory steps that must be followed in their defined order. These workflows are not suggestions—they are the required process for executing tasks in that category.
+
+**Relationship between shared context and category workflow:**
+
+- **Category workflow is primary:** The category prompt retrieved in step 3 defines the mandatory execution process
+- **Shared context supplements workflow:** The `:parent-shared-context` from previous tasks provides additional context about implementation details, decisions, and discoveries
+- **Context does not replace workflow:** Even if shared context contains information about implementation approaches, you must still follow all steps defined in the category workflow
+- **Use both together:** Apply the category workflow steps while incorporating knowledge from shared context
+
+**Example:** If executing a "medium" category task:
+1. Follow all steps from `prompt://category-medium` (e.g., analysis, design, implementation, testing)
+2. Use `:parent-shared-context` to inform your decisions within each step
+3. Do not skip workflow steps even if shared context suggests an implementation approach
+
+**When to deviate from category workflow:**
+
+Only deviate from the category workflow when:
+- The category prompt resource is missing or malformed (handled by step 3 error)
+- A legitimate blocker prevents following a specific step (document the blocker and inform the user)
+- The user explicitly instructs you to modify the workflow
