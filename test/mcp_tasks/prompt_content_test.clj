@@ -19,6 +19,14 @@
     (fixtures/write-config-file "{:use-git? true}")
     (fixtures/init-test-git-repo)
 
+    ;; Create test category prompt files
+    (let [category-prompts-dir (io/file (fixtures/test-project-dir) ".mcp-tasks" "category-prompts")]
+      (.mkdirs category-prompts-dir)
+      (spit (io/file category-prompts-dir "simple.md")
+            "---\ndescription: Execute simple tasks\n---\n\nComplete the next simple task.")
+      (spit (io/file category-prompts-dir "medium.md")
+            "---\ndescription: Execute medium tasks\n---\n\nComplete the next medium task."))
+
     (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
       (try
         (testing "resource content includes YAML frontmatter with description"
@@ -94,15 +102,15 @@
     (fixtures/init-test-git-repo)
 
     ;; Create test prompt files
-    (let [prompts-dir (io/file (fixtures/test-project-dir) ".mcp-tasks" "prompts")]
-      (.mkdirs prompts-dir)
-      (spit (io/file prompts-dir "simple.md")
+    (let [category-prompts-dir (io/file (fixtures/test-project-dir) ".mcp-tasks" "category-prompts")]
+      (.mkdirs category-prompts-dir)
+      (spit (io/file category-prompts-dir "simple.md")
             "---\ndescription: Execute simple tasks with basic workflow\n---\n\n- Analyze the task\n- Implement solution")
-      (spit (io/file prompts-dir "medium.md")
+      (spit (io/file category-prompts-dir "medium.md")
             "---\ndescription: Execute medium complexity tasks\n---\n\n- Deep analysis\n- Design approach\n- Implementation")
-      (spit (io/file prompts-dir "large.md")
+      (spit (io/file category-prompts-dir "large.md")
             "---\ndescription: Execute large tasks with detailed planning\n---\n\n- Comprehensive analysis\n- Detailed design\n- Implementation\n- Testing")
-      (spit (io/file prompts-dir "clarify-task.md")
+      (spit (io/file category-prompts-dir "clarify-task.md")
             "---\ndescription: Transform informal instructions into clear specifications\n---\n\n- Analyze requirements\n- Clarify ambiguities"))
 
     (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
