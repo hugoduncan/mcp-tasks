@@ -435,6 +435,33 @@
           (finally
             (mcp-client/close! client)))))))
 
+(deftest ^:native-binary test-task-and-story-prompts-work
+  ;; Verify task and story prompts work correctly (regression test).
+  ;; Tests execute-task and execute-story-child prompts via prompts/get.
+  ;; Expected to PASS (these prompts already work correctly).
+  (testing "test-task-and-story-prompts-work"
+    (testing "task and story prompts return complete content"
+      (let [client (create-binary-client)
+            test-prompts ["execute-task" "execute-story-child"]]
+        (try
+          (doseq [prompt-name test-prompts]
+            (testing (str "prompt " prompt-name " has complete content")
+              (let [response (get-prompt-via-client client prompt-name)
+                    messages (:messages response)]
+                (is (vector? messages)
+                    (str "Prompt '" prompt-name "' should have :messages vector, got: " (type messages)))
+                (is (pos? (count messages))
+                    (str "Prompt '" prompt-name "' should have at least one message, got: " (count messages)))
+                (when (seq messages)
+                  (let [first-message (first messages)
+                        content (get-in first-message [:content :text])]
+                    (is (string? content)
+                        (str "Prompt '" prompt-name "' message should have text content, got: " (type content)))
+                    (is (> (count content) 100)
+                        (str "Prompt '" prompt-name "' content should be substantial (>100 chars), got " (count content) " chars")))))))
+          (finally
+            (mcp-client/close! client)))))))
+
 ;; Comprehensive Tests
 
 (deftest ^:native-binary ^:comprehensive comprehensive-mcp-protocol
