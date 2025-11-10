@@ -8,23 +8,23 @@
 
 (deftest discover-categories-test
   ;; Test that discover-categories finds categories from the
-  ;; prompts subdirectory, returning them sorted without .md extensions.
+  ;; category-prompts subdirectory, returning them sorted without .md extensions.
   (testing "discover-categories"
     (let [config {:resolved-tasks-dir ".mcp-tasks"}]
-      (testing "returns sorted categories from prompts directory"
+      (testing "returns sorted categories from category-prompts directory"
         (let [categories (sut/discover-categories config)]
           (is (vector? categories))
           (is (every? string? categories))
           (is (= categories (sort categories)))
           (is (not-any? #(re-find #"\.md$" %) categories))))
 
-      (testing "finds categories from prompts subdirectory"
+      (testing "finds categories from category-prompts subdirectory"
         (let [categories (sut/discover-categories config)
               category-set (set categories)]
-          ;; Should find "simple" which exists in prompts
+          ;; Should find "simple" which exists in category-prompts
           (is (contains? category-set "simple"))))
 
-      (testing "returns categories only from prompts subdirectory"
+      (testing "returns categories only from category-prompts subdirectory"
         (let [categories (sut/discover-categories config)]
           ;; Each category should appear exactly once
           (is (= (count categories) (count (set categories)))))))))
@@ -351,7 +351,7 @@
   "Create a temporary override file for testing.
   Returns the file object for cleanup."
   [prompt-name content]
-  (let [override-dir (io/file ".mcp-tasks" "story" "prompts")
+  (let [override-dir (io/file ".mcp-tasks" "prompt-overrides")
         override-file (io/file override-dir (str prompt-name ".md"))]
     (.mkdirs override-dir)
     (spit override-file content)
@@ -524,7 +524,7 @@
   ;; Validates URI format, content extraction, and frontmatter handling.
   (testing "category-prompt-resources"
     (let [temp-dir (str (System/getProperty "java.io.tmpdir") "/mcp-tasks-test-" (System/currentTimeMillis))
-          prompts-dir (io/file temp-dir ".mcp-tasks" "prompts")
+          prompts-dir (io/file temp-dir ".mcp-tasks" "category-prompts")
           config {:base-dir temp-dir
                   :resolved-tasks-dir (str temp-dir "/.mcp-tasks")}]
       (try
@@ -655,9 +655,9 @@
     (testing "does not affect other task execution prompts"
       (let [prompts-with-branch (sut/task-execution-prompts {:branch-management? true})
             prompts-without-branch (sut/task-execution-prompts {:branch-management? false})]
-        ;; Check that non-execute-task prompts are identical
+        ;; Check that non-execute-task and non-execute-story-child prompts are identical
         (doseq [prompt-name (keys prompts-with-branch)
-                :when (not= prompt-name "execute-task")]
+                :when (not (contains? #{"execute-task" "execute-story-child"} prompt-name))]
           (is (= (get-in prompts-with-branch [prompt-name :messages])
                  (get-in prompts-without-branch [prompt-name :messages]))))))))
 
@@ -729,7 +729,163 @@
     (testing "does not affect other task execution prompts"
       (let [prompts-with-worktree (sut/task-execution-prompts {:worktree-management? true})
             prompts-without-worktree (sut/task-execution-prompts {:worktree-management? false})]
+        ;; Check that non-execute-task and non-execute-story-child prompts are identical
         (doseq [prompt-name (keys prompts-with-worktree)
-                :when (not= prompt-name "execute-task")]
+                :when (not (contains? #{"execute-task" "execute-story-child"} prompt-name))]
           (is (= (get-in prompts-with-worktree [prompt-name :messages])
                  (get-in prompts-without-worktree [prompt-name :messages]))))))))
+
+;; Backward compatibility tests
+
+(defn- create-deprecated-category-file
+  "Create a category file in the deprecated prompts/ directory for testing."
+  [category content]
+  (let [deprecated-dir (io/file ".mcp-tasks" "prompts")
+        file (io/file deprecated-dir (str category ".md"))]
+    (.mkdirs deprecated-dir)
+    (spit file content)
+    file))
+
+(defn- create-new-category-file
+  "Create a category file in the new category-prompts/ directory for testing."
+  [category content]
+  (let [new-dir (io/file ".mcp-tasks" "category-prompts")
+        file (io/file new-dir (str category ".md"))]
+    (.mkdirs new-dir)
+    (spit file content)
+    file))
+
+(defn- create-deprecated-workflow-file
+  "Create a workflow prompt file in the deprecated story/prompts/ directory for testing."
+  [prompt-name content]
+  (let [deprecated-dir (io/file ".mcp-tasks" "story" "prompts")
+        file (io/file deprecated-dir (str prompt-name ".md"))]
+    (.mkdirs deprecated-dir)
+    (spit file content)
+    file))
+
+(deftest backward-compat-category-prompts-test
+  ;; Test backward compatibility for category prompts in deprecated prompts/ directory
+  (testing "category prompts backward compatibility"
+    (testing "finds category in new location only"
+      (let [config {:resolved-tasks-dir ".mcp-tasks"}
+            test-file (create-new-category-file "test-new-only" "New content")]
+        (try
+          (let [categories (sut/discover-categories config)]
+            (is (contains? (set categories) "test-new-only")))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "finds category in deprecated location only"
+      (let [config {:resolved-tasks-dir ".mcp-tasks"}
+            test-file (create-deprecated-category-file "test-deprecated-only" "Deprecated content")]
+        (try
+          (let [categories (sut/discover-categories config)]
+            (is (contains? (set categories) "test-deprecated-only")))
+          (finally
+            (delete-test-file test-file)
+            (fs/delete-tree (io/file ".mcp-tasks" "prompts"))))))
+
+    (testing "new location takes precedence when both exist"
+      (let [config {:resolved-tasks-dir ".mcp-tasks"}
+            new-file (create-new-category-file "test-both" "New content")
+            deprecated-file (create-deprecated-category-file "test-both" "Deprecated content")]
+        (try
+          (let [categories (sut/discover-categories config)
+                prompt-data (#'sut/read-prompt-instructions config "test-both")]
+            (is (contains? (set categories) "test-both"))
+            (is (= "New content" (:content prompt-data))))
+          (finally
+            (delete-test-file new-file)
+            (delete-test-file deprecated-file)
+            (fs/delete-tree (io/file ".mcp-tasks" "prompts"))))))
+
+    (testing "combines categories from both locations"
+      (let [config {:resolved-tasks-dir ".mcp-tasks"}
+            new-file (create-new-category-file "test-new" "New content")
+            deprecated-file (create-deprecated-category-file "test-old" "Old content")]
+        (try
+          (let [categories (sut/discover-categories config)
+                category-set (set categories)]
+            (is (contains? category-set "test-new"))
+            (is (contains? category-set "test-old")))
+          (finally
+            (delete-test-file new-file)
+            (delete-test-file deprecated-file)
+            (fs/delete-tree (io/file ".mcp-tasks" "prompts"))))))))
+
+(deftest backward-compat-workflow-prompts-test
+  ;; Test backward compatibility for workflow prompts in deprecated story/prompts/ directory
+  (testing "workflow prompts backward compatibility"
+    (testing "finds prompt in new location only"
+      (let [test-file (create-test-override-file "test-new-workflow" "---\ndescription: New\n---\nNew content")]
+        (try
+          (let [result (sut/get-story-prompt "test-new-workflow")]
+            (is (some? result))
+            (is (= "New" (:description result)))
+            (is (str/includes? (:content result) "New content")))
+          (finally
+            (delete-test-file test-file)))))
+
+    (testing "finds prompt in deprecated location only"
+      (let [test-file (create-deprecated-workflow-file "test-deprecated-workflow" "---\ndescription: Deprecated\n---\nDeprecated content")]
+        (try
+          (let [result (sut/get-story-prompt "test-deprecated-workflow")]
+            (is (some? result))
+            (is (= "Deprecated" (:description result)))
+            (is (str/includes? (:content result) "Deprecated content")))
+          (finally
+            (delete-test-file test-file)
+            (fs/delete-tree (io/file ".mcp-tasks" "story"))))))
+
+    (testing "new location takes precedence when both exist"
+      (let [new-file (create-test-override-file "test-both-workflow" "---\ndescription: New\n---\nNew content")
+            deprecated-file (create-deprecated-workflow-file "test-both-workflow" "---\ndescription: Deprecated\n---\nDeprecated content")]
+        (try
+          (let [result (sut/get-story-prompt "test-both-workflow")]
+            (is (some? result))
+            (is (= "New" (:description result)))
+            (is (str/includes? (:content result) "New content")))
+          (finally
+            (delete-test-file new-file)
+            (delete-test-file deprecated-file)
+            (fs/delete-tree (io/file ".mcp-tasks" "story"))))))
+
+    (testing "falls back to builtin when no override exists"
+      (let [result (sut/get-story-prompt "create-story-tasks")]
+        (is (some? result))
+        (is (some? (:description result)))
+        (is (some? (:content result)))))))
+
+(deftest backward-compat-empty-directories-test
+  ;; Verify that empty deprecated directories don't trigger deprecation warnings.
+  ;; This is important for user experience during migration - if users create
+  ;; new directory structures but haven't moved files yet, we shouldn't warn.
+  ;;
+  ;; The implementation correctly avoids warnings because:
+  ;; 1. discover-prompt-files returns empty vector for directories with no .md files
+  ;; 2. discover-categories only warns for categories in deprecated-only set
+  ;; 3. resolve-prompt-path-with-fallback only warns when specific file exists
+  (testing "empty deprecated directories"
+    (testing "empty deprecated prompts/ directory doesn't affect discover-categories"
+      (let [config {:resolved-tasks-dir ".mcp-tasks"}
+            deprecated-dir (io/file ".mcp-tasks" "prompts")]
+        (.mkdirs deprecated-dir)
+        (try
+          (let [categories (sut/discover-categories config)]
+            ;; Should discover built-in categories without warnings
+            (is (vector? categories))
+            (is (seq categories) "Should find built-in categories"))
+          (finally
+            (fs/delete-tree deprecated-dir)))))
+
+    (testing "empty deprecated story/prompts/ directory doesn't affect get-story-prompt"
+      (let [deprecated-dir (io/file ".mcp-tasks" "story" "prompts")]
+        (.mkdirs deprecated-dir)
+        (try
+          (let [result (sut/get-story-prompt "create-story-tasks")]
+            ;; Should find built-in prompt without warnings
+            (is (some? result))
+            (is (some? (:content result))))
+          (finally
+            (fs/delete-tree (io/file ".mcp-tasks" "story"))))))))

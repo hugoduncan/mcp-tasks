@@ -10,7 +10,7 @@
 
 **Category**: A task organization unit that determines which prompt will be used to execute a task. Each task has a `:category` field that determines its execution workflow.
 
-**Category Discovery**: Automatic detection of available categories by scanning `.mcp-tasks/prompts/` for `.md` files.
+**Category Discovery**: Automatic detection of available categories by scanning `.mcp-tasks/category-prompts/` for `.md` files. Falls back to deprecated `.mcp-tasks/prompts/` with warnings.
 
 **Circular Dependency**: A dependency cycle where a chain of `:blocked-by` relations forms a loop (e.g., Task A blocked-by Task B, Task B blocked-by Task C, Task C blocked-by Task A). The system detects circular dependencies and marks affected tasks as blocked with `:blocking-task-ids` showing the cycle. Users must manually resolve circular dependencies by removing or reordering relations.
 
@@ -20,7 +20,9 @@
 
 **Current Execution Resource**: An MCP resource (`resource://current-execution`) that exposes the currently executing story and task information for external tools and monitoring.
 
-**Category Prompts**: Category-specific execution steps defined in `.mcp-tasks/prompts/<category>.md`.
+**Category Prompts**: Category-specific execution steps defined in `.mcp-tasks/category-prompts/<category>.md`. Overrides built-in prompts from `resources/category-prompts/`.
+
+**Prompt Overrides**: Custom workflow prompts stored in `.mcp-tasks/prompt-overrides/<name>.md` that override built-in workflow prompts from `resources/prompts/` (e.g., execute-task.md, refine-task.md, complete-story.md).
 
 **EDN (Extensible Data Notation)**: Clojure's data format used for task storage, providing rich data types and human-readable structure.
 

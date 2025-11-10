@@ -24,7 +24,7 @@
   (cleanup-test-project)
   (let [mcp-tasks-dir (io/file test-project-dir ".mcp-tasks")
         tasks-dir (io/file mcp-tasks-dir "tasks")
-        prompts-dir (io/file mcp-tasks-dir "prompts")]
+        prompts-dir (io/file mcp-tasks-dir "category-prompts")]
     (.mkdirs tasks-dir)
     (.mkdirs prompts-dir)
     ;; Create a simple.md file in prompts dir so discover-categories finds at least one category

@@ -22,20 +22,28 @@ clojure -M:mcp-tasks --list-prompts
 
 ### Install Prompt Templates
 
-Install prompt templates to `.mcp-tasks/prompts/` directory:
+Install prompt templates to customize task execution workflows:
 
 ```bash
-# Install all available prompts
+# Install all available category prompts to .mcp-tasks/category-prompts/
 clojure -M:mcp-tasks --install-prompts
 
-# Install specific prompts (comma-separated)
+# Install specific category prompts (comma-separated)
 clojure -M:mcp-tasks --install-prompts simple,clarify-task
+
+# Install workflow prompts to .mcp-tasks/prompt-overrides/
+clojure -M:mcp-tasks --install-prompts execute-task,refine-task
 ```
 
 The `--install-prompts` command:
+- Detects prompt type (category vs workflow) automatically
+- Category prompts install to `.mcp-tasks/category-prompts/`
+- Workflow prompts install to `.mcp-tasks/prompt-overrides/`
 - Skips files that already exist (exit code 0)
 - Warns if a prompt is not found or installation fails (exit code 1)
 - Does not start the MCP server
+
+**Backward Compatibility:** The system continues to read from deprecated locations (`.mcp-tasks/prompts/` and `.mcp-tasks/story/prompts/`) with warnings. See [Migration Guide](migration/prompt-directories.md) for details.
 
 ## Prompt Templates
 
@@ -84,14 +92,14 @@ argument-hint: <story-name> [additional-context...]
 
 ### Creating Custom Prompts
 
-To create a custom prompt:
+To create a custom category prompt:
 
-1. Create a `.md` file in `.mcp-tasks/prompts/` directory
+1. Create a `.md` file in `.mcp-tasks/category-prompts/` directory
 2. Add frontmatter with a `description` field (optional but recommended)
 3. Write execution instructions in Markdown
 4. The filename (without `.md`) becomes the category name
 
-Example `.mcp-tasks/prompts/research.md`:
+Example `.mcp-tasks/category-prompts/research.md`:
 
 ```markdown
 ---
@@ -112,19 +120,26 @@ Tasks assigned to the `research` category will use these execution instructions.
 
 The system automatically discovers prompts by:
 
-1. Scanning `.mcp-tasks/prompts/` directory for `.md` files
-2. Extracting category names from filenames (without extension)
-3. Parsing frontmatter to extract metadata
-4. Registering prompts with the MCP server
+1. **Category prompts**: Scanning `.mcp-tasks/category-prompts/` directory for `.md` files
+2. **Workflow prompts**: Reading from `.mcp-tasks/prompt-overrides/` for custom workflow overrides
+3. Extracting names from filenames (without extension)
+4. Parsing frontmatter to extract metadata
+5. Registering prompts with the MCP server
 
-Built-in prompts from `resources/prompts/` serve as defaults. Custom prompts in `.mcp-tasks/prompts/` override built-in prompts with the same name.
+**Built-in prompts** serve as defaults:
+- Category prompts: `resources/category-prompts/` (simple.md, medium.md, large.md, clarify-task.md)
+- Workflow prompts: `resources/prompts/` (execute-task.md, refine-task.md, complete-story.md, etc.)
 
-### Category Prompts vs Story Prompts
+**Custom prompts** override built-in prompts:
+- Category overrides: `.mcp-tasks/category-prompts/<category>.md`
+- Workflow overrides: `.mcp-tasks/prompt-overrides/<name>.md`
+
+### Category Prompts vs Workflow Prompts
 
 mcp-tasks has two types of prompts:
 
-- **Category prompts**: Define workflows for task categories (e.g., `simple`, `medium`, `large`). Stored in `.mcp-tasks/prompts/<category>.md`
-- **Story prompts**: Define workflows for story-level operations (e.g., refining stories, creating tasks). Stored in `.mcp-tasks/story/prompts/<name>.md`
+- **Category prompts**: Define workflows for task categories (e.g., `simple`, `medium`, `large`). Located in `.mcp-tasks/category-prompts/<category>.md`
+- **Workflow prompts**: Define workflows for task/story operations (e.g., executing tasks, refining stories, creating tasks). Located in `.mcp-tasks/prompt-overrides/<name>.md`
 
 ## Categories
 
@@ -132,15 +147,15 @@ Categories organize tasks by execution workflow. Each category corresponds to a 
 
 ### Category Discovery
 
-Categories are automatically discovered by scanning the `.mcp-tasks/prompts/` directory:
+Categories are automatically discovered by scanning the `.mcp-tasks/category-prompts/` directory:
 
-1. System looks for `.md` files in `.mcp-tasks/prompts/`
+1. System looks for `.md` files in `.mcp-tasks/category-prompts/`
 2. Filename (without `.md` extension) becomes the category name
 3. Each category automatically gets a corresponding MCP prompt
 
 For example, if you have:
 ```
-.mcp-tasks/prompts/
+.mcp-tasks/category-prompts/
 ├── simple.md
 ├── medium.md
 ├── large.md
@@ -153,7 +168,7 @@ The system discovers four categories: `simple`, `medium`, `large`, and `research
 
 To add a new category:
 
-1. Create a prompt file in `.mcp-tasks/prompts/<category-name>.md`
+1. Create a prompt file in `.mcp-tasks/category-prompts/<category-name>.md`
 2. Define execution instructions in the file
 3. Assign tasks to the category using the `:category` field
 
@@ -184,9 +199,11 @@ Categories and prompts have a 1:1 mapping:
 - The category name equals the prompt filename (without `.md`)
 
 When you create a task with `:category "research"`, the system:
-1. Looks for `.mcp-tasks/prompts/research.md`
-2. Loads the prompt instructions from that file
-3. Uses those instructions to execute the task
+1. Looks for `.mcp-tasks/category-prompts/research.md`
+2. Falls back to deprecated `.mcp-tasks/prompts/research.md` (with warning)
+3. Falls back to built-in `resources/category-prompts/research.md`
+4. Loads the prompt instructions from the first found location
+5. Uses those instructions to execute the task
 
 ## Task Metadata
 
@@ -278,7 +295,7 @@ Consistent conventions make it easier to filter, report, and manage tasks across
 
 ### Custom Research Category
 
-Create `.mcp-tasks/prompts/research.md`:
+Create `.mcp-tasks/category-prompts/research.md`:
 
 ```markdown
 ---

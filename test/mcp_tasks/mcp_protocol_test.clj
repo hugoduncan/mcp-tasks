@@ -4,6 +4,7 @@
   Tests that tools, prompts, and resources are properly advertised and
   accessible through the MCP protocol."
   (:require
+    [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.mcp-client.core :as mcp-client]
@@ -65,6 +66,12 @@
   (testing "resources availability"
     (fixtures/write-config-file "{:use-git? true}")
     (fixtures/init-test-git-repo)
+
+    ;; Create test category prompt files
+    (let [category-prompts-dir (io/file (fixtures/test-project-dir) ".mcp-tasks" "category-prompts")]
+      (.mkdirs category-prompts-dir)
+      (spit (io/file category-prompts-dir "simple.md")
+            "---\ndescription: Execute simple tasks\n---\n\nSimple workflow"))
 
     (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
       (try

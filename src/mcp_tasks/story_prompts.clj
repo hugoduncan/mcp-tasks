@@ -9,20 +9,20 @@
 
 (def create-story-tasks
   "Break down a story into categorized, executable tasks."
-  (slurp (io/resource "story/prompts/create-story-tasks.md")))
+  (slurp (io/resource "prompts/create-story-tasks.md")))
 
 (def execute-story-child
   "Execute the next task from a story's task list."
-  (slurp (io/resource "story/prompts/execute-story-child.md")))
+  (slurp (io/resource "prompts/execute-story-child.md")))
 
 (def review-story-implementation
   "Review the implementation of a story."
-  (slurp (io/resource "story/prompts/review-story-implementation.md")))
+  (slurp (io/resource "prompts/review-story-implementation.md")))
 
 (def complete-story
   "Mark a story as complete and archive it."
-  (slurp (io/resource "story/prompts/complete-story.md")))
+  (slurp (io/resource "prompts/complete-story.md")))
 
 (def create-story-pr
   "Create a pull request for a completed story."
-  (slurp (io/resource "story/prompts/create-story-pr.md")))
+  (slurp (io/resource "prompts/create-story-pr.md")))

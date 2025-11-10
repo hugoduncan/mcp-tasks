@@ -46,15 +46,67 @@
     (testing "returns exit code 0"
       (is (= 0 (#'sut/list-prompts))))))
 
+(deftest list-builtin-categories-test
+  ;; Test that list-builtin-categories returns the correct set of categories.
+  (testing "list-builtin-categories"
+    (testing "returns set of built-in category names"
+      (let [categories (#'sut/list-builtin-categories)]
+        (is (set? categories))
+        (is (contains? categories "simple"))
+        (is (contains? categories "medium"))
+        (is (contains? categories "large"))
+        (is (contains? categories "clarify-task"))))
+
+    (testing "does not contain workflow prompts"
+      (let [categories (#'sut/list-builtin-categories)]
+        (is (not (contains? categories "execute-task")))
+        (is (not (contains? categories "refine-task")))
+        (is (not (contains? categories "complete-story")))))))
+
 (deftest install-prompt-test
-  ;; Test that install-prompt handles various edge cases.
+  ;; Test that install-prompt handles various edge cases and directory routing.
   (testing "install-prompt"
     (testing "warns on nonexistent prompt"
       (let [output (with-out-str (#'sut/install-prompt "nonexistent"))
             exit-code (#'sut/install-prompt "nonexistent")]
         (is (str/includes? output "Warning"))
         (is (str/includes? output "not found"))
-        (is (= 1 exit-code))))))
+        (is (= 1 exit-code))))
+
+    (testing "installs category prompt to category-prompts directory"
+      (let [target-file-atom (atom nil)]
+        (with-redefs [fs/exists? (constantly false)
+                      fs/create-dirs (fn [_] nil)
+                      spit (fn [file _content]
+                             (reset! target-file-atom file))]
+          (binding [*out* (java.io.StringWriter.)]
+            (#'sut/install-prompt "simple"))
+          (is (some? @target-file-atom))
+          (is (str/includes? @target-file-atom ".mcp-tasks/category-prompts/simple.md")))))
+
+    (testing "installs workflow prompt to prompt-overrides directory"
+      (let [target-file-atom (atom nil)]
+        (with-redefs [fs/exists? (constantly false)
+                      fs/create-dirs (fn [_] nil)
+                      spit (fn [file _content]
+                             (reset! target-file-atom file))]
+          (binding [*out* (java.io.StringWriter.)]
+            (#'sut/install-prompt "execute-task"))
+          (is (some? @target-file-atom))
+          (is (str/includes? @target-file-atom ".mcp-tasks/prompt-overrides/execute-task.md")))))
+
+    (testing "skips existing files with message"
+      (let [temp-dir (fs/create-temp-dir)
+            test-file (fs/path temp-dir ".mcp-tasks" "category-prompts" "simple.md")]
+        (try
+          (fs/create-dirs (fs/parent test-file))
+          (spit (str test-file) "existing content")
+          (with-redefs [fs/exists? (constantly true)]
+            (let [output (with-out-str (#'sut/install-prompt "simple"))]
+              (is (str/includes? output "Skipping simple"))
+              (is (str/includes? output "already exists"))))
+          (finally
+            (fs/delete-tree temp-dir)))))))
 
 (deftest install-prompts-test
   ;; Test that install-prompts handles multiple prompts and returns
@@ -210,7 +262,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-dir (.getPath temp-dir)
@@ -236,7 +288,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-dir (.getPath temp-dir)
@@ -263,7 +315,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-file (io/file temp-dir ".mcp-tasks.edn")]
@@ -313,7 +365,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-dir (.getPath temp-dir)
@@ -340,7 +392,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-dir (.getPath temp-dir)
@@ -363,7 +415,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-dir (.getPath temp-dir)
@@ -393,7 +445,7 @@
             _ (fs/delete temp-dir)
             _ (.mkdirs temp-dir)
             mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-            prompts-dir (io/file mcp-tasks-dir "prompts")
+            prompts-dir (io/file mcp-tasks-dir "category-prompts")
             _ (.mkdirs prompts-dir)
             _ (spit (io/file prompts-dir "simple.md") "Test instructions\n")
             config-dir (.getPath temp-dir)
