@@ -179,7 +179,11 @@
   [config transport]
   (let [all-prompts (merge (tp/category-prompts config)
                            (tp/story-prompts config))
-        category-resources-vec (tp/category-prompt-resources config)
+        ;; Use both filesystem and embedded resources
+        ;; Filesystem resources override embedded (for user customizations)
+        embedded-resources (tp/builtin-category-prompt-resources config)
+        fs-resources (tp/category-prompt-resources config)
+        category-resources-vec (concat embedded-resources fs-resources)
         base-dir (:base-dir config)
         all-resources (merge
                         (resources/prompt-resources all-prompts)
