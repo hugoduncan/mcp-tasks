@@ -32,6 +32,7 @@
     [build :as build]
     [cheshire.core :as json]
     [clojure.java.io :as io]
+    [clojure.set]
     [clojure.string]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-clj.mcp-client.core :as mcp-client]))
@@ -251,6 +252,42 @@
                 "Server title should be 'MCP Tasks Server'"))
           (finally
             (stop-server proc)))))))
+
+(deftest ^:native-binary test-all-prompts-exposed
+  ;; Verify all expected prompts are available via prompts/list.
+  ;; Tests category, task, and story prompts are exposed from the binary.
+  ;; Expected to FAIL before fix is applied (category prompts missing).
+  (testing "test-all-prompts-exposed"
+    (testing "all expected prompts available via prompts/list"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (list-prompts-via-client client)
+                prompt-names (set (map :name (:prompts response)))
+                expected-prompts #{"next-simple"
+                                   "next-medium"
+                                   "next-large"
+                                   "next-clarify-task"
+                                   "execute-task"
+                                   "refine-task"
+                                   "execute-story-child"
+                                   "create-story-tasks"
+                                   "review-story-implementation"
+                                   "complete-story"
+                                   "create-story-pr"}
+                missing-prompts (clojure.set/difference expected-prompts prompt-names)
+                unexpected-prompts (clojure.set/difference prompt-names expected-prompts)]
+            (is (>= (count prompt-names) 11)
+                (str "Expected at least 11 prompts, got " (count prompt-names)))
+            (is (empty? missing-prompts)
+                (str "Missing expected prompts:\n"
+                     "  Expected: " (pr-str (sort expected-prompts)) "\n"
+                     "  Actual:   " (pr-str (sort prompt-names)) "\n"
+                     "  Missing:  " (pr-str (sort missing-prompts))))
+            ;; Informational: report unexpected prompts if any
+            (when (seq unexpected-prompts)
+              (println "\nNote: Found additional prompts:" (pr-str (sort unexpected-prompts)))))
+          (finally
+            (mcp-client/close! client)))))))
 
 (deftest ^:native-binary test-mcp-client-infrastructure
   ;; Verify MCP client helpers work with the native binary.
