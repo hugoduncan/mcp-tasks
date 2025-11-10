@@ -143,7 +143,7 @@
             resource (first (filter #(= (:uri %) "prompt://category-struct-test") resources))]
         (is (some? resource))
         (is (= "prompt://category-struct-test" (:uri resource)))
-        (is (= "struct-test category instructions" (:name resource)))
+        (is (= "next-struct-test" (:name resource)))
         (is (= "Struct test" (:description resource)))
         (is (= "text/markdown" (:mimeType resource)))
         (is (string? (:text resource)))

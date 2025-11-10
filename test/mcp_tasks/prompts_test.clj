@@ -655,9 +655,9 @@
     (testing "does not affect other task execution prompts"
       (let [prompts-with-branch (sut/task-execution-prompts {:branch-management? true})
             prompts-without-branch (sut/task-execution-prompts {:branch-management? false})]
-        ;; Check that non-execute-task prompts are identical
+        ;; Check that non-execute-task and non-execute-story-child prompts are identical
         (doseq [prompt-name (keys prompts-with-branch)
-                :when (not= prompt-name "execute-task")]
+                :when (not (contains? #{"execute-task" "execute-story-child"} prompt-name))]
           (is (= (get-in prompts-with-branch [prompt-name :messages])
                  (get-in prompts-without-branch [prompt-name :messages]))))))))
 
@@ -729,8 +729,9 @@
     (testing "does not affect other task execution prompts"
       (let [prompts-with-worktree (sut/task-execution-prompts {:worktree-management? true})
             prompts-without-worktree (sut/task-execution-prompts {:worktree-management? false})]
+        ;; Check that non-execute-task and non-execute-story-child prompts are identical
         (doseq [prompt-name (keys prompts-with-worktree)
-                :when (not= prompt-name "execute-task")]
+                :when (not (contains? #{"execute-task" "execute-story-child"} prompt-name))]
           (is (= (get-in prompts-with-worktree [prompt-name :messages])
                  (get-in prompts-without-worktree [prompt-name :messages]))))))))
 
