@@ -380,6 +380,48 @@
         prompt-list (create-prompts config categories)]
     (into {} (map (fn [p] [(:name p) p]) prompt-list))))
 
+(defn category-prompts
+  "Generate MCP prompts from category prompt vars in mcp-tasks.task-prompts.
+
+  Discovers category prompt definitions from the vars in mcp-tasks.task-prompts
+  namespace and generates MCP prompt definitions.
+
+  This function is used for native binaries where filesystem discovery isn't
+  available.
+
+  Returns a map of prompt names to prompt definitions, suitable for registering
+  with the MCP server."
+  [config]
+  (require 'mcp-tasks.task-prompts)
+  (let [ns (find-ns 'mcp-tasks.task-prompts)
+        category-vars (->> (ns-publics ns)
+                           vals
+                           (filter (fn [v] (string? @v))))
+        categories (map (fn [v] (name (symbol v))) category-vars)]
+    (into {}
+          (for [category categories]
+            (let [prompt-var (ns-resolve ns (symbol category))
+                  prompt-content @prompt-var
+                  {:keys [metadata content]} (parse-frontmatter prompt-content)
+                  execution-instructions content
+                  prompt-text (str "Please complete the next "
+                                   category
+                                   " task following these steps:\n\n"
+                                   (read-task-prompt-text config category)
+                                   execution-instructions
+                                   (complete-task-prompt-text config category))
+                  description (or (get metadata "description")
+                                  (format
+                                    "Execute the next %s task from .mcp-tasks/tasks.ednl"
+                                    category))]
+              [(str "next-" category)
+               (prompts/valid-prompt?
+                 {:name (str "next-" category)
+                  :description description
+                  :messages [{:role "user"
+                              :content {:type "text"
+                                        :text prompt-text}}]})])))))
+
 ;; Story prompt utilities
 
 (defn- list-builtin-story-prompts
@@ -650,3 +692,44 @@
                       :mimeType "text/markdown"
                       :text text}))))
          vec)))
+
+(defn builtin-category-prompt-resources
+  "Generate MCP resources from builtin category prompts in mcp-tasks.task-prompts.
+
+  Reads category prompt definitions from the vars in mcp-tasks.task-prompts
+  namespace and generates MCP resource definitions.
+
+  This function is used for native binaries where filesystem discovery isn't
+  available.
+
+  Returns a vector of resource maps."
+  [_config]
+  (require 'mcp-tasks.task-prompts)
+  (let [ns (find-ns 'mcp-tasks.task-prompts)
+        category-vars (->> (ns-publics ns)
+                           vals
+                           (filter (fn [v] (string? @v))))]
+    (vec
+      (for [v category-vars]
+        (let [category (name (symbol v))
+              prompt-content @v
+              {:keys [metadata content]} (parse-frontmatter prompt-content)
+              description (or (get metadata "description")
+                              (format "Execution instructions for %s category" category))
+              ;; Reconstruct frontmatter if metadata exists
+              frontmatter (when metadata
+                            (let [lines (keep (fn [[k v]]
+                                                (when v
+                                                  (str k ": " v)))
+                                              metadata)]
+                              (when (seq lines)
+                                (str "---\n"
+                                     (str/join "\n" lines)
+                                     "\n---\n"))))
+              ;; Include frontmatter in text if it exists
+              text (str frontmatter content)]
+          {:uri (str "prompt://category-" category)
+           :name (str "next-" category)
+           :description description
+           :mimeType "text/markdown"
+           :text text})))))

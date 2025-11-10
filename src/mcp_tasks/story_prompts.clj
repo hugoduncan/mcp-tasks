@@ -26,3 +26,11 @@
 (def create-story-pr
   "Create a pull request for a completed story."
   (slurp (io/resource "prompts/create-story-pr.md")))
+
+(def execute-task
+  "Execute a task following category-specific workflow instructions."
+  (slurp (io/resource "prompts/execute-task.md")))
+
+(def refine-task
+  "Refine a task to improve clarity and completeness."
+  (slurp (io/resource "prompts/refine-task.md")))
