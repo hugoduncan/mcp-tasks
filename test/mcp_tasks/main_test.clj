@@ -13,24 +13,32 @@
       File)))
 
 (deftest get-prompt-vars-test
-  ;; Test that get-prompt-vars finds all prompt vars from task-prompts namespace
-  ;; and filters to only those containing strings.
+  ;; Test that get-prompt-vars finds all prompt definitions from task-prompts 
+  ;; namespace vars and resources/prompts files.
   (testing "get-prompt-vars"
-    (testing "returns sequence of vars"
-      (let [vars (#'sut/get-prompt-vars)]
-        (is (seq vars))
-        (is (every? var? vars))))
+    (testing "returns sequence of prompt maps"
+      (let [prompts (#'sut/get-prompt-vars)]
+        (is (seq prompts))
+        (is (every? map? prompts))
+        (is (every? #(contains? % :name) prompts))
+        (is (every? #(contains? % :content) prompts))))
 
-    (testing "returns only vars with string values"
-      (let [vars (#'sut/get-prompt-vars)]
-        (is (every? #(string? @%) vars))))
+    (testing "returns only prompts with string content"
+      (let [prompts (#'sut/get-prompt-vars)]
+        (is (every? #(string? (:content %)) prompts))))
 
-    (testing "finds all defined prompts"
-      (let [vars (#'sut/get-prompt-vars)
-            var-names (set (map #(name (symbol %)) vars))]
-        (is (contains? var-names "clarify-task"))
-        (is (contains? var-names "simple"))
-        (is (>= (count var-names) 2))))))
+    (testing "finds all defined prompts including task execution prompts"
+      (let [prompts (#'sut/get-prompt-vars)
+            prompt-names (set (map :name prompts))]
+        ;; Category prompts from task-prompts namespace
+        (is (contains? prompt-names "clarify-task"))
+        (is (contains? prompt-names "simple"))
+        ;; Task execution prompts from resources/prompts
+        (is (contains? prompt-names "execute-task"))
+        (is (contains? prompt-names "refine-task"))
+        ;; Story prompts from story-prompts namespace
+        (is (contains? prompt-names "create-story-tasks"))
+        (is (>= (count prompt-names) 7))))))
 
 (deftest list-prompts-test
   ;; Test that list-prompts outputs prompt names and descriptions to stdout.

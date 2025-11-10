@@ -16,30 +16,61 @@
       File)))
 
 (defn- get-prompt-vars
-  "Get all prompt vars from the task-prompts and story-prompts namespaces.
+  "Get all prompt vars and files from namespaces and resources.
 
-  Returns a sequence of var objects representing prompt definitions."
+  Returns a sequence of maps with :name and :content keys.
+  Discovers prompts from:
+  - mcp-tasks.task-prompts namespace vars (category prompts)
+  - mcp-tasks.story-prompts namespace vars (story prompts)  
+  - resources/prompts/*.md files (task execution prompts)"
   []
   (require 'mcp-tasks.task-prompts)
   (require 'mcp-tasks.story-prompts)
-  (let [task-ns (find-ns 'mcp-tasks.task-prompts)
+  (let [;; Get vars from namespaces
+        task-ns (find-ns 'mcp-tasks.task-prompts)
         story-ns (find-ns 'mcp-tasks.story-prompts)
         task-vars (->> (ns-publics task-ns)
                        vals
                        (filter (fn [v] (string? @v))))
         story-vars (->> (ns-publics story-ns)
                         vals
-                        (filter (fn [v] (string? @v))))]
-    (concat task-vars story-vars)))
+                        (filter (fn [v] (string? @v))))
+        var-prompts (concat task-vars story-vars)
+
+        ;; Discover prompts from resources/prompts directory
+        prompts-url (io/resource "prompts")
+        file-prompts (when prompts-url
+                       (let [prompts-dir (io/file (.toURI prompts-url))
+                             prompt-files (->> (file-seq prompts-dir)
+                                               (filter #(and (.isFile ^File %)
+                                                             (str/ends-with? (.getName ^File %) ".md"))))]
+                         (for [file prompt-files]
+                           (let [prompt-name (str/replace (.getName ^File file) #"\.md$" "")
+                                 content (slurp file)]
+                             {:name prompt-name
+                              :content content
+                              :var (reify clojure.lang.IDeref
+                                     (deref [_] content))
+                              :meta {:doc (str "Task execution prompt: " prompt-name)}}))))]
+
+    ;; Convert vars to uniform format
+    (concat
+      (map (fn [v]
+             {:name (name (symbol v))
+              :content @v
+              :var v
+              :meta (meta v)})
+           var-prompts)
+      (or file-prompts []))))
 
 (defn- list-prompts
   "List all available prompts with their names and descriptions.
 
   Outputs each prompt name with its docstring (first line only) to stdout."
   []
-  (doseq [v (get-prompt-vars)]
-    (let [prompt-name (name (symbol v))
-          docstring (or (:doc (meta v)) "No description available")]
+  (doseq [prompt-map (get-prompt-vars)]
+    (let [prompt-name (:name prompt-map)
+          docstring (or (:doc (:meta prompt-map)) "No description available")]
       (println (str prompt-name ": " docstring))))
   0)
 
@@ -66,15 +97,15 @@
 
   Returns 0 if successful, 1 if the prompt was not found or installation failed."
   [prompt-name]
-  (let [prompt-vars (get-prompt-vars)
-        prompt-var (first (filter #(= prompt-name (name (symbol %))) prompt-vars))
+  (let [prompt-maps (get-prompt-vars)
+        prompt-map (first (filter #(= prompt-name (:name %)) prompt-maps))
         builtin-categories (list-builtin-categories)
         is-category? (contains? builtin-categories prompt-name)
         target-dir (if is-category?
                      ".mcp-tasks/category-prompts"
                      ".mcp-tasks/prompt-overrides")
         target-file (str target-dir "/" prompt-name ".md")]
-    (if-not prompt-var
+    (if-not prompt-map
       (do
         (println (str "Warning: Prompt '" prompt-name "' not found"))
         1)
@@ -85,7 +116,7 @@
         (try
           (when-let [parent (fs/parent target-file)]
             (fs/create-dirs parent))
-          (spit target-file @prompt-var)
+          (spit target-file (:content prompt-map))
           (println (str "Installed " prompt-name " to " target-file))
           0
           (catch Exception e
@@ -104,7 +135,7 @@
   Returns 0 if all installations succeeded, 1 if any failed or were not found."
   [prompt-names]
   (let [names-to-install (if (empty? prompt-names)
-                           (map #(name (symbol %)) (get-prompt-vars))
+                           (map :name (get-prompt-vars))
                            prompt-names)
         results (map install-prompt names-to-install)
         exit-code (if (every? zero? results) 0 1)]
@@ -146,10 +177,13 @@
 
   Returns server configuration map suitable for mcp-server/create-server"
   [config transport]
-  (let [all-prompts (merge (tp/prompts config)
-                           (tp/story-prompts config)
-                           (tp/task-execution-prompts config))
-        category-resources-vec (tp/category-prompt-resources config)
+  (let [all-prompts (merge (tp/category-prompts config)
+                           (tp/story-prompts config))
+        ;; Use both filesystem and embedded resources
+        ;; Filesystem resources override embedded (for user customizations)
+        embedded-resources (tp/builtin-category-prompt-resources config)
+        fs-resources (tp/category-prompt-resources config)
+        category-resources-vec (concat embedded-resources fs-resources)
         base-dir (:base-dir config)
         all-resources (merge
                         (resources/prompt-resources all-prompts)

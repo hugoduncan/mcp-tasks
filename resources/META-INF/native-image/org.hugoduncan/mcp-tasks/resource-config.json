@@ -2,10 +2,13 @@
   "resources": {
     "includes": [
       {
+        "pattern": "category-prompts/.*\\.md"
+      },
+      {
         "pattern": "prompts/.*\\.md"
       },
       {
-        "pattern": "story/prompts/.*\\.md"
+        "pattern": "prompts/infrastructure/.*\\.md"
       }
     ]
   }

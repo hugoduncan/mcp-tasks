@@ -21,11 +21,3 @@
 (def large
   "Execute large tasks with detailed analysis, design, and user interaction"
   (slurp (io/resource "category-prompts/large.md")))
-
-(def execute-task
-  "Execute a task with category-specific workflow and validation"
-  (slurp (io/resource "prompts/execute-task.md")))
-
-(def refine-task
-  "Interactively refine a task to improve clarity and completeness"
-  (slurp (io/resource "prompts/refine-task.md")))

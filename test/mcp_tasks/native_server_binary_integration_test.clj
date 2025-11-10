@@ -32,8 +32,10 @@
     [build :as build]
     [cheshire.core :as json]
     [clojure.java.io :as io]
+    [clojure.set]
     [clojure.string]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [mcp-clj.mcp-client.core :as mcp-client]))
 
 (def ^:dynamic *test-dir* nil)
 (def ^:dynamic *binary-path* nil)
@@ -111,6 +113,52 @@
     (catch Exception _
       ;; Already stopped
       nil)))
+
+;; MCP Client Helpers
+
+(defn- create-binary-client
+  "Create an MCP client connected to the native binary via stdio transport.
+
+  Returns the client after waiting for it to be ready."
+  []
+  (let [client (mcp-client/create-client
+                 {:transport {:type :stdio
+                              :command *binary-path*
+                              :args []
+                              :cwd *test-dir*}
+                  :client-info {:name "test-client" :version "1.0.0"}
+                  :protocol-version "2025-06-18"})]
+    ;; Wait for client to be ready (up to 5 seconds)
+    (mcp-client/wait-for-ready client 5000)
+    client))
+
+(defn- list-prompts-via-client
+  "List all prompts via MCP client.
+
+  Returns the prompts/list response map."
+  [client]
+  @(mcp-client/list-prompts client))
+
+(defn- get-prompt-via-client
+  "Get a specific prompt via MCP client.
+
+  Returns the prompts/get response map."
+  [client prompt-name]
+  @(mcp-client/get-prompt client prompt-name {}))
+
+(defn- list-resources-via-client
+  "List all resources via MCP client.
+
+  Returns the resources/list response map."
+  [client]
+  @(mcp-client/list-resources client))
+
+(defn- read-resource-via-client
+  "Read a specific resource via MCP client.
+
+  Returns the resources/read response map."
+  [client uri]
+  @(mcp-client/read-resource client uri))
 
 ;; Smoke Tests
 
@@ -204,6 +252,215 @@
                 "Server title should be 'MCP Tasks Server'"))
           (finally
             (stop-server proc)))))))
+
+(deftest ^:native-binary test-all-prompts-exposed
+  ;; Verify all expected prompts are available via prompts/list.
+  ;; Tests category, task, and story prompts are exposed from the binary.
+  ;; Expected to FAIL before fix is applied (category prompts missing).
+  (testing "test-all-prompts-exposed"
+    (testing "all expected prompts available via prompts/list"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (list-prompts-via-client client)
+                prompt-names (set (map :name (:prompts response)))
+                expected-prompts #{"next-simple"
+                                   "next-medium"
+                                   "next-large"
+                                   "next-clarify-task"
+                                   "execute-task"
+                                   "refine-task"
+                                   "execute-story-child"
+                                   "create-story-tasks"
+                                   "review-story-implementation"
+                                   "complete-story"
+                                   "create-story-pr"}
+                missing-prompts (clojure.set/difference expected-prompts prompt-names)
+                unexpected-prompts (clojure.set/difference prompt-names expected-prompts)]
+            (is (>= (count prompt-names) 11)
+                (str "Expected at least 11 prompts, got " (count prompt-names)))
+            (is (empty? missing-prompts)
+                (str "Missing expected prompts:\n"
+                     "  Expected: " (pr-str (sort expected-prompts)) "\n"
+                     "  Actual:   " (pr-str (sort prompt-names)) "\n"
+                     "  Missing:  " (pr-str (sort missing-prompts))))
+            ;; Informational: report unexpected prompts if any
+            (when (seq unexpected-prompts)
+              (println "\nNote: Found additional prompts:" (pr-str (sort unexpected-prompts)))))
+          (finally
+            (mcp-client/close! client)))))))
+
+(deftest ^:native-binary test-category-prompts-content
+  ;; Verify category prompts return complete content via prompts/get.
+  ;; Tests that each category prompt (simple, medium, large, clarify-task)
+  ;; has valid content with expected structure and keywords.
+  ;; Expected to FAIL before fix is applied (category prompts missing from binary).
+  (testing "test-category-prompts-content"
+    (testing "category prompts return complete content via prompts/get"
+      (let [client (create-binary-client)
+            category-prompts ["next-simple" "next-medium" "next-large" "next-clarify-task"]]
+        (try
+          (doseq [prompt-name category-prompts]
+            (testing (str "prompt " prompt-name " has complete content")
+              (let [response (get-prompt-via-client client prompt-name)
+                    messages (:messages response)]
+                (is (vector? messages)
+                    (str "Prompt '" prompt-name "' should have :messages vector"))
+                (is (pos? (count messages))
+                    (str "Prompt '" prompt-name "' should have at least one message"))
+                (when (seq messages)
+                  (let [first-message (first messages)
+                        content (get-in first-message [:content :text])]
+                    (is (string? content)
+                        (str "Prompt '" prompt-name "' message should have text content"))
+                    (is (> (count content) 100)
+                        (str "Prompt '" prompt-name "' content should be substantial (>100 chars), got " (count content) " chars"))
+                    (is (re-find #"(?i)task" content)
+                        (str "Prompt '" prompt-name "' content should contain 'task' keyword"))
+                    (is (re-find #"(?i)complete" content)
+                        (str "Prompt '" prompt-name "' content should contain 'complete' keyword")))))))
+          (finally
+            (mcp-client/close! client)))))))
+
+(deftest ^:native-binary test-mcp-client-infrastructure
+  ;; Verify MCP client helpers work with the native binary.
+  ;; Tests that we can use mcp-client library instead of raw JSON-RPC.
+  (testing "test-mcp-client-infrastructure"
+    (testing "MCP client connects and calls prompts/list"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (list-prompts-via-client client)]
+            (is (map? response)
+                "prompts/list should return a map")
+            (is (vector? (:prompts response))
+                "prompts/list should contain :prompts vector")
+            (is (pos? (count (:prompts response)))
+                "prompts/list should return at least one prompt"))
+          (finally
+            (mcp-client/close! client)))))
+
+    (testing "MCP client calls prompts/get"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (get-prompt-via-client client "execute-task")]
+            (is (map? response)
+                "prompts/get should return a map")
+            (is (vector? (:messages response))
+                "prompts/get should contain :messages vector")
+            (is (pos? (count (:messages response)))
+                "prompts/get should return at least one message")
+            (let [first-message (first (:messages response))
+                  content (get-in first-message [:content :text])]
+              (is (string? content)
+                  "Message should have text content")
+              (is (> (count content) 100)
+                  "Prompt content should be substantial")))
+          (finally
+            (mcp-client/close! client)))))
+
+    (testing "MCP client calls resources/list"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (list-resources-via-client client)]
+            (is (map? response)
+                "resources/list should return a map")
+            (is (vector? (:resources response))
+                "resources/list should contain :resources vector"))
+          (finally
+            (mcp-client/close! client)))))
+
+    (testing "MCP client calls resources/read"
+      (let [client (create-binary-client)]
+        (try
+          ;; First get a resource URI from resources/list
+          (let [list-response (list-resources-via-client client)
+                resources (:resources list-response)]
+            (when (seq resources)
+              (let [uri (:uri (first resources))
+                    read-response (read-resource-via-client client uri)]
+                (is (map? read-response)
+                    "resources/read should return a map")
+                (is (vector? (:contents read-response))
+                    "resources/read should contain :contents vector")
+                (when (seq (:contents read-response))
+                  (let [first-content (first (:contents read-response))]
+                    (is (or (:text first-content) (:blob first-content))
+                        "Content should have :text or :blob"))))))
+          (finally
+            (mcp-client/close! client)))))))
+
+(deftest ^:native-binary test-prompt-resources-exposed
+  ;; Verify prompt resources are accessible via resources/list and resources/read.
+  ;; Tests that category prompts are exposed as resources with prompt:// URIs.
+  ;; Expected to FAIL before fix is applied (category prompts missing from binary).
+  (testing "test-prompt-resources-exposed"
+    (testing "prompt resources accessible via resources endpoints"
+      (let [client (create-binary-client)]
+        (try
+          (testing "resources/list returns prompt resources"
+            (let [response (list-resources-via-client client)
+                  resources (:resources response)
+                  prompt-uris (->> resources
+                                   (map :uri)
+                                   (filter #(clojure.string/starts-with? % "prompt://"))
+                                   set)
+                  category-prompt-uris (->> prompt-uris
+                                            (filter #(clojure.string/starts-with? % "prompt://category-"))
+                                            set)]
+              (is (vector? resources)
+                  "resources/list should return :resources vector")
+              (is (pos? (count prompt-uris))
+                  (str "Should have at least one prompt:// resource, got " (count prompt-uris)))
+              (is (pos? (count category-prompt-uris))
+                  (str "Should have at least one category prompt resource (prompt://category-*), got:\n"
+                       "  All prompt URIs: " (pr-str (sort prompt-uris)) "\n"
+                       "  Category URIs:   " (pr-str (sort category-prompt-uris))))
+
+              (testing "category prompt resources return complete content"
+                ;; Try to read first category prompt resource
+                (when (seq category-prompt-uris)
+                  (let [test-uri (first (sort category-prompt-uris))
+                        read-response (read-resource-via-client client test-uri)
+                        contents (:contents read-response)]
+                    (is (vector? contents)
+                        (str "resources/read for '" test-uri "' should return :contents vector"))
+                    (is (pos? (count contents))
+                        (str "resources/read for '" test-uri "' should have at least one content item"))
+                    (when (seq contents)
+                      (let [first-content (first contents)
+                            text (:text first-content)]
+                        (is (string? text)
+                            (str "Content for '" test-uri "' should have :text field"))
+                        (is (> (count text) 100)
+                            (str "Content for '" test-uri "' should be substantial (>100 chars), got " (count text) " chars")))))))))
+          (finally
+            (mcp-client/close! client)))))))
+
+(deftest ^:native-binary test-task-and-story-prompts-work
+  ;; Verify task and story prompts work correctly (regression test).
+  ;; Tests execute-task and execute-story-child prompts via prompts/get.
+  ;; Expected to PASS (these prompts already work correctly).
+  (testing "test-task-and-story-prompts-work"
+    (testing "task and story prompts return complete content"
+      (let [client (create-binary-client)
+            test-prompts ["execute-task" "execute-story-child"]]
+        (try
+          (doseq [prompt-name test-prompts]
+            (testing (str "prompt " prompt-name " has complete content")
+              (let [response (get-prompt-via-client client prompt-name)
+                    messages (:messages response)]
+                (is (vector? messages)
+                    (str "Prompt '" prompt-name "' should have :messages vector, got: " (type messages)))
+                (is (pos? (count messages))
+                    (str "Prompt '" prompt-name "' should have at least one message, got: " (count messages)))
+                (when (seq messages)
+                  (let [first-message (first messages)
+                        content (get-in first-message [:content :text])]
+                    (is (string? content)
+                        (str "Prompt '" prompt-name "' message should have text content, got: " (type content)))
+                    (is (> (count content) 100)
+                        (str "Prompt '" prompt-name "' content should be substantial (>100 chars), got " (count content) " chars")))))))
+          (finally
+            (mcp-client/close! client)))))))
 
 ;; Comprehensive Tests
 
