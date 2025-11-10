@@ -578,13 +578,14 @@
             (let [prompt-name (name (symbol v))
                   prompt-content @v
                   {:keys [metadata content]} (parse-frontmatter prompt-content)
-                  ;; Tailor execute-story-child content based on config
+                  ;; Tailor content based on config for prompts that need it
                   tailored-content
-                  (append-management-instructions
-                    content
-                    prompt-name
-                    "execute-story-child"
-                    config)
+                  (cond-> content
+                    (= prompt-name "execute-story-child")
+                    (append-management-instructions "execute-story-child" "execute-story-child" config)
+
+                    (= prompt-name "execute-task")
+                    (append-management-instructions "execute-task" "execute-task" config))
                   description (or (get metadata "description")
                                   (:doc (meta v))
                                   (format "Story prompt: %s" prompt-name))
