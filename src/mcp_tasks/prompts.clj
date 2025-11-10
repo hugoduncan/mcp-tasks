@@ -578,13 +578,14 @@
                          (let [file-content (slurp resource-path)
                                {:keys [metadata content]} (parse-frontmatter
                                                             file-content)
-                               ;; Tailor execute-task content based on config
+                               ;; Tailor execute-task and execute-story-child content based on config
                                tailored-content
-                               (append-management-instructions
-                                 content
-                                 prompt-name
-                                 "execute-task"
-                                 config)
+                               (cond-> content
+                                 (= prompt-name "execute-task")
+                                 (append-management-instructions "execute-task" "execute-task" config)
+
+                                 (= prompt-name "execute-story-child")
+                                 (append-management-instructions "execute-story-child" "execute-story-child" config))
                                description (or (get metadata "description")
                                                (format
                                                  "Task execution prompt: %s"
@@ -644,7 +645,7 @@
                          ;; Include frontmatter in text if it exists
                          text (str frontmatter content)]
                      {:uri (str "prompt://category-" category)
-                      :name (str category " category instructions")
+                      :name (str "next-" category)
                       :description description
                       :mimeType "text/markdown"
                       :text text}))))
