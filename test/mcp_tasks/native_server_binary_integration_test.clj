@@ -33,7 +33,8 @@
     [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.string]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [mcp-clj.mcp-client.core :as mcp-client]))
 
 (def ^:dynamic *test-dir* nil)
 (def ^:dynamic *binary-path* nil)
@@ -111,6 +112,52 @@
     (catch Exception _
       ;; Already stopped
       nil)))
+
+;; MCP Client Helpers
+
+(defn- create-binary-client
+  "Create an MCP client connected to the native binary via stdio transport.
+
+  Returns the client after waiting for it to be ready."
+  []
+  (let [client (mcp-client/create-client
+                 {:transport {:type :stdio
+                              :command *binary-path*
+                              :args []
+                              :cwd *test-dir*}
+                  :client-info {:name "test-client" :version "1.0.0"}
+                  :protocol-version "2025-06-18"})]
+    ;; Wait for client to be ready (up to 5 seconds)
+    (mcp-client/wait-for-ready client 5000)
+    client))
+
+(defn- list-prompts-via-client
+  "List all prompts via MCP client.
+
+  Returns the prompts/list response map."
+  [client]
+  @(mcp-client/list-prompts client))
+
+(defn- get-prompt-via-client
+  "Get a specific prompt via MCP client.
+
+  Returns the prompts/get response map."
+  [client prompt-name]
+  @(mcp-client/get-prompt client prompt-name {}))
+
+(defn- list-resources-via-client
+  "List all resources via MCP client.
+
+  Returns the resources/list response map."
+  [client]
+  @(mcp-client/list-resources client))
+
+(defn- read-resource-via-client
+  "Read a specific resource via MCP client.
+
+  Returns the resources/read response map."
+  [client uri]
+  @(mcp-client/read-resource client uri))
 
 ;; Smoke Tests
 
@@ -204,6 +251,73 @@
                 "Server title should be 'MCP Tasks Server'"))
           (finally
             (stop-server proc)))))))
+
+(deftest ^:native-binary test-mcp-client-infrastructure
+  ;; Verify MCP client helpers work with the native binary.
+  ;; Tests that we can use mcp-client library instead of raw JSON-RPC.
+  (testing "test-mcp-client-infrastructure"
+    (testing "MCP client connects and calls prompts/list"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (list-prompts-via-client client)]
+            (is (map? response)
+                "prompts/list should return a map")
+            (is (vector? (:prompts response))
+                "prompts/list should contain :prompts vector")
+            (is (pos? (count (:prompts response)))
+                "prompts/list should return at least one prompt"))
+          (finally
+            (mcp-client/close! client)))))
+
+    (testing "MCP client calls prompts/get"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (get-prompt-via-client client "execute-task")]
+            (is (map? response)
+                "prompts/get should return a map")
+            (is (vector? (:messages response))
+                "prompts/get should contain :messages vector")
+            (is (pos? (count (:messages response)))
+                "prompts/get should return at least one message")
+            (let [first-message (first (:messages response))
+                  content (get-in first-message [:content :text])]
+              (is (string? content)
+                  "Message should have text content")
+              (is (> (count content) 100)
+                  "Prompt content should be substantial")))
+          (finally
+            (mcp-client/close! client)))))
+
+    (testing "MCP client calls resources/list"
+      (let [client (create-binary-client)]
+        (try
+          (let [response (list-resources-via-client client)]
+            (is (map? response)
+                "resources/list should return a map")
+            (is (vector? (:resources response))
+                "resources/list should contain :resources vector"))
+          (finally
+            (mcp-client/close! client)))))
+
+    (testing "MCP client calls resources/read"
+      (let [client (create-binary-client)]
+        (try
+          ;; First get a resource URI from resources/list
+          (let [list-response (list-resources-via-client client)
+                resources (:resources list-response)]
+            (when (seq resources)
+              (let [uri (:uri (first resources))
+                    read-response (read-resource-via-client client uri)]
+                (is (map? read-response)
+                    "resources/read should return a map")
+                (is (vector? (:contents read-response))
+                    "resources/read should contain :contents vector")
+                (when (seq (:contents read-response))
+                  (let [first-content (first (:contents read-response))]
+                    (is (or (:text first-content) (:blob first-content))
+                        "Content should have :text or :blob"))))))
+          (finally
+            (mcp-client/close! client)))))))
 
 ;; Comprehensive Tests
 
