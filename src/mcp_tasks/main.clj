@@ -189,7 +189,8 @@
                         (resources/prompt-resources all-prompts)
                         (resources/category-prompt-resources
                           category-resources-vec)
-                        (resources/current-execution-resource base-dir))]
+                        (resources/current-execution-resource base-dir)
+                        (resources/available-categories-resource config))]
     {:transport transport
      :tools (tools/tools config)
      :prompts all-prompts

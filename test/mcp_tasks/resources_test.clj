@@ -2,6 +2,7 @@
   "Unit tests for resource definitions"
   (:require
     [babashka.fs :as fs]
+    [cheshire.core]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]

@@ -485,4 +485,18 @@
       (is (map? (:server-info server-config)))
       (is (= "mcp-tasks" (get-in server-config [:server-info :name])))
       (is (= "0.1.124" (get-in server-config [:server-info :version])))
-      (is (= "MCP Tasks Server" (get-in server-config [:server-info :title]))))))
+      (is (= "MCP Tasks Server" (get-in server-config [:server-info :title])))))
+
+  (testing "includes categories resource"
+    (let [config {:use-git? false}
+          transport {:type :in-memory}
+          server-config (sut/create-server-config config transport)]
+      (is (map? (:resources server-config)))
+      (is (contains? (:resources server-config) "resource://categories"))
+      (let [resource (get (:resources server-config) "resource://categories")]
+        (is (map? resource))
+        (is (= "categories" (:name resource)))
+        (is (= "resource://categories" (:uri resource)))
+        (is (= "application/json" (:mime-type resource)))
+        (is (= "Available task categories and their descriptions" (:description resource)))
+        (is (fn? (:implementation resource)))))))
