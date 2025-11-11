@@ -734,6 +734,62 @@ See `doc/dev/changelog.md` for setup details.
    - Deploys to Clojars (if not dry-run)
    - Creates GitHub Release with JAR and binaries (if not dry-run)
 
+## Binary Testing
+
+**Test Organization:**
+
+Native binary integration tests are located in:
+- `test/mcp_tasks/native_binary_integration_test.clj` - CLI binary tests
+- `test/mcp_tasks/native_server_binary_integration_test.clj` - Server binary tests
+
+Tests use metadata tags for classification:
+- `:native-binary` - All native binary tests (required for filtering)
+- `:comprehensive` - Thorough validation tests (slower, complete coverage)
+- `:smoke` - Fast feedback tests (quick validation of basic functionality)
+
+**Running Tests Locally:**
+
+Build the native binaries first:
+```bash
+# Build CLI binary
+clj -T:build native-cli
+
+# Build server binary
+clj -T:build native-server
+```
+
+Run tests with environment variables to specify target platform:
+```bash
+# Smoke tests only (fast feedback)
+BINARY_TARGET_OS=macos BINARY_TARGET_ARCH=universal \
+  clojure -M:dev:test --focus :native-binary --skip-meta :comprehensive
+
+# Comprehensive tests (full validation)
+BINARY_TARGET_OS=linux BINARY_TARGET_ARCH=amd64 \
+  clojure -M:dev:test --focus :native-binary
+```
+
+**Environment Variables:**
+- `BINARY_TARGET_OS` - Target OS (`linux` or `macos`)
+- `BINARY_TARGET_ARCH` - Target architecture (`amd64` or `universal`)
+
+**CI Testing Strategy:**
+
+The CI workflows use a platform-specific testing approach to balance speed and coverage:
+
+- **macOS** (`test-focus: smoke`): Fast smoke tests only
+  - Skips comprehensive tests for faster feedback
+  - Uses `--skip-meta :comprehensive` flag
+  - Provides quick validation that binaries work on macOS
+
+- **Linux** (`test-focus: comprehensive`): Full test suite
+  - Runs all native binary tests (both smoke and comprehensive)
+  - Provides complete validation on Linux platform
+  - Ensures thorough coverage before release
+
+**Rationale:**
+This split allows the CI pipeline to provide fast feedback on macOS while still maintaining comprehensive test coverage on Linux. macOS universal binaries are tested for basic functionality, while the more critical Linux binaries receive full validation. This approach reduces CI runtime without sacrificing test quality.
+
 ## Key Concepts
 
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
