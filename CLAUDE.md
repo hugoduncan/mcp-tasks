@@ -581,11 +581,31 @@ See `doc/dev/changelog.md` for setup details.
 
 **Workflows:**
 
-- **test.yml** - Runs on pushes to master and all PRs
-  - Runs cljstyle check
-  - Runs clj-kondo lint with `--fail-level warning`
-  - Runs unit tests and integration tests separately
-  - Caches Clojure dependencies for faster runs
+- **test.yml** - Comprehensive testing workflow with three jobs:
+  
+  **Triggers:**
+  - Pushes to master branch
+  - All pull requests
+  
+  **Jobs:**
+  
+  1. **test** (ubuntu-latest)
+     - Runs cljstyle check
+     - Runs clj-kondo lint with `--fail-level warning`
+     - Runs unit tests (with `:unit` focus)
+     - Runs integration tests (with `:integration` focus, skipping `:native-binary` tests)
+  
+  2. **babashka-test** (ubuntu-latest)
+     - Verifies bb.edn is valid (`bb tasks`)
+     - Tests CLI help commands for all subcommands (list, add, show, complete, update, delete)
+     - Runs smoke test with `bb list --format json`
+  
+  3. **install-scripts-lint** (ubuntu-latest)
+     - Runs shellcheck on the `install` script
+  
+  **Caching Strategy:**
+  - Caches `~/.m2/repository` and `~/.gitlibs` directories
+  - Cache key based on `deps.edn` hash for automatic invalidation
 
 - **release.yml** - Manual workflow for releasing new versions
   - Runs all tests and linting
