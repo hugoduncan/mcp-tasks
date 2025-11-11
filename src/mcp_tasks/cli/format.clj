@@ -245,6 +245,64 @@
       (when (seq lines)
         (str/join "\n" lines)))))
 
+;; Prompts formatting
+
+(defn format-prompts-list
+  "Format prompts list response for human-readable output.
+
+  Displays prompts grouped by type (category/workflow) with aligned columns."
+  [prompts metadata]
+  (let [category-prompts (filter #(= :category (:type %)) prompts)
+        workflow-prompts (filter #(= :workflow (:type %)) prompts)
+        max-name-width (apply max 0 (map #(count (:name %)) prompts))
+        format-prompt (fn [p]
+                        (str "  "
+                             (format (str "%-" max-name-width "s") (:name p))
+                             "  "
+                             (:description p)))]
+    (str/join "\n"
+              (filter some?
+                      ["Available Prompts:"
+                       ""
+                       (when (seq category-prompts)
+                         (str "Category Prompts (" (count category-prompts) "):"))
+                       (str/join "\n" (map format-prompt category-prompts))
+                       (when (and (seq category-prompts) (seq workflow-prompts))
+                         "")
+                       (when (seq workflow-prompts)
+                         (str "Workflow Prompts (" (count workflow-prompts) "):"))
+                       (str/join "\n" (map format-prompt workflow-prompts))
+                       ""
+                       (str "Total: " (:total-count metadata)
+                            " prompts (" (:category-count metadata)
+                            " category, " (:workflow-count metadata) " workflow)")]))))
+
+(defn format-prompts-install
+  "Format prompts install response for human-readable output.
+
+  Shows installation results with status indicators and paths."
+  [results metadata]
+  (let [format-result (fn [r]
+                        (case (:status r)
+                          :installed
+                          (str "✓ " (:name r) " (" (name (:type r)) ")\n"
+                               "  → " (:path r))
+
+                          :not-found
+                          (str "✗ " (:name r) "\n"
+                               "  Error: " (:error r))
+
+                          (str "? " (:name r) "\n"
+                               "  Unknown status: " (:status r))))]
+    (str/join "\n\n"
+              (filter some?
+                      ["Installing prompts..."
+                       ""
+                       (str/join "\n\n" (map format-result results))
+                       ""
+                       (str "Summary: " (:installed-count metadata) " installed, "
+                            (:failed-count metadata) " failed")]))))
+
 ;; Multimethod for format dispatch
 
 (defmulti render
@@ -318,6 +376,14 @@
     ;; Why-blocked response
     (:why-blocked data)
     (format-why-blocked (:why-blocked data))
+
+    ;; Prompts list response
+    (:prompts data)
+    (format-prompts-list (:prompts data) (:metadata data))
+
+    ;; Prompts install response
+    (:results data)
+    (format-prompts-install (:results data) (:metadata data))
 
     ;; Generic response with modified files
     (:modified-files data)
