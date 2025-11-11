@@ -2,6 +2,7 @@
   "Unit tests for resource definitions"
   (:require
     [babashka.fs :as fs]
+    [cheshire.core]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -209,3 +210,117 @@
               arg-hint-line (first (filter #(str/starts-with? % "argument-hint:") frontmatter-lines))]
           (is (some? arg-hint-line))
           (is (str/includes? arg-hint-line "[story-specification]")))))))
+
+(deftest available-categories-resource-test
+  ;; Test that available-categories-resource returns correct JSON structure.
+  (testing "available-categories-resource"
+    (let [config (config/resolve-config test-project-dir {})
+          resource-map (resources/available-categories-resource config)
+          resource (get resource-map "resource://categories")]
+
+      (testing "returns a resource definition"
+        (is (map? resource-map))
+        (is (= 1 (count resource-map)))
+        (is (some? resource)))
+
+      (testing "resource has correct metadata"
+        (is (= "categories" (:name resource)))
+        (is (= "resource://categories" (:uri resource)))
+        (is (= "application/json" (:mime-type resource)))
+        (is (= "Available task categories and their descriptions" (:description resource)))
+        (is (fn? (:implementation resource))))
+
+      (testing "implementation returns valid JSON content"
+        (let [implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              contents (:contents result)]
+          (is (not (:isError result)))
+          (is (vector? contents))
+          (is (= 1 (count contents)))
+          (let [content (first contents)]
+            (is (= "resource://categories" (:uri content)))
+            (is (= "application/json" (:mimeType content)))
+            (is (string? (:text content))))))
+
+      (testing "JSON structure is correct"
+        (let [implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)]
+          (is (contains? parsed :categories))
+          (is (vector? (:categories parsed)))
+          (is (pos? (count (:categories parsed))))
+          (let [first-category (first (:categories parsed))]
+            (is (contains? first-category :name))
+            (is (contains? first-category :description))
+            (is (string? (:name first-category)))
+            (is (string? (:description first-category))))))
+
+      (testing "includes simple category from test setup"
+        (let [implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              simple-cat (first (filter #(= "simple" (:name %)) categories))]
+          (is (some? simple-cat))
+          (is (= "simple" (:name simple-cat)))
+          (is (string? (:description simple-cat)))))
+
+      (testing "categories are sorted alphabetically by name"
+        (let [implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              category-names (map :name categories)]
+          (is (= category-names (sort category-names)))))
+
+      (testing "handles empty category directory"
+        (let [empty-project-dir (.getAbsolutePath (io/file "test-resources/resources-test-empty"))
+              _ (fs/create-dirs (io/file empty-project-dir ".mcp-tasks" "category-prompts"))
+              config (config/resolve-config empty-project-dir {})
+              resource-map (resources/available-categories-resource config)
+              resource (get resource-map "resource://categories")
+              implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)]
+          (is (not (:isError result)))
+          (is (= [] (:categories parsed)))
+          (fs/delete-tree (io/file empty-project-dir))))
+
+      (testing "handles category without description frontmatter"
+        (let [prompts-dir (io/file test-project-dir ".mcp-tasks" "category-prompts")
+              _ (spit (io/file prompts-dir "no-desc.md") "Just instructions\n")
+              config (config/resolve-config test-project-dir {})
+              resource-map (resources/available-categories-resource config)
+              resource (get resource-map "resource://categories")
+              implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              no-desc-cat (first (filter #(= "no-desc" (:name %)) categories))]
+          (is (not (:isError result)))
+          (is (some? no-desc-cat))
+          (is (= "no-desc" (:name no-desc-cat)))
+          (is (= "Tasks for no-desc category" (:description no-desc-cat)))))
+
+      (testing "handles category with malformed frontmatter"
+        (let [prompts-dir (io/file test-project-dir ".mcp-tasks" "category-prompts")
+              _ (spit (io/file prompts-dir "malformed.md")
+                      "---\ninvalid yaml: [unclosed\n---\nInstructions\n")
+              config (config/resolve-config test-project-dir {})
+              resource-map (resources/available-categories-resource config)
+              resource (get resource-map "resource://categories")
+              implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              malformed-cat (first (filter #(= "malformed" (:name %)) categories))]
+          (is (not (:isError result)))
+          (is (some? malformed-cat))
+          (is (= "malformed" (:name malformed-cat)))
+          (is (= "Tasks for malformed category" (:description malformed-cat))))))))

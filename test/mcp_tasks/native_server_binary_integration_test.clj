@@ -462,6 +462,74 @@
           (finally
             (mcp-client/close! client)))))))
 
+(deftest ^:native-binary smoke-test-categories-resource
+  ;; Verify categories resource is available and returns correct structure
+  (testing "smoke-test-categories-resource"
+    (testing "server exposes categories resource with correct JSON structure"
+      (let [proc (start-server)]
+        (try
+          ;; Initialize
+          (send-jsonrpc proc
+                        {:jsonrpc "2.0"
+                         :id 1
+                         :method "initialize"
+                         :params {:protocolVersion "2025-06-18"
+                                  :capabilities {}
+                                  :clientInfo {:name "test-client"
+                                               :version "1.0.0"}}})
+          (send-jsonrpc proc
+                        {:jsonrpc "2.0"
+                         :method "initialized"})
+
+          ;; List resources
+          (testing "categories resource is listed"
+            (let [response (send-jsonrpc proc
+                                         {:jsonrpc "2.0"
+                                          :id 2
+                                          :method "resources/list"})]
+              (is (some? response)
+                  "Server should respond to resources/list")
+              (is (vector? (get-in response [:result :resources]))
+                  "Response should contain resources array")
+              (is (some #(= "resource://categories" (:uri %))
+                        (get-in response [:result :resources]))
+                  "Resources should include resource://categories")))
+
+          ;; Read categories resource
+          (testing "categories resource returns valid JSON"
+            (let [response (send-jsonrpc proc
+                                         {:jsonrpc "2.0"
+                                          :id 3
+                                          :method "resources/read"
+                                          :params {:uri "resource://categories"}})]
+              (is (some? response)
+                  "Server should respond to resources/read")
+              (is (nil? (:error response))
+                  "Resource read should not return error")
+              (let [content (get-in response [:result :contents 0])]
+                (is (= "resource://categories" (:uri content))
+                    "Content should have correct URI")
+                (is (= "application/json" (:mimeType content))
+                    "Content should have JSON MIME type")
+                ;; Parse JSON text
+                (let [categories-data (json/parse-string (:text content) keyword)]
+                  (is (vector? (:categories categories-data))
+                      "JSON should contain categories array")
+                  (is (pos? (count (:categories categories-data)))
+                      "Categories array should not be empty")
+                  ;; Verify structure of first category
+                  (let [first-cat (first (:categories categories-data))]
+                    (is (string? (:name first-cat))
+                        "Category should have name string")
+                    (is (string? (:description first-cat))
+                        "Category should have description string")
+                    ;; Verify our test category is present
+                    (is (some #(= "simple" (:name %)) (:categories categories-data))
+                        "Should include 'simple' category from test fixture"))))))
+
+          (finally
+            (stop-server proc)))))))
+
 ;; Comprehensive Tests
 
 (deftest ^:native-binary ^:comprehensive comprehensive-mcp-protocol

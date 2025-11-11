@@ -3,7 +3,8 @@
   (:require
     [cheshire.core :as json]
     [clojure.string :as str]
-    [mcp-tasks.execution-state :as execution-state]))
+    [mcp-tasks.execution-state :as execution-state]
+    [mcp-tasks.prompts :as tp]))
 
 (defn- format-argument-hint
   "Format argument hint from prompt :arguments vector.
@@ -120,4 +121,31 @@
       :uri uri
       :mime-type "application/json"
       :description "Current story and task execution state"
+      :implementation impl-fn}}))
+
+(defn available-categories-resource
+  "Create resource definition for available task categories.
+
+  Returns a resource definition that exposes all available task
+  categories and their descriptions as JSON.
+
+  Parameters:
+  - config: Configuration map (used for category discovery)"
+  [config]
+  (let [uri "resource://categories"
+        impl-fn (fn [_context _uri]
+                  (let [category-desc-map (tp/category-descriptions config)
+                        categories (into []
+                                         (for [[name description] (sort-by key category-desc-map)]
+                                           {:name name
+                                            :description description}))
+                        json-data {:categories categories}]
+                    {:contents [{:uri uri
+                                 :mimeType "application/json"
+                                 :text (json/generate-string json-data)}]}))]
+    {uri
+     {:name "categories"
+      :uri uri
+      :mime-type "application/json"
+      :description "Available task categories and their descriptions"
       :implementation impl-fn}}))

@@ -1,6 +1,7 @@
 (ns mcp-tasks.main-test
   (:require
     [babashka.fs :as fs]
+    [cheshire.core]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -11,6 +12,46 @@
   (:import
     (java.io
       File)))
+
+;; Test Fixtures
+
+(defmacro with-temp-categories
+  "Create temporary config directory with category-prompts.
+
+  Usage: (with-temp-categories categories git-mode? [temp-dir config] ...body...)
+
+  categories - map of category-name -> content string
+  git-mode? - boolean for :use-git? config (default false)
+  binding-vec - vector [temp-dir-sym config-sym] for bindings
+  body - test forms to execute"
+  [categories git-mode? [temp-dir-sym config-sym] & body]
+  (let [mcp-tasks-dir (gensym "mcp-tasks-dir")
+        prompts-dir (gensym "prompts-dir")
+        config-dir (gensym "config-dir")
+        raw-config (gensym "raw-config")
+        cat-name (gensym "cat-name")
+        content (gensym "content")]
+    `(let [~temp-dir-sym (File/createTempFile "mcp-tasks-test" "")
+           ~'_ (fs/delete ~temp-dir-sym)
+           ~'_ (.mkdirs ~temp-dir-sym)
+           ~mcp-tasks-dir (io/file ~temp-dir-sym ".mcp-tasks")
+           ~prompts-dir (io/file ~mcp-tasks-dir "category-prompts")
+           ~'_ (.mkdirs ~prompts-dir)
+           ;; Create category files
+           ~'_ (doseq [[~cat-name ~content] ~categories]
+                 (spit (io/file ~prompts-dir (str ~cat-name ".md")) ~content))
+           ~config-dir (.getPath ~temp-dir-sym)
+           ~raw-config {:use-git? ~git-mode?}
+           ~config-sym (config/resolve-config ~config-dir ~raw-config)]
+       (try
+         ~@body
+         (finally
+           ;; Clean up category files
+           (doseq [[~cat-name ~'_] ~categories]
+             (fs/delete (io/file ~prompts-dir (str ~cat-name ".md"))))
+           (fs/delete ~prompts-dir)
+           (fs/delete ~mcp-tasks-dir)
+           (fs/delete ~temp-dir-sym))))))
 
 (deftest get-prompt-vars-test
   ;; Test that get-prompt-vars finds all prompt definitions from task-prompts 
@@ -485,4 +526,45 @@
       (is (map? (:server-info server-config)))
       (is (= "mcp-tasks" (get-in server-config [:server-info :name])))
       (is (= "0.1.124" (get-in server-config [:server-info :version])))
-      (is (= "MCP Tasks Server" (get-in server-config [:server-info :title]))))))
+      (is (= "MCP Tasks Server" (get-in server-config [:server-info :title])))))
+
+  (testing "includes categories resource"
+    (let [config {:use-git? false}
+          transport {:type :in-memory}
+          server-config (sut/create-server-config config transport)]
+      (is (map? (:resources server-config)))
+      (is (contains? (:resources server-config) "resource://categories"))
+      (let [resource (get (:resources server-config) "resource://categories")]
+        (is (map? resource))
+        (is (= "categories" (:name resource)))
+        (is (= "resource://categories" (:uri resource)))
+        (is (= "application/json" (:mime-type resource)))
+        (is (= "Available task categories and their descriptions" (:description resource)))
+        (is (fn? (:implementation resource))))))
+
+  (testing "categories resource end-to-end integration"
+    (with-temp-categories {"simple" "---\ndescription: Simple workflow\n---\nTest\n"
+                           "custom" "---\ndescription: Custom workflow\n---\nTest\n"}
+      false
+      [_temp-dir resolved-config]
+      (let [transport {:type :in-memory}
+            server-config (sut/create-server-config resolved-config transport)
+            resource (get (:resources server-config) "resource://categories")
+            implementation (:implementation resource)
+            result (implementation nil "resource://categories")]
+        (is (not (:isError result)))
+        (is (vector? (:contents result)))
+        (is (= 1 (count (:contents result))))
+        (let [content (first (:contents result))
+              json-text (:text content)
+              parsed (cheshire.core/parse-string json-text true)]
+          (is (= "resource://categories" (:uri content)))
+          (is (= "application/json" (:mimeType content)))
+          (is (contains? parsed :categories))
+          (is (vector? (:categories parsed)))
+          (is (>= (count (:categories parsed)) 2))
+          (let [category-names (set (map :name (:categories parsed)))]
+            (is (contains? category-names "simple"))
+            (is (contains? category-names "custom")))
+          (let [simple-cat (first (filter #(= "simple" (:name %)) (:categories parsed)))]
+            (is (= "Simple workflow" (:description simple-cat)))))))))
