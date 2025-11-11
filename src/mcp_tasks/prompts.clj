@@ -234,6 +234,24 @@
          vec)
     []))
 
+(defn- discover-builtin-categories
+  "Discover built-in category prompts from resources/category-prompts/.
+
+  Returns a set of category names (strings without .md extension) found in
+  the resources directory. Returns empty set if resource directory not found."
+  []
+  (if-let [resource-url (io/resource builtin-category-prompts-dir)]
+    (try
+      (let [resource-dir (io/file (.toURI resource-url))]
+        (->> (file-seq resource-dir)
+             (filter #(and (.isFile %)
+                           (str/ends-with? (.getName %) ".md")))
+             (map #(str/replace (.getName %) #"\.md$" ""))
+             set))
+      (catch Exception _e
+        #{}))
+    #{}))
+
 (defn discover-categories
   "Discover task categories by reading category-prompts subdirectory from resolved tasks dir.
 
@@ -241,12 +259,16 @@
   category names (filenames without .md extension) found in the category-prompts
   subdirectory.
 
+  Includes built-in categories from resources/category-prompts/ and user overrides.
+  User overrides take precedence over built-in categories.
+
   Supports backward compatibility by also checking deprecated prompts/ directory.
   Categories found in both locations are deduplicated (new location takes precedence)."
   [config]
   (let [resolved-tasks-dir (:resolved-tasks-dir config)
         new-dir (str resolved-tasks-dir "/" user-category-prompts-dir)
         deprecated-dir (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir)
+        builtin-categories (discover-builtin-categories)
         new-categories (set (discover-prompt-files new-dir))
         deprecated-categories (set (discover-prompt-files deprecated-dir))
         ;; Find categories that only exist in deprecated location
@@ -259,8 +281,8 @@
                  :new-path (str new-dir "/" category ".md")
                  :message (str "Category prompt found in deprecated location. "
                                "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/")}))
-    ;; Return combined sorted vector
-    (vec (sort (clojure.set/union new-categories deprecated-categories)))))
+    ;; Return combined sorted vector (built-in + user overrides + deprecated)
+    (vec (sort (clojure.set/union builtin-categories new-categories deprecated-categories)))))
 
 (defn- read-task-prompt-text
   "Generate prompt text for reading the next task from a category.
@@ -310,12 +332,17 @@
   The :metadata key contains parsed frontmatter (may be nil),
   and :content contains the prompt text with frontmatter stripped.
 
-  Supports backward compatibility by checking deprecated prompts/ directory
-  with deprecation warning."
+  Falls back to built-in resources/category-prompts/<category>.md if no user
+  override exists. Supports backward compatibility by checking deprecated
+  prompts/ directory with deprecation warning."
   [config category]
   (let [resolved-tasks-dir (:resolved-tasks-dir config)]
-    (when-let [resolved (resolve-category-prompt-path resolved-tasks-dir category)]
-      (parse-frontmatter (slurp (:path resolved))))))
+    ;; Try user override first, then fall back to built-in resource
+    (if-let [resolved (resolve-category-prompt-path resolved-tasks-dir category)]
+      (parse-frontmatter (slurp (:path resolved)))
+      ;; No user override, try built-in resource
+      (when-let [resource-url (io/resource (str builtin-category-prompts-dir "/" category ".md"))]
+        (parse-frontmatter (slurp resource-url))))))
 
 (defn create-prompts
   "Generate MCP prompts for task categories.
