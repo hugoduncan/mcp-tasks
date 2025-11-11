@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This changelog is automatically generated using [git-cliff](https://github.com/orhun/git-cliff).
 ## [Unreleased]
 
+### Features
+
+- Add prompts CLI command with list and install subcommands
+  - `mcp-tasks prompts list` - List all available built-in prompts with type information
+  - `mcp-tasks prompts install <prompt1> [prompt2]...` - Install specific prompts to local directories
+  - Support for multiple output formats (human, json, edn) via --format flag
+  - Category prompts install to .mcp-tasks/category-prompts/
+  - Workflow prompts install to .mcp-tasks/prompt-overrides/
+  - Replaces deprecated --list-prompts and --install-prompts server flags
+
 ### Changed
 
 - Replaced clojure.data.json with cheshire.core for babashka compatibility
