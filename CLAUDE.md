@@ -607,6 +607,53 @@ See `doc/dev/changelog.md` for setup details.
   - Caches `~/.m2/repository` and `~/.gitlibs` directories
   - Cache key based on `deps.edn` hash for automatic invalidation
 
+- **build-binaries.yml** - Reusable workflow for building native binaries
+  
+  **Triggers:**
+  - `workflow_call` - Called by other workflows (e.g., release.yml)
+  - `workflow_dispatch` - Manual triggering for testing
+  
+  **Jobs:**
+  
+  1. **test** (ubuntu-latest)
+     - Runs cljstyle check
+     - Runs clj-kondo lint with `--fail-level warning`
+     - Runs unit tests (with `:unit` focus)
+     - Runs integration tests (with `:integration` focus, skipping `:native-binary` tests)
+     - Must pass before binaries are built
+  
+  2. **build-matrix** (multi-platform)
+     - Builds binaries for multiple OS/architecture combinations
+     - **Matrix Strategy:**
+       - `linux-amd64` (ubuntu-latest) - Standard x86_64 Linux binary
+       - `macos-universal` (macos-latest) - Universal binary with x86_64 and arm64 slices
+     - **Build Process:**
+       - Builds CLI JAR → Native CLI binary
+       - Builds Server JAR → Native server binary
+       - Uses GraalVM for native compilation
+       - Universal binaries created with `:universal true` flag
+     - **Architecture Verification:**
+       - macOS universal: Verifies both x86_64 and arm64 slices present
+       - Linux amd64: Verifies x86-64 only (no ARM)
+       - Fails build if architecture requirements not met
+     - **Artifacts:**
+       - CLI binary: `mcp-tasks-{os}-{arch}`
+       - Server binary: `mcp-tasks-server-{os}-{arch}`
+  
+  3. **test-binaries** (multi-platform)
+     - Tests built binaries on their target platforms
+     - **Testing Strategy:**
+       - **macOS** (`test-focus: smoke`): Fast smoke tests only
+         - Skips comprehensive tests for faster feedback
+         - Uses `--skip-meta :comprehensive` flag
+       - **Linux** (`test-focus: comprehensive`): Full test suite
+         - Runs all native binary tests
+         - Provides complete validation
+     - **Environment Variables:**
+       - `BINARY_TARGET_OS`: Target OS (linux/macos)
+       - `BINARY_TARGET_ARCH`: Target architecture (amd64/universal)
+     - Tests use these variables to locate correct binary
+
 - **release.yml** - Manual workflow for releasing new versions
   - Runs all tests and linting
   - Builds JAR with version calculated from commit count
