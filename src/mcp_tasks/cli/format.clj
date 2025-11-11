@@ -288,6 +288,10 @@
                           (str "✓ " (:name r) " (" (name (:type r)) ")\n"
                                "  → " (:path r))
 
+                          :exists
+                          (str "✓ " (:name r) " (" (name (:type r)) ")\n"
+                               "  → " (:path r) " (already exists)")
+
                           :not-found
                           (str "✗ " (:name r) "\n"
                                "  Error: " (:error r))
