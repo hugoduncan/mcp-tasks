@@ -29,9 +29,15 @@ Parse `$ARGUMENTS`: first token is story specification, rest is context.
 
 ## Task Categorization
 
-Choose categories from the add-task tool list.
+Use `ReadMcpResourceTool` with server "mcp-tasks", uri
+"resource://categories" to retrieve the available categories. If
+missing, inform user and stop.
 
-**Examples:**
+Parse the JSON response to extract available categories and their
+descriptions. Use category descriptions to inform categorization
+decisions.
+
+**Examples** (if resource://categories returns simple, medium and large categories):
 - "Update README with installation instructions" → **simple** (direct documentation change)
 - "Add user profile editing with avatar upload" → **medium** (multiple fields, file handling, validation)
 - "Implement real-time notifications with WebSocket fallback" → **large** (architecture, multiple protocols, state management)
