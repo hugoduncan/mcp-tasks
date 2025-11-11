@@ -579,28 +579,15 @@ See `doc/dev/changelog.md` for setup details.
 
 ## GitHub Actions
 
-**Workflows:**
+The project uses GitHub Actions for CI/CD with three workflows:
 
-- **test.yml** - Runs on pushes to master and all PRs
-  - Runs cljstyle check
-  - Runs clj-kondo lint with `--fail-level warning`
-  - Runs unit tests and integration tests separately
-  - Caches Clojure dependencies for faster runs
+- **test.yml** - Runs tests, linting, and validation on pushes and PRs
+- **build-binaries.yml** - Builds native binaries for Linux (amd64) and macOS (universal)
+- **release.yml** - Manual release workflow with versioning, changelog, and deployment
 
-- **release.yml** - Manual workflow for releasing new versions
-  - Runs all tests and linting
-  - Builds JAR with version calculated from commit count
-  - Generates changelog using git-cliff
-  - Creates git tag
-  - Deploys to Clojars
-  - Creates GitHub Release with JAR artifact
-  - Supports dry-run mode for testing
+The workflows use a custom `setup-clojure` action for consistent environment setup and include comprehensive binary testing with platform-specific strategies (smoke tests on macOS, full tests on Linux).
 
-**Release Process:**
-1. Go to Actions → Release workflow
-2. Click "Run workflow"
-3. Optionally enable dry-run to test without deploying
-4. Workflow automatically calculates version (0.1.N based on commit count)
+For complete workflow documentation, job details, and binary testing instructions, see [doc/github-workflows.md](doc/github-workflows.md).
 
 ## Key Concepts
 
