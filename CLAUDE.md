@@ -734,6 +734,28 @@ See `doc/dev/changelog.md` for setup details.
    - Deploys to Clojars (if not dry-run)
    - Creates GitHub Release with JAR and binaries (if not dry-run)
 
+**Custom Actions:**
+
+- **setup-clojure** (`.github/actions/setup-clojure/action.yml`)
+  
+  Reusable action that sets up the Clojure development environment. Used by all workflows to ensure consistent environment configuration.
+  
+  **Purpose:** Centralizes Java/GraalVM setup, Clojure tools installation, and dependency caching
+  
+  **Inputs:**
+  - `java-distribution`: Java distribution to use (`temurin` or `graalvm`, default: `temurin`)
+  - `java-version`: Java version (default: `21`)
+  - `install-linters`: Whether to install cljstyle and clj-kondo (default: `false`)
+  - `cache-key-suffix`: Optional cache key suffix for platform-specific caching
+  - `github-token`: GitHub token (required for GraalVM distribution)
+  
+  **Features:**
+  - Supports both Temurin and GraalVM distributions
+  - For macOS universal binaries: Installs both ARM64 (via graalvm/setup-graalvm) and x86_64 GraalVM for cross-compilation
+  - Installs Clojure CLI and Babashka via DeLaGuardo/setup-clojure
+  - Optionally installs linters (cljstyle, clj-kondo)
+  - Caches Maven and gitlibs dependencies with configurable cache keys
+
 ## Binary Testing
 
 **Test Organization:**
@@ -741,6 +763,10 @@ See `doc/dev/changelog.md` for setup details.
 Native binary integration tests are located in:
 - `test/mcp_tasks/native_binary_integration_test.clj` - CLI binary tests
 - `test/mcp_tasks/native_server_binary_integration_test.clj` - Server binary tests
+
+For developers who want details, see:
+- [test/mcp_tasks/native_binary_integration_test.clj](test/mcp_tasks/native_binary_integration_test.clj)
+- [test/mcp_tasks/native_server_binary_integration_test.clj](test/mcp_tasks/native_server_binary_integration_test.clj)
 
 Tests use metadata tags for classification:
 - `:native-binary` - All native binary tests (required for filtering)
