@@ -530,8 +530,6 @@
           (finally
             (stop-server proc)))))))
 
-
-
 ;; Comprehensive Tests
 
 (deftest ^:native-binary ^:comprehensive comprehensive-mcp-protocol

@@ -13,6 +13,46 @@
     (java.io
       File)))
 
+;; Test Fixtures
+
+(defmacro with-temp-categories
+  "Create temporary config directory with category-prompts.
+
+  Usage: (with-temp-categories categories git-mode? [temp-dir config] ...body...)
+
+  categories - map of category-name -> content string
+  git-mode? - boolean for :use-git? config (default false)
+  binding-vec - vector [temp-dir-sym config-sym] for bindings
+  body - test forms to execute"
+  [categories git-mode? [temp-dir-sym config-sym] & body]
+  (let [mcp-tasks-dir (gensym "mcp-tasks-dir")
+        prompts-dir (gensym "prompts-dir")
+        config-dir (gensym "config-dir")
+        raw-config (gensym "raw-config")
+        cat-name (gensym "cat-name")
+        content (gensym "content")]
+    `(let [~temp-dir-sym (File/createTempFile "mcp-tasks-test" "")
+           ~'_ (fs/delete ~temp-dir-sym)
+           ~'_ (.mkdirs ~temp-dir-sym)
+           ~mcp-tasks-dir (io/file ~temp-dir-sym ".mcp-tasks")
+           ~prompts-dir (io/file ~mcp-tasks-dir "category-prompts")
+           ~'_ (.mkdirs ~prompts-dir)
+           ;; Create category files
+           ~'_ (doseq [[~cat-name ~content] ~categories]
+                 (spit (io/file ~prompts-dir (str ~cat-name ".md")) ~content))
+           ~config-dir (.getPath ~temp-dir-sym)
+           ~raw-config {:use-git? ~git-mode?}
+           ~config-sym (config/resolve-config ~config-dir ~raw-config)]
+       (try
+         ~@body
+         (finally
+           ;; Clean up category files
+           (doseq [[~cat-name ~'_] ~categories]
+             (fs/delete (io/file ~prompts-dir (str ~cat-name ".md"))))
+           (fs/delete ~prompts-dir)
+           (fs/delete ~mcp-tasks-dir)
+           (fs/delete ~temp-dir-sym))))))
+
 (deftest get-prompt-vars-test
   ;; Test that get-prompt-vars finds all prompt definitions from task-prompts 
   ;; namespace vars and resources/prompts files.
@@ -503,23 +543,15 @@
         (is (fn? (:implementation resource))))))
 
   (testing "categories resource end-to-end integration"
-    (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
-          _ (fs/delete temp-dir)
-          _ (.mkdirs temp-dir)
-          mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
-          prompts-dir (io/file mcp-tasks-dir "category-prompts")
-          _ (.mkdirs prompts-dir)
-          _ (spit (io/file prompts-dir "simple.md") "---\ndescription: Simple workflow\n---\nTest\n")
-          _ (spit (io/file prompts-dir "custom.md") "---\ndescription: Custom workflow\n---\nTest\n")
-          config-dir (.getPath temp-dir)
-          raw-config {:use-git? false}
-          resolved-config (config/resolve-config config-dir raw-config)
-          transport {:type :in-memory}
-          server-config (sut/create-server-config resolved-config transport)
-          resource (get (:resources server-config) "resource://categories")
-          implementation (:implementation resource)
-          result (implementation nil "resource://categories")]
-      (try
+    (with-temp-categories {"simple" "---\ndescription: Simple workflow\n---\nTest\n"
+                           "custom" "---\ndescription: Custom workflow\n---\nTest\n"}
+      false
+      [_temp-dir resolved-config]
+      (let [transport {:type :in-memory}
+            server-config (sut/create-server-config resolved-config transport)
+            resource (get (:resources server-config) "resource://categories")
+            implementation (:implementation resource)
+            result (implementation nil "resource://categories")]
         (is (not (:isError result)))
         (is (vector? (:contents result)))
         (is (= 1 (count (:contents result))))
@@ -535,10 +567,4 @@
             (is (contains? category-names "simple"))
             (is (contains? category-names "custom")))
           (let [simple-cat (first (filter #(= "simple" (:name %)) (:categories parsed)))]
-            (is (= "Simple workflow" (:description simple-cat)))))
-        (finally
-          (fs/delete (io/file prompts-dir "simple.md"))
-          (fs/delete (io/file prompts-dir "custom.md"))
-          (fs/delete prompts-dir)
-          (fs/delete mcp-tasks-dir)
-          (fs/delete temp-dir))))))
+            (is (= "Simple workflow" (:description simple-cat)))))))))

@@ -1,5 +1,8 @@
 {:lint-as
  {mcp-tasks.test-helpers/with-test-setup clojure.core/fn
   mcp-tasks.uberscript-integration-test/with-uberscript-test clojure.core/fn}
+ :hooks
+ {:analyze-call
+  {mcp-tasks.main-test/with-temp-categories hooks.mcp-tasks.main-test/with-temp-categories}}
  :cljc
  {:features #{:clj}}}
