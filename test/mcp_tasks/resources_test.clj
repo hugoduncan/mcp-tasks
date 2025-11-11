@@ -274,4 +274,53 @@
               parsed (cheshire.core/parse-string json-text true)
               categories (:categories parsed)
               category-names (map :name categories)]
-          (is (= category-names (sort category-names))))))))
+          (is (= category-names (sort category-names)))))
+
+      (testing "handles empty category directory"
+        (let [empty-project-dir (.getAbsolutePath (io/file "test-resources/resources-test-empty"))
+              _ (fs/create-dirs (io/file empty-project-dir ".mcp-tasks" "category-prompts"))
+              config (config/resolve-config empty-project-dir {})
+              resource-map (resources/available-categories-resource config)
+              resource (get resource-map "resource://categories")
+              implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)]
+          (is (not (:isError result)))
+          (is (= [] (:categories parsed)))
+          (fs/delete-tree (io/file empty-project-dir))))
+
+      (testing "handles category without description frontmatter"
+        (let [prompts-dir (io/file test-project-dir ".mcp-tasks" "category-prompts")
+              _ (spit (io/file prompts-dir "no-desc.md") "Just instructions\n")
+              config (config/resolve-config test-project-dir {})
+              resource-map (resources/available-categories-resource config)
+              resource (get resource-map "resource://categories")
+              implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              no-desc-cat (first (filter #(= "no-desc" (:name %)) categories))]
+          (is (not (:isError result)))
+          (is (some? no-desc-cat))
+          (is (= "no-desc" (:name no-desc-cat)))
+          (is (= "Tasks for no-desc category" (:description no-desc-cat)))))
+
+      (testing "handles category with malformed frontmatter"
+        (let [prompts-dir (io/file test-project-dir ".mcp-tasks" "category-prompts")
+              _ (spit (io/file prompts-dir "malformed.md")
+                      "---\ninvalid yaml: [unclosed\n---\nInstructions\n")
+              config (config/resolve-config test-project-dir {})
+              resource-map (resources/available-categories-resource config)
+              resource (get resource-map "resource://categories")
+              implementation (:implementation resource)
+              result (implementation nil "resource://categories")
+              json-text (-> result :contents first :text)
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              malformed-cat (first (filter #(= "malformed" (:name %)) categories))]
+          (is (not (:isError result)))
+          (is (some? malformed-cat))
+          (is (= "malformed" (:name malformed-cat)))
+          (is (= "Tasks for malformed category" (:description malformed-cat))))))))
