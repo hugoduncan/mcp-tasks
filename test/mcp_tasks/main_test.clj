@@ -1,6 +1,7 @@
 (ns mcp-tasks.main-test
   (:require
     [babashka.fs :as fs]
+    [cheshire.core]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
@@ -499,4 +500,45 @@
         (is (= "resource://categories" (:uri resource)))
         (is (= "application/json" (:mime-type resource)))
         (is (= "Available task categories and their descriptions" (:description resource)))
-        (is (fn? (:implementation resource)))))))
+        (is (fn? (:implementation resource))))))
+
+  (testing "categories resource end-to-end integration"
+    (let [temp-dir (File/createTempFile "mcp-tasks-test" "")
+          _ (fs/delete temp-dir)
+          _ (.mkdirs temp-dir)
+          mcp-tasks-dir (io/file temp-dir ".mcp-tasks")
+          prompts-dir (io/file mcp-tasks-dir "category-prompts")
+          _ (.mkdirs prompts-dir)
+          _ (spit (io/file prompts-dir "simple.md") "---\ndescription: Simple workflow\n---\nTest\n")
+          _ (spit (io/file prompts-dir "custom.md") "---\ndescription: Custom workflow\n---\nTest\n")
+          config-dir (.getPath temp-dir)
+          raw-config {:use-git? false}
+          resolved-config (config/resolve-config config-dir raw-config)
+          transport {:type :in-memory}
+          server-config (sut/create-server-config resolved-config transport)
+          resource (get (:resources server-config) "resource://categories")
+          implementation (:implementation resource)
+          result (implementation nil "resource://categories")]
+      (try
+        (is (not (:isError result)))
+        (is (vector? (:contents result)))
+        (is (= 1 (count (:contents result))))
+        (let [content (first (:contents result))
+              json-text (:text content)
+              parsed (cheshire.core/parse-string json-text true)]
+          (is (= "resource://categories" (:uri content)))
+          (is (= "application/json" (:mimeType content)))
+          (is (contains? parsed :categories))
+          (is (vector? (:categories parsed)))
+          (is (>= (count (:categories parsed)) 2))
+          (let [category-names (set (map :name (:categories parsed)))]
+            (is (contains? category-names "simple"))
+            (is (contains? category-names "custom")))
+          (let [simple-cat (first (filter #(= "simple" (:name %)) (:categories parsed)))]
+            (is (= "Simple workflow" (:description simple-cat)))))
+        (finally
+          (fs/delete (io/file prompts-dir "simple.md"))
+          (fs/delete (io/file prompts-dir "custom.md"))
+          (fs/delete prompts-dir)
+          (fs/delete mcp-tasks-dir)
+          (fs/delete temp-dir))))))

@@ -386,7 +386,39 @@ Track additional workflow information:
 
 ## MCP Resources
 
-mcp-tasks exposes its execution prompts as MCP resources, enabling advanced use cases like prompt composition and inspection.
+mcp-tasks exposes execution prompts and category metadata as MCP resources, enabling advanced use cases like prompt composition, inspection, and category discovery.
+
+### Categories Resource
+
+The categories resource provides a machine-readable list of all available task categories and their descriptions:
+
+**URI:** `resource://categories`
+
+**Format:** JSON
+
+**Structure:**
+```json
+{
+  "categories": [
+    {
+      "name": "simple",
+      "description": "Execute simple tasks with basic workflow"
+    },
+    {
+      "name": "medium",
+      "description": "Execute medium complexity tasks..."
+    }
+  ]
+}
+```
+
+The categories list is automatically generated from discovered category prompts in `.mcp-tasks/category-prompts/` and includes descriptions extracted from YAML frontmatter. Categories are returned in alphabetical order by name.
+
+**Use cases:**
+- Discover available categories programmatically
+- Build UI/CLI tools that present category options to users
+- Validate task category fields against available categories
+- Generate documentation about task categorization
 
 ### Prompt Resources
 
