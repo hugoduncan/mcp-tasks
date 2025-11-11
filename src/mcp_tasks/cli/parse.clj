@@ -926,17 +926,17 @@ EXAMPLES:
 
         "install"
         (try
-          (let [raw-parsed (cli/parse-opts subcommand-args {:spec prompts-install-spec :restrict (get-allowed-keys prompts-install-spec)})
-                parsed (-> raw-parsed
-                           (dissoc :f)
-                           (cond-> (:f raw-parsed) (assoc :format (:f raw-parsed))))
-                prompt-names (vec (:org.babashka/cli raw-parsed))]
+          (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
+                parsed-opts (-> (:opts raw-parsed)
+                                (dissoc :f)
+                                (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
+                prompt-names (vec (:args raw-parsed))]
             (if (empty? prompt-names)
               {:error "At least one prompt name is required"
                :metadata {:args args}}
-              (let [format-validation (validate-format parsed)]
+              (let [format-validation (validate-format parsed-opts)]
                 (if (:valid? format-validation)
-                  (assoc parsed
+                  (assoc parsed-opts
                          :subcommand :install
                          :prompt-names prompt-names)
                   (dissoc format-validation :valid?)))))
