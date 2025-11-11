@@ -25,24 +25,37 @@
   "Discover file-based prompts from resources/prompts directory.
 
   Returns a sequence of maps with :name, :content, :var, and :meta keys.
-  Only discovers prompts from resources - does not include namespace vars."
+  Only discovers prompts from resources - does not include namespace vars.
+
+  Returns empty sequence if resources directory is not found or cannot be accessed."
   []
-  (when-let [prompts-url (io/resource "prompts")]
-    (let [prompts-dir (io/file (.toURI prompts-url))
-          prompt-files (->> (file-seq prompts-dir)
-                            (filter #(and (.isFile ^File %)
-                                          (str/ends-with? (.getName ^File %) ".md"))))]
-      (for [file prompt-files]
-        (let [prompt-name (str/replace (.getName ^File file) #"\.md$" "")
-              content (slurp file)
-              frontmatter (parse-frontmatter content)
-              description (or (:description frontmatter)
-                              (str "Task execution prompt: " prompt-name))]
-          {:name prompt-name
-           :content content
-           :var (reify clojure.lang.IDeref
-                  (deref [_] content))
-           :meta {:doc description}})))))
+  (if-let [prompts-url (io/resource "prompts")]
+    (try
+      (let [prompts-dir (io/file (.toURI prompts-url))
+            prompt-files (->> (file-seq prompts-dir)
+                              (filter #(and (.isFile ^File %)
+                                            (str/ends-with? (.getName ^File %) ".md"))))]
+        (keep (fn [file]
+                (try
+                  (let [prompt-name (str/replace (.getName ^File file) #"\.md$" "")
+                        content (slurp file)
+                        frontmatter (parse-frontmatter content)
+                        description (or (:description frontmatter)
+                                        (str "Task execution prompt: " prompt-name))]
+                    {:name prompt-name
+                     :content content
+                     :var (reify clojure.lang.IDeref
+                            (deref [_] content))
+                     :meta {:doc description}})
+                  (catch Exception _e
+                    ;; Skip files that cannot be read
+                    nil)))
+              prompt-files))
+      (catch Exception _e
+        ;; Cannot access resources directory
+        []))
+    ;; Resources directory not found
+    []))
 
 (defn- deduplicate-prompts
   "De-duplicate prompts by name, preferring file-based entries over vars.
@@ -139,7 +152,9 @@
     (if-not prompt-map
       {:name prompt-name
        :type nil
-       :status :not-found}
+       :status :not-found
+       :error (str "Prompt '" prompt-name "' not found. "
+                   "Use 'mcp-tasks prompts list' to see available prompts.")}
       (let [builtin-categories (list-builtin-categories)
             is-category? (contains? builtin-categories prompt-name)
             target-dir (if is-category?
@@ -164,4 +179,4 @@
               {:name prompt-name
                :type prompt-type
                :status :error
-               :error (.getMessage e)})))))))
+               :error (str "Failed to install prompt to " target-file ": " (.getMessage e))})))))))

@@ -1,6 +1,7 @@
 (ns mcp-tasks.prompt-management-test
   (:require
     [babashka.fs :as fs]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.prompt-management :as sut]))
 
@@ -147,7 +148,14 @@
         (is (= "nonexistent-prompt" (:name result)))
         (is (nil? (:type result)))
         (is (= :not-found (:status result)))
-        (is (not (contains? result :path)))))))
+        (is (not (contains? result :path)))))
+
+    (testing "includes helpful error message for non-existent prompt"
+      (let [result (sut/install-prompt "nonexistent-prompt")]
+        (is (contains? result :error))
+        (is (string? (:error result)))
+        (is (str/includes? (:error result) "not found"))
+        (is (str/includes? (:error result) "mcp-tasks prompts list"))))))
 
 ;; Note: IO error testing is omitted as it's difficult to reliably reproduce
 ;; file system errors in a portable way. The implementation handles errors

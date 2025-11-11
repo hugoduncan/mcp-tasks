@@ -296,6 +296,10 @@
                           (str "✗ " (:name r) "\n"
                                "  Error: " (:error r))
 
+                          :error
+                          (str "✗ " (:name r) " (" (name (:type r)) ")\n"
+                               "  Error: " (:error r))
+
                           (str "? " (:name r) "\n"
                                "  Unknown status: " (:status r))))]
     (str/join "\n\n"
