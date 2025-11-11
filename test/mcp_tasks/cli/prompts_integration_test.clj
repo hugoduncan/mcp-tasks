@@ -369,24 +369,25 @@
           (is (= 2 successful) "Should have 2 successful installs")
           (is (= 1 not-found) "Should have 1 not-found"))))))
 
-(deftest prompts-install-overwrite-existing-test
-  ;; Test that installing overwrites existing prompts
-  (testing "prompts-install-overwrite-existing"
-    (testing "first install creates file"
+(deftest prompts-install-skip-existing-test
+  ;; Test that installing skips existing prompts without overwriting
+  (testing "prompts-install-skip-existing"
+    (testing "preserves modified files on re-install"
       (let [result (call-cli "prompts" "install" "simple")
             target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
         (is (= 0 (:exit result)))
         (is (.exists target-file))
-        (let [original-content (slurp target-file)]
-          ;; Modify the file
-          (spit target-file "Modified content")
-          (is (= "Modified content" (slurp target-file)))
+        ;; Modify the file
+        (spit target-file "Modified content")
+        (is (= "Modified content" (slurp target-file)))
 
-          ;; Install again
-          (let [result2 (call-cli "prompts" "install" "simple")]
-            (is (= 0 (:exit result2)))
-            ;; Should be overwritten with original content
-            (is (= original-content (slurp target-file)))))))))
+        ;; Install again
+        (let [result2 (call-cli "prompts" "install" "simple")]
+          (is (= 0 (:exit result2)))
+          ;; Should NOT be overwritten - modified content preserved
+          (is (= "Modified content" (slurp target-file)))
+          ;; Should indicate file already exists
+          (is (str/includes? (:out result2) "already exists")))))))
 
 (deftest prompts-help-test
   ;; Test help output for prompts commands
