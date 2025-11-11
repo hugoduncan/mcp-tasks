@@ -655,19 +655,84 @@ See `doc/dev/changelog.md` for setup details.
      - Tests use these variables to locate correct binary
 
 - **release.yml** - Manual workflow for releasing new versions
-  - Runs all tests and linting
-  - Builds JAR with version calculated from commit count
-  - Generates changelog using git-cliff
-  - Creates git tag
-  - Deploys to Clojars
-  - Creates GitHub Release with JAR artifact
-  - Supports dry-run mode for testing
+  
+  **Triggers:**
+  - `workflow_dispatch` - Manual triggering from GitHub Actions UI
+    - `dry-run` input (optional, default: false) - Skip deployment steps for testing
+  
+  **Dependencies:**
+  - Calls `build-binaries.yml` reusable workflow to build native binaries
+  - Waits for binary builds to complete before proceeding
+  
+  **Jobs:**
+  
+  1. **build-binaries** (reusable workflow call)
+     - Builds all native binaries (CLI and server for linux-amd64 and macos-universal)
+     - See build-binaries.yml documentation above for details
+  
+  2. **release** (ubuntu-latest)
+     - **Prerequisites:**
+       - Requires `build-binaries` job to complete successfully
+       - Only runs on master branch or when dry-run is enabled
+       - Requires GitHub environment named "Release"
+     
+     - **Version Calculation:**
+       - Uses commit count-based versioning: `0.1.N` where N is commit count
+       - Calculated via `clojure -T:build version`
+       - Outputs both version (e.g., "0.1.123") and tag (e.g., "v0.1.123")
+     
+     - **SHA Reference Updates:**
+       - Updates documentation files with new version tag and commit SHA
+       - Files updated: `doc/install.md`, `plugins/mcp-tasks-skill/README.md`
+       - Uses `scripts/update-sha-refs.sh` script
+       - Commits changes with message: "docs: update to <tag> (<sha>)"
+       - Gracefully handles case where no updates are needed
+     
+     - **JAR Build and Validation:**
+       - Builds JAR artifact with calculated version
+       - Validates JAR exists at expected location
+       - Prints JAR size and SHA256 checksum
+       - Runs smoke test to verify basic functionality
+     
+     - **Changelog Generation:**
+       - Uses git-cliff to generate changelog
+       - If no previous tag exists, generates full changelog
+       - Otherwise, generates changelog from previous tag to HEAD
+       - Saves changelog to file and GitHub Actions output
+     
+     - **Binary Artifact Validation:**
+       - Downloads all 4 binary artifacts from build-binaries job:
+         - `mcp-tasks-linux-amd64`
+         - `mcp-tasks-macos-universal`
+         - `mcp-tasks-server-linux-amd64`
+         - `mcp-tasks-server-macos-universal`
+       - Validates all binaries exist before proceeding
+       - Fails release if any binary is missing
+     
+     - **Deployment Steps (skipped in dry-run mode):**
+       - **Git Tag**: Creates annotated tag and pushes to remote
+       - **Clojars Deployment**: Deploys JAR using credentials from GitHub secrets
+       - **GitHub Release**: Creates release with:
+         - Tag name (e.g., "v0.1.123")
+         - Generated changelog as release body
+         - JAR artifact
+         - All 4 binary artifacts
+         - Non-draft, non-prerelease status
 
 **Release Process:**
 1. Go to Actions → Release workflow
 2. Click "Run workflow"
 3. Optionally enable dry-run to test without deploying
-4. Workflow automatically calculates version (0.1.N based on commit count)
+4. Workflow automatically:
+   - Builds binaries for all platforms
+   - Calculates version (0.1.N based on commit count)
+   - Updates SHA references in documentation
+   - Builds and validates JAR
+   - Generates changelog
+   - Validates binary artifacts
+   - Creates git tag (if not dry-run)
+   - Deploys to Clojars (if not dry-run)
+   - Creates GitHub Release with JAR and binaries (if not dry-run)
 
 ## Key Concepts
 
