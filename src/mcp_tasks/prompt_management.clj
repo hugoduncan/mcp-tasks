@@ -8,6 +8,32 @@
     (java.io
       File)))
 
+(defn parse-frontmatter
+  "Parse YAML frontmatter from markdown content.
+
+  Expects frontmatter delimited by --- at start and end.
+  Returns a map of parsed key-value pairs, or nil if no frontmatter found.
+
+  Example:
+  ---
+  description: Execute a task
+  argument-hint: [args]
+  ---
+
+  Returns: {:description \"Execute a task\" :argument-hint \"[args]\"}"
+  [content]
+  (when (str/starts-with? content "---")
+    (let [lines (str/split-lines content)
+          ;; Skip first --- and find closing ---
+          frontmatter-lines (take-while #(not (str/starts-with? % "---"))
+                                        (rest lines))]
+      (when (seq frontmatter-lines)
+        (into {}
+              (keep (fn [line]
+                      (when-let [[_ k v] (re-matches #"^([^:]+):\s*(.*)$" line)]
+                        [(keyword (str/trim k)) (str/trim v)]))
+                    frontmatter-lines))))))
+
 (defn get-prompt-vars
   "Get all prompt vars and files from namespaces and resources.
 
@@ -39,22 +65,31 @@
                                                              (str/ends-with? (.getName ^File %) ".md"))))]
                          (for [file prompt-files]
                            (let [prompt-name (str/replace (.getName ^File file) #"\.md$" "")
-                                 content (slurp file)]
+                                 content (slurp file)
+                                 frontmatter (parse-frontmatter content)
+                                 description (or (:description frontmatter)
+                                                 (str "Task execution prompt: " prompt-name))]
                              {:name prompt-name
                               :content content
                               :var (reify clojure.lang.IDeref
                                      (deref [_] content))
-                              :meta {:doc (str "Task execution prompt: " prompt-name)}}))))]
+                              :meta {:doc description}}))))
 
-    ;; Convert vars to uniform format
-    (concat
-      (map (fn [v]
-             {:name (name (symbol v))
-              :content @v
-              :var v
-              :meta (meta v)})
-           var-prompts)
-      (or file-prompts []))))
+        ;; Convert vars to uniform format and de-duplicate
+        var-prompt-maps (map (fn [v]
+                               {:name (name (symbol v))
+                                :content @v
+                                :var v
+                                :meta (meta v)})
+                             var-prompts)
+        all-prompts (concat var-prompt-maps (or file-prompts []))
+        ;; Group by name and de-duplicate, preferring file-based entries
+        grouped (group-by :name all-prompts)]
+    (mapcat (fn [[_name prompts]]
+              ;; If multiple prompts with same name, prefer file-based (has :content key from file)
+              ;; File-based entries come second in concat, so take last
+              [(last prompts)])
+            grouped)))
 
 (defn list-builtin-categories
   "List all built-in category prompt names.
