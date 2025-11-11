@@ -25,6 +25,7 @@ COMMANDS:
   delete       Delete a task
   reopen       Reopen a closed task
   why-blocked  Show why a task is blocked
+  prompts      Manage prompt templates
 
 GLOBAL OPTIONS:
   --format <format>     Output format: edn, json, human (default: edn)
@@ -221,6 +222,58 @@ OPTIONS:
 EXAMPLES:
   clojure -M:cli why-blocked --task-id 42
   clojure -M:cli why-blocked --id 42 --format human")
+
+(def prompts-help
+  "Help text for the prompts command."
+  "mcp-tasks prompts - Manage prompt templates
+
+USAGE:
+  mcp-tasks prompts <subcommand> [options]
+
+SUBCOMMANDS:
+  list     List all available built-in prompts
+  install  Install prompts to local directories
+
+Run 'mcp-tasks prompts <subcommand> --help' for subcommand-specific options.")
+
+(def prompts-list-help
+  "Help text for the prompts list subcommand."
+  "mcp-tasks prompts list - List all available built-in prompts
+
+USAGE:
+  mcp-tasks prompts list [options]
+
+Displays all built-in prompts with their names, types, and descriptions.
+Category prompts define execution workflows for tasks.
+Workflow prompts define operations like refining tasks or creating stories.
+
+OPTIONS:
+  --format, -f <format>  Output format: human, json, edn (default: human)
+  --help, -h             Show this help message
+
+EXAMPLES:
+  mcp-tasks prompts list
+  mcp-tasks prompts list --format json")
+
+(def prompts-install-help
+  "Help text for the prompts install subcommand."
+  "mcp-tasks prompts install - Install prompts to local directories
+
+USAGE:
+  mcp-tasks prompts install <prompt1> [prompt2] [prompt3]... [options]
+
+Install one or more built-in prompts to local override directories.
+Category prompts install to .mcp-tasks/category-prompts/
+Workflow prompts install to .mcp-tasks/prompt-overrides/
+
+OPTIONS:
+  --format, -f <format>  Output format: human, json, edn (default: human)
+  --help, -h             Show this help message
+
+EXAMPLES:
+  mcp-tasks prompts install simple
+  mcp-tasks prompts install simple medium execute-task
+  mcp-tasks prompts install simple --format json")
 
 ;; Type Coercion Functions
 
@@ -570,6 +623,35 @@ EXAMPLES:
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
+(def prompts-list-spec
+  "Spec for the prompts list subcommand.
+
+  Validates and coerces arguments for listing available prompts.
+
+  Coercion rules:
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)"
+  {:format {:coerce :keyword
+            :alias :f
+            :desc "Output format (edn, json, human)"}})
+
+(def prompts-install-spec
+  "Spec for the prompts install subcommand.
+
+  Validates and coerces arguments for installing prompts.
+
+  Coercion rules:
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires at least one prompt name in args"
+  {:format {:coerce :keyword
+            :alias :f
+            :desc "Output format (edn, json, human)"}})
+
 ;; Parse Functions
 
 (defn parse-list
@@ -815,3 +897,53 @@ EXAMPLES:
     (catch Exception e
       {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
+
+(defn parse-prompts
+  "Parse arguments for the prompts command.
+
+  Handles subcommands: list, install
+  Returns parsed options map with :subcommand key or error map with :error key."
+  [args]
+  (if (empty? args)
+    {:error "Subcommand required: list or install"
+     :metadata {:args args}}
+    (let [subcommand (first args)
+          subcommand-args (rest args)]
+      (case subcommand
+        "list"
+        (try
+          (let [raw-parsed (cli/parse-opts subcommand-args {:spec prompts-list-spec :restrict (get-allowed-keys prompts-list-spec)})
+                parsed (-> raw-parsed
+                           (dissoc :f)
+                           (cond-> (:f raw-parsed) (assoc :format (:f raw-parsed))))
+                format-validation (validate-format parsed)]
+            (if (:valid? format-validation)
+              (assoc parsed :subcommand :list)
+              (dissoc format-validation :valid?)))
+          (catch Exception e
+            {:error (format-unknown-option-error (.getMessage e))
+             :metadata {:args args}}))
+
+        "install"
+        (try
+          (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
+                parsed-opts (-> (:opts raw-parsed)
+                                (dissoc :f)
+                                (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
+                prompt-names (vec (:args raw-parsed))]
+            (if (empty? prompt-names)
+              {:error "At least one prompt name is required"
+               :metadata {:args args}}
+              (let [format-validation (validate-format parsed-opts)]
+                (if (:valid? format-validation)
+                  (assoc parsed-opts
+                         :subcommand :install
+                         :prompt-names prompt-names)
+                  (dissoc format-validation :valid?)))))
+          (catch Exception e
+            {:error (format-unknown-option-error (.getMessage e))
+             :metadata {:args args}}))
+
+        {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install")
+         :metadata {:args args
+                    :provided-subcommand subcommand}}))))

@@ -285,9 +285,13 @@
               implementation (:implementation resource)
               result (implementation nil "resource://categories")
               json-text (-> result :contents first :text)
-              parsed (cheshire.core/parse-string json-text true)]
+              parsed (cheshire.core/parse-string json-text true)
+              categories (:categories parsed)
+              category-names (map :name categories)]
           (is (not (:isError result)))
-          (is (= [] (:categories parsed)))
+          ;; Should return built-in categories even when user directory is empty
+          (is (seq categories) "Should find built-in categories")
+          (is (some #(= "simple" %) category-names) "Should include 'simple' built-in category")
           (fs/delete-tree (io/file empty-project-dir))))
 
       (testing "handles category without description frontmatter"

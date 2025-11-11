@@ -92,9 +92,9 @@ jobs:
 
       - name: Run smoke test
         run: |
-          OUTPUT=$(clojure -M -m mcp-tasks.main --list-prompts)
+          OUTPUT=$(clojure -M:cli prompts list)
           echo "$OUTPUT"
-          if ! echo "$OUTPUT" | grep -q "simple:"; then
+          if ! echo "$OUTPUT" | grep -q "simple"; then
             echo "Error: Expected prompt 'simple' not found in output"
             exit 1
           fi

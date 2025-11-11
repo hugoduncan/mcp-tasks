@@ -8,40 +8,85 @@ Customization focuses on adapting task execution workflows, categories, and meta
 
 For system-level settings like git integration, branch management, and worktree support, see the [Configuration](config.md) documentation. The `.mcp-tasks.edn` configuration file controls how the system operates, while the customizations described below control how tasks are defined and executed.
 
-## Command Line Options
+## Command Line Tools
 
-The mcp-tasks server supports command line flags for managing task prompts:
+The mcp-tasks CLI provides commands for managing prompt templates and customizing workflows.
 
 ### List Available Prompts
 
-Display all available prompt templates with their descriptions:
+Display all available built-in prompts with their names, types, and descriptions:
 
 ```bash
-clojure -M:mcp-tasks --list-prompts
+# Human-readable output (default)
+mcp-tasks prompts list
+
+# JSON output
+mcp-tasks prompts list --format json
+
+# EDN output
+mcp-tasks prompts list --format edn
+```
+
+The list command shows:
+- **Category prompts**: Define execution workflows for task categories (e.g., `simple`, `medium`, `large`)
+- **Workflow prompts**: Define operations like executing tasks, refining stories, creating tasks
+
+Example output:
+```
+Available Prompts:
+
+Category Prompts (4):
+  simple          Execute simple tasks with basic workflow
+  medium          Execute medium complexity tasks with analysis, design...
+  large           Execute large tasks with detailed analysis, design...
+  clarify-task    Transform informal task instructions into clear...
+
+Workflow Prompts (7):
+  execute-task           Execute a task following category-specific workflow...
+  refine-task            Refine a task to improve clarity and completeness
+  execute-story-child    Execute the next task from a story's task list
+  create-story-tasks     Break down a story into categorized, executable tasks
+  complete-story         Mark a story as complete and archive it
+  create-story-pr        Create a pull request for a completed story
+  review-story-impl...   Review the implementation of a story
+
+Total: 11 prompts (4 category, 7 workflow)
 ```
 
 ### Install Prompt Templates
 
-Install prompt templates to customize task execution workflows:
+Install built-in prompt templates to local directories for customization:
 
 ```bash
-# Install all available category prompts to .mcp-tasks/category-prompts/
-clojure -M:mcp-tasks --install-prompts
+# Install a single prompt
+mcp-tasks prompts install simple
 
-# Install specific category prompts (comma-separated)
-clojure -M:mcp-tasks --install-prompts simple,clarify-task
+# Install multiple prompts
+mcp-tasks prompts install simple medium execute-task
 
-# Install workflow prompts to .mcp-tasks/prompt-overrides/
-clojure -M:mcp-tasks --install-prompts execute-task,refine-task
+# JSON output for scripting
+mcp-tasks prompts install simple --format json
 ```
 
-The `--install-prompts` command:
+The install command:
 - Detects prompt type (category vs workflow) automatically
 - Category prompts install to `.mcp-tasks/category-prompts/`
 - Workflow prompts install to `.mcp-tasks/prompt-overrides/`
-- Skips files that already exist (exit code 0)
-- Warns if a prompt is not found or installation fails (exit code 1)
-- Does not start the MCP server
+- Provides clear feedback about what was installed and where
+- Supports multiple output formats (human, json, edn)
+
+Example output:
+```
+Installing prompts...
+
+✓ simple (category)
+  → .mcp-tasks/category-prompts/simple.md
+
+✓ execute-task (workflow)
+  → .mcp-tasks/prompt-overrides/execute-task.md
+
+Summary: 2 installed, 0 failed
+```
 
 **Backward Compatibility:** The system continues to read from deprecated locations (`.mcp-tasks/prompts/` and `.mcp-tasks/story/prompts/`) with warnings. See [Migration Guide](migration/prompt-directories.md) for details.
 

@@ -3,7 +3,6 @@
     [babashka.fs :as fs]
     [cheshire.core]
     [clojure.java.io :as io]
-    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.config :as config]
     [mcp-tasks.main :as sut]
@@ -52,124 +51,6 @@
            (fs/delete ~prompts-dir)
            (fs/delete ~mcp-tasks-dir)
            (fs/delete ~temp-dir-sym))))))
-
-(deftest get-prompt-vars-test
-  ;; Test that get-prompt-vars finds all prompt definitions from task-prompts 
-  ;; namespace vars and resources/prompts files.
-  (testing "get-prompt-vars"
-    (testing "returns sequence of prompt maps"
-      (let [prompts (#'sut/get-prompt-vars)]
-        (is (seq prompts))
-        (is (every? map? prompts))
-        (is (every? #(contains? % :name) prompts))
-        (is (every? #(contains? % :content) prompts))))
-
-    (testing "returns only prompts with string content"
-      (let [prompts (#'sut/get-prompt-vars)]
-        (is (every? #(string? (:content %)) prompts))))
-
-    (testing "finds all defined prompts including task execution prompts"
-      (let [prompts (#'sut/get-prompt-vars)
-            prompt-names (set (map :name prompts))]
-        ;; Category prompts from task-prompts namespace
-        (is (contains? prompt-names "clarify-task"))
-        (is (contains? prompt-names "simple"))
-        ;; Task execution prompts from resources/prompts
-        (is (contains? prompt-names "execute-task"))
-        (is (contains? prompt-names "refine-task"))
-        ;; Story prompts from story-prompts namespace
-        (is (contains? prompt-names "create-story-tasks"))
-        (is (>= (count prompt-names) 7))))))
-
-(deftest list-prompts-test
-  ;; Test that list-prompts outputs prompt names and descriptions to stdout.
-  (testing "list-prompts"
-    (testing "outputs all prompt names with descriptions"
-      (let [output (with-out-str (#'sut/list-prompts))]
-        (is (string? output))
-        (is (str/includes? output "clarify-task:"))
-        (is (str/includes? output "simple:"))
-        (is (str/includes? output "Transform informal task instructions"))
-        (is (str/includes? output "Execute simple tasks"))))
-
-    (testing "returns exit code 0"
-      (is (= 0 (#'sut/list-prompts))))))
-
-(deftest list-builtin-categories-test
-  ;; Test that list-builtin-categories returns the correct set of categories.
-  (testing "list-builtin-categories"
-    (testing "returns set of built-in category names"
-      (let [categories (#'sut/list-builtin-categories)]
-        (is (set? categories))
-        (is (contains? categories "simple"))
-        (is (contains? categories "medium"))
-        (is (contains? categories "large"))
-        (is (contains? categories "clarify-task"))))
-
-    (testing "does not contain workflow prompts"
-      (let [categories (#'sut/list-builtin-categories)]
-        (is (not (contains? categories "execute-task")))
-        (is (not (contains? categories "refine-task")))
-        (is (not (contains? categories "complete-story")))))))
-
-(deftest install-prompt-test
-  ;; Test that install-prompt handles various edge cases and directory routing.
-  (testing "install-prompt"
-    (testing "warns on nonexistent prompt"
-      (let [output (with-out-str (#'sut/install-prompt "nonexistent"))
-            exit-code (#'sut/install-prompt "nonexistent")]
-        (is (str/includes? output "Warning"))
-        (is (str/includes? output "not found"))
-        (is (= 1 exit-code))))
-
-    (testing "installs category prompt to category-prompts directory"
-      (let [target-file-atom (atom nil)]
-        (with-redefs [fs/exists? (constantly false)
-                      fs/create-dirs (fn [_] nil)
-                      spit (fn [file _content]
-                             (reset! target-file-atom file))]
-          (binding [*out* (java.io.StringWriter.)]
-            (#'sut/install-prompt "simple"))
-          (is (some? @target-file-atom))
-          (is (str/includes? @target-file-atom ".mcp-tasks/category-prompts/simple.md")))))
-
-    (testing "installs workflow prompt to prompt-overrides directory"
-      (let [target-file-atom (atom nil)]
-        (with-redefs [fs/exists? (constantly false)
-                      fs/create-dirs (fn [_] nil)
-                      spit (fn [file _content]
-                             (reset! target-file-atom file))]
-          (binding [*out* (java.io.StringWriter.)]
-            (#'sut/install-prompt "execute-task"))
-          (is (some? @target-file-atom))
-          (is (str/includes? @target-file-atom ".mcp-tasks/prompt-overrides/execute-task.md")))))
-
-    (testing "skips existing files with message"
-      (let [temp-dir (fs/create-temp-dir)
-            test-file (fs/path temp-dir ".mcp-tasks" "category-prompts" "simple.md")]
-        (try
-          (fs/create-dirs (fs/parent test-file))
-          (spit (str test-file) "existing content")
-          (with-redefs [fs/exists? (constantly true)]
-            (let [output (with-out-str (#'sut/install-prompt "simple"))]
-              (is (str/includes? output "Skipping simple"))
-              (is (str/includes? output "already exists"))))
-          (finally
-            (fs/delete-tree temp-dir)))))))
-
-(deftest install-prompts-test
-  ;; Test that install-prompts handles multiple prompts and returns
-  ;; appropriate exit codes.
-  (testing "install-prompts"
-    (testing "returns exit code 1 when any prompt not found"
-      (let [exit-code (#'sut/install-prompts ["nonexistent"])]
-        (is (= 1 exit-code))))
-
-    (testing "returns exit code 1 when some prompts are not found"
-      (let [output (with-out-str (#'sut/install-prompts ["simple" "nonexistent"]))
-            exit-code (#'sut/install-prompts ["simple" "nonexistent"])]
-        (is (= 1 exit-code))
-        (is (str/includes? output "Warning: Prompt 'nonexistent' not found"))))))
 
 (deftest load-and-validate-config-test
   ;; Test that load-and-validate-config correctly loads, resolves, and validates config.
