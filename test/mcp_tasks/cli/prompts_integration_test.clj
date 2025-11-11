@@ -112,7 +112,6 @@
 
           (testing "prompts are grouped by type"
             (let [prompts (:prompts parsed)
-                  types (map :type prompts)
                   categories (filter #(= :category (:type %)) prompts)
                   workflows (filter #(= :workflow (:type %)) prompts)]
               (is (pos? (count categories)))
@@ -418,28 +417,28 @@
       (let [list-result (call-cli "prompts" "list" "-f" "edn")
             parsed-list (edn/read-string (:out list-result))
             category-prompts (filter #(= :category (:type %)) (:prompts parsed-list))
-            category-names (map :name category-prompts)]
-        ;; Install all category prompts
-        (let [install-result (apply call-cli "prompts" "install" (concat category-names ["-f" "edn"]))
-              parsed-install (edn/read-string (:out install-result))]
-          ;; All should have successful status
-          (is (every? #(#{:installed :exists} (:status %)) (:results parsed-install)))
-          ;; Verify files exist
-          (doseq [name category-names]
-            (is (.exists (io/file *test-dir* ".mcp-tasks/category-prompts" (str name ".md"))))))))
+            category-names (map :name category-prompts)
+            ;; Install all category prompts
+            install-result (apply call-cli "prompts" "install" (concat category-names ["-f" "edn"]))
+            parsed-install (edn/read-string (:out install-result))]
+        ;; All should have successful status
+        (is (every? #(#{:installed :exists} (:status %)) (:results parsed-install)))
+        ;; Verify files exist
+        (doseq [name category-names]
+          (is (.exists (io/file *test-dir* ".mcp-tasks/category-prompts" (str name ".md")))))))
 
     (testing "install all workflow prompts and verify"
       (let [list-result (call-cli "prompts" "list" "-f" "edn")
             parsed-list (edn/read-string (:out list-result))
             workflow-prompts (filter #(= :workflow (:type %)) (:prompts parsed-list))
-            workflow-names (map :name workflow-prompts)]
-        (let [install-result (apply call-cli "prompts" "install" (concat workflow-names ["-f" "edn"]))
-              parsed-install (edn/read-string (:out install-result))]
-          ;; All should have successful status
-          (is (every? #(#{:installed :exists} (:status %)) (:results parsed-install)))
-          ;; Verify files exist
-          (doseq [name workflow-names]
-            (is (.exists (io/file *test-dir* ".mcp-tasks/prompt-overrides" (str name ".md"))))))))))
+            workflow-names (map :name workflow-prompts)
+            install-result (apply call-cli "prompts" "install" (concat workflow-names ["-f" "edn"]))
+            parsed-install (edn/read-string (:out install-result))]
+        ;; All should have successful status
+        (is (every? #(#{:installed :exists} (:status %)) (:results parsed-install)))
+        ;; Verify files exist
+        (doseq [name workflow-names]
+          (is (.exists (io/file *test-dir* ".mcp-tasks/prompt-overrides" (str name ".md")))))))))
 
 (deftest prompts-type-detection-test
   ;; Verify correct type detection for category vs workflow prompts

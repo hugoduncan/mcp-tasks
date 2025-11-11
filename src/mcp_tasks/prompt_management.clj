@@ -160,13 +160,15 @@
             target-dir (if is-category?
                          ".mcp-tasks/category-prompts"
                          ".mcp-tasks/prompt-overrides")
-            target-file (str target-dir "/" prompt-name ".md")
+            relative-path (str target-dir "/" prompt-name ".md")
+            ;; Resolve relative path against current working directory
+            target-file (io/file (System/getProperty "user.dir") relative-path)
             prompt-type (if is-category? :category :workflow)]
         (if (fs/exists? target-file)
           {:name prompt-name
            :type prompt-type
            :status :exists
-           :path target-file}
+           :path relative-path}
           (try
             (when-let [parent (fs/parent target-file)]
               (fs/create-dirs parent))
@@ -174,9 +176,9 @@
             {:name prompt-name
              :type prompt-type
              :status :installed
-             :path target-file}
+             :path relative-path}
             (catch Exception e
               {:name prompt-name
                :type prompt-type
                :status :error
-               :error (str "Failed to install prompt to " target-file ": " (.getMessage e))})))))))
+               :error (str "Failed to install prompt to " relative-path ": " (.getMessage e))})))))))
