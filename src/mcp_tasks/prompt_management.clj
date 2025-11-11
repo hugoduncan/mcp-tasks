@@ -3,107 +3,85 @@
   (:require
     [babashka.fs :as fs]
     [clojure.java.io :as io]
-    [clojure.string :as str])
+    [clojure.string :as str]
+    [mcp-tasks.prompts :as prompts])
   (:import
     (java.io
       File)))
 
-(defn parse-frontmatter
+(defn- parse-frontmatter
   "Parse YAML frontmatter from markdown content.
 
-  Expects frontmatter delimited by --- at start and end.
-  Returns a map of parsed key-value pairs, or nil if no frontmatter found.
+  Delegates to prompts/parse-frontmatter and converts the result to keyword map format.
 
-  Example:
-  ---
-  description: Execute a task
-  argument-hint: [args]
-  ---
-
-  Returns: {:description \"Execute a task\" :argument-hint \"[args]\"}"
+  Returns: {:description \"...\" :argument-hint \"...\"} (keyword keys, or nil)"
   [content]
-  (when (str/starts-with? content "---")
-    (let [lines (str/split-lines content)
-          ;; Skip first --- and find closing ---
-          frontmatter-lines (take-while #(not (str/starts-with? % "---"))
-                                        (rest lines))]
-      (when (seq frontmatter-lines)
-        (into {}
-              (keep (fn [line]
-                      (when-let [[_ k v] (re-matches #"^([^:]+):\s*(.*)$" line)]
-                        [(keyword (str/trim k)) (str/trim v)]))
-                    frontmatter-lines))))))
+  (let [{:keys [metadata]} (prompts/parse-frontmatter content)]
+    (when metadata
+      (into {}
+            (map (fn [[k v]] [(keyword k) v]) metadata)))))
+
+(defn- discover-file-prompts
+  "Discover file-based prompts from resources/prompts directory.
+
+  Returns a sequence of maps with :name, :content, :var, and :meta keys.
+  Only discovers prompts from resources - does not include namespace vars."
+  []
+  (when-let [prompts-url (io/resource "prompts")]
+    (let [prompts-dir (io/file (.toURI prompts-url))
+          prompt-files (->> (file-seq prompts-dir)
+                            (filter #(and (.isFile ^File %)
+                                          (str/ends-with? (.getName ^File %) ".md"))))]
+      (for [file prompt-files]
+        (let [prompt-name (str/replace (.getName ^File file) #"\.md$" "")
+              content (slurp file)
+              frontmatter (parse-frontmatter content)
+              description (or (:description frontmatter)
+                              (str "Task execution prompt: " prompt-name))]
+          {:name prompt-name
+           :content content
+           :var (reify clojure.lang.IDeref
+                  (deref [_] content))
+           :meta {:doc description}})))))
+
+(defn- deduplicate-prompts
+  "De-duplicate prompts by name, preferring file-based entries over vars.
+
+  Takes a sequence of prompt maps. When multiple prompts have the same :name,
+  keeps only the last occurrence (file-based prompts come after vars in typical usage).
+
+  Returns a sequence of de-duplicated prompt maps."
+  [prompts]
+  (let [grouped (group-by :name prompts)]
+    (mapcat (fn [[_name prompt-list]]
+              ;; Take last to prefer file-based entries
+              [(last prompt-list)])
+            grouped)))
 
 (defn get-prompt-vars
   "Get all prompt vars and files from namespaces and resources.
 
-  Returns a sequence of maps with :name and :content keys.
+  Returns a sequence of maps with :name, :content, :var, and :meta keys.
   Discovers prompts from:
   - mcp-tasks.task-prompts namespace vars (category prompts)
   - mcp-tasks.story-prompts namespace vars (story prompts)
-  - resources/prompts/*.md files (task execution prompts)"
+  - resources/prompts/*.md files (task execution prompts)
+
+  File-based prompts override namespace vars when names collide."
   []
-  (require 'mcp-tasks.task-prompts)
-  (require 'mcp-tasks.story-prompts)
-  (let [;; Get vars from namespaces
-        task-ns (find-ns 'mcp-tasks.task-prompts)
-        story-ns (find-ns 'mcp-tasks.story-prompts)
-        task-vars (->> (ns-publics task-ns)
-                       vals
-                       (filter (fn [v] (string? @v))))
-        story-vars (->> (ns-publics story-ns)
-                        vals
-                        (filter (fn [v] (string? @v))))
-        var-prompts (concat task-vars story-vars)
-
-        ;; Discover prompts from resources/prompts directory
-        prompts-url (io/resource "prompts")
-        file-prompts (when prompts-url
-                       (let [prompts-dir (io/file (.toURI prompts-url))
-                             prompt-files (->> (file-seq prompts-dir)
-                                               (filter #(and (.isFile ^File %)
-                                                             (str/ends-with? (.getName ^File %) ".md"))))]
-                         (for [file prompt-files]
-                           (let [prompt-name (str/replace (.getName ^File file) #"\.md$" "")
-                                 content (slurp file)
-                                 frontmatter (parse-frontmatter content)
-                                 description (or (:description frontmatter)
-                                                 (str "Task execution prompt: " prompt-name))]
-                             {:name prompt-name
-                              :content content
-                              :var (reify clojure.lang.IDeref
-                                     (deref [_] content))
-                              :meta {:doc description}}))))
-
-        ;; Convert vars to uniform format and de-duplicate
-        var-prompt-maps (map (fn [v]
-                               {:name (name (symbol v))
-                                :content @v
-                                :var v
-                                :meta (meta v)})
-                             var-prompts)
-        all-prompts (concat var-prompt-maps (or file-prompts []))
-        ;; Group by name and de-duplicate, preferring file-based entries
-        grouped (group-by :name all-prompts)]
-    (mapcat (fn [[_name prompts]]
-              ;; If multiple prompts with same name, prefer file-based (has :content key from file)
-              ;; File-based entries come second in concat, so take last
-              [(last prompts)])
-            grouped)))
+  (let [var-prompts (prompts/get-prompt-vars)
+        file-prompts (discover-file-prompts)
+        all-prompts (concat var-prompts (or file-prompts []))]
+    (deduplicate-prompts all-prompts)))
 
 (defn list-builtin-categories
   "List all built-in category prompt names.
 
-  Returns a set of category names (strings) found in resources/category-prompts/."
+  Returns a set of category names (strings) found in resources/category-prompts/.
+
+  Delegates to prompts/list-builtin-categories."
   []
-  (let [resource-dir "category-prompts"]
-    (->> (io/resource resource-dir)
-         io/file
-         file-seq
-         (filter #(and (.isFile ^File %)
-                       (str/ends-with? (.getName ^File %) ".md")))
-         (map #(str/replace (.getName ^File %) #"\.md$" ""))
-         set)))
+  (prompts/list-builtin-categories))
 
 (defn list-available-prompts
   "List all available built-in prompts with metadata.

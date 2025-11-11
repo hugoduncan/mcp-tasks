@@ -175,7 +175,7 @@
       (str "Workflow prompt found in deprecated location. "
            "Please move from .mcp-tasks/story/prompts/ to .mcp-tasks/prompt-overrides/"))))
 
-(defn- parse-frontmatter
+(defn parse-frontmatter
   "Parse simple 'field: value' frontmatter from markdown text.
 
   Expects frontmatter delimited by '---' at start and end.
@@ -251,6 +251,13 @@
       (catch Exception _e
         #{}))
     #{}))
+
+(defn list-builtin-categories
+  "List all built-in category prompt names.
+
+  Returns a set of category names (strings) found in resources/category-prompts/."
+  []
+  (discover-builtin-categories))
 
 (defn discover-categories
   "Discover task categories by reading category-prompts subdirectory from resolved tasks dir.
@@ -450,6 +457,34 @@
                                         :text prompt-text}}]})])))))
 
 ;; Story prompt utilities
+
+(defn get-prompt-vars
+  "Get all prompt vars from namespaces.
+
+  Returns a sequence of maps with :name, :content, :var, and :meta keys.
+  Discovers prompts from:
+  - mcp-tasks.task-prompts namespace vars (category prompts)
+  - mcp-tasks.story-prompts namespace vars (story prompts)
+
+  Does NOT include file-based prompts - only namespace vars."
+  []
+  (require 'mcp-tasks.task-prompts)
+  (require 'mcp-tasks.story-prompts)
+  (let [task-ns (find-ns 'mcp-tasks.task-prompts)
+        story-ns (find-ns 'mcp-tasks.story-prompts)
+        task-vars (->> (ns-publics task-ns)
+                       vals
+                       (filter (fn [v] (string? @v))))
+        story-vars (->> (ns-publics story-ns)
+                        vals
+                        (filter (fn [v] (string? @v))))
+        all-vars (concat task-vars story-vars)]
+    (map (fn [v]
+           {:name (name (symbol v))
+            :content @v
+            :var v
+            :meta (meta v)})
+         all-vars)))
 
 (defn- list-builtin-story-prompts
   "List all built-in story prompts available in resources.
