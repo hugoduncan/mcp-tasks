@@ -8,6 +8,9 @@
   Similar approach to script/uberscript-main.clj for Babashka uberscript builds."
   (:gen-class))
 
+(require 'mcp-tasks.task-prompts)
+(require 'mcp-tasks.story-prompts)
+
 ;; Explicitly require Malli and all tool namespaces so native-image includes them
 (require 'malli.core)
 (require 'mcp-tasks.tool.select-tasks)
