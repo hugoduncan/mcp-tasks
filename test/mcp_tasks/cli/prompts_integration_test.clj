@@ -39,19 +39,27 @@
 
 (defn- call-cli
   "Call CLI main function capturing stdout and exit code.
-  Changes working directory to *test-dir* for config discovery.
+  Changes working directory for config discovery.
+  
+  Parameters:
+  - dir (optional): Directory to use as working directory. Defaults to *test-dir*.
+  - args: CLI arguments
+  
   Returns {:exit exit-code :out output-string :err error-string}"
   [& args]
-  (let [out (java.io.StringWriter.)
+  (let [[dir cli-args] (if (and (seq args) (instance? java.io.File (first args)))
+                         [(str (first args)) (rest args)]
+                         [*test-dir* args])
+        out (java.io.StringWriter.)
         err (java.io.StringWriter.)
         exit-code (atom nil)
         original-dir (System/getProperty "user.dir")]
     (try
-      (System/setProperty "user.dir" *test-dir*)
+      (System/setProperty "user.dir" dir)
       (binding [*out* out
                 *err* err]
         (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
-          (apply cli/-main args)))
+          (apply cli/-main cli-args)))
       (finally
         (System/setProperty "user.dir" original-dir)))
     {:exit @exit-code
@@ -476,33 +484,40 @@
   ;; Test that prompts install works correctly when run from a subdirectory
   (testing "prompts-install-from-subdirectory"
     (testing "installs to parent .mcp-tasks when run from subdirectory"
-      (let [subdir (io/file *test-dir* "src")
-            original-dir (System/getProperty "user.dir")]
+      (let [subdir (io/file *test-dir* "src")]
         (fs/create-dirs subdir)
+        (let [result (call-cli subdir "prompts" "install" "simple")
+              target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
+          (is (= 0 (:exit result)))
+          (is (.exists target-file))
+          (is (str/includes? (slurp target-file) "---"))
+          (is (str/includes? (slurp target-file) "description:")))))
+
+    (testing "works from nested subdirectory"
+      (let [nested-dir (io/file *test-dir* "src/test/integration")]
+        (fs/create-dirs nested-dir)
+        (let [result (call-cli nested-dir "prompts" "install" "medium")
+              target-file (io/file *test-dir* ".mcp-tasks/category-prompts/medium.md")]
+          (is (= 0 (:exit result)))
+          (is (.exists target-file)))))))
+
+(deftest prompts-install-without-config-test
+  ;; Test backward compatibility: prompts install works when no .mcp-tasks.edn exists
+  (testing "prompts-install-without-config"
+    (testing "falls back to .mcp-tasks in current directory when no config"
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-no-config-"}))
+            tasks-dir (io/file test-dir ".mcp-tasks")
+            category-dir (io/file tasks-dir "category-prompts")]
         (try
-          ;; Change to subdirectory
-          (System/setProperty "user.dir" (str subdir))
-          ;; Install from subdirectory
-          (let [result (call-cli "prompts" "install" "simple")
-                ;; Check that file was created in parent .mcp-tasks
-                target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
+          ;; Create .mcp-tasks directories but NO config file
+          (fs/create-dirs category-dir)
+          ;; Do NOT create .mcp-tasks.edn
+
+          (let [result (call-cli (io/file test-dir) "prompts" "install" "simple")
+                target-file (io/file category-dir "simple.md")]
             (is (= 0 (:exit result)))
             (is (.exists target-file))
             (is (str/includes? (slurp target-file) "---"))
             (is (str/includes? (slurp target-file) "description:")))
           (finally
-            ;; Restore original directory
-            (System/setProperty "user.dir" original-dir)))))
-
-    (testing "works from nested subdirectory"
-      (let [nested-dir (io/file *test-dir* "src/test/integration")
-            original-dir (System/getProperty "user.dir")]
-        (fs/create-dirs nested-dir)
-        (try
-          (System/setProperty "user.dir" (str nested-dir))
-          (let [result (call-cli "prompts" "install" "medium")
-                target-file (io/file *test-dir* ".mcp-tasks/category-prompts/medium.md")]
-            (is (= 0 (:exit result)))
-            (is (.exists target-file)))
-          (finally
-            (System/setProperty "user.dir" original-dir)))))))
+            (fs/delete-tree test-dir)))))))
