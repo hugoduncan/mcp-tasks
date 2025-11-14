@@ -567,3 +567,54 @@
             (is (str/includes? (slurp target-file) "description:")))
           (finally
             (fs/delete-tree test-dir)))))))
+
+(deftest prompts-install-from-worktree-test
+  ;; Test that prompts install works from a git worktree
+  (testing "prompts-install-from-worktree"
+    (testing "installs to main repo when run from worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "test-worktree"
+            worktree-path (str project-dir "/" worktree-name)
+            mcp-tasks-dir (io/file project-dir ".mcp-tasks")
+            category-dir (io/file mcp-tasks-dir "category-prompts")]
+        (try
+          ;; Set up project directory with config and .mcp-tasks
+          (fs/create-dirs category-dir)
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree (git creates the directory under project-dir)
+          (h/create-git-worktree project-dir worktree-path)
+
+          ;; Install prompt from worktree
+          (let [result (call-cli (io/file worktree-path) "prompts" "install" "simple")
+                target-file (io/file category-dir "simple.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree project-dir)))))
+
+    (testing "works from nested subdirectory within worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "test-worktree-nested"
+            worktree-path (str project-dir "/" worktree-name)
+            mcp-tasks-dir (io/file project-dir ".mcp-tasks")
+            category-dir (io/file mcp-tasks-dir "category-prompts")
+            nested-dir (io/file worktree-path "src/test")]
+        (try
+          ;; Set up project directory with config and .mcp-tasks
+          (fs/create-dirs category-dir)
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree and nested directory
+          (h/create-git-worktree project-dir worktree-path)
+          (fs/create-dirs nested-dir)
+
+          ;; Install prompt from nested directory in worktree
+          (let [result (call-cli nested-dir "prompts" "install" "medium")
+                target-file (io/file category-dir "medium.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file)))
+          (finally
+            (fs/delete-tree project-dir)))))))
