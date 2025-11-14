@@ -84,37 +84,28 @@
               (println parse/help-text))
             (exit 1))
 
-          ;; Check for prompts subcommand-specific help
-          (if (and (= "prompts" command)
-                   (>= (count command-args) 2)
-                   (or (= "--help" (second command-args))
-                       (= "-h" (second command-args))))
-            (let [subcommand (first command-args)]
-              (case subcommand
-                "list" (do (println parse/prompts-list-help) (exit 0))
-                "install" (do (println parse/prompts-install-help) (exit 0))
-                ;; Unknown subcommand, let parse-prompts handle it
-                (let [parsed-args (parse/parse-prompts command-args)]
-                  (binding [*out* *err*]
-                    (println (format/format-error parsed-args)))
-                  (exit 1))))
+          ;; Load config using automatic discovery
+          (let [{:keys [raw-config config-dir]} (config/read-config)
+                resolved-config (config/resolve-config config-dir raw-config)
+                _ (config/validate-startup config-dir resolved-config)
 
-            ;; Load config using automatic discovery
-            (let [{:keys [raw-config config-dir]} (config/read-config)
-                  resolved-config (config/resolve-config config-dir raw-config)
-                  _ (config/validate-startup config-dir resolved-config)
+                ;; Parse command-specific args
+                parsed-args (case command
+                              "list" (parse/parse-list command-args)
+                              "show" (parse/parse-show command-args)
+                              "add" (parse/parse-add command-args)
+                              "complete" (parse/parse-complete command-args)
+                              "update" (parse/parse-update command-args)
+                              "delete" (parse/parse-delete command-args)
+                              "reopen" (parse/parse-reopen command-args)
+                              "why-blocked" (parse/parse-why-blocked command-args)
+                              "prompts" (parse/parse-prompts command-args))]
 
-                  ;; Parse command-specific args
-                  parsed-args (case command
-                                "list" (parse/parse-list command-args)
-                                "show" (parse/parse-show command-args)
-                                "add" (parse/parse-add command-args)
-                                "complete" (parse/parse-complete command-args)
-                                "update" (parse/parse-update command-args)
-                                "delete" (parse/parse-delete command-args)
-                                "reopen" (parse/parse-reopen command-args)
-                                "why-blocked" (parse/parse-why-blocked command-args)
-                                "prompts" (parse/parse-prompts command-args))]
+            ;; Check for help request
+            (if (:help parsed-args)
+              (do
+                (println (:help parsed-args))
+                (exit 0))
 
               ;; Check for parsing errors
               (if (:error parsed-args)
