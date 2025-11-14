@@ -126,12 +126,18 @@
 (defn install-prompt
   "Install a single prompt to appropriate directory.
 
+  Uses :resolved-tasks-dir from config rather than hardcoded paths to support:
+  - Running from subdirectories (config discovery traverses up directory tree)
+  - Worktree environments (config system detects worktree and resolves main repo)
+  - Custom :tasks-dir configuration values (respects user-configured paths)
+
   Parameters:
+  - config: Configuration map with :resolved-tasks-dir
   - prompt-name: Name of the prompt to install (string)
 
   Auto-detects type:
-  - Categories -> .mcp-tasks/category-prompts/<name>.md
-  - Workflows -> .mcp-tasks/prompt-overrides/<name>.md
+  - Categories -> <resolved-tasks-dir>/category-prompts/<name>.md
+  - Workflows -> <resolved-tasks-dir>/prompt-overrides/<name>.md
 
   Returns a map with:
   - :name - prompt name
@@ -146,7 +152,7 @@
 
   Example not found:
   {:name \"foo\" :type nil :status :not-found}"
-  [prompt-name]
+  [config prompt-name]
   (let [prompt-maps (get-prompt-vars)
         prompt-map (first (filter #(= prompt-name (:name %)) prompt-maps))]
     (if-not prompt-map
@@ -157,18 +163,18 @@
                    "Use 'mcp-tasks prompts list' to see available prompts.")}
       (let [builtin-categories (list-builtin-categories)
             is-category? (contains? builtin-categories prompt-name)
-            target-dir (if is-category?
-                         ".mcp-tasks/category-prompts"
-                         ".mcp-tasks/prompt-overrides")
-            relative-path (str target-dir "/" prompt-name ".md")
-            ;; Resolve relative path against current working directory
-            target-file (io/file (System/getProperty "user.dir") relative-path)
+            resolved-tasks-dir (:resolved-tasks-dir config)
+            target-subdir (if is-category?
+                            "category-prompts"
+                            "prompt-overrides")
+            target-file (io/file resolved-tasks-dir target-subdir (str prompt-name ".md"))
+            display-path (str target-file)
             prompt-type (if is-category? :category :workflow)]
         (if (fs/exists? target-file)
           {:name prompt-name
            :type prompt-type
            :status :exists
-           :path relative-path}
+           :path display-path}
           (try
             (when-let [parent (fs/parent target-file)]
               (fs/create-dirs parent))
@@ -176,9 +182,9 @@
             {:name prompt-name
              :type prompt-type
              :status :installed
-             :path relative-path}
+             :path display-path}
             (catch Exception e
               {:name prompt-name
                :type prompt-type
                :status :error
-               :error (str "Failed to install prompt to " relative-path ": " (.getMessage e))})))))))
+               :error (str "Failed to install prompt to " display-path ": " (.getMessage e))})))))))

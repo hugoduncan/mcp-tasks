@@ -19,7 +19,9 @@
   [test-dir]
   (fs/create-dirs (io/file test-dir ".mcp-tasks"))
   (fs/create-dirs (io/file test-dir ".mcp-tasks/category-prompts"))
-  (fs/create-dirs (io/file test-dir ".mcp-tasks/prompt-overrides")))
+  (fs/create-dirs (io/file test-dir ".mcp-tasks/prompt-overrides"))
+  ;; Create config file for config discovery
+  (spit (io/file test-dir ".mcp-tasks.edn") "{}"))
 
 (defn- cli-test-fixture
   "CLI-specific test fixture for prompts commands."
@@ -37,19 +39,27 @@
 
 (defn- call-cli
   "Call CLI main function capturing stdout and exit code.
-  Changes working directory to *test-dir* for config discovery.
+  Changes working directory for config discovery.
+  
+  Parameters:
+  - dir (optional): Directory to use as working directory. Defaults to *test-dir*.
+  - args: CLI arguments
+  
   Returns {:exit exit-code :out output-string :err error-string}"
   [& args]
-  (let [out (java.io.StringWriter.)
+  (let [[dir cli-args] (if (and (seq args) (instance? java.io.File (first args)))
+                         [(str (first args)) (rest args)]
+                         [*test-dir* args])
+        out (java.io.StringWriter.)
         err (java.io.StringWriter.)
         exit-code (atom nil)
         original-dir (System/getProperty "user.dir")]
     (try
-      (System/setProperty "user.dir" *test-dir*)
+      (System/setProperty "user.dir" dir)
       (binding [*out* out
                 *err* err]
         (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
-          (apply cli/-main args)))
+          (apply cli/-main cli-args)))
       (finally
         (System/setProperty "user.dir" original-dir)))
     {:exit @exit-code
@@ -469,3 +479,142 @@
       ;; Workflow prompt goes to prompt-overrides/
       (is (.exists (io/file *test-dir* ".mcp-tasks/prompt-overrides/execute-task.md")))
       (is (not (.exists (io/file *test-dir* ".mcp-tasks/category-prompts/execute-task.md")))))))
+
+(deftest prompts-install-from-subdirectory-test
+  ;; Test that prompts install works correctly when run from a subdirectory
+  (testing "prompts-install-from-subdirectory"
+    (testing "installs to parent .mcp-tasks when run from subdirectory"
+      (let [subdir (io/file *test-dir* "src")]
+        (fs/create-dirs subdir)
+        (let [result (call-cli subdir "prompts" "install" "simple")
+              target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
+          (is (= 0 (:exit result)))
+          (is (.exists target-file))
+          (is (str/includes? (slurp target-file) "---"))
+          (is (str/includes? (slurp target-file) "description:")))))
+
+    (testing "works from nested subdirectory"
+      (let [nested-dir (io/file *test-dir* "src/test/integration")]
+        (fs/create-dirs nested-dir)
+        (let [result (call-cli nested-dir "prompts" "install" "medium")
+              target-file (io/file *test-dir* ".mcp-tasks/category-prompts/medium.md")]
+          (is (= 0 (:exit result)))
+          (is (.exists target-file)))))))
+
+(deftest prompts-install-without-config-test
+  ;; Test backward compatibility: prompts install works when no .mcp-tasks.edn exists
+  (testing "prompts-install-without-config"
+    (testing "falls back to .mcp-tasks in current directory when no config"
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-no-config-"}))
+            tasks-dir (io/file test-dir ".mcp-tasks")
+            category-dir (io/file tasks-dir "category-prompts")]
+        (try
+          ;; Create .mcp-tasks directories but NO config file
+          (fs/create-dirs category-dir)
+          ;; Do NOT create .mcp-tasks.edn
+
+          (let [result (call-cli (io/file test-dir) "prompts" "install" "simple")
+                target-file (io/file category-dir "simple.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree test-dir)))))))
+
+(deftest prompts-install-custom-absolute-tasks-dir-test
+  ;; Test that prompts install respects custom absolute :tasks-dir in config
+  (testing "prompts-install-custom-absolute-tasks-dir"
+    (testing "installs to absolute custom tasks-dir when configured"
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-abs-dir-"}))
+            custom-tasks-dir (str (fs/create-temp-dir {:prefix "custom-tasks-"}))
+            category-dir (io/file custom-tasks-dir "category-prompts")]
+        (try
+          ;; Create config with absolute custom tasks-dir
+          (fs/create-dirs category-dir)
+          (spit (io/file test-dir ".mcp-tasks.edn")
+                (pr-str {:tasks-dir custom-tasks-dir}))
+
+          (let [result (call-cli (io/file test-dir) "prompts" "install" "simple")
+                target-file (io/file category-dir "simple.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree test-dir)
+            (fs/delete-tree custom-tasks-dir)))))))
+
+(deftest prompts-install-custom-relative-tasks-dir-test
+  ;; Test that prompts install respects custom relative :tasks-dir in config
+  (testing "prompts-install-custom-relative-tasks-dir"
+    (testing "installs to relative custom tasks-dir when configured"
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-rel-dir-"}))
+            custom-dir-name "custom-tasks"
+            custom-tasks-dir (io/file test-dir custom-dir-name)
+            category-dir (io/file custom-tasks-dir "category-prompts")]
+        (try
+          ;; Create config with relative custom tasks-dir
+          (fs/create-dirs category-dir)
+          (spit (io/file test-dir ".mcp-tasks.edn")
+                (pr-str {:tasks-dir custom-dir-name}))
+
+          (let [result (call-cli (io/file test-dir) "prompts" "install" "medium")
+                target-file (io/file category-dir "medium.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree test-dir)))))))
+
+(deftest prompts-install-from-worktree-test
+  ;; Test that prompts install works from a git worktree
+  (testing "prompts-install-from-worktree"
+    (testing "installs to main repo when run from worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "test-worktree"
+            worktree-path (str project-dir "/" worktree-name)
+            mcp-tasks-dir (io/file project-dir ".mcp-tasks")
+            category-dir (io/file mcp-tasks-dir "category-prompts")]
+        (try
+          ;; Set up project directory with config and .mcp-tasks
+          (fs/create-dirs category-dir)
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree (git creates the directory under project-dir)
+          (h/create-git-worktree project-dir worktree-path)
+
+          ;; Install prompt from worktree
+          (let [result (call-cli (io/file worktree-path) "prompts" "install" "simple")
+                target-file (io/file category-dir "simple.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree project-dir)))))
+
+    (testing "works from nested subdirectory within worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "test-worktree-nested"
+            worktree-path (str project-dir "/" worktree-name)
+            mcp-tasks-dir (io/file project-dir ".mcp-tasks")
+            category-dir (io/file mcp-tasks-dir "category-prompts")
+            nested-dir (io/file worktree-path "src/test")]
+        (try
+          ;; Set up project directory with config and .mcp-tasks
+          (fs/create-dirs category-dir)
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree and nested directory
+          (h/create-git-worktree project-dir worktree-path)
+          (fs/create-dirs nested-dir)
+
+          ;; Install prompt from nested directory in worktree
+          (let [result (call-cli nested-dir "prompts" "install" "medium")
+                target-file (io/file category-dir "medium.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file)))
+          (finally
+            (fs/delete-tree project-dir)))))))

@@ -72,6 +72,42 @@
         result (sh/sh "git" "rev-parse" "HEAD" :dir git-dir)]
     (zero? (:exit result))))
 
+(defn create-git-worktree
+  "Create a git repository with a worktree for testing.
+
+  Sets up a main repository in test-dir, creates an initial commit,
+  and adds a worktree at the specified path.
+
+  Parameters:
+  - test-dir: Main repository directory
+  - worktree-path: Path for the worktree directory
+  - branch-name: Branch name for the worktree (default: \"test-branch\")
+
+  Returns a map with:
+  - :main-repo - path to main repository
+  - :worktree - path to worktree
+  - :branch - branch name"
+  ([test-dir worktree-path]
+   (create-git-worktree test-dir worktree-path "test-branch"))
+  ([test-dir worktree-path branch-name]
+   (let [main-repo (str test-dir)]
+     ;; Initialize git repo in main directory
+     (sh/sh "git" "init" :dir main-repo)
+     (sh/sh "git" "config" "user.email" "test@test.com" :dir main-repo)
+     (sh/sh "git" "config" "user.name" "Test User" :dir main-repo)
+
+     ;; Create initial commit (required for worktrees)
+     (spit (str main-repo "/README.md") "# Test Project")
+     (sh/sh "git" "add" "README.md" :dir main-repo)
+     (sh/sh "git" "commit" "-m" "Initial commit" :dir main-repo)
+
+     ;; Create worktree
+     (sh/sh "git" "worktree" "add" worktree-path branch-name :dir main-repo)
+
+     {:main-repo main-repo
+      :worktree worktree-path
+      :branch branch-name})))
+
 (defn derive-test-worktree-path
   "Generate expected worktree path for testing.
   Mimics the logic from mcp-tasks.tools.git/derive-worktree-path

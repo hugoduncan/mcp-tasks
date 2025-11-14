@@ -902,48 +902,62 @@ EXAMPLES:
   "Parse arguments for the prompts command.
 
   Handles subcommands: list, install
-  Returns parsed options map with :subcommand key or error map with :error key."
+  Returns parsed options map with :subcommand key, error map with :error key,
+  or help map with :help key."
   [args]
   (if (empty? args)
     {:error "Subcommand required: list or install"
      :metadata {:args args}}
     (let [subcommand (first args)
           subcommand-args (rest args)]
-      (case subcommand
-        "list"
-        (try
-          (let [raw-parsed (cli/parse-opts subcommand-args {:spec prompts-list-spec :restrict (get-allowed-keys prompts-list-spec)})
-                parsed (-> raw-parsed
-                           (dissoc :f)
-                           (cond-> (:f raw-parsed) (assoc :format (:f raw-parsed))))
-                format-validation (validate-format parsed)]
-            (if (:valid? format-validation)
-              (assoc parsed :subcommand :list)
-              (dissoc format-validation :valid?)))
-          (catch Exception e
-            {:error (format-unknown-option-error (.getMessage e))
-             :metadata {:args args}}))
+      ;; Check for help flag
+      (if (and (>= (count subcommand-args) 1)
+               (or (= "--help" (first subcommand-args))
+                   (= "-h" (first subcommand-args))))
+        (case subcommand
+          "list" {:help prompts-list-help}
+          "install" {:help prompts-install-help}
+          ;; Unknown subcommand with help flag - show error
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install")
+           :metadata {:args args
+                      :provided-subcommand subcommand}})
 
-        "install"
-        (try
-          (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
-                parsed-opts (-> (:opts raw-parsed)
-                                (dissoc :f)
-                                (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
-                prompt-names (vec (:args raw-parsed))]
-            (if (empty? prompt-names)
-              {:error "At least one prompt name is required"
-               :metadata {:args args}}
-              (let [format-validation (validate-format parsed-opts)]
-                (if (:valid? format-validation)
-                  (assoc parsed-opts
-                         :subcommand :install
-                         :prompt-names prompt-names)
-                  (dissoc format-validation :valid?)))))
-          (catch Exception e
-            {:error (format-unknown-option-error (.getMessage e))
-             :metadata {:args args}}))
+        ;; Normal parsing without help flag
+        (case subcommand
+          "list"
+          (try
+            (let [raw-parsed (cli/parse-opts subcommand-args {:spec prompts-list-spec :restrict (get-allowed-keys prompts-list-spec)})
+                  parsed (-> raw-parsed
+                             (dissoc :f)
+                             (cond-> (:f raw-parsed) (assoc :format (:f raw-parsed))))
+                  format-validation (validate-format parsed)]
+              (if (:valid? format-validation)
+                (assoc parsed :subcommand :list)
+                (dissoc format-validation :valid?)))
+            (catch Exception e
+              {:error (format-unknown-option-error (.getMessage e))
+               :metadata {:args args}}))
 
-        {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install")
-         :metadata {:args args
-                    :provided-subcommand subcommand}}))))
+          "install"
+          (try
+            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
+                  parsed-opts (-> (:opts raw-parsed)
+                                  (dissoc :f)
+                                  (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
+                  prompt-names (vec (:args raw-parsed))]
+              (if (empty? prompt-names)
+                {:error "At least one prompt name is required"
+                 :metadata {:args args}}
+                (let [format-validation (validate-format parsed-opts)]
+                  (if (:valid? format-validation)
+                    (assoc parsed-opts
+                           :subcommand :install
+                           :prompt-names prompt-names)
+                    (dissoc format-validation :valid?)))))
+            (catch Exception e
+              {:error (format-unknown-option-error (.getMessage e))
+               :metadata {:args args}}))
+
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install")
+           :metadata {:args args
+                      :provided-subcommand subcommand}})))))
