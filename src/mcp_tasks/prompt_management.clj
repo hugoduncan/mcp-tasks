@@ -163,13 +163,13 @@
                             "category-prompts"
                             "prompt-overrides")
             target-file (io/file resolved-tasks-dir target-subdir (str prompt-name ".md"))
-            relative-path (str (fs/file-name (fs/path resolved-tasks-dir)) "/" target-subdir "/" prompt-name ".md")
+            display-path (str target-file)
             prompt-type (if is-category? :category :workflow)]
         (if (fs/exists? target-file)
           {:name prompt-name
            :type prompt-type
            :status :exists
-           :path relative-path}
+           :path display-path}
           (try
             (when-let [parent (fs/parent target-file)]
               (fs/create-dirs parent))
@@ -177,9 +177,9 @@
             {:name prompt-name
              :type prompt-type
              :status :installed
-             :path relative-path}
+             :path display-path}
             (catch Exception e
               {:name prompt-name
                :type prompt-type
                :status :error
-               :error (str "Failed to install prompt to " relative-path ": " (.getMessage e))})))))))
+               :error (str "Failed to install prompt to " display-path ": " (.getMessage e))})))))))
