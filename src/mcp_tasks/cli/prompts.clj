@@ -28,7 +28,7 @@
 (defn prompts-install-command
   "Execute the prompts install command.
 
-  Takes :prompt-names from parsed-args and installs each prompt.
+  Takes config and parsed-args. Installs each prompt from :prompt-names.
 
   Returns structured data with:
   - :results - vector of installation result maps
@@ -38,9 +38,9 @@
   {:results [{:name \"simple\" :type :category :status :installed :path \"...\"}
              {:name \"foo\" :type nil :status :not-found}]
    :metadata {:requested-count 2 :installed-count 1 :failed-count 1}}"
-  [parsed-args]
+  [config parsed-args]
   (let [prompt-names (:prompt-names parsed-args)
-        results (mapv pm/install-prompt prompt-names)
+        results (mapv (partial pm/install-prompt config) prompt-names)
         installed-count (count (filter #(= :installed (:status %)) results))
         failed-count (count (filter #(not= :installed (:status %)) results))]
     {:results results

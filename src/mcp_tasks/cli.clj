@@ -84,41 +84,20 @@
                 (println parse/help-text))
               (exit 1))
 
-            ;; Handle prompts command separately (doesn't need config)
-            (if (= "prompts" command)
-              ;; Check for subcommand-specific help
-              (if (and (>= (count command-args) 2)
-                       (or (= "--help" (second command-args))
-                           (= "-h" (second command-args))))
-                (let [subcommand (first command-args)]
-                  (case subcommand
-                    "list" (do (println parse/prompts-list-help) (exit 0))
-                    "install" (do (println parse/prompts-install-help) (exit 0))
-                    ;; Unknown subcommand, let parse-prompts handle it
-                    (let [parsed-args (parse/parse-prompts command-args)]
-                      (binding [*out* *err*]
-                        (println (format/format-error parsed-args)))
-                      (exit 1))))
-                ;; No help flag, parse and execute
-                (let [parsed-args (parse/parse-prompts command-args)]
-                  (if (:error parsed-args)
-                    (do
-                      (binding [*out* *err*]
-                        (println (format/format-error parsed-args)))
-                      (exit 1))
-                    (let [result (case (:subcommand parsed-args)
-                                   :list (prompts/prompts-list-command parsed-args)
-                                   :install (prompts/prompts-install-command parsed-args))
-                          output-format (or (:format parsed-args) format)
-                          formatted-output (format/render output-format result)]
-                      (if (:error result)
-                        (do
-                          (binding [*out* *err*]
-                            (println formatted-output))
-                          (exit 1))
-                        (do
-                          (println formatted-output)
-                          (exit 0)))))))
+            ;; Check for prompts subcommand-specific help
+            (if (and (= "prompts" command)
+                     (>= (count command-args) 2)
+                     (or (= "--help" (second command-args))
+                         (= "-h" (second command-args))))
+              (let [subcommand (first command-args)]
+                (case subcommand
+                  "list" (do (println parse/prompts-list-help) (exit 0))
+                  "install" (do (println parse/prompts-install-help) (exit 0))
+                  ;; Unknown subcommand, let parse-prompts handle it
+                  (let [parsed-args (parse/parse-prompts command-args)]
+                    (binding [*out* *err*]
+                      (println (format/format-error parsed-args)))
+                    (exit 1))))
 
               ;; Load config using automatic discovery
               (let [{:keys [raw-config config-dir]} (config/read-config)
@@ -134,7 +113,8 @@
                                   "update" (parse/parse-update command-args)
                                   "delete" (parse/parse-delete command-args)
                                   "reopen" (parse/parse-reopen command-args)
-                                  "why-blocked" (parse/parse-why-blocked command-args))]
+                                  "why-blocked" (parse/parse-why-blocked command-args)
+                                  "prompts" (parse/parse-prompts command-args))]
 
                 ;; Check for parsing errors
                 (if (:error parsed-args)
@@ -152,7 +132,10 @@
                                  "update" (commands/update-command resolved-config parsed-args)
                                  "delete" (commands/delete-command resolved-config parsed-args)
                                  "reopen" (commands/reopen-command resolved-config parsed-args)
-                                 "why-blocked" (commands/why-blocked-command resolved-config parsed-args))
+                                 "why-blocked" (commands/why-blocked-command resolved-config parsed-args)
+                                 "prompts" (case (:subcommand parsed-args)
+                                             :list (prompts/prompts-list-command parsed-args)
+                                             :install (prompts/prompts-install-command resolved-config parsed-args)))
                         output-format (or (:format parsed-args) format)
                         formatted-output (format/render output-format result)]
                     (if (:error result)

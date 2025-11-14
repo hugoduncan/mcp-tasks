@@ -103,59 +103,62 @@
   ;; Test that install-prompt installs category and workflow prompts to
   ;; the correct directories based on type detection
   (testing "install-prompt"
-    (testing "installs category prompt to category-prompts directory"
-      (let [result (sut/install-prompt "simple")]
-        (is (= "simple" (:name result)))
-        (is (= :category (:type result)))
-        (is (= :installed (:status result)))
-        (is (= ".mcp-tasks/category-prompts/simple.md" (:path result)))
-        (is (fs/exists? ".mcp-tasks/category-prompts/simple.md"))
-        (let [content (slurp ".mcp-tasks/category-prompts/simple.md")]
-          (is (string? content))
-          (is (pos? (count content))))))
+    (let [test-config {:resolved-tasks-dir ".mcp-tasks"}]
+      (testing "installs category prompt to category-prompts directory"
+        (let [result (sut/install-prompt test-config "simple")]
+          (is (= "simple" (:name result)))
+          (is (= :category (:type result)))
+          (is (= :installed (:status result)))
+          (is (= ".mcp-tasks/category-prompts/simple.md" (:path result)))
+          (is (fs/exists? ".mcp-tasks/category-prompts/simple.md"))
+          (let [content (slurp ".mcp-tasks/category-prompts/simple.md")]
+            (is (string? content))
+            (is (pos? (count content))))))
 
-    (testing "installs workflow prompt to prompt-overrides directory"
-      (let [result (sut/install-prompt "execute-task")]
-        (is (= "execute-task" (:name result)))
-        (is (= :workflow (:type result)))
-        (is (= :installed (:status result)))
-        (is (= ".mcp-tasks/prompt-overrides/execute-task.md" (:path result)))
-        (is (fs/exists? ".mcp-tasks/prompt-overrides/execute-task.md"))
-        (let [content (slurp ".mcp-tasks/prompt-overrides/execute-task.md")]
-          (is (string? content))
-          (is (pos? (count content))))))))
+      (testing "installs workflow prompt to prompt-overrides directory"
+        (let [result (sut/install-prompt test-config "execute-task")]
+          (is (= "execute-task" (:name result)))
+          (is (= :workflow (:type result)))
+          (is (= :installed (:status result)))
+          (is (= ".mcp-tasks/prompt-overrides/execute-task.md" (:path result)))
+          (is (fs/exists? ".mcp-tasks/prompt-overrides/execute-task.md"))
+          (let [content (slurp ".mcp-tasks/prompt-overrides/execute-task.md")]
+            (is (string? content))
+            (is (pos? (count content)))))))))
 
 (deftest install-prompt-handles-existing-files
   ;; Test that install-prompt correctly handles the case where the
   ;; target file already exists
   (testing "install-prompt"
-    (testing "returns :exists status when file already exists"
-      (fs/create-dirs ".mcp-tasks/category-prompts")
-      (spit ".mcp-tasks/category-prompts/simple.md" "existing content")
-      (let [result (sut/install-prompt "simple")]
-        (is (= "simple" (:name result)))
-        (is (= :category (:type result)))
-        (is (= :exists (:status result)))
-        (is (= ".mcp-tasks/category-prompts/simple.md" (:path result)))
-        (is (= "existing content" (slurp ".mcp-tasks/category-prompts/simple.md")))))))
+    (let [test-config {:resolved-tasks-dir ".mcp-tasks"}]
+      (testing "returns :exists status when file already exists"
+        (fs/create-dirs ".mcp-tasks/category-prompts")
+        (spit ".mcp-tasks/category-prompts/simple.md" "existing content")
+        (let [result (sut/install-prompt test-config "simple")]
+          (is (= "simple" (:name result)))
+          (is (= :category (:type result)))
+          (is (= :exists (:status result)))
+          (is (= ".mcp-tasks/category-prompts/simple.md" (:path result)))
+          (is (= "existing content" (slurp ".mcp-tasks/category-prompts/simple.md"))))))))
 
 (deftest install-prompt-handles-missing-prompts
   ;; Test that install-prompt correctly handles the case where the
   ;; requested prompt does not exist
   (testing "install-prompt"
-    (testing "returns :not-found status for non-existent prompt"
-      (let [result (sut/install-prompt "nonexistent-prompt")]
-        (is (= "nonexistent-prompt" (:name result)))
-        (is (nil? (:type result)))
-        (is (= :not-found (:status result)))
-        (is (not (contains? result :path)))))
+    (let [test-config {:resolved-tasks-dir ".mcp-tasks"}]
+      (testing "returns :not-found status for non-existent prompt"
+        (let [result (sut/install-prompt test-config "nonexistent-prompt")]
+          (is (= "nonexistent-prompt" (:name result)))
+          (is (nil? (:type result)))
+          (is (= :not-found (:status result)))
+          (is (not (contains? result :path)))))
 
-    (testing "includes helpful error message for non-existent prompt"
-      (let [result (sut/install-prompt "nonexistent-prompt")]
-        (is (contains? result :error))
-        (is (string? (:error result)))
-        (is (str/includes? (:error result) "not found"))
-        (is (str/includes? (:error result) "mcp-tasks prompts list"))))))
+      (testing "includes helpful error message for non-existent prompt"
+        (let [result (sut/install-prompt test-config "nonexistent-prompt")]
+          (is (contains? result :error))
+          (is (string? (:error result)))
+          (is (str/includes? (:error result) "not found"))
+          (is (str/includes? (:error result) "mcp-tasks prompts list")))))))
 
 ;; Note: IO error testing is omitted as it's difficult to reliably reproduce
 ;; file system errors in a portable way. The implementation handles errors
@@ -174,10 +177,11 @@
   ;; Test that install-prompt's type detection matches the type assigned
   ;; by list-available-prompts
   (testing "install-prompt type detection"
-    (testing "matches list-available-prompts for each prompt"
-      (let [prompts (sut/list-available-prompts)]
-        (doseq [prompt (take 5 prompts)]
-          (let [install-result (sut/install-prompt (:name prompt))]
-            (is (or (= (:type prompt) (:type install-result))
-                    (= :exists (:status install-result)))
-                (str "Type mismatch for prompt: " (:name prompt)))))))))
+    (let [test-config {:resolved-tasks-dir ".mcp-tasks"}]
+      (testing "matches list-available-prompts for each prompt"
+        (let [prompts (sut/list-available-prompts)]
+          (doseq [prompt (take 5 prompts)]
+            (let [install-result (sut/install-prompt test-config (:name prompt))]
+              (is (or (= (:type prompt) (:type install-result))
+                      (= :exists (:status install-result)))
+                  (str "Type mismatch for prompt: " (:name prompt))))))))))
