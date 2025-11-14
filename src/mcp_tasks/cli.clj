@@ -20,6 +20,19 @@
   [code]
   (System/exit code))
 
+(defn exit-with-success
+  "Print message to stdout and exit with code 0."
+  [message]
+  (println message)
+  (exit 0))
+
+(defn exit-with-error
+  "Print message to stderr and exit with code 1."
+  [message]
+  (binding [*out* *err*]
+    (println message))
+  (exit 1))
+
 (defn execute-command
   "Execute a command with the given configuration and arguments.
   Returns a map with :exit-code and :output."
@@ -105,34 +118,27 @@
       (cond
         ;; Handle global help or no command
         (or help (nil? command))
-        (do
-          (println parse/help-text)
-          (exit 0))
+        (exit-with-success parse/help-text)
 
         ;; Handle command-specific help
         (and (= "--help" (first command-args))
              (contains? valid-commands command))
-        (do
+        (exit-with-success
           (case command
-            "list" (println parse/list-help)
-            "show" (println parse/show-help)
-            "add" (println parse/add-help)
-            "complete" (println parse/complete-help)
-            "update" (println parse/update-help)
-            "delete" (println parse/delete-help)
-            "reopen" (println parse/reopen-help)
-            "why-blocked" (println parse/why-blocked-help)
-            "prompts" (println parse/prompts-help))
-          (exit 0))
+            "list" parse/list-help
+            "show" parse/show-help
+            "add" parse/add-help
+            "complete" parse/complete-help
+            "update" parse/update-help
+            "delete" parse/delete-help
+            "reopen" parse/reopen-help
+            "why-blocked" parse/why-blocked-help
+            "prompts" parse/prompts-help))
 
         ;; Handle unknown command
         (not (contains? valid-commands command))
-        (do
-          (binding [*out* *err*]
-            (println (str "Unknown command: " command))
-            (println)
-            (println parse/help-text))
-          (exit 1))
+        (exit-with-error
+          (str "Unknown command: " command "\n\n" parse/help-text))
 
         ;; Execute valid command
         :else
@@ -148,14 +154,12 @@
 
     (catch clojure.lang.ExceptionInfo e
       (let [data (ex-data e)]
-        (binding [*out* *err*]
+        (exit-with-error
           (if (= :tool-error (:type data))
-            (println (.getMessage e))
-            (println (format/format-error {:error (.getMessage e)
-                                           :details data}))))
-        (exit 1)))
+            (.getMessage e)
+            (format/format-error {:error (.getMessage e)
+                                  :details data})))))
 
     (catch Exception e
-      (binding [*out* *err*]
-        (println (format/format-error {:error (.getMessage e)})))
-      (exit 1))))
+      (exit-with-error
+        (format/format-error {:error (.getMessage e)})))))
