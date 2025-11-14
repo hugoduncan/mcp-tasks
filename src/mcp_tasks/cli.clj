@@ -113,39 +113,60 @@
           {:keys [format help]} (:opts parsed)
           format (or format :human)
           command (first command-and-args)
-          command-args (rest command-and-args)]
+          command-args (rest command-and-args)
 
+          ;; Determine what action to take
+          result (cond
+                   ;; Handle global help or no command
+                   (or help (nil? command))
+                   {:help parse/help-text}
+
+                   ;; Handle command-specific help
+                   (and (= "--help" (first command-args))
+                        (contains? valid-commands command))
+                   {:help (case command
+                            "list" parse/list-help
+                            "show" parse/show-help
+                            "add" parse/add-help
+                            "complete" parse/complete-help
+                            "update" parse/update-help
+                            "delete" parse/delete-help
+                            "reopen" parse/reopen-help
+                            "why-blocked" parse/why-blocked-help
+                            "prompts" parse/prompts-help)}
+
+                   ;; Handle unknown command
+                   (not (contains? valid-commands command))
+                   {:error (str "Unknown command: " command "\n\n" parse/help-text)
+                    :exit-code 1
+                    :stderr? true}
+
+                   ;; Execute valid command
+                   :else
+                   (let [{:keys [raw-config config-dir]} (config/read-config)
+                         resolved-config (config/resolve-config config-dir raw-config)
+                         _ (config/validate-startup config-dir resolved-config)]
+                     (execute-command resolved-config command command-args format)))]
+
+      ;; Handle result uniformly
       (cond
-        ;; Handle global help or no command
-        (or help (nil? command))
-        (exit-with-success parse/help-text)
+        ;; Help output
+        (:help result)
+        (do (println (:help result))
+            (exit 0))
 
-        ;; Handle command-specific help
-        (and (= "--help" (first command-args))
-             (contains? valid-commands command))
-        (exit-with-success
-          (case command
-            "list" parse/list-help
-            "show" parse/show-help
-            "add" parse/add-help
-            "complete" parse/complete-help
-            "update" parse/update-help
-            "delete" parse/delete-help
-            "reopen" parse/reopen-help
-            "why-blocked" parse/why-blocked-help
-            "prompts" parse/prompts-help))
+        ;; Error output
+        (:error result)
+        (let [{:keys [exit-code stderr?] :or {exit-code 1 stderr? true}} result]
+          (if stderr?
+            (binding [*out* *err*]
+              (println (:error result)))
+            (println (:error result)))
+          (exit exit-code))
 
-        ;; Handle unknown command
-        (not (contains? valid-commands command))
-        (exit-with-error
-          (str "Unknown command: " command "\n\n" parse/help-text))
-
-        ;; Execute valid command
+        ;; Normal output
         :else
-        (let [{:keys [raw-config config-dir]} (config/read-config)
-              resolved-config (config/resolve-config config-dir raw-config)
-              _ (config/validate-startup config-dir resolved-config)
-              {:keys [exit-code output stderr?]} (execute-command resolved-config command command-args format)]
+        (let [{:keys [exit-code output stderr?]} result]
           (if stderr?
             (binding [*out* *err*]
               (println output))
