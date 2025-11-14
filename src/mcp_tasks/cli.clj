@@ -20,6 +20,58 @@
   [code]
   (System/exit code))
 
+(defn execute-command
+  "Execute a command with the given configuration and arguments.
+  Returns a map with :exit-code and :output."
+  [resolved-config command command-args global-format]
+  (let [;; Parse command-specific args
+        parsed-args (case command
+                      "list" (parse/parse-list command-args)
+                      "show" (parse/parse-show command-args)
+                      "add" (parse/parse-add command-args)
+                      "complete" (parse/parse-complete command-args)
+                      "update" (parse/parse-update command-args)
+                      "delete" (parse/parse-delete command-args)
+                      "reopen" (parse/parse-reopen command-args)
+                      "why-blocked" (parse/parse-why-blocked command-args)
+                      "prompts" (parse/parse-prompts command-args))]
+    (cond
+      ;; Check for help request
+      (:help parsed-args)
+      {:exit-code 0
+       :output (:help parsed-args)
+       :stderr? false}
+
+      ;; Check for parsing errors
+      (:error parsed-args)
+      {:exit-code 1
+       :output (format/format-error parsed-args)
+       :stderr? true}
+
+      ;; Execute command
+      :else
+      (let [result (case command
+                     "list" (commands/list-command resolved-config parsed-args)
+                     "show" (commands/show-command resolved-config parsed-args)
+                     "add" (commands/add-command resolved-config parsed-args)
+                     "complete" (commands/complete-command resolved-config parsed-args)
+                     "update" (commands/update-command resolved-config parsed-args)
+                     "delete" (commands/delete-command resolved-config parsed-args)
+                     "reopen" (commands/reopen-command resolved-config parsed-args)
+                     "why-blocked" (commands/why-blocked-command resolved-config parsed-args)
+                     "prompts" (case (:subcommand parsed-args)
+                                 :list (prompts/prompts-list-command parsed-args)
+                                 :install (prompts/prompts-install-command resolved-config parsed-args)))
+            output-format (or (:format parsed-args) global-format)
+            formatted-output (format/render output-format result)]
+        (if (:error result)
+          {:exit-code 1
+           :output formatted-output
+           :stderr? true}
+          {:exit-code 0
+           :output formatted-output
+           :stderr? false})))))
+
 (defn -main
   "Main entry point for the CLI."
   [& args]
@@ -50,8 +102,8 @@
           command (first command-and-args)
           command-args (rest command-and-args)]
 
-      ;; Handle global help or no command
       (cond
+        ;; Handle global help or no command
         (or help (nil? command))
         (do
           (println parse/help-text)
@@ -73,70 +125,26 @@
             "prompts" (println parse/prompts-help))
           (exit 0))
 
-        ;; Execute command
+        ;; Handle unknown command
+        (not (contains? valid-commands command))
+        (do
+          (binding [*out* *err*]
+            (println (str "Unknown command: " command))
+            (println)
+            (println parse/help-text))
+          (exit 1))
+
+        ;; Execute valid command
         :else
-        ;; Validate command is known
-        (if-not (contains? valid-commands command)
-          (do
+        (let [{:keys [raw-config config-dir]} (config/read-config)
+              resolved-config (config/resolve-config config-dir raw-config)
+              _ (config/validate-startup config-dir resolved-config)
+              {:keys [exit-code output stderr?]} (execute-command resolved-config command command-args format)]
+          (if stderr?
             (binding [*out* *err*]
-              (println (str "Unknown command: " command))
-              (println)
-              (println parse/help-text))
-            (exit 1))
-
-          ;; Load config using automatic discovery
-          (let [{:keys [raw-config config-dir]} (config/read-config)
-                resolved-config (config/resolve-config config-dir raw-config)
-                _ (config/validate-startup config-dir resolved-config)
-
-                ;; Parse command-specific args
-                parsed-args (case command
-                              "list" (parse/parse-list command-args)
-                              "show" (parse/parse-show command-args)
-                              "add" (parse/parse-add command-args)
-                              "complete" (parse/parse-complete command-args)
-                              "update" (parse/parse-update command-args)
-                              "delete" (parse/parse-delete command-args)
-                              "reopen" (parse/parse-reopen command-args)
-                              "why-blocked" (parse/parse-why-blocked command-args)
-                              "prompts" (parse/parse-prompts command-args))]
-
-            ;; Check for help request
-            (if (:help parsed-args)
-              (do
-                (println (:help parsed-args))
-                (exit 0))
-
-              ;; Check for parsing errors
-              (if (:error parsed-args)
-                (do
-                  (binding [*out* *err*]
-                    (println (format/format-error parsed-args)))
-                  (exit 1))
-
-                ;; Execute command
-                (let [result (case command
-                               "list" (commands/list-command resolved-config parsed-args)
-                               "show" (commands/show-command resolved-config parsed-args)
-                               "add" (commands/add-command resolved-config parsed-args)
-                               "complete" (commands/complete-command resolved-config parsed-args)
-                               "update" (commands/update-command resolved-config parsed-args)
-                               "delete" (commands/delete-command resolved-config parsed-args)
-                               "reopen" (commands/reopen-command resolved-config parsed-args)
-                               "why-blocked" (commands/why-blocked-command resolved-config parsed-args)
-                               "prompts" (case (:subcommand parsed-args)
-                                           :list (prompts/prompts-list-command parsed-args)
-                                           :install (prompts/prompts-install-command resolved-config parsed-args)))
-                      output-format (or (:format parsed-args) format)
-                      formatted-output (format/render output-format result)]
-                  (if (:error result)
-                    (do
-                      (binding [*out* *err*]
-                        (println formatted-output))
-                      (exit 1))
-                    (do
-                      (println formatted-output)
-                      (exit 0))))))))))
+              (println output))
+            (println output))
+          (exit exit-code))))
 
     (catch clojure.lang.ExceptionInfo e
       (let [data (ex-data e)]
