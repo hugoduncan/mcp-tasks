@@ -521,3 +521,49 @@
             (is (str/includes? (slurp target-file) "description:")))
           (finally
             (fs/delete-tree test-dir)))))))
+
+(deftest prompts-install-custom-absolute-tasks-dir-test
+  ;; Test that prompts install respects custom absolute :tasks-dir in config
+  (testing "prompts-install-custom-absolute-tasks-dir"
+    (testing "installs to absolute custom tasks-dir when configured"
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-abs-dir-"}))
+            custom-tasks-dir (str (fs/create-temp-dir {:prefix "custom-tasks-"}))
+            category-dir (io/file custom-tasks-dir "category-prompts")]
+        (try
+          ;; Create config with absolute custom tasks-dir
+          (fs/create-dirs category-dir)
+          (spit (io/file test-dir ".mcp-tasks.edn")
+                (pr-str {:tasks-dir custom-tasks-dir}))
+
+          (let [result (call-cli (io/file test-dir) "prompts" "install" "simple")
+                target-file (io/file category-dir "simple.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree test-dir)
+            (fs/delete-tree custom-tasks-dir)))))))
+
+(deftest prompts-install-custom-relative-tasks-dir-test
+  ;; Test that prompts install respects custom relative :tasks-dir in config
+  (testing "prompts-install-custom-relative-tasks-dir"
+    (testing "installs to relative custom tasks-dir when configured"
+      (let [test-dir (str (fs/create-temp-dir {:prefix "mcp-tasks-rel-dir-"}))
+            custom-dir-name "custom-tasks"
+            custom-tasks-dir (io/file test-dir custom-dir-name)
+            category-dir (io/file custom-tasks-dir "category-prompts")]
+        (try
+          ;; Create config with relative custom tasks-dir
+          (fs/create-dirs category-dir)
+          (spit (io/file test-dir ".mcp-tasks.edn")
+                (pr-str {:tasks-dir custom-dir-name}))
+
+          (let [result (call-cli (io/file test-dir) "prompts" "install" "medium")
+                target-file (io/file category-dir "medium.md")]
+            (is (= 0 (:exit result)))
+            (is (.exists target-file))
+            (is (str/includes? (slurp target-file) "---"))
+            (is (str/includes? (slurp target-file) "description:")))
+          (finally
+            (fs/delete-tree test-dir)))))))
