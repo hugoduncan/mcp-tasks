@@ -126,6 +126,11 @@
 (defn install-prompt
   "Install a single prompt to appropriate directory.
 
+  Uses :resolved-tasks-dir from config rather than hardcoded paths to support:
+  - Running from subdirectories (config discovery traverses up directory tree)
+  - Worktree environments (config system detects worktree and resolves main repo)
+  - Custom :tasks-dir configuration values (respects user-configured paths)
+
   Parameters:
   - config: Configuration map with :resolved-tasks-dir
   - prompt-name: Name of the prompt to install (string)
