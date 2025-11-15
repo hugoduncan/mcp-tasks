@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Exit silently if not in Claude Code web session
+if [ "$CLAUDE_CODE_REMOTE" != "true" ]; then
+  exit 0
+fi
+
+# Configuration
+INSTALL_DIR="$HOME/.local/bin"
+GITHUB_REPO="hugoduncan/mcp-tasks"
+BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
+
+# Binary names
+BINARY_CLI="mcp-tasks"
+BINARY_SERVER="mcp-tasks-server"
+
+# Supported platforms
+SUPPORTED_PLATFORMS="linux-amd64, macos-universal (Windows not supported)"
+
+# Check if command exists
+has() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Detect platform and architecture
+detect_platform() {
+  local os
+  local arch
+  local platform
+
+  # Detect OS
+  case "$(uname -s)" in
+    Linux*)
+      os="linux"
+      ;;
+    Darwin*)
+      os="macos"
+      ;;
+    *)
+      echo "Error: Unsupported operating system: $(uname -s)" >&2
+      echo "Supported platforms: $SUPPORTED_PLATFORMS" >&2
+      return 1
+      ;;
+  esac
+
+  # Detect architecture
+  # macOS uses universal binaries (both x86_64 and arm64 in single file)
+  case "$os:$(uname -m)" in
+    linux:x86_64)
+      arch="amd64"
+      ;;
+    macos:x86_64|macos:arm64|macos:aarch64)
+      arch="universal"
+      ;;
+    *)
+      echo "Error: Unsupported platform: ${os} $(uname -m)" >&2
+      echo "Supported platforms: $SUPPORTED_PLATFORMS" >&2
+      return 1
+      ;;
+  esac
+
+  platform="${os}-${arch}"
+  echo "$platform"
+}
+
+# Download file using curl or wget
+download() {
+  local url="$1"
+  local output="$2"
+
+  if has curl; then
+    curl -fsSL -o "$output" "$url"
+  elif has wget; then
+    wget -q --server-response --content-on-error=off -O "$output" "$url" 2>&1 | grep -q "HTTP/.* 200" || return 1
+  else
+    echo "Error: Neither curl nor wget found" >&2
+    return 1
+  fi
+}
+
+# Install a single binary
+install_binary() {
+  local binary_name="$1"
+  local platform="$2"
+  local temp_dir="$3"
+
+  local remote_name="${binary_name}-${platform}"
+  local download_url="${BASE_URL}/${remote_name}"
+  local temp_file="${temp_dir}/${binary_name}"
+  local install_path="${INSTALL_DIR}/${binary_name}"
+
+  echo "Downloading ${binary_name}..." >&2
+  if ! download "$download_url" "$temp_file"; then
+    echo "Error: Failed to download ${binary_name} from ${download_url}" >&2
+    return 1
+  fi
+
+  echo "Installing ${binary_name} to ${INSTALL_DIR}..." >&2
+  mv "$temp_file" "$install_path"
+  chmod +x "$install_path"
+}
+
+# Check if ~/.local/bin is already in PATH
+is_in_path() {
+  # Check current PATH environment variable
+  if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
+    return 0
+  fi
+
+  # Check CLAUDE_ENV_FILE if it exists
+  if [ -n "$CLAUDE_ENV_FILE" ] && [ -f "$CLAUDE_ENV_FILE" ]; then
+    if grep -q "/.local/bin" "$CLAUDE_ENV_FILE" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+# Add ~/.local/bin to PATH in CLAUDE_ENV_FILE
+update_path() {
+  if [ -z "$CLAUDE_ENV_FILE" ]; then
+    echo "Error: CLAUDE_ENV_FILE environment variable not set" >&2
+    return 1
+  fi
+
+  if is_in_path; then
+    echo "$HOME/.local/bin already in PATH" >&2
+    return 0
+  fi
+
+  echo "Adding ~/.local/bin to PATH in $CLAUDE_ENV_FILE" >&2
+  # shellcheck disable=SC2016
+  echo 'export PATH="$PATH:~/.local/bin"' >> "$CLAUDE_ENV_FILE"
+}
+
+# Register MCP server with Claude Code
+register_mcp() {
+  echo "Registering MCP server with Claude Code..." >&2
+  local output
+  if ! output=$(claude mcp add mcp-tasks -s project "$INSTALL_DIR/$BINARY_SERVER" 2>&1); then
+    # If server already exists, that's okay (idempotent behavior)
+    if echo "$output" | grep -q "already exists"; then
+      echo "MCP server already registered (skipping)" >&2
+      return 0
+    fi
+    echo "Error: Failed to register MCP server" >&2
+    echo "$output" >&2
+    return 1
+  fi
+  echo "$output" >&2
+}
+
+# Cleanup temporary directory
+cleanup() {
+  if [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
+    rm -rf "$TEMP_DIR"
+  fi
+}
+
+# Main installation flow
+main() {
+  echo "mcp-tasks web session installer" >&2
+  echo "" >&2
+
+  # Detect platform
+  echo "Detecting platform..." >&2
+  if ! PLATFORM=$(detect_platform); then
+    exit 1
+  fi
+  echo "Platform: $PLATFORM" >&2
+  echo "" >&2
+
+  # Create installation directory
+  mkdir -p "$INSTALL_DIR"
+
+  # Create temporary directory
+  TEMP_DIR=$(mktemp -d)
+  trap cleanup EXIT
+
+  # Install binaries
+  if ! install_binary "$BINARY_CLI" "$PLATFORM" "$TEMP_DIR"; then
+    exit 1
+  fi
+  if ! install_binary "$BINARY_SERVER" "$PLATFORM" "$TEMP_DIR"; then
+    exit 1
+  fi
+  echo "" >&2
+
+  # Update PATH
+  if ! update_path; then
+    exit 1
+  fi
+  echo "" >&2
+
+  # Register MCP server
+  if ! register_mcp; then
+    exit 1
+  fi
+  echo "" >&2
+
+  # Success message
+  echo "Installation complete!" >&2
+  echo "" >&2
+  echo "Binaries installed to: $INSTALL_DIR" >&2
+  echo "  - $BINARY_CLI" >&2
+  echo "  - $BINARY_SERVER" >&2
+  echo "" >&2
+  echo "MCP server registered with Claude Code" >&2
+}
+
+main
