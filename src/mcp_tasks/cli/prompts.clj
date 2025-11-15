@@ -76,43 +76,46 @@
   {:error \"Prompt 'foo' not found\"
    :metadata {:prompt-name \"foo\"}}"
   [config parsed-args]
-  (let [prompt-name (:prompt-name parsed-args)
-        resolved-tasks-dir (:resolved-tasks-dir config)
-        builtin-categories (prompts/list-builtin-categories)
-        builtin-workflows (set (prompts/list-builtin-workflows))
-        is-category? (contains? builtin-categories prompt-name)
-        is-workflow? (contains? builtin-workflows prompt-name)]
-    (cond
-      is-category?
-      (let [resolved-path (prompts/resolve-category-prompt-path
-                            resolved-tasks-dir
-                            prompt-name)
-            builtin-resource-path (str prompts/builtin-category-prompts-dir
-                                       "/"
-                                       prompt-name
-                                       ".md")
-            loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
-        (if loaded
-          (assoc loaded
-                 :name prompt-name
-                 :type :category)
-          {:error (str "Prompt '" prompt-name "' not found")
-           :metadata {:prompt-name prompt-name}}))
+  (let [prompt-name (:prompt-name parsed-args)]
+    (if (nil? prompt-name)
+      {:error "Prompt name is required"
+       :metadata {:prompt-name nil}}
+      (let [resolved-tasks-dir (:resolved-tasks-dir config)
+            builtin-categories (prompts/list-builtin-categories)
+            builtin-workflows (set (prompts/list-builtin-workflows))
+            is-category? (contains? builtin-categories prompt-name)
+            is-workflow? (contains? builtin-workflows prompt-name)]
+        (cond
+          is-category?
+          (let [resolved-path (prompts/resolve-category-prompt-path
+                                resolved-tasks-dir
+                                prompt-name)
+                builtin-resource-path (str prompts/builtin-category-prompts-dir
+                                           "/"
+                                           prompt-name
+                                           ".md")
+                loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+            (if loaded
+              (assoc loaded
+                     :name prompt-name
+                     :type :category)
+              {:error (str "Prompt '" prompt-name "' not found")
+               :metadata {:prompt-name prompt-name}}))
 
-      is-workflow?
-      (let [resolved-path (prompts/resolve-workflow-prompt-path
-                            resolved-tasks-dir
-                            prompt-name)
-            builtin-resource-path (str "prompts/" prompt-name ".md")
-            loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
-        (if loaded
-          (assoc loaded
-                 :name prompt-name
-                 :type :workflow)
-          {:error (str "Prompt '" prompt-name "' not found")
-           :metadata {:prompt-name prompt-name}}))
+          is-workflow?
+          (let [resolved-path (prompts/resolve-workflow-prompt-path
+                                resolved-tasks-dir
+                                prompt-name)
+                builtin-resource-path (str "prompts/" prompt-name ".md")
+                loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+            (if loaded
+              (assoc loaded
+                     :name prompt-name
+                     :type :workflow)
+              {:error (str "Prompt '" prompt-name "' not found")
+               :metadata {:prompt-name prompt-name}}))
 
-      :else
-      {:error (str "Prompt '" prompt-name "' not found. "
-                   "Use 'mcp-tasks prompts list' to see available prompts.")
-       :metadata {:prompt-name prompt-name}})))
+          :else
+          {:error (str "Prompt '" prompt-name "' not found. "
+                       "Use 'mcp-tasks prompts list' to see available prompts.")
+           :metadata {:prompt-name prompt-name}})))))
