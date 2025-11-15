@@ -275,6 +275,26 @@ EXAMPLES:
   mcp-tasks prompts install simple medium execute-task
   mcp-tasks prompts install simple --format json")
 
+(def prompts-show-help
+  "Help text for the prompts show subcommand."
+  "mcp-tasks prompts show - Display effective content of a specific prompt
+
+USAGE:
+  mcp-tasks prompts show <prompt-name> [options]
+
+Displays the effective (resolved) content of a prompt, following override precedence:
+- Category prompts: .mcp-tasks/category-prompts/<name>.md → built-in
+- Workflow prompts: .mcp-tasks/prompt-overrides/<name>.md → built-in
+
+OPTIONS:
+  --format, -f <format>  Output format: human, json, edn (default: human)
+  --help, -h             Show this help message
+
+EXAMPLES:
+  mcp-tasks prompts show simple
+  mcp-tasks prompts show execute-task
+  mcp-tasks prompts show simple --format json")
+
 ;; Type Coercion Functions
 
 (defn coerce-json-map
@@ -652,6 +672,21 @@ EXAMPLES:
             :alias :f
             :desc "Output format (edn, json, human)"}})
 
+(def prompts-show-spec
+  "Spec for the prompts show subcommand.
+
+  Validates and coerces arguments for showing a specific prompt.
+
+  Coercion rules:
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires exactly one prompt name in args"
+  {:format {:coerce :keyword
+            :alias :f
+            :desc "Output format (edn, json, human)"}})
+
 ;; Parse Functions
 
 (defn parse-list
@@ -901,12 +936,12 @@ EXAMPLES:
 (defn parse-prompts
   "Parse arguments for the prompts command.
 
-  Handles subcommands: list, install
+  Handles subcommands: list, install, show
   Returns parsed options map with :subcommand key, error map with :error key,
   or help map with :help key."
   [args]
   (if (empty? args)
-    {:error "Subcommand required: list or install"
+    {:error "Subcommand required: list, install, or show"
      :metadata {:args args}}
     (let [subcommand (first args)
           subcommand-args (rest args)]
@@ -917,8 +952,9 @@ EXAMPLES:
         (case subcommand
           "list" {:help prompts-list-help}
           "install" {:help prompts-install-help}
+          "show" {:help prompts-show-help}
           ;; Unknown subcommand with help flag - show error
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install")
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install, show")
            :metadata {:args args
                       :provided-subcommand subcommand}})
 
@@ -958,6 +994,34 @@ EXAMPLES:
               {:error (format-unknown-option-error (.getMessage e))
                :metadata {:args args}}))
 
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install")
+          "show"
+          (try
+            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-show-spec})
+                  parsed-opts (-> (:opts raw-parsed)
+                                  (dissoc :f)
+                                  (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
+                  prompt-name (first (:args raw-parsed))]
+              (cond
+                (empty? (:args raw-parsed))
+                {:error "Prompt name is required"
+                 :metadata {:args args}}
+
+                (> (count (:args raw-parsed)) 1)
+                {:error "Only one prompt name is allowed"
+                 :metadata {:args args
+                            :provided-names (:args raw-parsed)}}
+
+                :else
+                (let [format-validation (validate-format parsed-opts)]
+                  (if (:valid? format-validation)
+                    (assoc parsed-opts
+                           :subcommand :show
+                           :prompt-name prompt-name)
+                    (dissoc format-validation :valid?)))))
+            (catch Exception e
+              {:error (format-unknown-option-error (.getMessage e))
+               :metadata {:args args}}))
+
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install, show")
            :metadata {:args args
                       :provided-subcommand subcommand}})))))

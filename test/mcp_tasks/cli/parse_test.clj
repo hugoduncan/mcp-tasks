@@ -401,3 +401,85 @@
       (let [result (sut/parse-why-blocked ["--format" "json"])]
         (is (contains? result :error))
         (is (= "Required option: --task-id (or --id)" (:error result)))))))
+
+(deftest parse-prompts-test
+  ;; Tests for parse-prompts with list, install, and show subcommands
+  (testing "parse-prompts"
+    (testing "returns error when no subcommand provided"
+      (let [result (sut/parse-prompts [])]
+        (is (= "Subcommand required: list, install, or show" (:error result)))
+        (is (= {:args []} (:metadata result)))))
+
+    (testing "handles list subcommand"
+      (testing "with no args"
+        (let [result (sut/parse-prompts ["list"])]
+          (is (= :list (:subcommand result)))
+          (is (nil? (:format result)))))
+
+      (testing "with format option"
+        (let [result (sut/parse-prompts ["list" "--format" "json"])]
+          (is (= :list (:subcommand result)))
+          (is (= :json (:format result)))))
+
+      (testing "with help flag"
+        (let [result (sut/parse-prompts ["list" "--help"])]
+          (is (string? (:help result)))
+          (is (re-find #"mcp-tasks prompts list" (:help result))))))
+
+    (testing "handles install subcommand"
+      (testing "with single prompt"
+        (let [result (sut/parse-prompts ["install" "simple"])]
+          (is (= :install (:subcommand result)))
+          (is (= ["simple"] (:prompt-names result)))))
+
+      (testing "with multiple prompts"
+        (let [result (sut/parse-prompts ["install" "simple" "medium" "large"])]
+          (is (= :install (:subcommand result)))
+          (is (= ["simple" "medium" "large"] (:prompt-names result)))))
+
+      (testing "with format option"
+        (let [result (sut/parse-prompts ["install" "simple" "--format" "edn"])]
+          (is (= :install (:subcommand result)))
+          (is (= ["simple"] (:prompt-names result)))
+          (is (= :edn (:format result)))))
+
+      (testing "returns error when no prompt names provided"
+        (let [result (sut/parse-prompts ["install"])]
+          (is (= "At least one prompt name is required" (:error result)))))
+
+      (testing "with help flag"
+        (let [result (sut/parse-prompts ["install" "--help"])]
+          (is (string? (:help result)))
+          (is (re-find #"mcp-tasks prompts install" (:help result))))))
+
+    (testing "handles show subcommand"
+      (testing "with single prompt name"
+        (let [result (sut/parse-prompts ["show" "simple"])]
+          (is (= :show (:subcommand result)))
+          (is (= "simple" (:prompt-name result)))))
+
+      (testing "with format option"
+        (let [result (sut/parse-prompts ["show" "execute-task" "--format" "json"])]
+          (is (= :show (:subcommand result)))
+          (is (= "execute-task" (:prompt-name result)))
+          (is (= :json (:format result)))))
+
+      (testing "returns error when no prompt name provided"
+        (let [result (sut/parse-prompts ["show"])]
+          (is (= "Prompt name is required" (:error result)))))
+
+      (testing "returns error when multiple prompt names provided"
+        (let [result (sut/parse-prompts ["show" "simple" "medium"])]
+          (is (= "Only one prompt name is allowed" (:error result)))
+          (is (= ["simple" "medium"] (get-in result [:metadata :provided-names])))))
+
+      (testing "with help flag"
+        (let [result (sut/parse-prompts ["show" "--help"])]
+          (is (string? (:help result)))
+          (is (re-find #"mcp-tasks prompts show" (:help result))))))
+
+    (testing "handles unknown subcommand"
+      (let [result (sut/parse-prompts ["unknown"])]
+        (is (re-find #"Unknown subcommand: unknown" (:error result)))
+        (is (re-find #"list, install, show" (:error result)))
+        (is (= "unknown" (get-in result [:metadata :provided-subcommand])))))))
