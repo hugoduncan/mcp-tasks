@@ -118,7 +118,9 @@
        :location (:location resolution)})))
 
 (defn resolve-category-prompt-path
-  "Resolve category prompt path with fallback to deprecated location.
+  "Public API for CLI and tooling to resolve category prompt paths.
+  
+  Resolves category prompt path with fallback to deprecated location.
 
   Checks for category prompt file in this order:
   1. .mcp-tasks/category-prompts/<category>.md (new location)
@@ -147,7 +149,9 @@
            "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/"))))
 
 (defn resolve-workflow-prompt-path
-  "Resolve workflow prompt path with fallback to deprecated location.
+  "Public API for CLI and tooling to resolve workflow prompt paths.
+  
+  Resolves workflow prompt path with fallback to deprecated location.
 
   Checks for workflow prompt file in this order:
   1. .mcp-tasks/prompt-overrides/<name>.md (new location)
