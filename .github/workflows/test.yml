@@ -103,5 +103,11 @@ jobs:
       - name: Run shellcheck on web-session-start script
         run: shellcheck scripts/web-session-start
 
+      - name: Run shellcheck on web-session-start test script
+        run: shellcheck test/web_session_start_test.sh
+
       - name: Run install script tests
         run: ./test/install_test.sh
+
+      - name: Run web-session-start script tests
+        run: ./test/web_session_start_test.sh
