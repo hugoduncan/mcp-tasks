@@ -233,6 +233,7 @@ USAGE:
 SUBCOMMANDS:
   list     List all available built-in prompts
   install  Install prompts to local directories
+  show     Display resolved content of a specific prompt
 
 Run 'mcp-tasks prompts <subcommand> --help' for subcommand-specific options.")
 
