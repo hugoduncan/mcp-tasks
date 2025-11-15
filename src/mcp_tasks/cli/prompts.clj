@@ -99,7 +99,8 @@
               (assoc loaded
                      :name prompt-name
                      :type :category)
-              {:error (str "Prompt '" prompt-name "' not found")
+              {:error (str "Prompt '" prompt-name "' not found. "
+                           "Use 'mcp-tasks prompts list' to see available prompts.")
                :metadata {:prompt-name prompt-name}}))
 
           is-workflow?
@@ -112,7 +113,8 @@
               (assoc loaded
                      :name prompt-name
                      :type :workflow)
-              {:error (str "Prompt '" prompt-name "' not found")
+              {:error (str "Prompt '" prompt-name "' not found. "
+                           "Use 'mcp-tasks prompts list' to see available prompts.")
                :metadata {:prompt-name prompt-name}}))
 
           :else
