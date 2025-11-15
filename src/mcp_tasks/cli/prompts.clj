@@ -3,7 +3,8 @@
 
   Handles listing and installing built-in prompts."
   (:require
-    [mcp-tasks.prompt-management :as pm]))
+    [mcp-tasks.prompt-management :as pm]
+    [mcp-tasks.prompts :as prompts]))
 
 (defn prompts-list-command
   "Execute the prompts list command.
@@ -47,3 +48,79 @@
      :metadata {:requested-count (count prompt-names)
                 :installed-count installed-count
                 :failed-count failed-count}}))
+
+(defn- load-prompt-by-type
+  "Load a prompt by type, handling path resolution and content loading.
+
+  Parameters:
+  - prompt-type: :category or :workflow
+  - resolver-fn: Function to resolve override path (takes resolved-tasks-dir and prompt-name)
+  - builtin-dir: Built-in resource directory string
+  - resolved-tasks-dir: Base directory for overrides
+  - prompt-name: Name of the prompt
+
+  Returns structured data with :name, :type, :content, :source, :path
+  or error map with :error and :metadata."
+  [prompt-type resolver-fn builtin-dir resolved-tasks-dir prompt-name]
+  (let [resolved-path (resolver-fn resolved-tasks-dir prompt-name)
+        builtin-resource-path (str builtin-dir "/" prompt-name ".md")
+        loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+    (if loaded
+      (assoc loaded
+             :name prompt-name
+             :type prompt-type)
+      {:error (str "Prompt '" prompt-name "' not found. "
+                   "Use 'mcp-tasks prompts list' to see available prompts.")
+       :metadata {:prompt-name prompt-name}})))
+
+(defn prompts-show-command
+  "Execute the prompts show command.
+
+  Takes config and parsed-args. Shows the effective content of a specific prompt.
+
+  Returns structured data with:
+  - :name - prompt name
+  - :type - :category or :workflow
+  - :content - resolved prompt content
+  - :source - :override or :builtin
+  - :path - path to source file
+
+  Returns error map if prompt not found:
+  - :error - error message
+  - :metadata - map with :prompt-name
+
+  Example success:
+  {:name \"simple\"
+   :type :category
+   :content \"...\"
+   :source :builtin
+   :path \"jar:file:/...!/category-prompts/simple.md\"}
+
+  Example error:
+  {:error \"Prompt 'foo' not found\"
+   :metadata {:prompt-name \"foo\"}}"
+  [config parsed-args]
+  (let [prompt-name (:prompt-name parsed-args)]
+    (if (nil? prompt-name)
+      {:error "Prompt name is required"
+       :metadata {:prompt-name nil}}
+      (let [resolved-tasks-dir (:resolved-tasks-dir config)
+            prompt-type (prompts/detect-prompt-type prompt-name)]
+        (case prompt-type
+          :category
+          (load-prompt-by-type :category
+                               prompts/resolve-category-prompt-path
+                               prompts/builtin-category-prompts-dir
+                               resolved-tasks-dir
+                               prompt-name)
+
+          :workflow
+          (load-prompt-by-type :workflow
+                               prompts/resolve-workflow-prompt-path
+                               prompts/builtin-prompts-dir
+                               resolved-tasks-dir
+                               prompt-name)
+
+          {:error (str "Prompt '" prompt-name "' not found. "
+                       "Use 'mcp-tasks prompts list' to see available prompts.")
+           :metadata {:prompt-name prompt-name}})))))

@@ -525,3 +525,81 @@
           clojure.lang.ExceptionInfo
           #"Unknown format type"
           (sut/render :xml task-list-response)))))
+
+(deftest format-prompts-show-test
+  ;; Test formatting prompts show response for human output
+  ;; Should display metadata header followed by content
+  (testing "format-prompts-show"
+    (testing "formats prompts show with all metadata"
+      (let [data {:name "simple"
+                  :type :category
+                  :source :builtin
+                  :path "jar:file:/path/to/resources.jar!/category-prompts/simple.md"
+                  :content "- Step 1\n- Step 2"
+                  :metadata {"description" "Execute simple tasks"}}
+            result (sut/format-prompts-show data)]
+        (is (str/includes? result "Prompt: simple"))
+        (is (str/includes? result "Type: category"))
+        (is (str/includes? result "Source: builtin"))
+        (is (str/includes? result "Description: Execute simple tasks"))
+        (is (str/includes? result "Path: jar:file:/path/to/resources.jar!/category-prompts/simple.md"))
+        (is (str/includes? result "---"))
+        (is (str/includes? result "- Step 1\n- Step 2"))))
+
+    (testing "formats prompts show without description"
+      (let [data {:name "refine-task"
+                  :type :workflow
+                  :source :override
+                  :path "/path/to/.mcp-tasks/prompt-overrides/refine-task.md"
+                  :content "Refine the task"
+                  :metadata {}}
+            result (sut/format-prompts-show data)]
+        (is (str/includes? result "Prompt: refine-task"))
+        (is (str/includes? result "Type: workflow"))
+        (is (str/includes? result "Source: override"))
+        (is (not (str/includes? result "Description:")))
+        (is (str/includes? result "Path: /path/to/.mcp-tasks/prompt-overrides/refine-task.md"))
+        (is (str/includes? result "Refine the task"))))))
+
+(deftest render-prompts-show-test
+  ;; Test that render :human dispatches correctly for prompts show responses
+  ;; Should recognize prompts show data by presence of :name and :content
+  (testing "render :human for prompts show"
+    (testing "recognizes and formats prompts show response"
+      (let [data {:name "medium"
+                  :type :category
+                  :source :builtin
+                  :path "resources/category-prompts/medium.md"
+                  :content "Execute medium tasks"
+                  :metadata {"description" "Medium workflow"}}
+            result (sut/render :human data)]
+        (is (str/includes? result "Prompt: medium"))
+        (is (str/includes? result "Type: category"))
+        (is (str/includes? result "Execute medium tasks"))))
+
+    (testing "renders prompts show in edn format"
+      (let [data {:name "simple"
+                  :type :category
+                  :source :builtin
+                  :path "resources/category-prompts/simple.md"
+                  :content "Simple workflow"
+                  :metadata {}}
+            result (sut/render :edn data)
+            parsed (read-string result)]
+        (is (= "simple" (:name parsed)))
+        (is (= :category (:type parsed)))
+        (is (= "Simple workflow" (:content parsed)))))
+
+    (testing "renders prompts show in json format"
+      (let [data {:name "large"
+                  :type :workflow
+                  :source :override
+                  :path "/path/to/override.md"
+                  :content "Large workflow"
+                  :metadata {"description" "Execute large tasks"}}
+            result (sut/render :json data)
+            parsed (json/parse-string result true)]
+        (is (= "large" (:name parsed)))
+        (is (= "workflow" (:type parsed)))
+        (is (= "Large workflow" (:content parsed)))
+        (is (= "Execute large tasks" (get-in parsed [:metadata :description])))))))

@@ -618,3 +618,280 @@
             (is (.exists target-file)))
           (finally
             (fs/delete-tree project-dir)))))))
+
+(deftest prompts-show-builtin-category-test
+  ;; Test showing builtin category prompt with metadata verification
+  (testing "prompts-show-builtin-category"
+    (testing "can show builtin category prompt with default format"
+      (let [result (call-cli "prompts" "show" "simple")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Source: builtin"))
+        (is (str/includes? (:out result) "Type: category"))
+        (is (str/includes? (:out result) "Prompt: simple"))
+        (is (str/includes? (:out result) "---"))
+        (is (str/includes? (:out result) "Description: Execute simple tasks with basic workflow"))))
+
+    (testing "verifies metadata values in human format"
+      (let [result (call-cli "prompts" "show" "medium")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Description:"))
+        (is (str/includes? (:out result) "Execute medium complexity tasks"))))))
+
+(deftest prompts-show-builtin-workflow-test
+  ;; Test showing builtin workflow prompt with metadata verification
+  (testing "prompts-show-builtin-workflow"
+    (testing "can show builtin workflow prompt"
+      (let [result (call-cli "prompts" "show" "execute-task")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Source: builtin"))
+        (is (str/includes? (:out result) "Type: workflow"))
+        (is (str/includes? (:out result) "Prompt: execute-task"))
+        (is (str/includes? (:out result) "---"))))
+
+    (testing "verifies metadata values including multiple fields"
+      (let [result (call-cli "prompts" "show" "execute-task")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Description: Execute a task based on selection criteria or context"))
+        (is (str/includes? (:out result) "Argument hint: [selection-criteria...]"))))))
+
+(deftest prompts-show-override-category-test
+  ;; Test showing overridden category prompt
+  (testing "prompts-show-override-category"
+    (testing "shows override when category prompt is customized"
+      (let [override-content "---\ndescription: Custom simple workflow\n---\n\nCustom simple steps"
+            override-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
+        (fs/create-dirs (.getParentFile override-file))
+        (spit override-file override-content)
+        (let [result (call-cli "prompts" "show" "simple")]
+          (is (= 0 (:exit result)))
+          (is (str/includes? (:out result) "Source: override"))
+          (is (str/includes? (:out result) "Type: category"))
+          (is (str/includes? (:out result) "Custom simple steps")))))))
+
+(deftest prompts-show-override-workflow-test
+  ;; Test showing overridden workflow prompt
+  (testing "prompts-show-override-workflow"
+    (testing "shows override when workflow prompt is customized"
+      (let [override-content "---\ndescription: Custom task execution\n---\n\nCustom task steps"
+            override-file (io/file *test-dir* ".mcp-tasks/prompt-overrides/execute-task.md")]
+        (fs/create-dirs (.getParentFile override-file))
+        (spit override-file override-content)
+        (let [result (call-cli "prompts" "show" "execute-task")]
+          (is (= 0 (:exit result)))
+          (is (str/includes? (:out result) "Source: override"))
+          (is (str/includes? (:out result) "Type: workflow"))
+          (is (str/includes? (:out result) "Custom task steps")))))))
+
+(deftest prompts-show-edn-format-test
+  ;; Test prompts show with EDN output and metadata verification
+  (testing "prompts-show-edn-format"
+    (testing "can show prompt in EDN format"
+      (let [result (call-cli "--format" "edn" "prompts" "show" "simple")]
+        (is (= 0 (:exit result)))
+        (let [parsed (edn/read-string (:out result))]
+          (is (map? parsed))
+          (is (= "simple" (:name parsed)))
+          (is (= :category (:type parsed)))
+          (is (= :builtin (:source parsed)))
+          (is (string? (:content parsed)))
+          (is (string? (:path parsed))))))
+
+    (testing "EDN format with -f alias"
+      (let [result (call-cli "prompts" "show" "execute-task" "-f" "edn")
+            parsed (edn/read-string (:out result))]
+        (is (= "execute-task" (:name parsed)))
+        (is (= :workflow (:type parsed)))))
+
+    (testing "EDN format includes parsed metadata"
+      (let [result (call-cli "prompts" "show" "simple" "-f" "edn")
+            parsed (edn/read-string (:out result))]
+        (is (contains? parsed :metadata))
+        (is (map? (:metadata parsed)))
+        (is (= "Execute simple tasks with basic workflow"
+               (get (:metadata parsed) "description")))))
+
+    (testing "EDN format includes metadata with multiple fields"
+      (let [result (call-cli "prompts" "show" "execute-task" "-f" "edn")
+            parsed (edn/read-string (:out result))]
+        (is (contains? parsed :metadata))
+        (is (= "Execute a task based on selection criteria or context"
+               (get (:metadata parsed) "description")))
+        (is (= "[selection-criteria...]"
+               (get (:metadata parsed) "argument-hint")))))))
+
+(deftest prompts-show-json-format-test
+  ;; Test prompts show with JSON output and metadata verification
+  (testing "prompts-show-json-format"
+    (testing "can show prompt in JSON format"
+      (let [result (call-cli "--format" "json" "prompts" "show" "medium")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/parse-string (:out result) keyword)]
+          (is (map? parsed))
+          (is (= "medium" (:name parsed)))
+          (is (= "category" (:type parsed)))
+          (is (= "builtin" (:source parsed)))
+          (is (string? (:content parsed)))
+          (is (string? (:path parsed))))))
+
+    (testing "JSON format with -f alias"
+      (let [result (call-cli "prompts" "show" "refine-task" "-f" "json")
+            parsed (json/parse-string (:out result) keyword)]
+        (is (= "refine-task" (:name parsed)))
+        (is (= "workflow" (:type parsed)))))
+
+    (testing "JSON format includes parsed metadata"
+      (let [result (call-cli "prompts" "show" "simple" "-f" "json")
+            parsed (json/parse-string (:out result) keyword)]
+        (is (contains? parsed :metadata))
+        (is (map? (:metadata parsed)))
+        (is (= "Execute simple tasks with basic workflow"
+               (:description (:metadata parsed))))))
+
+    (testing "JSON format includes metadata with multiple fields"
+      (let [result (call-cli "prompts" "show" "execute-task" "-f" "json")
+            parsed (json/parse-string (:out result) keyword)]
+        (is (contains? parsed :metadata))
+        (is (= "Execute a task based on selection criteria or context"
+               (:description (:metadata parsed))))
+        (is (= "[selection-criteria...]"
+               (:argumentHint (:metadata parsed))))))))
+
+(deftest prompts-show-nonexistent-test
+  ;; Test error handling for nonexistent prompts
+  (testing "prompts-show-nonexistent"
+    (testing "shows error for nonexistent prompt"
+      (let [result (call-cli "prompts" "show" "nonexistent")]
+        (is (= 1 (:exit result)))
+        (is (str/includes? (:err result) "not found"))))
+
+    (testing "EDN format shows error"
+      (let [result (call-cli "prompts" "show" "invalid" "-f" "edn")]
+        (is (= 1 (:exit result)))
+        (let [parsed (edn/read-string (:err result))]
+          (is (contains? parsed :error)))))
+
+    (testing "JSON format shows error"
+      (let [result (call-cli "prompts" "show" "bad-name" "-f" "json")]
+        (is (= 1 (:exit result)))
+        (let [parsed (json/parse-string (:err result) keyword)]
+          (is (contains? parsed :error)))))))
+
+(deftest prompts-show-from-subdirectory-test
+  ;; Test prompts show works from subdirectories
+  (testing "prompts-show-from-subdirectory"
+    (testing "shows prompts when run from subdirectory"
+      (let [subdir (io/file *test-dir* "src")]
+        (fs/create-dirs subdir)
+        (let [result (call-cli subdir "prompts" "show" "simple")]
+          (is (= 0 (:exit result)))
+          (is (str/includes? (:out result) "simple")))))
+
+    (testing "shows overridden prompts from subdirectory"
+      (let [override-file (io/file *test-dir* ".mcp-tasks/category-prompts/large.md")
+            subdir (io/file *test-dir* "test/integration")]
+        (fs/create-dirs (.getParentFile override-file))
+        (fs/create-dirs subdir)
+        (spit override-file "---\ndescription: Custom\n---\n\nCustom content")
+        (let [result (call-cli subdir "prompts" "show" "large")]
+          (is (= 0 (:exit result)))
+          (is (str/includes? (:out result) "Source: override"))
+          (is (str/includes? (:out result) "Custom content")))))))
+
+(deftest prompts-show-from-worktree-test
+  ;; Test prompts show works from git worktrees
+  (testing "prompts-show-from-worktree"
+    (testing "shows prompts when run from worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "show-worktree"
+            worktree-path (str project-dir "/" worktree-name)]
+        (try
+          ;; Set up project directory
+          (fs/create-dirs (io/file project-dir ".mcp-tasks"))
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree
+          (h/create-git-worktree project-dir worktree-path)
+
+          ;; Show prompt from worktree
+          (let [result (call-cli (io/file worktree-path) "prompts" "show" "simple")]
+            (is (= 0 (:exit result)))
+            (is (str/includes? (:out result) "simple")))
+          (finally
+            (fs/delete-tree project-dir)))))
+
+    (testing "shows overridden prompts from worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "show-override-worktree"
+            worktree-path (str project-dir "/" worktree-name)
+            override-file (io/file project-dir ".mcp-tasks/prompt-overrides/refine-task.md")]
+        (try
+          ;; Set up project with override
+          (fs/create-dirs (.getParentFile override-file))
+          (spit override-file "---\ndescription: Custom refine\n---\n\nCustom refine steps")
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree
+          (h/create-git-worktree project-dir worktree-path)
+
+          ;; Show prompt from worktree
+          (let [result (call-cli (io/file worktree-path) "prompts" "show" "refine-task")]
+            (is (= 0 (:exit result)))
+            (is (str/includes? (:out result) "Source: override"))
+            (is (str/includes? (:out result) "Custom refine steps")))
+          (finally
+            (fs/delete-tree project-dir)))))
+
+    (testing "shows prompts from nested directory in worktree"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "show-nested-worktree"
+            worktree-path (str project-dir "/" worktree-name)
+            nested-dir (io/file worktree-path "src/test")]
+        (try
+          ;; Set up project directory
+          (fs/create-dirs (io/file project-dir ".mcp-tasks"))
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree and nested directory
+          (h/create-git-worktree project-dir worktree-path)
+          (fs/create-dirs nested-dir)
+
+          ;; Show prompt from nested directory
+          (let [result (call-cli nested-dir "prompts" "show" "medium")]
+            (is (= 0 (:exit result)))
+            (is (str/includes? (:out result) "medium")))
+          (finally
+            (fs/delete-tree project-dir)))))
+
+    (testing "auto-detects prompt type in worktree environment"
+      (let [project-dir (str (fs/create-temp-dir {:prefix "project-"}))
+            worktree-name "type-detect-worktree"
+            worktree-path (str project-dir "/" worktree-name)]
+        (try
+          ;; Set up project directory
+          (fs/create-dirs (io/file project-dir ".mcp-tasks"))
+          (spit (io/file project-dir ".mcp-tasks.edn") "{}")
+
+          ;; Create worktree
+          (h/create-git-worktree project-dir worktree-path)
+
+          ;; Show category prompt
+          (let [result1 (call-cli (io/file worktree-path) "prompts" "show" "large")]
+            (is (= 0 (:exit result1)))
+            (is (str/includes? (:out result1) "Type: category")))
+
+          ;; Show workflow prompt
+          (let [result2 (call-cli (io/file worktree-path) "prompts" "show" "create-story-tasks")]
+            (is (= 0 (:exit result2)))
+            (is (str/includes? (:out result2) "Type: workflow")))
+          (finally
+            (fs/delete-tree project-dir)))))))
+
+(deftest prompts-show-help-test
+  ;; Test help output for prompts show command
+  (testing "prompts-show-help"
+    (testing "prompts show has help"
+      (let [result (call-cli "prompts" "show" "--help")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "show"))
+        (is (str/includes? (:out result) "prompt-name"))
+        (is (str/includes? (:out result) "format"))))))

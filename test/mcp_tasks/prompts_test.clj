@@ -889,3 +889,20 @@
             (is (some? (:content result))))
           (finally
             (fs/delete-tree (io/file ".mcp-tasks" "story"))))))))
+
+(deftest detect-prompt-type-test
+  ;; Test prompt type detection for built-in categories and workflows
+  (testing "detect-prompt-type"
+    (testing "detects category prompts"
+      (is (= :category (sut/detect-prompt-type "simple")))
+      (is (= :category (sut/detect-prompt-type "medium")))
+      (is (= :category (sut/detect-prompt-type "large"))))
+
+    (testing "detects workflow prompts"
+      (is (= :workflow (sut/detect-prompt-type "execute-task")))
+      (is (= :workflow (sut/detect-prompt-type "refine-task")))
+      (is (= :workflow (sut/detect-prompt-type "execute-story-child"))))
+
+    (testing "returns nil for unknown prompts"
+      (is (nil? (sut/detect-prompt-type "nonexistent")))
+      (is (nil? (sut/detect-prompt-type "foo-bar"))))))

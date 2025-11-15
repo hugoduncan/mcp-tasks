@@ -10,7 +10,7 @@
 
 ;; Path constants for prompt resources and user overrides
 (def builtin-category-prompts-dir "category-prompts")
-(def ^:private builtin-prompts-dir "prompts")
+(def builtin-prompts-dir "prompts")
 (def ^:private builtin-infrastructure-dir "prompts/infrastructure")
 
 (def ^:private user-category-prompts-dir "category-prompts")
@@ -117,8 +117,10 @@
       {:path (:path resolution)
        :location (:location resolution)})))
 
-(defn- resolve-category-prompt-path
-  "Resolve category prompt path with fallback to deprecated location.
+(defn resolve-category-prompt-path
+  "Public API for CLI and tooling to resolve category prompt paths.
+  
+  Resolves category prompt path with fallback to deprecated location.
 
   Checks for category prompt file in this order:
   1. .mcp-tasks/category-prompts/<category>.md (new location)
@@ -146,8 +148,10 @@
       (str "Category prompt found in deprecated location. "
            "Please move from .mcp-tasks/prompts/ to .mcp-tasks/category-prompts/"))))
 
-(defn- resolve-workflow-prompt-path
-  "Resolve workflow prompt path with fallback to deprecated location.
+(defn resolve-workflow-prompt-path
+  "Public API for CLI and tooling to resolve workflow prompt paths.
+  
+  Resolves workflow prompt path with fallback to deprecated location.
 
   Checks for workflow prompt file in this order:
   1. .mcp-tasks/prompt-overrides/<name>.md (new location)
@@ -486,14 +490,66 @@
             :meta (meta v)})
          all-vars)))
 
-(defn- list-builtin-story-prompts
-  "List all built-in story prompts available in resources.
+(defn load-prompt-content
+  "Load prompt content from override file or builtin resource.
+
+  Parameters:
+  - resolved-override: Map from resolve-*-prompt-path with :path and :location, or nil
+  - builtin-resource-path: Path to builtin resource (e.g., \"category-prompts/simple.md\")
+
+  Returns a map with:
+  - :content - The prompt text (with frontmatter stripped)
+  - :metadata - Parsed frontmatter metadata map (may be nil)
+  - :source - :override or :builtin
+  - :path - Absolute path to override file or resource URL string
+
+  Returns nil if neither override nor builtin exists."
+  [resolved-override builtin-resource-path]
+  (if resolved-override
+    ;; Load from override file
+    (let [file-content (slurp (:path resolved-override))
+          {:keys [metadata content]} (parse-frontmatter file-content)]
+      {:content content
+       :metadata metadata
+       :source :override
+       :path (:path resolved-override)})
+    ;; Try builtin resource
+    (when-let [resource-url (io/resource builtin-resource-path)]
+      (let [file-content (slurp resource-url)
+            {:keys [metadata content]} (parse-frontmatter file-content)]
+        {:content content
+         :metadata metadata
+         :source :builtin
+         :path (str resource-url)}))))
+
+(defn list-builtin-workflows
+  "List all built-in workflow prompts available in resources.
 
   Returns a sequence of prompt names (without .md extension) found in
   resources/prompts directory."
   []
   (when-let [prompts-url (io/resource builtin-prompts-dir)]
     (discover-prompt-files (io/file (.toURI prompts-url)))))
+
+(defn detect-prompt-type
+  "Detect whether a prompt name is a category or workflow prompt.
+
+  Checks against built-in prompt lists to determine type.
+
+  Parameters:
+  - prompt-name: Name of the prompt (string)
+
+  Returns:
+  - :category if prompt is a built-in category
+  - :workflow if prompt is a built-in workflow
+  - nil if prompt is not found in either list"
+  [prompt-name]
+  (let [builtin-categories (list-builtin-categories)
+        builtin-workflows (set (list-builtin-workflows))]
+    (cond
+      (contains? builtin-categories prompt-name) :category
+      (contains? builtin-workflows prompt-name) :workflow
+      :else nil)))
 
 (defn get-story-prompt
   "Get a story prompt by name, with file override support.
@@ -512,21 +568,13 @@
   Supports backward compatibility by checking deprecated story/prompts/ directory
   with deprecation warning."
   [prompt-name]
-  (if-let [resolved (resolve-workflow-prompt-path ".mcp-tasks" prompt-name)]
-    ;; Found override (new or deprecated location)
-    (let [file-content (slurp (:path resolved))
-          {:keys [metadata content]} (parse-frontmatter file-content)]
+  (let [resolved (resolve-workflow-prompt-path ".mcp-tasks" prompt-name)
+        builtin-path (str builtin-prompts-dir "/" prompt-name ".md")
+        loaded (load-prompt-content resolved builtin-path)]
+    (when loaded
       {:name prompt-name
-       :description (get metadata "description")
-       :content content})
-    ;; No override found, check builtin
-    (when-let [resource-path (io/resource
-                               (str builtin-prompts-dir "/" prompt-name ".md"))]
-      (let [file-content (slurp resource-path)
-            {:keys [metadata content]} (parse-frontmatter file-content)]
-        {:name prompt-name
-         :description (get metadata "description")
-         :content content}))))
+       :description (get (:metadata loaded) "description")
+       :content (:content loaded)})))
 
 (defn list-story-prompts
   "List all available story prompts.
@@ -534,7 +582,7 @@
   Returns a sequence of maps with :name and :description for each available
   story prompt, including both built-in prompts and file overrides."
   []
-  (let [builtin-prompts (for [prompt-name (list-builtin-story-prompts)
+  (let [builtin-prompts (for [prompt-name (list-builtin-workflows)
                               :let [prompt (get-story-prompt prompt-name)]
                               :when prompt]
                           {:name (:name prompt)
