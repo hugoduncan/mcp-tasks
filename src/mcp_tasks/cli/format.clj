@@ -311,6 +311,30 @@
                        (str "Summary: " (:installed-count metadata) " installed, "
                             (:failed-count metadata) " failed")]))))
 
+(defn format-prompts-show
+  "Format prompts show response for human-readable output.
+
+  Displays prompt metadata header followed by content."
+  [data]
+  (let [name (:name data)
+        type (:type data)
+        source (:source data)
+        path (:path data)
+        content (:content data)
+        description (get-in data [:metadata "description"])]
+    (str/join "\n"
+              (filter some?
+                      [(str "Prompt: " name)
+                       (str "Type: " (clojure.core/name type))
+                       (str "Source: " (clojure.core/name source))
+                       (when description
+                         (str "Description: " description))
+                       (str "Path: " path)
+                       ""
+                       "---"
+                       ""
+                       content]))))
+
 ;; Multimethod for format dispatch
 
 (defmulti render
@@ -392,6 +416,10 @@
     ;; Prompts install response
     (:results data)
     (format-prompts-install (:results data) (:metadata data))
+
+    ;; Prompts show response (has :name and :content)
+    (and (:name data) (:content data))
+    (format-prompts-show data)
 
     ;; Generic response with modified files
     (:modified-files data)

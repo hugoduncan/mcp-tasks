@@ -3,7 +3,8 @@
 
   Handles listing and installing built-in prompts."
   (:require
-    [mcp-tasks.prompt-management :as pm]))
+    [mcp-tasks.prompt-management :as pm]
+    [mcp-tasks.prompts :as prompts]))
 
 (defn prompts-list-command
   "Execute the prompts list command.
@@ -47,3 +48,71 @@
      :metadata {:requested-count (count prompt-names)
                 :installed-count installed-count
                 :failed-count failed-count}}))
+
+(defn prompts-show-command
+  "Execute the prompts show command.
+
+  Takes config and parsed-args. Shows the effective content of a specific prompt.
+
+  Returns structured data with:
+  - :name - prompt name
+  - :type - :category or :workflow
+  - :content - resolved prompt content
+  - :source - :override or :builtin
+  - :path - path to source file
+
+  Returns error map if prompt not found:
+  - :error - error message
+  - :metadata - map with :prompt-name
+
+  Example success:
+  {:name \"simple\"
+   :type :category
+   :content \"...\"
+   :source :builtin
+   :path \"jar:file:/...!/category-prompts/simple.md\"}
+
+  Example error:
+  {:error \"Prompt 'foo' not found\"
+   :metadata {:prompt-name \"foo\"}}"
+  [config parsed-args]
+  (let [prompt-name (:prompt-name parsed-args)
+        resolved-tasks-dir (:resolved-tasks-dir config)
+        builtin-categories (prompts/list-builtin-categories)
+        builtin-workflows (set (prompts/list-builtin-workflows))
+        is-category? (contains? builtin-categories prompt-name)
+        is-workflow? (contains? builtin-workflows prompt-name)]
+    (cond
+      is-category?
+      (let [resolved-path (prompts/resolve-category-prompt-path
+                            resolved-tasks-dir
+                            prompt-name)
+            builtin-resource-path (str prompts/builtin-category-prompts-dir
+                                       "/"
+                                       prompt-name
+                                       ".md")
+            loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+        (if loaded
+          (assoc loaded
+                 :name prompt-name
+                 :type :category)
+          {:error (str "Prompt '" prompt-name "' not found")
+           :metadata {:prompt-name prompt-name}}))
+
+      is-workflow?
+      (let [resolved-path (prompts/resolve-workflow-prompt-path
+                            resolved-tasks-dir
+                            prompt-name)
+            builtin-resource-path (str "prompts/" prompt-name ".md")
+            loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+        (if loaded
+          (assoc loaded
+                 :name prompt-name
+                 :type :workflow)
+          {:error (str "Prompt '" prompt-name "' not found")
+           :metadata {:prompt-name prompt-name}}))
+
+      :else
+      {:error (str "Prompt '" prompt-name "' not found. "
+                   "Use 'mcp-tasks prompts list' to see available prompts.")
+       :metadata {:prompt-name prompt-name}})))
