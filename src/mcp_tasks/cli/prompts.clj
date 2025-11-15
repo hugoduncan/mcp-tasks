@@ -106,7 +106,7 @@
           (let [resolved-path (prompts/resolve-workflow-prompt-path
                                 resolved-tasks-dir
                                 prompt-name)
-                builtin-resource-path (str "prompts/" prompt-name ".md")
+                builtin-resource-path (str prompts/builtin-prompts-dir "/" prompt-name ".md")
                 loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
             (if loaded
               (assoc loaded

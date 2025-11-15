@@ -10,7 +10,7 @@
 
 ;; Path constants for prompt resources and user overrides
 (def builtin-category-prompts-dir "category-prompts")
-(def ^:private builtin-prompts-dir "prompts")
+(def builtin-prompts-dir "prompts")
 (def ^:private builtin-infrastructure-dir "prompts/infrastructure")
 
 (def ^:private user-category-prompts-dir "category-prompts")
