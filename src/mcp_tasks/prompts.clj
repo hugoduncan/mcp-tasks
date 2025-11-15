@@ -544,21 +544,13 @@
   Supports backward compatibility by checking deprecated story/prompts/ directory
   with deprecation warning."
   [prompt-name]
-  (if-let [resolved (resolve-workflow-prompt-path ".mcp-tasks" prompt-name)]
-    ;; Found override (new or deprecated location)
-    (let [file-content (slurp (:path resolved))
-          {:keys [metadata content]} (parse-frontmatter file-content)]
+  (let [resolved (resolve-workflow-prompt-path ".mcp-tasks" prompt-name)
+        builtin-path (str builtin-prompts-dir "/" prompt-name ".md")
+        loaded (load-prompt-content resolved builtin-path)]
+    (when loaded
       {:name prompt-name
-       :description (get metadata "description")
-       :content content})
-    ;; No override found, check builtin
-    (when-let [resource-path (io/resource
-                               (str builtin-prompts-dir "/" prompt-name ".md"))]
-      (let [file-content (slurp resource-path)
-            {:keys [metadata content]} (parse-frontmatter file-content)]
-        {:name prompt-name
-         :description (get metadata "description")
-         :content content}))))
+       :description (get (:metadata loaded) "description")
+       :content (:content loaded)})))
 
 (defn list-story-prompts
   "List all available story prompts.
