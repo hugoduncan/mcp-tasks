@@ -81,12 +81,9 @@
       {:error "Prompt name is required"
        :metadata {:prompt-name nil}}
       (let [resolved-tasks-dir (:resolved-tasks-dir config)
-            builtin-categories (prompts/list-builtin-categories)
-            builtin-workflows (set (prompts/list-builtin-workflows))
-            is-category? (contains? builtin-categories prompt-name)
-            is-workflow? (contains? builtin-workflows prompt-name)]
-        (cond
-          is-category?
+            prompt-type (prompts/detect-prompt-type prompt-name)]
+        (case prompt-type
+          :category
           (let [resolved-path (prompts/resolve-category-prompt-path
                                 resolved-tasks-dir
                                 prompt-name)
@@ -103,7 +100,7 @@
                            "Use 'mcp-tasks prompts list' to see available prompts.")
                :metadata {:prompt-name prompt-name}}))
 
-          is-workflow?
+          :workflow
           (let [resolved-path (prompts/resolve-workflow-prompt-path
                                 resolved-tasks-dir
                                 prompt-name)
@@ -117,7 +114,6 @@
                            "Use 'mcp-tasks prompts list' to see available prompts.")
                :metadata {:prompt-name prompt-name}}))
 
-          :else
           {:error (str "Prompt '" prompt-name "' not found. "
                        "Use 'mcp-tasks prompts list' to see available prompts.")
            :metadata {:prompt-name prompt-name}})))))

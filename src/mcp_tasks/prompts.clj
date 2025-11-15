@@ -527,6 +527,26 @@
   (when-let [prompts-url (io/resource builtin-prompts-dir)]
     (discover-prompt-files (io/file (.toURI prompts-url)))))
 
+(defn detect-prompt-type
+  "Detect whether a prompt name is a category or workflow prompt.
+
+  Checks against built-in prompt lists to determine type.
+
+  Parameters:
+  - prompt-name: Name of the prompt (string)
+
+  Returns:
+  - :category if prompt is a built-in category
+  - :workflow if prompt is a built-in workflow
+  - nil if prompt is not found in either list"
+  [prompt-name]
+  (let [builtin-categories (list-builtin-categories)
+        builtin-workflows (set (list-builtin-workflows))]
+    (cond
+      (contains? builtin-categories prompt-name) :category
+      (contains? builtin-workflows prompt-name) :workflow
+      :else nil)))
+
 (defn get-story-prompt
   "Get a story prompt by name, with file override support.
 
