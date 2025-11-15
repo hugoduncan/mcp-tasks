@@ -66,8 +66,9 @@ When a Claude Code web session starts:
    - Downloads platform-appropriate binaries (`mcp-tasks` and `mcp-tasks-server`)
    - Makes binaries executable
    - Appends `~/.local/bin` to PATH in `CLAUDE_ENV_FILE` (if not already present)
-   - Registers the MCP server with Claude Code
 4. If not in a web session, exits silently (no-op)
+
+**Note:** MCP server registration is currently disabled as Claude Code web does not yet support MCP servers.
 
 ### Idempotent Behavior
 
@@ -75,7 +76,6 @@ The script is safe to run multiple times:
 
 - **Binaries**: Always updated to latest release (no version checking)
 - **PATH**: Only appends `~/.local/bin` if not already present in `CLAUDE_ENV_FILE`
-- **MCP Registration**: Updates existing registration if present (via `-s project` flag)
 
 ## Manual Installation
 
@@ -121,10 +121,9 @@ mkdir -p ~/.local/bin
 # 4. Update PATH in CLAUDE_ENV_FILE
 # - Checks if ~/.local/bin already in PATH
 # - Appends if not present: export PATH="$PATH:~/.local/bin"
-
-# 5. Register MCP server
-claude mcp add mcp-tasks -s project ~/.local/bin/mcp-tasks-server
 ```
+
+**Note:** MCP server registration (previously step 5) is currently disabled because Claude Code web does not yet support MCP servers.
 
 ## Troubleshooting
 
@@ -163,19 +162,9 @@ claude mcp add mcp-tasks -s project ~/.local/bin/mcp-tasks-server
 2. Check file contents: `cat "$CLAUDE_ENV_FILE"`
 3. Should contain: `export PATH="$PATH:~/.local/bin"`
 
-### MCP Registration Fails
+### MCP Registration
 
-**Symptom:** Error message: `"Failed to register MCP server"`
-
-**Causes:**
-1. `claude` CLI not available
-2. Binary path incorrect
-3. Permission issues
-
-**Solutions:**
-1. Verify `claude` command exists: `which claude`
-2. Check binary exists: `ls -l ~/.local/bin/mcp-tasks-server`
-3. Ensure binary is executable: `chmod +x ~/.local/bin/mcp-tasks-server`
+**Note:** MCP server registration is currently disabled in the `web-session-start` script because Claude Code web does not yet support MCP servers. This functionality may be enabled in a future release when support becomes available.
 
 ### Platform Not Supported
 
