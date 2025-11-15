@@ -6,3 +6,7 @@
 /.mcp.json
 /mcp-tasks
 /target/
+/.cpcache/
+/.proxy-shim.pid
+/.proxy-java-shim.env
+/script/
