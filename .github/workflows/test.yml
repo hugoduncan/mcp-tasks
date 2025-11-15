@@ -96,3 +96,9 @@ jobs:
 
       - name: Run shellcheck on Unix install script
         run: shellcheck install
+
+      - name: Run shellcheck on install test script
+        run: shellcheck test/install_test.sh
+
+      - name: Run install script tests
+        run: ./test/install_test.sh
