@@ -6,7 +6,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "./web-session-start"
+                        "command": "./scripts/web-session-start"
                     }
                 ]
             }
