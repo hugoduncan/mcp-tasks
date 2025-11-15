@@ -196,10 +196,11 @@ main() {
   echo "" >&2
 
   # Register MCP server
-  if ! register_mcp; then
-    exit 1
-  fi
-  echo "" >&2
+  # Disabled: Claude Code web does not support MCP servers yet
+  # if ! register_mcp; then
+  #   exit 1
+  # fi
+  # echo "" >&2
 
   # Success message
   echo "Installation complete!" >&2
@@ -207,8 +208,6 @@ main() {
   echo "Binaries installed to: $INSTALL_DIR" >&2
   echo "  - $BINARY_CLI" >&2
   echo "  - $BINARY_SERVER" >&2
-  echo "" >&2
-  echo "MCP server registered with Claude Code" >&2
 }
 
 main
