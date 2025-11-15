@@ -2,6 +2,37 @@
 
 set -e
 
+# Parse command line arguments
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --install-dir)
+        if [ -z "$2" ]; then
+          echo "Error: --install-dir requires a path argument" >&2
+          exit 1
+        fi
+        # Expand tilde to home directory
+        INSTALL_DIR="${2/#\~/$HOME}"
+        shift 2
+        ;;
+      -d)
+        if [ -z "$2" ]; then
+          echo "Error: -d requires a path argument" >&2
+          exit 1
+        fi
+        # Expand tilde to home directory
+        INSTALL_DIR="${2/#\~/$HOME}"
+        shift 2
+        ;;
+      *)
+        echo "Error: Unknown option: $1" >&2
+        echo "Usage: $0 [--install-dir <path>] [-d <path>]" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 GITHUB_REPO="hugoduncan/mcp-tasks"
@@ -127,6 +158,9 @@ cleanup() {
 
 # Main installation flow
 main() {
+  # Parse arguments first
+  parse_args "$@"
+
   echo "mcp-tasks installer"
   echo ""
 
