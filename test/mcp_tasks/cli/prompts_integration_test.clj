@@ -620,7 +620,7 @@
             (fs/delete-tree project-dir)))))))
 
 (deftest prompts-show-builtin-category-test
-  ;; Test showing builtin category prompt
+  ;; Test showing builtin category prompt with metadata verification
   (testing "prompts-show-builtin-category"
     (testing "can show builtin category prompt with default format"
       (let [result (call-cli "prompts" "show" "simple")]
@@ -629,10 +629,16 @@
         (is (str/includes? (:out result) "Type: category"))
         (is (str/includes? (:out result) "Prompt: simple"))
         (is (str/includes? (:out result) "---"))
-        (is (str/includes? (:out result) "Description:"))))))
+        (is (str/includes? (:out result) "Description: Execute simple tasks with basic workflow"))))
+
+    (testing "verifies metadata values in human format"
+      (let [result (call-cli "prompts" "show" "medium")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Description:"))
+        (is (str/includes? (:out result) "Execute medium complexity tasks"))))))
 
 (deftest prompts-show-builtin-workflow-test
-  ;; Test showing builtin workflow prompt
+  ;; Test showing builtin workflow prompt with metadata verification
   (testing "prompts-show-builtin-workflow"
     (testing "can show builtin workflow prompt"
       (let [result (call-cli "prompts" "show" "execute-task")]
@@ -640,7 +646,13 @@
         (is (str/includes? (:out result) "Source: builtin"))
         (is (str/includes? (:out result) "Type: workflow"))
         (is (str/includes? (:out result) "Prompt: execute-task"))
-        (is (str/includes? (:out result) "---"))))))
+        (is (str/includes? (:out result) "---"))))
+
+    (testing "verifies metadata values including multiple fields"
+      (let [result (call-cli "prompts" "show" "execute-task")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Description: Execute a task based on selection criteria or context"))
+        (is (str/includes? (:out result) "Argument hint: [selection-criteria...]"))))))
 
 (deftest prompts-show-override-category-test
   ;; Test showing overridden category prompt
@@ -671,7 +683,7 @@
           (is (str/includes? (:out result) "Custom task steps")))))))
 
 (deftest prompts-show-edn-format-test
-  ;; Test prompts show with EDN output
+  ;; Test prompts show with EDN output and metadata verification
   (testing "prompts-show-edn-format"
     (testing "can show prompt in EDN format"
       (let [result (call-cli "--format" "edn" "prompts" "show" "simple")]
@@ -688,10 +700,27 @@
       (let [result (call-cli "prompts" "show" "execute-task" "-f" "edn")
             parsed (edn/read-string (:out result))]
         (is (= "execute-task" (:name parsed)))
-        (is (= :workflow (:type parsed)))))))
+        (is (= :workflow (:type parsed)))))
+
+    (testing "EDN format includes parsed metadata"
+      (let [result (call-cli "prompts" "show" "simple" "-f" "edn")
+            parsed (edn/read-string (:out result))]
+        (is (contains? parsed :metadata))
+        (is (map? (:metadata parsed)))
+        (is (= "Execute simple tasks with basic workflow"
+               (get (:metadata parsed) "description")))))
+
+    (testing "EDN format includes metadata with multiple fields"
+      (let [result (call-cli "prompts" "show" "execute-task" "-f" "edn")
+            parsed (edn/read-string (:out result))]
+        (is (contains? parsed :metadata))
+        (is (= "Execute a task based on selection criteria or context"
+               (get (:metadata parsed) "description")))
+        (is (= "[selection-criteria...]"
+               (get (:metadata parsed) "argument-hint")))))))
 
 (deftest prompts-show-json-format-test
-  ;; Test prompts show with JSON output
+  ;; Test prompts show with JSON output and metadata verification
   (testing "prompts-show-json-format"
     (testing "can show prompt in JSON format"
       (let [result (call-cli "--format" "json" "prompts" "show" "medium")]
@@ -708,7 +737,24 @@
       (let [result (call-cli "prompts" "show" "refine-task" "-f" "json")
             parsed (json/parse-string (:out result) keyword)]
         (is (= "refine-task" (:name parsed)))
-        (is (= "workflow" (:type parsed)))))))
+        (is (= "workflow" (:type parsed)))))
+
+    (testing "JSON format includes parsed metadata"
+      (let [result (call-cli "prompts" "show" "simple" "-f" "json")
+            parsed (json/parse-string (:out result) keyword)]
+        (is (contains? parsed :metadata))
+        (is (map? (:metadata parsed)))
+        (is (= "Execute simple tasks with basic workflow"
+               (:description (:metadata parsed))))))
+
+    (testing "JSON format includes metadata with multiple fields"
+      (let [result (call-cli "prompts" "show" "execute-task" "-f" "json")
+            parsed (json/parse-string (:out result) keyword)]
+        (is (contains? parsed :metadata))
+        (is (= "Execute a task based on selection criteria or context"
+               (:description (:metadata parsed))))
+        (is (= "[selection-criteria...]"
+               (:argumentHint (:metadata parsed))))))))
 
 (deftest prompts-show-nonexistent-test
   ;; Test error handling for nonexistent prompts

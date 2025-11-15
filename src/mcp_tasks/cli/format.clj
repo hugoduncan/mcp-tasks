@@ -321,15 +321,22 @@
         source (:source data)
         path (:path data)
         content (:content data)
-        description (get-in data [:metadata "description"])]
+        metadata (:metadata data)
+        ;; Format metadata fields with proper labels
+        metadata-lines (when (seq metadata)
+                         (keep (fn [[k v]]
+                                 (when v
+                                   (let [label (-> k
+                                                   (str/replace "-" " ")
+                                                   str/capitalize)]
+                                     (str label ": " v))))
+                               (sort-by first metadata)))]
     (str/join "\n"
-              (filter some?
-                      [(str "Prompt: " name)
+              (concat [(str "Prompt: " name)
                        (str "Type: " (clojure.core/name type))
-                       (str "Source: " (clojure.core/name source))
-                       (when description
-                         (str "Description: " description))
-                       (str "Path: " path)
+                       (str "Source: " (clojure.core/name source))]
+                      metadata-lines
+                      [(str "Path: " path)
                        ""
                        "---"
                        ""
