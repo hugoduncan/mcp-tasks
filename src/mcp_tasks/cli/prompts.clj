@@ -49,6 +49,30 @@
                 :installed-count installed-count
                 :failed-count failed-count}}))
 
+(defn- load-prompt-by-type
+  "Load a prompt by type, handling path resolution and content loading.
+
+  Parameters:
+  - prompt-type: :category or :workflow
+  - resolver-fn: Function to resolve override path (takes resolved-tasks-dir and prompt-name)
+  - builtin-dir: Built-in resource directory string
+  - resolved-tasks-dir: Base directory for overrides
+  - prompt-name: Name of the prompt
+
+  Returns structured data with :name, :type, :content, :source, :path
+  or error map with :error and :metadata."
+  [prompt-type resolver-fn builtin-dir resolved-tasks-dir prompt-name]
+  (let [resolved-path (resolver-fn resolved-tasks-dir prompt-name)
+        builtin-resource-path (str builtin-dir "/" prompt-name ".md")
+        loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+    (if loaded
+      (assoc loaded
+             :name prompt-name
+             :type prompt-type)
+      {:error (str "Prompt '" prompt-name "' not found. "
+                   "Use 'mcp-tasks prompts list' to see available prompts.")
+       :metadata {:prompt-name prompt-name}})))
+
 (defn prompts-show-command
   "Execute the prompts show command.
 
@@ -84,35 +108,18 @@
             prompt-type (prompts/detect-prompt-type prompt-name)]
         (case prompt-type
           :category
-          (let [resolved-path (prompts/resolve-category-prompt-path
-                                resolved-tasks-dir
-                                prompt-name)
-                builtin-resource-path (str prompts/builtin-category-prompts-dir
-                                           "/"
-                                           prompt-name
-                                           ".md")
-                loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
-            (if loaded
-              (assoc loaded
-                     :name prompt-name
-                     :type :category)
-              {:error (str "Prompt '" prompt-name "' not found. "
-                           "Use 'mcp-tasks prompts list' to see available prompts.")
-               :metadata {:prompt-name prompt-name}}))
+          (load-prompt-by-type :category
+                               prompts/resolve-category-prompt-path
+                               prompts/builtin-category-prompts-dir
+                               resolved-tasks-dir
+                               prompt-name)
 
           :workflow
-          (let [resolved-path (prompts/resolve-workflow-prompt-path
-                                resolved-tasks-dir
-                                prompt-name)
-                builtin-resource-path (str prompts/builtin-prompts-dir "/" prompt-name ".md")
-                loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
-            (if loaded
-              (assoc loaded
-                     :name prompt-name
-                     :type :workflow)
-              {:error (str "Prompt '" prompt-name "' not found. "
-                           "Use 'mcp-tasks prompts list' to see available prompts.")
-               :metadata {:prompt-name prompt-name}}))
+          (load-prompt-by-type :workflow
+                               prompts/resolve-workflow-prompt-path
+                               prompts/builtin-prompts-dir
+                               resolved-tasks-dir
+                               prompt-name)
 
           {:error (str "Prompt '" prompt-name "' not found. "
                        "Use 'mcp-tasks prompts list' to see available prompts.")
