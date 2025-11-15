@@ -519,7 +519,7 @@
          :path (str resource-url)}))))
 
 (defn list-builtin-workflows
-  "List all built-in story prompts available in resources.
+  "List all built-in workflow prompts available in resources.
 
   Returns a sequence of prompt names (without .md extension) found in
   resources/prompts directory."
