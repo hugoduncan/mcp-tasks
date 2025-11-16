@@ -1,8 +1,12 @@
 (ns mcp-tasks.schema
   "Malli schemas for task management system.
 
-  Uses lazy-loading via requiring-resolve and compiled validators with delays
-  to avoid loading Malli at namespace load time.")
+  Uses lazy-loading via dynaload and compiled validators to avoid loading
+  Malli at namespace load time. When AOT-compiled with
+  -Dborkdude.dynaload.aot=true, dynaload enables direct linking for reduced
+  binary size."
+  (:require
+    [borkdude.dynaload :refer [dynaload]]))
 
 ;; Schema Definitions
 
@@ -42,79 +46,60 @@
 
 ;; Validation Helpers
 
-;; Lazy-loaded Malli functions
-;; Using requiring-resolve to avoid loading malli.core at namespace load time
+;; Lazy-loaded Malli functions via dynaload
+;; dynaload defers namespace loading until first call, with fallbacks for
+;; environments without Malli (e.g., standalone uberscript).
 
-;; Compiled validators using delays
-;; Both requiring-resolve AND validator compilation happen lazily
+(def ^:private malli-validator
+  "Lazy reference to malli.core/validator.
+  Falls back to a function returning always-true validator when Malli unavailable."
+  (dynaload 'malli.core/validator {:default (constantly (fn [_] true))}))
 
-;; USE_MALLI Environment Variable
-;;
-;; Why use USE_MALLI instead of just :bb reader conditional?
-;;
-;; The USE_MALLI environment variable provides more flexibility than platform-only
-;; reader conditionals:
-;;
-;; - BB tests run with full Malli validation (USE_MALLI=true set in bb.edn test task)
-;; - Standalone uberscript has no Malli dependencies (USE_MALLI not set, no-op validators)
-;; - JVM mode always uses full validation (Malli always available on classpath)
-;;
-;; This opt-in approach allows testing the BB implementation with validation enabled
-;; while keeping the standalone uberscript lean and dependency-free.
+(def ^:private malli-explainer
+  "Lazy reference to malli.core/explainer.
+  Falls back to a function returning always-nil explainer when Malli unavailable."
+  (dynaload 'malli.core/explainer {:default (constantly (fn [_] nil))}))
+
+;; Compiled validators
+;; dynaload handles lazy loading, so no delays needed
 
 (def relation-validator
   "Compiled validator for Relation schema."
-  #?(:bb (if (System/getenv "USE_MALLI")
-           (delay ((requiring-resolve 'malli.core/validator) Relation))
-           (delay (fn [_] true)))
-     :clj (delay ((requiring-resolve 'malli.core/validator) Relation))))
+  (malli-validator Relation))
 
 (def task-validator
   "Compiled validator for Task schema."
-  #?(:bb (if (System/getenv "USE_MALLI")
-           (delay ((requiring-resolve 'malli.core/validator) Task))
-           (delay (fn [_] true)))
-     :clj (delay ((requiring-resolve 'malli.core/validator) Task))))
+  (malli-validator Task))
 
 (def relation-explainer
   "Compiled explainer for Relation schema."
-  #?(:bb (if (System/getenv "USE_MALLI")
-           (delay ((requiring-resolve 'malli.core/explainer) Relation))
-           (delay (fn [_] nil)))
-     :clj (delay ((requiring-resolve 'malli.core/explainer) Relation))))
+  (malli-explainer Relation))
 
 (def task-explainer
   "Compiled explainer for Task schema."
-  #?(:bb (if (System/getenv "USE_MALLI")
-           (delay ((requiring-resolve 'malli.core/explainer) Task))
-           (delay (fn [_] nil)))
-     :clj (delay ((requiring-resolve 'malli.core/explainer) Task))))
+  (malli-explainer Task))
 
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
   [relation]
-  #_{:clj-kondo/ignore [:type-mismatch]}
-  (@relation-validator relation))
+  (relation-validator relation))
 
 (defn valid-task?
   "Validate a task map against the Task schema."
   [task]
-  #_{:clj-kondo/ignore [:type-mismatch]}
-  (@task-validator task))
+  (task-validator task))
 
 (defn explain-relation
   "Explain why a relation map is invalid.
   Returns nil if valid, explanation map if invalid."
   [relation]
-  #_{:clj-kondo/ignore [:type-mismatch]}
-  (@relation-explainer relation))
+  (relation-explainer relation))
 
 (defn explain-task
   "Explain why a task map is invalid.
   Returns nil if valid, explanation map if invalid."
   [task]
-  #_{:clj-kondo/ignore [:type-mismatch]}
-  (@task-explainer task))
+  (task-explainer task))
 
 ;; Example Data
 
