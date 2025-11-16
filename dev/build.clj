@@ -207,7 +207,8 @@
                  :target-dir class-dir})
     (b/compile-clj {:basis basis
                     :src-dirs ["src"]
-                    :class-dir class-dir})
+                    :class-dir class-dir
+                    :java-opts ["-Dborkdude.dynaload.aot=true"]})
     (b/uber {:class-dir class-dir
              :uber-file jar-file
              :basis basis
