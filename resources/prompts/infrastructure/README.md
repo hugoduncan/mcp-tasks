@@ -34,6 +34,7 @@ The include path is relative to the `resources/prompts/` directory. When the pro
 ## Current Files
 
 - `story-parsing.md` - Story argument parsing table and format examples
+- `task-parsing.md` - Task argument parsing table and format examples
 - `out-of-scope-issues.md` - Pattern for discovering and tracking out-of-scope issues
 - `branch-management.md` - Git branch management instructions (reference)
 - `worktree-management.md` - Git worktree workflow instructions (reference)
