@@ -66,8 +66,8 @@ Output: `target/mcp-tasks-server-<platform>-<arch>` (~40 MB native executable)
 
 **Implementation details** (in `src/mcp_tasks/schema.cljc` and `src/mcp_tasks/execution_state.cljc`):
 ```clojure
-(def malli-validator (dynaload 'malli.core/validator {:default (fn [_] identity)}))
-(def malli-explainer (dynaload 'malli.core/explainer {:default (fn [_] (fn [_] nil))}))
+(def malli-validator (dynaload 'malli.core/validator {:default (constantly (fn [_] true))}))
+(def malli-explainer (dynaload 'malli.core/explainer {:default (constantly (fn [_] nil))}))
 ```
 
 **Benefits over previous requiring-resolve approach**:
