@@ -135,6 +135,112 @@ argument-hint: <story-name> [additional-context...]
 ---
 ```
 
+### Prompt Templating
+
+Prompts support templating for reusable content and reduced duplication. The system uses Selmer-based syntax for includes and variable substitution.
+
+#### Template Syntax
+
+**File Includes:**
+```markdown
+{% include "path/to/file.md" %}
+```
+
+Include paths are relative to the prompt base directory (`resources/prompts/` for built-in prompts). The include directive inserts the entire content of the referenced file.
+
+Example:
+```markdown
+## Parse Arguments
+
+{% include "infrastructure/story-parsing.md" %}
+
+## Execute Task
+...
+```
+
+**Variable Substitution:**
+```markdown
+Hello {{name}}!
+```
+
+Variables are replaced with values from the rendering context. If a variable is missing, it remains as `{{variable}}` by default.
+
+#### Include Resolution
+
+Includes are resolved in this order:
+1. User override directory (`.mcp-tasks/prompt-overrides/` or `.mcp-tasks/category-prompts/`)
+2. Built-in resources on classpath (`resources/prompts/`)
+
+This allows you to override specific infrastructure files while still using built-in templates.
+
+#### Creating Reusable Template Fragments
+
+Store shared content in the `infrastructure/` subdirectory:
+
+```
+resources/prompts/
+├── execute-task.md
+├── execute-story-child.md
+└── infrastructure/
+    ├── story-parsing.md
+    ├── out-of-scope-issues.md
+    └── branch-management.md
+```
+
+Example infrastructure file (`infrastructure/story-parsing.md`):
+```markdown
+Parse `$ARGUMENTS`: first token is story specification, rest is context.
+
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "story N" | 59, #59, story 59 | `task-id: N, type: story, unique: true` |
+| Text | "Make prompts flexible" | `title-pattern: "...", type: story, unique: true` |
+
+Handle no match or multiple matches by informing user.
+```
+
+Then include in multiple prompts:
+```markdown
+---
+description: Execute the next task from a story
+---
+
+{% include "infrastructure/story-parsing.md" %}
+
+## Process
+1. Find first unblocked incomplete child...
+```
+
+#### Template Behavior
+
+**Missing Variables:** By default, missing variables are left as-is (`{{var}}`). The system supports three modes:
+- `:leave` (default) - Keep `{{var}}` in output
+- `:empty` - Replace with empty string
+- `:error` - Throw exception
+
+**Recursive Includes:** Includes can contain other includes, up to a depth of 10 levels to prevent circular references.
+
+**HTML Entity Escaping:** Selmer automatically escapes HTML entities (e.g., apostrophes become `&#39;`). For markdown prompts, this is typically not an issue as the content is rendered as text.
+
+**Error Handling:** Template errors provide clear messages indicating:
+- Missing include files with searched paths
+- Missing variables when using `:error` mode
+- Circular include detection when depth exceeds 10
+
+#### Best Practices
+
+1. **Factor out repeated patterns** - If the same text appears in multiple prompts, extract it to an infrastructure file.
+
+2. **Use descriptive paths** - Name infrastructure files by their content, not their usage (e.g., `story-parsing.md` not `story-prompt-header.md`).
+
+3. **Keep templates focused** - Each infrastructure file should contain one logical piece of content.
+
+4. **Document dependencies** - Note in comments which prompts use which infrastructure files.
+
+5. **Test template rendering** - After creating templates, verify they render correctly in the MCP client.
+
+6. **Avoid deep nesting** - Keep include depth shallow (1-2 levels) for maintainability.
+
 ### Creating Custom Prompts
 
 To create a custom category prompt:
