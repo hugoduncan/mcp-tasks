@@ -11,7 +11,8 @@
   babashka/fs         {:mvn/version "0.5.22"}
   org.babashka/cli    {:mvn/version "0.8.61"}
   cheshire/cheshire   {:mvn/version "5.13.0"}
-  selmer/selmer       {:mvn/version "1.12.61"}}
+  selmer/selmer       {:mvn/version "1.12.61"}
+  borkdude/dynaload   {:mvn/version "0.3.5"}}
 
  :aliases
  {:cli    {:main-opts ["-m" "mcp-tasks.cli"]}
