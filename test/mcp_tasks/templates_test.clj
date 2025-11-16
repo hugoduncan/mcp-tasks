@@ -253,6 +253,61 @@
           (finally
             (fs/delete-tree temp-dir)))))))
 
+(deftest story-parsing-infrastructure-test
+  ;; Test the extracted story parsing logic infrastructure file.
+  ;; Contracts being tested:
+  ;; - story-parsing.md exists and is loadable from resources
+  ;; - Content contains the expected parsing table structure
+  ;; - File can be included in templates using {% include %} syntax
+  ;; - Included content can be combined with prompt-specific content
+
+  (testing "story-parsing infrastructure"
+    (testing "when loading from resources"
+      (let [loader (templates/create-resource-loader
+                     nil "prompts/infrastructure")
+            content (loader "story-parsing.md")]
+        (testing "contains parsing instruction"
+          (is (str/includes? content "Parse `$ARGUMENTS`:")))
+
+        (testing "contains format table header"
+          (is (str/includes? content "| Format | Example |")))
+
+        (testing "contains numeric format examples"
+          (is (str/includes? content "59, #59, story 59")))
+
+        (testing "contains text format example"
+          (is (str/includes? content "title-pattern:")))
+
+        (testing "contains error handling instruction"
+          (is (str/includes? content "Handle no match")))))
+
+    (testing "when included in prompt template"
+      (let [template (str "# My Prompt\n\n"
+                          "{% include \"infrastructure/story-parsing.md\" %}\n\n"
+                          "## Additional Steps\n\n"
+                          "1. Do something specific")
+            result (templates/render-with-includes
+                     template {} {:resource-base "prompts"})]
+        (testing "preserves surrounding content"
+          (is (str/starts-with? result "# My Prompt"))
+          (is (str/includes? result "## Additional Steps")))
+
+        (testing "inlines the parsing logic"
+          (is (str/includes? result "Parse `$ARGUMENTS`:")))
+
+        (testing "includes the full table"
+          (is (str/includes? result "| Numeric / #N")))))
+
+    (testing "when combined with variables"
+      (let [template (str "Process story: {{story-name}}\n\n"
+                          "{% include \"infrastructure/story-parsing.md\" %}")
+            result (templates/render-with-includes
+                     template
+                     {:story-name "Test Story"}
+                     {:resource-base "prompts"})]
+        (is (str/includes? result "Process story: Test Story"))
+        (is (str/includes? result "Parse `$ARGUMENTS`:"))))))
+
 (deftest template-error-test
   ;; Test error detection and formatting.
   ;; Contracts being tested:
