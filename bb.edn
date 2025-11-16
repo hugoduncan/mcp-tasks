@@ -5,6 +5,8 @@
          :git/tag   "v0.1.66"
          :git/sha   "08ec63b"
          :deps/root "projects/server"}
+        borkdude/dynaload {:git/url "https://github.com/borkdude/dynaload"
+                           :git/sha "3c1242125307b983db0f6abb289d52a684a7f710"}
         metosin/malli     {:mvn/version "0.16.4"}
         cheshire/cheshire {:mvn/version "5.13.0"}
         babashka/fs       {:mvn/version "0.5.22"}

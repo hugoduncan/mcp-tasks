@@ -3,9 +3,10 @@
   
   Thin wrappers around mcp-tasks.tools functions.
   
-  Uses lazy-loading via requiring-resolve to only load the tool namespaces
+  Uses lazy-loading via dynaload to only load the tool namespaces
   that are actually used, improving startup time for simple commands."
   (:require
+    [borkdude.dynaload :refer [dynaload]]
     [cheshire.core :as json]))
 
 (defn- parse-tool-response
@@ -32,23 +33,44 @@
     ;; Merge all parsed JSON maps, with later items taking precedence
     (apply merge {} json-items)))
 
-(def ^:private tool-map
-  "Map of command names to their tool function symbols.
+;; Tool function dynaload definitions
+;; Lazy-loaded tool functions for CLI commands
 
-  Uses symbols instead of direct references to enable lazy loading via requiring-resolve."
-  {:list 'mcp-tasks.tool.select-tasks/select-tasks-tool
-   :show 'mcp-tasks.tool.select-tasks/select-tasks-tool
-   :add 'mcp-tasks.tool.add-task/add-task-tool
-   :complete 'mcp-tasks.tool.complete-task/complete-task-tool
-   :update 'mcp-tasks.tool.update-task/update-task-tool
-   :delete 'mcp-tasks.tool.delete-task/delete-task-tool
-   :reopen 'mcp-tasks.tool.reopen-task/reopen-task-tool
-   :why-blocked 'mcp-tasks.tool.select-tasks/select-tasks-tool})
+(def ^:private select-tasks-tool-fn
+  (dynaload 'mcp-tasks.tool.select-tasks/select-tasks-tool))
+
+(def ^:private add-task-tool-fn
+  (dynaload 'mcp-tasks.tool.add-task/add-task-tool))
+
+(def ^:private complete-task-tool-fn
+  (dynaload 'mcp-tasks.tool.complete-task/complete-task-tool))
+
+(def ^:private update-task-tool-fn
+  (dynaload 'mcp-tasks.tool.update-task/update-task-tool))
+
+(def ^:private delete-task-tool-fn
+  (dynaload 'mcp-tasks.tool.delete-task/delete-task-tool))
+
+(def ^:private reopen-task-tool-fn
+  (dynaload 'mcp-tasks.tool.reopen-task/reopen-task-tool))
+
+(def ^:private tool-map
+  "Map of command names to their tool functions.
+
+  Uses dynaload vars for lazy loading."
+  {:list select-tasks-tool-fn
+   :show select-tasks-tool-fn
+   :add add-task-tool-fn
+   :complete complete-task-tool-fn
+   :update update-task-tool-fn
+   :delete delete-task-tool-fn
+   :reopen reopen-task-tool-fn
+   :why-blocked select-tasks-tool-fn})
 
 (defn- execute-command
   "Execute a command by calling its corresponding tool implementation.
   
-  Uses requiring-resolve to lazily load only the tool namespace needed for this command.
+  Uses dynaload to lazily load only the tool namespace needed for this command.
   
   Parameters:
   - config: The loaded configuration map
@@ -63,8 +85,7 @@
    (let [tool-args (-> parsed-args
                        (dissoc :format)
                        arg-transform-fn)
-         tool-fn-sym (get tool-map command-key)
-         tool-fn (requiring-resolve tool-fn-sym)
+         tool-fn (get tool-map command-key)
          tool (tool-fn config)
          impl-fn (:implementation tool)
          response (impl-fn nil tool-args)]
