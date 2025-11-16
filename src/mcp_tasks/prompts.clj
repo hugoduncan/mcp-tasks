@@ -6,7 +6,8 @@
     [clojure.set :as set]
     [clojure.string :as str]
     [mcp-clj.log :as log]
-    [mcp-clj.mcp-server.prompts :as prompts]))
+    [mcp-clj.mcp-server.prompts :as prompts]
+    [mcp-tasks.templates :as templates]))
 
 ;; Path constants for prompt resources and user overrides
 (def builtin-category-prompts-dir "category-prompts")
@@ -498,26 +499,32 @@
   - builtin-resource-path: Path to builtin resource (e.g., \"category-prompts/simple.md\")
 
   Returns a map with:
-  - :content - The prompt text (with frontmatter stripped)
+  - :content - The prompt text (with frontmatter stripped and templates rendered)
   - :metadata - Parsed frontmatter metadata map (may be nil)
   - :source - :override or :builtin
   - :path - Absolute path to override file or resource URL string
 
-  Returns nil if neither override nor builtin exists."
+  Returns nil if neither override nor builtin exists.
+  
+  Template includes are resolved relative to prompts/ on the classpath."
   [resolved-override builtin-resource-path]
   (if resolved-override
     ;; Load from override file
     (let [file-content (slurp (:path resolved-override))
-          {:keys [metadata content]} (parse-frontmatter file-content)]
-      {:content content
+          {:keys [metadata content]} (parse-frontmatter file-content)
+          rendered-content (templates/render-with-includes
+                             content {} {:resource-base "prompts"})]
+      {:content rendered-content
        :metadata metadata
        :source :override
        :path (:path resolved-override)})
     ;; Try builtin resource
     (when-let [resource-url (io/resource builtin-resource-path)]
       (let [file-content (slurp resource-url)
-            {:keys [metadata content]} (parse-frontmatter file-content)]
-        {:content content
+            {:keys [metadata content]} (parse-frontmatter file-content)
+            rendered-content (templates/render-with-includes
+                               content {} {:resource-base "prompts"})]
+        {:content rendered-content
          :metadata metadata
          :source :builtin
          :path (str resource-url)}))))
