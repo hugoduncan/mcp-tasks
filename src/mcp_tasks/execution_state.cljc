@@ -1,10 +1,13 @@
 (ns mcp-tasks.execution-state
   "Management of current execution state for stories and tasks.
-  
-  Uses lazy-loading via requiring-resolve and compiled validators with delays
-  to avoid loading Malli at namespace load time."
+
+  Uses lazy-loading via dynaload and compiled validators to avoid loading
+  Malli at namespace load time. When AOT-compiled with
+  -Dborkdude.dynaload.aot=true, dynaload enables direct linking for reduced
+  binary size."
   (:require
     [babashka.fs :as fs]
+    [borkdude.dynaload :refer [dynaload]]
     [clojure.edn :as edn]))
 
 ;; Schema
@@ -35,35 +38,34 @@
 
 ;; Validation
 
-;; Compiled validators using delays with reader conditionals
-;; In Babashka: Malli is opt-in via USE_MALLI environment variable
-;; In JVM: Malli is always enabled
-;; Both requiring-resolve AND validator compilation happen lazily
+(def ^:private malli-validator
+  "Lazy reference to malli.core/validator.
+  Falls back to a function returning always-true validator when Malli unavailable."
+  (dynaload 'malli.core/validator {:default (constantly (fn [_] true))}))
+
+(def ^:private malli-explainer
+  "Lazy reference to malli.core/explainer.
+  Falls back to a function returning always-nil explainer when Malli unavailable."
+  (dynaload 'malli.core/explainer {:default (constantly (fn [_] nil))}))
 
 (def execution-state-validator
   "Compiled validator for ExecutionState schema."
-  #?(:bb (if (System/getenv "USE_MALLI")
-           (delay ((requiring-resolve 'malli.core/validator) ExecutionState))
-           (delay (fn [_] true)))
-     :clj (delay ((requiring-resolve 'malli.core/validator) ExecutionState))))
+  (malli-validator ExecutionState))
 
 (def execution-state-explainer
   "Compiled explainer for ExecutionState schema."
-  #?(:bb (if (System/getenv "USE_MALLI")
-           (delay ((requiring-resolve 'malli.core/explainer) ExecutionState))
-           (delay (fn [_] nil)))
-     :clj (delay ((requiring-resolve 'malli.core/explainer) ExecutionState))))
+  (malli-explainer ExecutionState))
 
 (defn valid-execution-state?
   "Validate an execution state map against the ExecutionState schema."
   [state]
-  (@execution-state-validator state))
+  (execution-state-validator state))
 
 (defn explain-execution-state
   "Explain why an execution state map is invalid.
   Returns nil if valid, explanation map if invalid."
   [state]
-  (@execution-state-explainer state))
+  (execution-state-explainer state))
 
 ;; File Path
 
