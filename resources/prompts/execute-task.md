@@ -39,9 +39,9 @@ Call `work-on` with `task-id`. Display environment: worktree name/directory, bra
 
 ### 5. Discovering Issues
 
-For issues beyond scope: create task with `add-task`, link with `:discovered-during` via `update-task`, continue current task. Before completion, verify all discoveries captured.
+{% include "infrastructure/out-of-scope-issues.md" %}
 
-**Capture:** Unrelated bugs, technical debt, missing tests, documentation gaps. **Don't capture:** In-scope issues, direct blockers, minor fixes.
+Before completion, verify all discoveries captured.
 
 ### 6. Execute
 

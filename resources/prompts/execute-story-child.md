@@ -88,13 +88,7 @@ appear in git history and PR descriptions.
 
 ### 7. Add tasks for out-of-scope-issues
 
-For each out-of-scope issue you discovered while executing the task,
-create a task describing the issue. Use `add-task`, link with
-`:discovered-during` relation via `update-task`.
-
-**Capture:** Unrelated bugs, technical debt, missing tests,
-documentation gaps. **Don't capture:** In-scope issues, direct blockers,
-minor fixes.
+{% include "infrastructure/out-of-scope-issues.md" %}
 
 ### 8. Complete
 
