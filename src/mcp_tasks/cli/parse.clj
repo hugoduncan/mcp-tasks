@@ -231,9 +231,9 @@ USAGE:
   mcp-tasks prompts <subcommand> [options]
 
 SUBCOMMANDS:
-  list     List all available built-in prompts
-  install  Install prompts to local directories
-  show     Display resolved content of a specific prompt
+  list       List all available built-in prompts
+  customize  Copy prompts to local directories for customization
+  show       Display resolved content of a specific prompt
 
 Run 'mcp-tasks prompts <subcommand> --help' for subcommand-specific options.")
 
@@ -256,25 +256,25 @@ EXAMPLES:
   mcp-tasks prompts list
   mcp-tasks prompts list --format json")
 
-(def prompts-install-help
-  "Help text for the prompts install subcommand."
-  "mcp-tasks prompts install - Install prompts to local directories
+(def prompts-customize-help
+  "Help text for the prompts customize subcommand."
+  "mcp-tasks prompts customize - Copy prompts to local directories for customization
 
 USAGE:
-  mcp-tasks prompts install <prompt1> [prompt2] [prompt3]... [options]
+  mcp-tasks prompts customize <prompt1> [prompt2] [prompt3]... [options]
 
-Install one or more built-in prompts to local override directories.
-Category prompts install to .mcp-tasks/category-prompts/
-Workflow prompts install to .mcp-tasks/prompt-overrides/
+Copy one or more built-in prompts to local override directories for customization.
+Category prompts are copied to .mcp-tasks/category-prompts/
+Workflow prompts are copied to .mcp-tasks/prompt-overrides/
 
 OPTIONS:
   --format, -f <format>  Output format: human, json, edn (default: human)
   --help, -h             Show this help message
 
 EXAMPLES:
-  mcp-tasks prompts install simple
-  mcp-tasks prompts install simple medium execute-task
-  mcp-tasks prompts install simple --format json")
+  mcp-tasks prompts customize simple
+  mcp-tasks prompts customize simple medium execute-task
+  mcp-tasks prompts customize simple --format json")
 
 (def prompts-show-help
   "Help text for the prompts show subcommand."
@@ -658,10 +658,10 @@ EXAMPLES:
             :alias :f
             :desc "Output format (edn, json, human)"}})
 
-(def prompts-install-spec
-  "Spec for the prompts install subcommand.
+(def prompts-customize-spec
+  "Spec for the prompts customize subcommand.
 
-  Validates and coerces arguments for installing prompts.
+  Validates and coerces arguments for copying prompts.
 
   Coercion rules:
   - :format -> keyword (edn, json, human)
@@ -937,12 +937,12 @@ EXAMPLES:
 (defn parse-prompts
   "Parse arguments for the prompts command.
 
-  Handles subcommands: list, install, show
+  Handles subcommands: list, customize, show
   Returns parsed options map with :subcommand key, error map with :error key,
   or help map with :help key."
   [args]
   (if (empty? args)
-    {:error "Subcommand required: list, install, or show"
+    {:error "Subcommand required: list, customize, or show"
      :metadata {:args args}}
     (let [subcommand (first args)
           subcommand-args (rest args)]
@@ -952,10 +952,10 @@ EXAMPLES:
                    (= "-h" (first subcommand-args))))
         (case subcommand
           "list" {:help prompts-list-help}
-          "install" {:help prompts-install-help}
+          "customize" {:help prompts-customize-help}
           "show" {:help prompts-show-help}
           ;; Unknown subcommand with help flag - show error
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install, show")
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show")
            :metadata {:args args
                       :provided-subcommand subcommand}})
 
@@ -975,9 +975,9 @@ EXAMPLES:
               {:error (format-unknown-option-error (.getMessage e))
                :metadata {:args args}}))
 
-          "install"
+          "customize"
           (try
-            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
+            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-customize-spec})
                   parsed-opts (-> (:opts raw-parsed)
                                   (dissoc :f)
                                   (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
@@ -988,7 +988,7 @@ EXAMPLES:
                 (let [format-validation (validate-format parsed-opts)]
                   (if (:valid? format-validation)
                     (assoc parsed-opts
-                           :subcommand :install
+                           :subcommand :customize
                            :prompt-names prompt-names)
                     (dissoc format-validation :valid?)))))
             (catch Exception e
@@ -1023,6 +1023,6 @@ EXAMPLES:
               {:error (format-unknown-option-error (.getMessage e))
                :metadata {:args args}}))
 
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, install, show")
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show")
            :metadata {:args args
                       :provided-subcommand subcommand}})))))

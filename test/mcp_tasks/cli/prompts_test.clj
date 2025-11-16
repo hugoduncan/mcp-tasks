@@ -32,12 +32,12 @@
             (is (#{:category :workflow} (:type prompt)))
             (is (string? (:description prompt)))))))))
 
-(deftest prompts-install-command-installs-prompts
-  ;; Test prompts-install-command installs prompts and returns results
-  (testing "prompts-install-command"
+(deftest prompts-customize-command-customizes-prompts
+  ;; Test prompts-customize-command copies prompts and returns results
+  (testing "prompts-customize-command"
     (let [test-config {:resolved-tasks-dir (str (System/getProperty "java.io.tmpdir") "/.mcp-tasks")}]
       (testing "with valid prompt names"
-        (let [result (sut/prompts-install-command test-config {:prompt-names ["simple" "medium"]})]
+        (let [result (sut/prompts-customize-command test-config {:prompt-names ["simple" "medium"]})]
           (is (contains? result :results))
           (is (contains? result :metadata))
           (is (= 2 (count (:results result))))
@@ -51,14 +51,14 @@
               (is (keyword? (:status res)))))))
 
       (testing "with non-existent prompt"
-        (let [result (sut/prompts-install-command test-config {:prompt-names ["nonexistent"]})]
+        (let [result (sut/prompts-customize-command test-config {:prompt-names ["nonexistent"]})]
           (is (= 1 (count (:results result))))
           (is (= :not-found (get-in result [:results 0 :status])))
           (is (= 0 (get-in result [:metadata :installed-count])))
           (is (= 1 (get-in result [:metadata :failed-count])))))
 
       (testing "with mix of valid and invalid prompts"
-        (let [result (sut/prompts-install-command test-config {:prompt-names ["simple" "invalid" "medium"]})]
+        (let [result (sut/prompts-customize-command test-config {:prompt-names ["simple" "invalid" "medium"]})]
           (is (= 3 (count (:results result))))
           (is (= 3 (get-in result [:metadata :requested-count])))
           (is (<= (get-in result [:metadata :installed-count]) 2))

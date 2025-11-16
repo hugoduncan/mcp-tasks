@@ -277,10 +277,10 @@
                             " prompts (" (:category-count metadata)
                             " category, " (:workflow-count metadata) " workflow)")]))))
 
-(defn format-prompts-install
-  "Format prompts install response for human-readable output.
+(defn format-prompts-customize
+  "Format prompts customize response for human-readable output.
 
-  Shows installation results with status indicators and paths."
+  Shows copy results with status indicators and paths."
   [results metadata]
   (let [format-result (fn [r]
                         (case (:status r)
@@ -304,7 +304,7 @@
                                "  Unknown status: " (:status r))))]
     (str/join "\n\n"
               (filter some?
-                      ["Installing prompts..."
+                      ["Customizing prompts..."
                        ""
                        (str/join "\n\n" (map format-result results))
                        ""
@@ -422,7 +422,7 @@
 
     ;; Prompts install response
     (:results data)
-    (format-prompts-install (:results data) (:metadata data))
+    (format-prompts-customize (:results data) (:metadata data))
 
     ;; Prompts show response (has :name and :content)
     (and (:name data) (:content data))

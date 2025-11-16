@@ -26,13 +26,13 @@
                 :category-count category-count
                 :workflow-count workflow-count}}))
 
-(defn prompts-install-command
-  "Execute the prompts install command.
+(defn prompts-customize-command
+  "Execute the prompts customize command.
 
-  Takes config and parsed-args. Installs each prompt from :prompt-names.
+  Takes config and parsed-args. Copies each prompt from :prompt-names to local directories.
 
   Returns structured data with:
-  - :results - vector of installation result maps
+  - :results - vector of copy result maps
   - :metadata - map with :requested-count, :installed-count, :failed-count
 
   Example:

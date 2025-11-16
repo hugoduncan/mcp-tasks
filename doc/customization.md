@@ -53,31 +53,31 @@ Workflow Prompts (7):
 Total: 11 prompts (4 category, 7 workflow)
 ```
 
-### Install Prompt Templates
+### Customize Prompt Templates
 
-Install built-in prompt templates to local directories for customization:
+Copy built-in prompt templates to local directories for customization:
 
 ```bash
-# Install a single prompt
-mcp-tasks prompts install simple
+# Copy a single prompt for customization
+mcp-tasks prompts customize simple
 
-# Install multiple prompts
-mcp-tasks prompts install simple medium execute-task
+# Copy multiple prompts
+mcp-tasks prompts customize simple medium execute-task
 
 # JSON output for scripting
-mcp-tasks prompts install simple --format json
+mcp-tasks prompts customize simple --format json
 ```
 
-The install command:
+The customize command:
 - Detects prompt type (category vs workflow) automatically
-- Category prompts install to `.mcp-tasks/category-prompts/`
-- Workflow prompts install to `.mcp-tasks/prompt-overrides/`
-- Provides clear feedback about what was installed and where
+- Category prompts are copied to `.mcp-tasks/category-prompts/`
+- Workflow prompts are copied to `.mcp-tasks/prompt-overrides/`
+- Provides clear feedback about what was copied and where
 - Supports multiple output formats (human, json, edn)
 
 Example output:
 ```
-Installing prompts...
+Customizing prompts...
 
 ✓ simple (category)
   → .mcp-tasks/category-prompts/simple.md

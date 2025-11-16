@@ -191,7 +191,7 @@
   ;; Test installing a single category prompt
   (testing "prompts-install-single-category"
     (testing "can install simple category prompt"
-      (let [result (call-cli "prompts" "install" "simple")
+      (let [result (call-cli "prompts" "customize" "simple")
             target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "simple"))
@@ -202,7 +202,7 @@
           (is (str/includes? content "description:")))))
 
     (testing "human format shows installation status"
-      (let [result (call-cli "prompts" "install" "medium")]
+      (let [result (call-cli "prompts" "customize" "medium")]
         (is (= 0 (:exit result)))
         (is (or (str/includes? (:out result) "✓")
                 (str/includes? (:out result) "installed")))
@@ -212,7 +212,7 @@
   ;; Test installing a single workflow prompt
   (testing "prompts-install-single-workflow"
     (testing "can install execute-task workflow prompt"
-      (let [result (call-cli "prompts" "install" "execute-task")
+      (let [result (call-cli "prompts" "customize" "execute-task")
             target-file (io/file *test-dir* ".mcp-tasks/prompt-overrides/execute-task.md")]
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "execute-task"))
@@ -223,7 +223,7 @@
           (is (str/includes? content "description:")))))
 
     (testing "human format shows installation path"
-      (let [result (call-cli "prompts" "install" "refine-task")]
+      (let [result (call-cli "prompts" "customize" "refine-task")]
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "prompt-overrides"))))))
 
@@ -231,7 +231,7 @@
   ;; Test installing multiple prompts at once
   (testing "prompts-install-multiple"
     (testing "can install multiple prompts"
-      (let [result (call-cli "prompts" "install" "simple" "medium" "execute-task")]
+      (let [result (call-cli "prompts" "customize" "simple" "medium" "execute-task")]
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "simple"))
         (is (str/includes? (:out result) "medium"))
@@ -242,7 +242,7 @@
         (is (.exists (io/file *test-dir* ".mcp-tasks/prompt-overrides/execute-task.md")))))
 
     (testing "human format shows summary"
-      (let [result (call-cli "prompts" "install" "simple" "large")]
+      (let [result (call-cli "prompts" "customize" "simple" "large")]
         (is (= 0 (:exit result)))
         (is (or (str/includes? (:out result) "Summary")
                 (str/includes? (:out result) "installed")))))))
@@ -251,7 +251,7 @@
   ;; Test prompts install with EDN output
   (testing "prompts-install-edn-format"
     (testing "can install with EDN output"
-      (let [result (call-cli "--format" "edn" "prompts" "install" "simple")]
+      (let [result (call-cli "--format" "edn" "prompts" "customize" "simple")]
         (is (= 0 (:exit result)))
         (let [parsed (edn/read-string (:out result))]
           (is (map? parsed))
@@ -283,7 +283,7 @@
                   (is (= 1 (:failed-count metadata))))))))))
 
     (testing "multiple installs with EDN"
-      (let [result (call-cli "prompts" "install" "medium" "execute-task" "-f" "edn")
+      (let [result (call-cli "prompts" "customize" "medium" "execute-task" "-f" "edn")
             parsed (edn/read-string (:out result))]
         (is (= 2 (count (:results parsed))))
         (is (= 2 (get-in parsed [:metadata :requested-count])))
@@ -295,7 +295,7 @@
   ;; Test prompts install with JSON output
   (testing "prompts-install-json-format"
     (testing "can install with JSON output"
-      (let [result (call-cli "--format" "json" "prompts" "install" "simple")]
+      (let [result (call-cli "--format" "json" "prompts" "customize" "simple")]
         (is (= 0 (:exit result)))
         (let [parsed (json/parse-string (:out result) keyword)]
           (is (contains? parsed :results))
@@ -317,7 +317,7 @@
               (is (number? (:failedCount metadata))))))))
 
     (testing "multiple installs with JSON"
-      (let [result (call-cli "prompts" "install" "large" "refine-task" "-f" "json")
+      (let [result (call-cli "prompts" "customize" "large" "refine-task" "-f" "json")
             parsed (json/parse-string (:out result) keyword)]
         (is (= 2 (count (:results parsed))))
         (is (= 2 (-> parsed :metadata :requestedCount)))
@@ -328,14 +328,14 @@
   ;; Test error handling for invalid prompt names
   (testing "prompts-install-error-invalid-name"
     (testing "installing non-existent prompt shows error"
-      (let [result (call-cli "prompts" "install" "nonexistent")]
+      (let [result (call-cli "prompts" "customize" "nonexistent")]
         (is (= 0 (:exit result)))
         (is (or (str/includes? (:out result) "✗")
                 (str/includes? (:out result) "not found")
                 (str/includes? (:out result) "failed")))))
 
     (testing "EDN format shows not-found status"
-      (let [result (call-cli "--format" "edn" "prompts" "install" "invalid-prompt")
+      (let [result (call-cli "--format" "edn" "prompts" "customize" "invalid-prompt")
             parsed (edn/read-string (:out result))]
         (is (= 1 (count (:results parsed))))
         (is (= :not-found (get-in parsed [:results 0 :status])))
@@ -343,7 +343,7 @@
         (is (= 1 (get-in parsed [:metadata :failed-count])))))
 
     (testing "JSON format shows not-found status"
-      (let [result (call-cli "prompts" "install" "bad-name" "-f" "json")
+      (let [result (call-cli "prompts" "customize" "bad-name" "-f" "json")
             parsed (json/parse-string (:out result) keyword)]
         (is (= "not-found" (get-in parsed [:results 0 :status])))
         ;; not-found counts as failed
@@ -354,7 +354,7 @@
   ;; Test installing mix of valid and invalid prompts
   (testing "prompts-install-mixed-valid-invalid"
     (testing "processes all prompts and reports status"
-      (let [result (call-cli "prompts" "install" "simple" "invalid" "medium")]
+      (let [result (call-cli "prompts" "customize" "simple" "invalid" "medium")]
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "simple"))
         (is (str/includes? (:out result) "invalid"))
@@ -367,7 +367,7 @@
                 (str/includes? (:out result) "failed")))))
 
     (testing "EDN format shows mixed results"
-      (let [result (call-cli "prompts" "install" "large" "bad" "execute-task" "-f" "edn")
+      (let [result (call-cli "prompts" "customize" "large" "bad" "execute-task" "-f" "edn")
             parsed (edn/read-string (:out result))]
         (is (= 3 (count (:results parsed))))
         (is (= 3 (get-in parsed [:metadata :requested-count])))
@@ -382,7 +382,7 @@
   ;; Test that installing skips existing prompts without overwriting
   (testing "prompts-install-skip-existing"
     (testing "preserves modified files on re-install"
-      (let [result (call-cli "prompts" "install" "simple")
+      (let [result (call-cli "prompts" "customize" "simple")
             target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
         (is (= 0 (:exit result)))
         (is (.exists target-file))
@@ -391,7 +391,7 @@
         (is (= "Modified content" (slurp target-file)))
 
         ;; Install again
-        (let [result2 (call-cli "prompts" "install" "simple")]
+        (let [result2 (call-cli "prompts" "customize" "simple")]
           (is (= 0 (:exit result2)))
           ;; Should NOT be overwritten - modified content preserved
           (is (= "Modified content" (slurp target-file)))
@@ -406,7 +406,7 @@
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "prompts"))
         (is (str/includes? (:out result) "list"))
-        (is (str/includes? (:out result) "install"))))
+        (is (str/includes? (:out result) "customize"))))
 
     (testing "prompts list has help"
       (let [result (call-cli "prompts" "list" "--help")]
@@ -415,9 +415,9 @@
         (is (str/includes? (:out result) "format"))))
 
     (testing "prompts install has help"
-      (let [result (call-cli "prompts" "install" "--help")]
+      (let [result (call-cli "prompts" "customize" "--help")]
         (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "install"))
+        (is (str/includes? (:out result) "customize"))
         (is (str/includes? (:out result) "format"))))))
 
 (deftest prompts-list-installed-matches-discovered-test
@@ -429,7 +429,7 @@
             category-prompts (filter #(= :category (:type %)) (:prompts parsed-list))
             category-names (map :name category-prompts)
             ;; Install all category prompts
-            install-result (apply call-cli "prompts" "install" (concat category-names ["-f" "edn"]))
+            install-result (apply call-cli "prompts" "customize" (concat category-names ["-f" "edn"]))
             parsed-install (edn/read-string (:out install-result))]
         ;; All should have successful status
         (is (every? #(#{:installed :exists} (:status %)) (:results parsed-install)))
@@ -442,7 +442,7 @@
             parsed-list (edn/read-string (:out list-result))
             workflow-prompts (filter #(= :workflow (:type %)) (:prompts parsed-list))
             workflow-names (map :name workflow-prompts)
-            install-result (apply call-cli "prompts" "install" (concat workflow-names ["-f" "edn"]))
+            install-result (apply call-cli "prompts" "customize" (concat workflow-names ["-f" "edn"]))
             parsed-install (edn/read-string (:out install-result))]
         ;; All should have successful status
         (is (every? #(#{:installed :exists} (:status %)) (:results parsed-install)))
@@ -472,7 +472,7 @@
         (is (some #(= "create-story-tasks" (:name %)) workflows))))
 
     (testing "installation respects type for directory selection"
-      (call-cli "prompts" "install" "simple" "execute-task")
+      (call-cli "prompts" "customize" "simple" "execute-task")
       ;; Category prompt goes to category-prompts/
       (is (.exists (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")))
       (is (not (.exists (io/file *test-dir* ".mcp-tasks/prompt-overrides/simple.md"))))
@@ -486,7 +486,7 @@
     (testing "installs to parent .mcp-tasks when run from subdirectory"
       (let [subdir (io/file *test-dir* "src")]
         (fs/create-dirs subdir)
-        (let [result (call-cli subdir "prompts" "install" "simple")
+        (let [result (call-cli subdir "prompts" "customize" "simple")
               target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
           (is (= 0 (:exit result)))
           (is (.exists target-file))
@@ -496,7 +496,7 @@
     (testing "works from nested subdirectory"
       (let [nested-dir (io/file *test-dir* "src/test/integration")]
         (fs/create-dirs nested-dir)
-        (let [result (call-cli nested-dir "prompts" "install" "medium")
+        (let [result (call-cli nested-dir "prompts" "customize" "medium")
               target-file (io/file *test-dir* ".mcp-tasks/category-prompts/medium.md")]
           (is (= 0 (:exit result)))
           (is (.exists target-file)))))))
@@ -513,7 +513,7 @@
           (fs/create-dirs category-dir)
           ;; Do NOT create .mcp-tasks.edn
 
-          (let [result (call-cli (io/file test-dir) "prompts" "install" "simple")
+          (let [result (call-cli (io/file test-dir) "prompts" "customize" "simple")
                 target-file (io/file category-dir "simple.md")]
             (is (= 0 (:exit result)))
             (is (.exists target-file))
@@ -535,7 +535,7 @@
           (spit (io/file test-dir ".mcp-tasks.edn")
                 (pr-str {:tasks-dir custom-tasks-dir}))
 
-          (let [result (call-cli (io/file test-dir) "prompts" "install" "simple")
+          (let [result (call-cli (io/file test-dir) "prompts" "customize" "simple")
                 target-file (io/file category-dir "simple.md")]
             (is (= 0 (:exit result)))
             (is (.exists target-file))
@@ -559,7 +559,7 @@
           (spit (io/file test-dir ".mcp-tasks.edn")
                 (pr-str {:tasks-dir custom-dir-name}))
 
-          (let [result (call-cli (io/file test-dir) "prompts" "install" "medium")
+          (let [result (call-cli (io/file test-dir) "prompts" "customize" "medium")
                 target-file (io/file category-dir "medium.md")]
             (is (= 0 (:exit result)))
             (is (.exists target-file))
@@ -586,7 +586,7 @@
           (h/create-git-worktree project-dir worktree-path)
 
           ;; Install prompt from worktree
-          (let [result (call-cli (io/file worktree-path) "prompts" "install" "simple")
+          (let [result (call-cli (io/file worktree-path) "prompts" "customize" "simple")
                 target-file (io/file category-dir "simple.md")]
             (is (= 0 (:exit result)))
             (is (.exists target-file))
@@ -612,7 +612,7 @@
           (fs/create-dirs nested-dir)
 
           ;; Install prompt from nested directory in worktree
-          (let [result (call-cli nested-dir "prompts" "install" "medium")
+          (let [result (call-cli nested-dir "prompts" "customize" "medium")
                 target-file (io/file category-dir "medium.md")]
             (is (= 0 (:exit result)))
             (is (.exists target-file)))
