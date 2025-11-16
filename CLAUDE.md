@@ -29,6 +29,15 @@ When updating documentation:
 - `.mcp-tasks/category-prompts/<category-name>.md` - Category-specific execution prompts
 - `.mcp-tasks/prompt-overrides/<name>.md` - Custom workflow prompt overrides (optional)
 
+**Prompt Templating:**
+
+Prompts support Selmer-based templating to reduce duplication:
+- `{% include "infrastructure/file.md" %}` - Include reusable fragments from `resources/prompts/infrastructure/`
+- `{{variable}}` - Variable substitution (used internally)
+- Override files in `.mcp-tasks/prompt-overrides/` take precedence over built-in prompts
+
+The `mcp-tasks.templates` namespace wraps Selmer to provide include resolution with proper override handling. See `doc/customization.md` for complete templating syntax and usage documentation.
+
 **Task File Format:**
 Tasks are stored in EDNL (EDN Lines) format where each line is a valid EDN map representing a Task record. The Task schema (defined in `src/mcp_tasks/schema.clj`) includes:
 
