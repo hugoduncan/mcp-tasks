@@ -220,7 +220,7 @@ description: Execute the next task from a story
 
 **Recursive Includes:** Includes can contain other includes, up to a depth of 10 levels to prevent circular references.
 
-**HTML Entity Escaping:** Selmer automatically escapes HTML entities (e.g., apostrophes become `&#39;`). For markdown prompts, this is typically not an issue as the content is rendered as text.
+**No HTML Escaping:** HTML entity escaping is disabled since prompts are markdown, not HTML. Special characters like apostrophes, angle brackets, and ampersands are preserved as-is in rendered content.
 
 **Error Handling:** Template errors provide clear messages indicating:
 - Missing include files with searched paths

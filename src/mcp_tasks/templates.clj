@@ -18,9 +18,13 @@
    :custom-resource-path nil})
 
 (defn- configure-selmer!
-  "Configure Selmer settings for template rendering."
+  "Configure Selmer settings for template rendering.
+  
+  Disables HTML escaping since prompts are markdown, not HTML."
   [config]
   (let [{:keys [missing-value-formatter]} (merge default-config config)]
+    ;; Disable HTML escaping - prompts are markdown, not HTML
+    (selmer-util/turn-off-escaping!)
     (selmer-util/set-missing-value-formatter!
       (case missing-value-formatter
         :leave (fn [tag _context-map]

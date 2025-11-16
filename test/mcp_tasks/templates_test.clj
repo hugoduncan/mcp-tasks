@@ -12,7 +12,7 @@
   ;; - Missing variables are handled based on configuration
   ;; - Multiple variables can be substituted in one template
   ;; - Nested data access works correctly
-  ;; - HTML entities are escaped by default (Selmer behavior)
+  ;; - Special characters are NOT escaped (prompts are markdown, not HTML)
 
   (testing "render"
     (testing "substitutes single variable"
@@ -24,12 +24,14 @@
              (templates/render "Hello {{user}}, welcome to {{place}}!"
                                {:user "Alice" :place "Home"}))))
 
-    (testing "escapes HTML entities in values"
-      (is (= "Hello &lt;script&gt;!"
+    (testing "preserves special characters without escaping"
+      ;; HTML escaping is disabled since prompts are markdown, not HTML
+      (is (= "Hello <script>!"
              (templates/render "Hello {{name}}!" {:name "<script>"})))
-      ;; Apostrophes are also escaped
-      (is (= "Bob&#39;s place"
-             (templates/render "{{place}}" {:place "Bob's place"}))))
+      (is (= "Bob's place"
+             (templates/render "{{place}}" {:place "Bob's place"})))
+      (is (= "1 < 2 & 3 > 1"
+             (templates/render "{{expr}}" {:expr "1 < 2 & 3 > 1"}))))
 
     (testing "handles nested data access"
       (is (= "User: Alice"
