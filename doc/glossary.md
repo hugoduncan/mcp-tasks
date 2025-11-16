@@ -57,6 +57,10 @@ EDN map with fields defined by the Task schema in
 
 **Task Tracking Repository**: The `.mcp-tasks/` directory as a separate git repository for version-controlling task history.
 
+**Template**: A prompt file containing Selmer-based templating syntax (`{% include "path" %}` for includes, `{{variable}}` for substitution) that is rendered before being presented to the agent.
+
+**Template Infrastructure File**: A reusable markdown file stored in `resources/prompts/infrastructure/` that can be included in multiple prompts via `{% include "infrastructure/filename.md" %}`. Examples include `story-parsing.md` and `out-of-scope-issues.md`.
+
 ## MCP Terms
 
 **MCP Client**: An application that connects to MCP servers (e.g., Claude Code, Claude Desktop).

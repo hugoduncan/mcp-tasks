@@ -6,34 +6,12 @@ argument-hint: [story-specification] [additional-context...]
 
 Review the implementation of a story against its requirements and code quality standards.
 
-Parse the arguments: $ARGUMENTS
-- The first word/token is the story specification
-- Everything after is additional context to consider when reviewing
-
-### Story Specification Formats
-
-The story can be specified in multiple ways:
-- **By ID**: "#59", "59", "story 59" (numeric formats)
-- **By title pattern**: "Make story prompts flexible" (text matching)
-
-### Parsing Logic
-
-1. **Extract the first token** from $ARGUMENTS as the story specification
-2. **Determine specification type**:
-   - If the token is numeric (e.g., "59") → treat as task-id
-   - If the token starts with "#" (e.g., "#59") → strip "#" and treat as task-id
-   - If the token matches "story N" pattern → extract N and treat as task-id
-   - Otherwise → treat as title-pattern
-3. **Use appropriate select-tasks filter**:
-   - For task-id: `task-id: N, type: story, unique: true`
-   - For title-pattern: `title-pattern: "...", type: story, unique: true`
+{% include "infrastructure/story-parsing.md" %}
 
 ## Process
 
 1. Find the story task using `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true`
-   - Handle errors:
-     - **No match**: Inform user no story found, suggest checking available stories
-     - **Multiple matches** (if using title-pattern without unique): List matching stories with IDs and ask for clarification
+   - Handle no match or multiple matches by informing user
    - Extract the story's `:id`, `:title`, and `:description` fields
 
 2. Analyze the current branch against the description of the story:

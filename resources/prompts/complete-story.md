@@ -6,9 +6,7 @@ argument-hint: [story-specification] [completion-comment...]
 
 Mark a story as complete and move it to the archive.
 
-Parse the arguments: $ARGUMENTS
-- The first word/token is the story name (without .md extension)
-- Everything after is an optional completion comment to append to the story
+{% include "infrastructure/story-parsing.md" %}
 
 ## Purpose
 
