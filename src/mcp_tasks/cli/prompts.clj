@@ -124,3 +124,25 @@
           {:error (str "Prompt '" prompt-name "' not found. "
                        "Use 'mcp-tasks prompts list' to see available prompts.")
            :metadata {:prompt-name prompt-name}})))))
+
+(defn prompts-install-command
+  "Execute the prompts install command.
+
+  Generates Claude Code slash command files from available prompts.
+  Files are written to the target directory with names: mcp-tasks-<prompt-name>.md
+
+  Takes config and parsed-args. Target directory defaults to .claude/commands/.
+
+  Returns structured data with:
+  - :results - vector of generation result maps
+  - :metadata - map with :generated-count, :failed-count, :target-dir
+
+  Example:
+  {:results [{:name \"simple\" :status :generated :path \"...\"}]
+   :metadata {:generated-count 1 :failed-count 0 :target-dir \".claude/commands/\"}}"
+  [_config parsed-args]
+  (let [target-dir (:target-dir parsed-args)]
+    {:results []
+     :metadata {:generated-count 0
+                :failed-count 0
+                :target-dir target-dir}}))

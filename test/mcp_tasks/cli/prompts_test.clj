@@ -63,3 +63,27 @@
           (is (= 3 (get-in result [:metadata :requested-count])))
           (is (<= (get-in result [:metadata :installed-count]) 2))
           (is (>= (get-in result [:metadata :failed-count]) 1)))))))
+
+(deftest prompts-install-command-returns-skeleton-response
+  ;; Test prompts-install-command returns expected skeleton structure
+  (testing "prompts-install-command"
+    (testing "returns skeleton response with default target directory"
+      (let [result (sut/prompts-install-command {} {:target-dir ".claude/commands/"})]
+        (is (contains? result :results))
+        (is (contains? result :metadata))
+        (is (vector? (:results result)))
+        (is (= 0 (count (:results result))))
+
+        (testing "metadata contains correct fields"
+          (let [metadata (:metadata result)]
+            (is (= 0 (:generated-count metadata)))
+            (is (= 0 (:failed-count metadata)))
+            (is (= ".claude/commands/" (:target-dir metadata)))))))
+
+    (testing "returns skeleton response with custom target directory"
+      (let [result (sut/prompts-install-command {} {:target-dir "my-commands/"})]
+        (is (= "my-commands/" (get-in result [:metadata :target-dir])))))
+
+    (testing "returns empty results vector for now"
+      (let [result (sut/prompts-install-command {} {:target-dir ".claude/commands/"})]
+        (is (empty? (:results result)))))))

@@ -75,7 +75,8 @@
                      "prompts" (case (:subcommand parsed-args)
                                  :list (prompts/prompts-list-command parsed-args)
                                  :customize (prompts/prompts-customize-command resolved-config parsed-args)
-                                 :show (prompts/prompts-show-command resolved-config parsed-args)))
+                                 :show (prompts/prompts-show-command resolved-config parsed-args)
+                                 :install (prompts/prompts-install-command resolved-config parsed-args)))
             output-format (or (:format parsed-args) global-format)
             formatted-output (format/render output-format result)]
         (if (:error result)

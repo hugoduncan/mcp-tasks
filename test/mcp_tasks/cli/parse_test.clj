@@ -403,11 +403,11 @@
         (is (= "Required option: --task-id (or --id)" (:error result)))))))
 
 (deftest parse-prompts-test
-  ;; Tests for parse-prompts with list, customize, and show subcommands
+  ;; Tests for parse-prompts with list, customize, show, and install subcommands
   (testing "parse-prompts"
     (testing "returns error when no subcommand provided"
       (let [result (sut/parse-prompts [])]
-        (is (= "Subcommand required: list, customize, or show" (:error result)))
+        (is (= "Subcommand required: list, customize, show, or install" (:error result)))
         (is (= {:args []} (:metadata result)))))
 
     (testing "handles list subcommand"
@@ -478,8 +478,41 @@
           (is (string? (:help result)))
           (is (re-find #"mcp-tasks prompts show" (:help result))))))
 
+    (testing "handles install subcommand"
+      (testing "with no args uses default directory"
+        (let [result (sut/parse-prompts ["install"])]
+          (is (= :install (:subcommand result)))
+          (is (= ".claude/commands/" (:target-dir result)))))
+
+      (testing "with target directory"
+        (let [result (sut/parse-prompts ["install" "my-commands/"])]
+          (is (= :install (:subcommand result)))
+          (is (= "my-commands/" (:target-dir result)))))
+
+      (testing "with format option"
+        (let [result (sut/parse-prompts ["install" "--format" "json"])]
+          (is (= :install (:subcommand result)))
+          (is (= ".claude/commands/" (:target-dir result)))
+          (is (= :json (:format result)))))
+
+      (testing "with target directory and format option"
+        (let [result (sut/parse-prompts ["install" "custom/" "--format" "edn"])]
+          (is (= :install (:subcommand result)))
+          (is (= "custom/" (:target-dir result)))
+          (is (= :edn (:format result)))))
+
+      (testing "returns error when multiple directories provided"
+        (let [result (sut/parse-prompts ["install" "dir1/" "dir2/"])]
+          (is (= "Only one target directory is allowed" (:error result)))
+          (is (= ["dir1/" "dir2/"] (get-in result [:metadata :provided-args])))))
+
+      (testing "with help flag"
+        (let [result (sut/parse-prompts ["install" "--help"])]
+          (is (string? (:help result)))
+          (is (re-find #"mcp-tasks prompts install" (:help result))))))
+
     (testing "handles unknown subcommand"
       (let [result (sut/parse-prompts ["unknown"])]
         (is (re-find #"Unknown subcommand: unknown" (:error result)))
-        (is (re-find #"list, customize, show" (:error result)))
+        (is (re-find #"list, customize, show, install" (:error result)))
         (is (= "unknown" (get-in result [:metadata :provided-subcommand])))))))

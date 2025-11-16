@@ -234,6 +234,7 @@ SUBCOMMANDS:
   list       List all available built-in prompts
   customize  Copy prompts to local directories for customization
   show       Display resolved content of a specific prompt
+  install    Generate Claude Code slash commands from prompts
 
 Run 'mcp-tasks prompts <subcommand> --help' for subcommand-specific options.")
 
@@ -295,6 +296,28 @@ EXAMPLES:
   mcp-tasks prompts show simple
   mcp-tasks prompts show execute-task
   mcp-tasks prompts show simple --format json")
+
+(def prompts-install-help
+  "Help text for the prompts install subcommand."
+  "mcp-tasks prompts install - Generate Claude Code slash commands from prompts
+
+USAGE:
+  mcp-tasks prompts install [target-directory] [options]
+
+Generate Claude Code slash command files (.md) from available prompts.
+Files are written to the target directory with names: mcp-tasks-<prompt-name>.md
+
+TARGET DIRECTORY:
+  Defaults to .claude/commands/ if not specified.
+
+OPTIONS:
+  --format, -f <format>  Output format: human, json, edn (default: human)
+  --help, -h             Show this help message
+
+EXAMPLES:
+  mcp-tasks prompts install
+  mcp-tasks prompts install .claude/commands/
+  mcp-tasks prompts install my-commands/ --format json")
 
 ;; Type Coercion Functions
 
@@ -688,6 +711,21 @@ EXAMPLES:
             :alias :f
             :desc "Output format (edn, json, human)"}})
 
+(def prompts-install-spec
+  "Spec for the prompts install subcommand.
+
+  Validates and coerces arguments for generating slash commands.
+
+  Coercion rules:
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Optional target directory in args (defaults to .claude/commands/)"
+  {:format {:coerce :keyword
+            :alias :f
+            :desc "Output format (edn, json, human)"}})
+
 ;; Parse Functions
 
 (defn parse-list
@@ -937,12 +975,12 @@ EXAMPLES:
 (defn parse-prompts
   "Parse arguments for the prompts command.
 
-  Handles subcommands: list, customize, show
+  Handles subcommands: list, customize, show, install
   Returns parsed options map with :subcommand key, error map with :error key,
   or help map with :help key."
   [args]
   (if (empty? args)
-    {:error "Subcommand required: list, customize, or show"
+    {:error "Subcommand required: list, customize, show, or install"
      :metadata {:args args}}
     (let [subcommand (first args)
           subcommand-args (rest args)]
@@ -954,8 +992,9 @@ EXAMPLES:
           "list" {:help prompts-list-help}
           "customize" {:help prompts-customize-help}
           "show" {:help prompts-show-help}
+          "install" {:help prompts-install-help}
           ;; Unknown subcommand with help flag - show error
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show")
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show, install")
            :metadata {:args args
                       :provided-subcommand subcommand}})
 
@@ -1023,6 +1062,30 @@ EXAMPLES:
               {:error (format-unknown-option-error (.getMessage e))
                :metadata {:args args}}))
 
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show")
+          "install"
+          (try
+            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
+                  parsed-opts (-> (:opts raw-parsed)
+                                  (dissoc :f)
+                                  (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
+                  target-dir (or (first (:args raw-parsed)) ".claude/commands/")]
+              (cond
+                (> (count (:args raw-parsed)) 1)
+                {:error "Only one target directory is allowed"
+                 :metadata {:args args
+                            :provided-args (:args raw-parsed)}}
+
+                :else
+                (let [format-validation (validate-format parsed-opts)]
+                  (if (:valid? format-validation)
+                    (assoc parsed-opts
+                           :subcommand :install
+                           :target-dir target-dir)
+                    (dissoc format-validation :valid?)))))
+            (catch Exception e
+              {:error (format-unknown-option-error (.getMessage e))
+               :metadata {:args args}}))
+
+          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show, install")
            :metadata {:args args
                       :provided-subcommand subcommand}})))))
