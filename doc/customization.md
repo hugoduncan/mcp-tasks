@@ -227,6 +227,45 @@ description: Execute the next task from a story
 - Missing variables when using `:error` mode
 - Circular include detection when depth exceeds 10
 
+#### Runtime vs Template Content
+
+Not all dynamic content belongs in templates. Template variables are resolved **at prompt load time** (when the MCP server starts or when prompts are loaded), while some content must be fetched **at execution time** (when an agent is actively working on a task).
+
+**Template-time content** (use `{% include %}` or `{{variable}}`):
+- Reusable documentation fragments
+- Common parsing logic shared across prompts
+- Static workflow instructions
+
+**Runtime content** (use MCP tools like `ReadMcpResourceTool`):
+- Category-specific execution instructions (category is determined when agent selects a task)
+- Task details (selected dynamically during execution)
+- Current project state
+
+**Example: Category Instructions**
+
+You might be tempted to use `{{category-instructions}}` as a template variable:
+
+```markdown
+## Execute Task
+{{category-instructions}}
+```
+
+However, this **cannot work** because:
+1. Template rendering occurs when the prompt file is loaded
+2. Category is determined at runtime when the agent selects which task to execute
+3. The same prompt (e.g., `execute-story-child`) handles tasks from any category
+
+The correct approach uses runtime fetching:
+
+```markdown
+## Execute Task
+Use `ReadMcpResourceTool` with server "mcp-tasks", uri `prompt://category-<category>`.
+```
+
+This pattern allows the agent to fetch category-specific instructions after determining which task (and thus which category) to execute.
+
+**Rule of thumb:** If the value depends on information only available during task execution, use MCP tools to fetch it at runtime rather than template variables.
+
 #### Best Practices
 
 1. **Factor out repeated patterns** - If the same text appears in multiple prompts, extract it to an infrastructure file.
