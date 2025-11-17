@@ -11,7 +11,7 @@ Refine the task through an interactive process.
 ## Process
 
 {% if cli %}
-1. Find task via `mcp-tasks show --task-id N` or `mcp-tasks list --title-pattern "..." --limit 1`. Extract `id`, `title`, `description`, `design`, `type`.
+1. Find task via `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --limit 1 --format edn`. Extract `id`, `title`, `description`, `design`, `type`.
 {% else %}
 1. Find task via `select-tasks` (unique). Extract `:id`, `:title`, `:description`, `:design`, `:type`.
 {% endif %}

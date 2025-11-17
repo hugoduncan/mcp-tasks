@@ -660,7 +660,7 @@
             output (sut/format-prompts-install results metadata)]
         (is (str/includes? output "Warning: 2 files overwritten"))))
 
-    (testing "shows skipped files"
+    (testing "hides skipped files from output"
       (let [results [{:name "infrastructure"
                       :type nil
                       :status :skipped
@@ -671,8 +671,9 @@
                       :overwritten-count 0
                       :target-dir ".claude/commands/"}
             output (sut/format-prompts-install results metadata)]
-        (is (str/includes? output "- infrastructure (skipped:"))
-        (is (str/includes? output "Summary: 0 generated, 1 skipped"))))
+        (is (not (str/includes? output "infrastructure")))
+        (is (not (str/includes? output "skipped")))
+        (is (str/includes? output "Summary: 0 generated, 0 failed"))))
 
     (testing "shows failed files with error"
       (let [results [{:name "broken"

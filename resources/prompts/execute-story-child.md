@@ -13,11 +13,11 @@ Execute the next incomplete task from the story.
 ### 1. Find first unblocked incomplete child
 
 {% if cli %}
-Call `mcp-tasks list --parent-id <story-id> --blocked false --limit 1`.
+Call `mcp-tasks list --parent-id <story-id> --blocked false --limit 1 --format edn`.
 
 Display progress using the metadata from the list command output.
 
-**If no unblocked tasks:** Call `mcp-tasks list --parent-id <story-id>`:
+**If no unblocked tasks:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
 - Incomplete tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
 - No incomplete tasks + completed count > 0: All tasks complete; suggest review/PR; stop
 - No incomplete tasks + completed count = 0: Suggest refining story or creating tasks; stop

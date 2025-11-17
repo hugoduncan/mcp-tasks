@@ -10,12 +10,12 @@ Parse `$ARGUMENTS`. If empty, skip to step 3 (task in context).
 {% if cli %}
 | Format | Example | CLI command |
 |--------|---------|-------------|
-| Numeric / #N / "task N" | 59, #59, task 59 | `mcp-tasks show --task-id N` |
-| category / category=X | simple, category=simple | `mcp-tasks list --category X --status open --limit 1` |
-| type / type=X | bug, type=bug | `mcp-tasks list --type X --status open --limit 1` |
-| parent N / parent-id=N | parent 51, parent-id=51 | `mcp-tasks list --parent-id N --status open --limit 1` |
-| status=X | status=open | `mcp-tasks list --status X --limit 1` |
-| Text / title-pattern=X | execute, title-pattern=execute | `mcp-tasks list --title-pattern X --limit 1` |
+| Numeric / #N / "task N" | 59, #59, task 59 | `mcp-tasks show --task-id N --format edn` |
+| category / category=X | simple, category=simple | `mcp-tasks list --category X --status open --limit 1 --format edn` |
+| type / type=X | bug, type=bug | `mcp-tasks list --type X --status open --limit 1 --format edn` |
+| parent N / parent-id=N | parent 51, parent-id=51 | `mcp-tasks list --parent-id N --status open --limit 1 --format edn` |
+| status=X | status=open | `mcp-tasks list --status X --limit 1 --format edn` |
+| Text / title-pattern=X | execute, title-pattern=execute | `mcp-tasks list --title-pattern X --limit 1 --format edn` |
 | Multiple | category=medium type=feature | Combine filters (AND) |
 {% else %}
 | Format | Example | select-tasks params |

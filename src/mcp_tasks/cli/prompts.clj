@@ -112,8 +112,11 @@
   - YAML frontmatter with description and argument-hint (if present in source)
   - Rendered prompt content with {:cli true} context applied
 
+  For category prompts, the command name is prefixed with 'next-' to indicate
+  execution of the next task in that category.
+
   Returns a result map with:
-  - :name - prompt name
+  - :name - prompt name (with next- prefix for categories)
   - :type - :category or :workflow
   - :status - :generated | :failed | :skipped
   - :path - path to generated file (when status is :generated)
@@ -136,7 +139,11 @@
                                                    prompts/builtin-prompts-dir])
             resolved-path (resolver-fn resolved-tasks-dir name)
             builtin-resource-path (str builtin-dir "/" name ".md")
-            cli-context {:cli true}]
+            cli-context {:cli true}
+            ;; Category prompts get "next-" prefix for command name
+            command-name (if (= actual-type :category)
+                           (str "next-" name)
+                           name)]
         (try
           (let [loaded (prompts/load-prompt-content resolved-path
                                                     builtin-resource-path
@@ -144,21 +151,21 @@
             (if loaded
               (let [frontmatter (build-slash-command-frontmatter (:metadata loaded))
                     file-content (str frontmatter (:content loaded))
-                    target-file (io/file target-dir (str "mcp-tasks-" name ".md"))
+                    target-file (io/file target-dir (str "mcp-tasks-" command-name ".md"))
                     file-existed? (fs/exists? target-file)]
                 (fs/create-dirs target-dir)
                 (spit target-file file-content)
-                {:name name
+                {:name command-name
                  :type actual-type
                  :status :generated
                  :path (str target-file)
                  :overwritten file-existed?})
-              {:name name
+              {:name command-name
                :type actual-type
                :status :failed
                :error (str "Prompt '" name "' not found")}))
           (catch Exception e
-            {:name name
+            {:name command-name
              :type actual-type
              :status :failed
              :error (.getMessage e)}))))))

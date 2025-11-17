@@ -11,7 +11,7 @@ Review the implementation of a story against its requirements and code quality s
 ## Process
 
 {% if cli %}
-1. Find the story task using `mcp-tasks show --task-id N` or `mcp-tasks list --title-pattern "..." --type story --limit 1`
+1. Find the story task using `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --type story --limit 1 --format edn`
    - Handle no match or multiple matches by informing user
    - Extract the story's `id`, `title`, and `description` fields
 {% else %}

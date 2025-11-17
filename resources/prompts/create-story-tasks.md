@@ -11,7 +11,7 @@ Create task breakdown for story. Don't implement.
 ## Process
 
 {% if cli %}
-1. Retrieve story via `mcp-tasks show --task-id N` or `mcp-tasks list --title-pattern "..." --type story --limit 1`. Handle no match or multiple matches.
+1. Retrieve story via `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --type story --limit 1 --format edn`. Handle no match or multiple matches.
 
 2. Check `meta` field for `"refined": "true"`. If unrefined, warn user and ask: "Task has not been refined. Proceed anyway? (yes/no)". If user declines, suggest `/mcp-tasks-refine-task` and stop.
 {% else %}

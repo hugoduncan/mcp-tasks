@@ -1068,15 +1068,15 @@
     (testing "shows overwrite indicator when files exist"
       (let [target-dir (io/file *test-dir* "overwrite-test")
             _ (fs/create-dirs target-dir)
-            ;; Create an existing file
-            _ (spit (io/file target-dir "mcp-tasks-simple.md") "old content")
+            ;; Create an existing file (note: category prompts get next- prefix)
+            _ (spit (io/file target-dir "mcp-tasks-next-simple.md") "old content")
             result (call-cli "prompts" "install" (str target-dir))]
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "overwritten"))
         (is (str/includes? (:out result) "Warning"))
 
         ;; Verify file was actually overwritten
-        (let [new-content (slurp (io/file target-dir "mcp-tasks-simple.md"))]
+        (let [new-content (slurp (io/file target-dir "mcp-tasks-next-simple.md"))]
           (is (not= "old content" new-content))
           (is (str/starts-with? new-content "---")))))))
 

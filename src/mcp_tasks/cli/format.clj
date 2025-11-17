@@ -314,9 +314,11 @@
 (defn format-prompts-install
   "Format prompts install response for human-readable output.
 
-  Shows generation results with status indicators and overwrite warnings."
+  Shows generation results with status indicators. Skipped files are not displayed.
+  Only shows (overwritten) when an existing file was replaced."
   [results metadata]
-  (let [format-result (fn [r]
+  (let [displayable-results (remove #(= :skipped (:status %)) results)
+        format-result (fn [r]
                         (case (:status r)
                           :generated
                           (let [base (str "✓ " (:name r) " (" (name (:type r)) ")\n"
@@ -324,9 +326,6 @@
                             (if (:overwritten r)
                               (str base " (overwritten)")
                               base))
-
-                          :skipped
-                          (str "- " (:name r) " (skipped: " (:reason r) ")")
 
                           :failed
                           (str "✗ " (:name r)
@@ -345,11 +344,10 @@
               (filter some?
                       ["Installing prompts as Claude Code slash commands..."
                        ""
-                       (str/join "\n\n" (map format-result results))
+                       (str/join "\n\n" (map format-result displayable-results))
                        ""
                        warning
                        (str "Summary: " (:generated-count metadata) " generated, "
-                            (:skipped-count metadata) " skipped, "
                             (:failed-count metadata) " failed")]))))
 
 (defn format-prompts-show
