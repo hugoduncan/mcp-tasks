@@ -203,7 +203,8 @@
             (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks2")}
                   parsed-args {:target-dir commands-dir}
                   result (sut/prompts-install-command config parsed-args)
-                  simple (first (filter #(= "simple" (:name %))
+                  ;; Category prompts get "next-" prefix
+                  simple (first (filter #(= "next-simple" (:name %))
                                         (:results result)))]
               (is (= :generated (:status simple)))
               (let [content (slurp (:path simple))]
@@ -273,12 +274,14 @@
             (fs/create-dirs commands-dir)
             (spit (str override-dir "/simple.md") test-prompt)
             ;; Create an existing file that will be overwritten
-            (spit (str commands-dir "/mcp-tasks-simple.md") "old content")
+            ;; Category prompts get "next-" prefix in filename
+            (spit (str commands-dir "/mcp-tasks-next-simple.md") "old content")
 
             (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks")}
                   parsed-args {:target-dir commands-dir}
                   result (sut/prompts-install-command config parsed-args)
-                  simple (first (filter #(= "simple" (:name %))
+                  ;; Category prompts get "next-" prefix
+                  simple (first (filter #(= "next-simple" (:name %))
                                         (:results result)))]
               (is (= :generated (:status simple)))
               (is (true? (:overwritten simple))
@@ -311,15 +314,16 @@
             (fs/create-dirs commands-dir)
             (spit (str override-dir "/simple.md") test-prompt-1)
             (spit (str override-dir "/medium.md") test-prompt-2)
-            ;; Create only one existing file
-            (spit (str commands-dir "/mcp-tasks-simple.md") "old simple")
+            ;; Create only one existing file - category prompts get "next-" prefix
+            (spit (str commands-dir "/mcp-tasks-next-simple.md") "old simple")
 
             (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks2")}
                   parsed-args {:target-dir commands-dir}
                   result (sut/prompts-install-command config parsed-args)
                   metadata (:metadata result)
-                  simple (first (filter #(= "simple" (:name %)) (:results result)))
-                  medium (first (filter #(= "medium" (:name %)) (:results result)))]
+                  ;; Category prompts get "next-" prefix
+                  simple (first (filter #(= "next-simple" (:name %)) (:results result)))
+                  medium (first (filter #(= "next-medium" (:name %)) (:results result)))]
               (is (true? (:overwritten simple)))
               (is (false? (:overwritten medium)))
               (is (= 1 (:overwritten-count metadata))

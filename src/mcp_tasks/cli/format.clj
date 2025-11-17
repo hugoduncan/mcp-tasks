@@ -336,10 +336,15 @@
                           (str "? " (:name r) "\n"
                                "  Unknown status: " (:status r))))
         overwritten-count (:overwritten-count metadata 0)
+        skipped-count (:skipped-count metadata 0)
         warning (when (pos? overwritten-count)
                   (str "Warning: " overwritten-count " file"
                        (when (> overwritten-count 1) "s")
-                       " overwritten"))]
+                       " overwritten"))
+        summary-parts [(str (:generated-count metadata) " generated")
+                       (str (:failed-count metadata) " failed")
+                       (when (pos? skipped-count)
+                         (str skipped-count " skipped"))]]
     (str/join "\n\n"
               (filter some?
                       ["Installing prompts as Claude Code slash commands..."
@@ -347,8 +352,8 @@
                        (str/join "\n\n" (map format-result displayable-results))
                        ""
                        warning
-                       (str "Summary: " (:generated-count metadata) " generated, "
-                            (:failed-count metadata) " failed")]))))
+                       (str "Summary: "
+                            (str/join ", " (filter some? summary-parts)))]))))
 
 (defn format-prompts-show
   "Format prompts show response for human-readable output.
