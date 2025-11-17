@@ -89,7 +89,7 @@ assert_file_contains() {
     echo "  File: $file_path"
     if [ -f "$file_path" ]; then
       echo "  File contents:"
-      cat "$file_path" | sed 's/^/    /'
+      sed 's/^/    /' < "$file_path"
     else
       echo "  File does not exist"
     fi
