@@ -12,6 +12,8 @@ For system-level settings like git integration, branch management, and worktree 
 
 The mcp-tasks CLI provides commands for managing prompt templates and customizing workflows.
 
+For complete CLI documentation, see [command-line.md](command-line.md).
+
 ### List Available Prompts
 
 Display all available built-in prompts with their names, types, and descriptions:
@@ -87,6 +89,44 @@ Customizing prompts...
 
 Summary: 2 installed, 0 failed
 ```
+
+### Generate Claude Code Slash Commands
+
+Generate Claude Code slash command files from available prompts to use mcp-tasks workflows without the MCP server:
+
+```bash
+# Install to default location (.claude/commands/)
+mcp-tasks prompts install
+
+# Install to custom directory
+mcp-tasks prompts install my-commands/
+
+# JSON output for scripting
+mcp-tasks prompts install --format json
+```
+
+The install command:
+- Generates `.md` files in the target directory with names `mcp-tasks-<prompt-name>.md`
+- Renders templates with `cli=true` context, replacing MCP tool references with CLI equivalents
+- Preserves frontmatter (description, argument-hint) for Claude Code
+- Warns when overwriting existing files
+
+Example output:
+```
+Installing prompts as Claude Code slash commands...
+
+✓ simple (category)
+  → .claude/commands/mcp-tasks-simple.md
+
+✓ execute-task (workflow)
+  → .claude/commands/mcp-tasks-execute-task.md
+
+Warning: 2 files overwritten
+
+Summary: 11 generated, 3 skipped, 0 failed
+```
+
+After installation, use the generated commands in Claude Code via the `/` menu.
 
 **Backward Compatibility:** The system continues to read from deprecated locations (`.mcp-tasks/prompts/` and `.mcp-tasks/story/prompts/`) with warnings. See [Migration Guide](migration/prompt-directories.md) for details.
 
