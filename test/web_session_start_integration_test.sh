@@ -9,6 +9,10 @@
 # Note: This test downloads actual binaries from GitHub and should not run
 # in CI by default to avoid rate limiting and unnecessary network usage.
 
+# Disable shellcheck warnings for functions defined after early exit check
+# These functions are invoked conditionally and shellcheck incorrectly flags them
+# shellcheck disable=SC2317,SC2329
+
 set -e
 
 # Check if integration tests are enabled
@@ -40,7 +44,6 @@ log_info() {
   echo -e "${YELLOW}ℹ${NC} $*" >&2
 }
 
-# shellcheck disable=SC2329
 assert_equals() {
   local expected="$1"
   local actual="$2"
