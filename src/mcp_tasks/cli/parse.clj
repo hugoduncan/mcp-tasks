@@ -726,6 +726,108 @@ EXAMPLES:
             :alias :f
             :desc "Output format (edn, json, human)"}})
 
+(def prompts-subcommands
+  "Configuration map for prompts subcommands.
+
+  Keys are subcommand strings, values are maps containing:
+  - :spec - babashka.cli spec for parsing
+  - :help - help text string
+  - :args-mode - how to handle positional args:
+    - :none - no positional args allowed
+    - :one-or-more - at least one arg required
+    - :exactly-one - exactly one arg required
+    - :zero-or-one - optional single arg with default
+  - :default-arg - default value when :args-mode is :zero-or-one
+  - :result-key - key to use for positional arg(s) in result"
+  {"list" {:spec prompts-list-spec
+           :help prompts-list-help
+           :args-mode :none}
+   "customize" {:spec prompts-customize-spec
+                :help prompts-customize-help
+                :args-mode :one-or-more
+                :result-key :prompt-names}
+   "show" {:spec prompts-show-spec
+           :help prompts-show-help
+           :args-mode :exactly-one
+           :result-key :prompt-name}
+   "install" {:spec prompts-install-spec
+              :help prompts-install-help
+              :args-mode :zero-or-one
+              :default-arg ".claude/commands/"
+              :result-key :target-dir}})
+
+(defn parse-prompts-subcommand
+  "Parse arguments for a prompts subcommand using its configuration.
+
+  Takes subcommand keyword, config map, and args vector.
+  Returns parsed options with :subcommand key, or error map with :error key."
+  [subcommand-kw {:keys [spec args-mode default-arg result-key]} args original-args]
+  (try
+    (let [raw-parsed (if (= args-mode :none)
+                       {:opts (cli/parse-opts args {:spec spec
+                                                    :restrict (get-allowed-keys spec)})
+                        :args []}
+                       (cli/parse-args args {:spec spec}))
+          parsed-opts (-> (:opts raw-parsed)
+                          (dissoc :f)
+                          (cond-> (get-in raw-parsed [:opts :f])
+                            (assoc :format (get-in raw-parsed [:opts :f]))))
+          positional-args (:args raw-parsed)]
+      (case args-mode
+        :none
+        (let [format-validation (validate-format parsed-opts)]
+          (if (:valid? format-validation)
+            (assoc parsed-opts :subcommand subcommand-kw)
+            (dissoc format-validation :valid?)))
+
+        :one-or-more
+        (if (empty? positional-args)
+          {:error "At least one prompt name is required"
+           :metadata {:args original-args}}
+          (let [format-validation (validate-format parsed-opts)]
+            (if (:valid? format-validation)
+              (assoc parsed-opts
+                     :subcommand subcommand-kw
+                     result-key (vec positional-args))
+              (dissoc format-validation :valid?))))
+
+        :exactly-one
+        (cond
+          (empty? positional-args)
+          {:error "Prompt name is required"
+           :metadata {:args original-args}}
+
+          (> (count positional-args) 1)
+          {:error "Only one prompt name is allowed"
+           :metadata {:args original-args
+                      :provided-names positional-args}}
+
+          :else
+          (let [format-validation (validate-format parsed-opts)]
+            (if (:valid? format-validation)
+              (assoc parsed-opts
+                     :subcommand subcommand-kw
+                     result-key (first positional-args))
+              (dissoc format-validation :valid?))))
+
+        :zero-or-one
+        (cond
+          (> (count positional-args) 1)
+          {:error "Only one target directory is allowed"
+           :metadata {:args original-args
+                      :provided-args positional-args}}
+
+          :else
+          (let [format-validation (validate-format parsed-opts)]
+            (if (:valid? format-validation)
+              (assoc parsed-opts
+                     :subcommand subcommand-kw
+                     result-key (or (first positional-args) default-arg))
+              (dissoc format-validation :valid?))))))
+    (catch Exception e
+      {:error (format-unknown-option-error (.getMessage e))
+       :metadata {:args original-args}})))
+
 ;; Parse Functions
 
 (defn parse-list
@@ -979,113 +1081,30 @@ EXAMPLES:
   Returns parsed options map with :subcommand key, error map with :error key,
   or help map with :help key."
   [args]
-  (if (empty? args)
-    {:error "Subcommand required: list, customize, show, or install"
-     :metadata {:args args}}
-    (let [subcommand (first args)
-          subcommand-args (rest args)]
-      ;; Check for help flag
-      (if (and (>= (count subcommand-args) 1)
+  (let [valid-subcommands (str/join ", " (sort (keys prompts-subcommands)))]
+    (if (empty? args)
+      {:error (str "Subcommand required: " valid-subcommands)
+       :metadata {:args args}}
+      (let [subcommand (first args)
+            subcommand-args (rest args)
+            config (get prompts-subcommands subcommand)]
+        (cond
+          ;; Unknown subcommand
+          (nil? config)
+          {:error (str "Unknown subcommand: " subcommand
+                       ". Valid subcommands: " valid-subcommands)
+           :metadata {:args args
+                      :provided-subcommand subcommand}}
+
+          ;; Help flag requested
+          (and (seq subcommand-args)
                (or (= "--help" (first subcommand-args))
                    (= "-h" (first subcommand-args))))
-        (case subcommand
-          "list" {:help prompts-list-help}
-          "customize" {:help prompts-customize-help}
-          "show" {:help prompts-show-help}
-          "install" {:help prompts-install-help}
-          ;; Unknown subcommand with help flag - show error
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show, install")
-           :metadata {:args args
-                      :provided-subcommand subcommand}})
+          {:help (:help config)}
 
-        ;; Normal parsing without help flag
-        (case subcommand
-          "list"
-          (try
-            (let [raw-parsed (cli/parse-opts subcommand-args {:spec prompts-list-spec :restrict (get-allowed-keys prompts-list-spec)})
-                  parsed (-> raw-parsed
-                             (dissoc :f)
-                             (cond-> (:f raw-parsed) (assoc :format (:f raw-parsed))))
-                  format-validation (validate-format parsed)]
-              (if (:valid? format-validation)
-                (assoc parsed :subcommand :list)
-                (dissoc format-validation :valid?)))
-            (catch Exception e
-              {:error (format-unknown-option-error (.getMessage e))
-               :metadata {:args args}}))
-
-          "customize"
-          (try
-            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-customize-spec})
-                  parsed-opts (-> (:opts raw-parsed)
-                                  (dissoc :f)
-                                  (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
-                  prompt-names (vec (:args raw-parsed))]
-              (if (empty? prompt-names)
-                {:error "At least one prompt name is required"
-                 :metadata {:args args}}
-                (let [format-validation (validate-format parsed-opts)]
-                  (if (:valid? format-validation)
-                    (assoc parsed-opts
-                           :subcommand :customize
-                           :prompt-names prompt-names)
-                    (dissoc format-validation :valid?)))))
-            (catch Exception e
-              {:error (format-unknown-option-error (.getMessage e))
-               :metadata {:args args}}))
-
-          "show"
-          (try
-            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-show-spec})
-                  parsed-opts (-> (:opts raw-parsed)
-                                  (dissoc :f)
-                                  (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
-                  prompt-name (first (:args raw-parsed))]
-              (cond
-                (empty? (:args raw-parsed))
-                {:error "Prompt name is required"
-                 :metadata {:args args}}
-
-                (> (count (:args raw-parsed)) 1)
-                {:error "Only one prompt name is allowed"
-                 :metadata {:args args
-                            :provided-names (:args raw-parsed)}}
-
-                :else
-                (let [format-validation (validate-format parsed-opts)]
-                  (if (:valid? format-validation)
-                    (assoc parsed-opts
-                           :subcommand :show
-                           :prompt-name prompt-name)
-                    (dissoc format-validation :valid?)))))
-            (catch Exception e
-              {:error (format-unknown-option-error (.getMessage e))
-               :metadata {:args args}}))
-
-          "install"
-          (try
-            (let [raw-parsed (cli/parse-args subcommand-args {:spec prompts-install-spec})
-                  parsed-opts (-> (:opts raw-parsed)
-                                  (dissoc :f)
-                                  (cond-> (get-in raw-parsed [:opts :f]) (assoc :format (get-in raw-parsed [:opts :f]))))
-                  target-dir (or (first (:args raw-parsed)) ".claude/commands/")]
-              (cond
-                (> (count (:args raw-parsed)) 1)
-                {:error "Only one target directory is allowed"
-                 :metadata {:args args
-                            :provided-args (:args raw-parsed)}}
-
-                :else
-                (let [format-validation (validate-format parsed-opts)]
-                  (if (:valid? format-validation)
-                    (assoc parsed-opts
-                           :subcommand :install
-                           :target-dir target-dir)
-                    (dissoc format-validation :valid?)))))
-            (catch Exception e
-              {:error (format-unknown-option-error (.getMessage e))
-               :metadata {:args args}}))
-
-          {:error (str "Unknown subcommand: " subcommand ". Valid subcommands: list, customize, show, install")
-           :metadata {:args args
-                      :provided-subcommand subcommand}})))))
+          ;; Normal parsing
+          :else
+          (parse-prompts-subcommand (keyword subcommand)
+                                    config
+                                    subcommand-args
+                                    args))))))

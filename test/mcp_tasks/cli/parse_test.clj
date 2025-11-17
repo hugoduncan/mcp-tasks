@@ -407,7 +407,7 @@
   (testing "parse-prompts"
     (testing "returns error when no subcommand provided"
       (let [result (sut/parse-prompts [])]
-        (is (= "Subcommand required: list, customize, show, or install" (:error result)))
+        (is (= "Subcommand required: customize, install, list, show" (:error result)))
         (is (= {:args []} (:metadata result)))))
 
     (testing "handles list subcommand"
@@ -514,5 +514,5 @@
     (testing "handles unknown subcommand"
       (let [result (sut/parse-prompts ["unknown"])]
         (is (re-find #"Unknown subcommand: unknown" (:error result)))
-        (is (re-find #"list, customize, show, install" (:error result)))
+        (is (re-find #"customize, install, list, show" (:error result)))
         (is (= "unknown" (get-in result [:metadata :provided-subcommand])))))))
