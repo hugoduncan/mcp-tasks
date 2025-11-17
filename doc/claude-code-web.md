@@ -121,9 +121,14 @@ mkdir -p ~/.local/bin
 # 4. Update PATH in CLAUDE_ENV_FILE
 # - Checks if ~/.local/bin already in PATH
 # - Appends if not present: export PATH="$PATH:~/.local/bin"
+
+# 5. Install Claude Code slash commands
+mcp-tasks prompts install
+# - Copies prompt files as slash commands to .claude/commands/
+# - Non-fatal if installation fails
 ```
 
-**Note:** MCP server registration (previously step 5) is currently disabled because Claude Code web does not yet support MCP servers.
+**Note:** MCP server registration (previously step 6) is currently disabled because Claude Code web does not yet support MCP servers.
 
 ## Troubleshooting
 

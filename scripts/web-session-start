@@ -196,21 +196,32 @@ main() {
   echo "" >&2
 
   # Register MCP server
-  # 
+  #
   # Disabled: Claude Code web does not support MCP servers yet
-  # 
+  #
   # Background: The original story (task 762) included MCP registration as a requirement
   # because local Claude Code installations support MCP servers. However, Claude Code web
   # sessions do not currently support MCP server registration.
-  # 
+  #
   # This code will remain disabled until Claude Code web adds MCP server support.
   # When support is added, uncomment the registration code below to enable automatic
   # MCP server registration during web session initialization.
-  # 
+  #
   # if ! register_mcp; then
   #   exit 1
   # fi
   # echo "" >&2
+
+  # Install Claude Code slash commands
+  # Add ~/.local/bin to current PATH so mcp-tasks command is available
+  export PATH="$PATH:$HOME/.local/bin"
+
+  echo "Installing Claude Code slash commands..." >&2
+  if ! "$INSTALL_DIR/$BINARY_CLI" prompts install; then
+    echo "Warning: Failed to install slash commands" >&2
+    # Non-fatal: continue with installation
+  fi
+  echo "" >&2
 
   # Success message
   echo "Installation complete!" >&2
