@@ -96,3 +96,25 @@ jobs:
 
       - name: Run shellcheck on Unix install script
         run: shellcheck install
+
+      - name: Run shellcheck on install test script
+        run: shellcheck test/install_test.sh
+
+      - name: Run shellcheck on web-session-start script
+        run: shellcheck scripts/web-session-start
+
+      - name: Run shellcheck on web-session-start test script
+        run: shellcheck test/web_session_start_test.sh
+
+      - name: Run shellcheck on web-session-start integration test script
+        run: shellcheck test/web_session_start_integration_test.sh
+
+      - name: Run install script tests
+        run: ./test/install_test.sh
+
+      - name: Run web-session-start script tests
+        run: ./test/web_session_start_test.sh
+
+      # Integration tests download actual binaries from GitHub releases
+      # and are opt-in only to avoid rate limiting and unnecessary network usage.
+      # To run locally: RUN_INTEGRATION_TESTS=true ./test/web_session_start_integration_test.sh

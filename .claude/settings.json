@@ -1,3 +1,15 @@
 {
-    "includeCoAuthoredBy": false
+    "includeCoAuthoredBy": false,
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "./scripts/web-session-start"
+                    }
+                ]
+            }
+        ]
+    }
 }
