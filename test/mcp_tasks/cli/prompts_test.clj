@@ -305,8 +305,8 @@
         (testing "tracks overwritten count in metadata"
           (let [override-dir (str temp-dir "/.mcp-tasks2/category-prompts")
                 commands-dir (str temp-dir "/partial-overwrite")
-                test-prompt-1 (str "---\ndescription: P1\n---\nContent 1.\n")
-                test-prompt-2 (str "---\ndescription: P2\n---\nContent 2.\n")]
+                test-prompt-1 "---\ndescription: P1\n---\nContent 1.\n"
+                test-prompt-2 "---\ndescription: P2\n---\nContent 2.\n"]
             (fs/create-dirs override-dir)
             (fs/create-dirs commands-dir)
             (spit (str override-dir "/simple.md") test-prompt-1)
