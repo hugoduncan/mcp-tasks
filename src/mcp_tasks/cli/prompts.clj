@@ -5,8 +5,33 @@
   (:require
     [babashka.fs :as fs]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [mcp-tasks.prompt-management :as pm]
     [mcp-tasks.prompts :as prompts]))
+
+(defn- build-slash-command-frontmatter
+  "Build YAML frontmatter string for Claude Code slash command.
+
+  Extracts relevant fields from prompt metadata:
+  - description: Brief description shown in /help
+  - argument-hint: Expected arguments for auto-completion
+
+  Metadata may have string or keyword keys (from YAML parsing).
+
+  Returns frontmatter string with delimiters, or empty string if no relevant fields."
+  [metadata]
+  (let [;; Support both string and keyword keys
+        description (or (get metadata "description") (get metadata :description))
+        argument-hint (or (get metadata "argument-hint") (get metadata :argument-hint))
+        fields (cond-> []
+                 description
+                 (conj (str "description: " description))
+
+                 argument-hint
+                 (conj (str "argument-hint: " argument-hint)))]
+    (if (seq fields)
+      (str "---\n" (str/join "\n" fields) "\n---\n\n")
+      "")))
 
 (defn prompts-list-command
   "Execute the prompts list command.
@@ -83,6 +108,10 @@
   - target-dir: Target directory for generated files
   - prompt-info: Map with :name and :type from list-available-prompts
 
+  The generated file includes:
+  - YAML frontmatter with description and argument-hint (if present in source)
+  - Rendered prompt content with {:cli true} context applied
+
   Returns a result map with:
   - :name - prompt name
   - :type - :category or :workflow
@@ -93,11 +122,8 @@
   [config target-dir prompt-info]
   (let [{:keys [name]} prompt-info
         resolved-tasks-dir (:resolved-tasks-dir config)
-        ;; Use detect-prompt-type to correctly identify actual prompts
-        ;; vs infrastructure files (which return nil)
         actual-type (prompts/detect-prompt-type name)]
     (if (nil? actual-type)
-      ;; Skip infrastructure files that aren't actual prompts
       {:name name
        :type nil
        :status :skipped
@@ -115,9 +141,11 @@
                                                     builtin-resource-path
                                                     cli-context)]
             (if loaded
-              (let [target-file (io/file target-dir (str "mcp-tasks-" name ".md"))]
+              (let [frontmatter (build-slash-command-frontmatter (:metadata loaded))
+                    file-content (str frontmatter (:content loaded))
+                    target-file (io/file target-dir (str "mcp-tasks-" name ".md"))]
                 (fs/create-dirs target-dir)
-                (spit target-file (:content loaded))
+                (spit target-file file-content)
                 {:name name
                  :type actual-type
                  :status :generated

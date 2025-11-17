@@ -66,13 +66,53 @@
           (is (<= (get-in result [:metadata :installed-count]) 2))
           (is (>= (get-in result [:metadata :failed-count]) 1)))))))
 
+(deftest build-slash-command-frontmatter-generates-yaml
+  ;; Test build-slash-command-frontmatter creates proper YAML frontmatter
+  ;; for Claude Code slash commands from prompt metadata.
+  (testing "build-slash-command-frontmatter"
+    (let [build-fn #'sut/build-slash-command-frontmatter]
+      (testing "includes both description and argument-hint"
+        (let [result (build-fn {"description" "Test desc"
+                                "argument-hint" "[task-id] [ctx...]"})]
+          (is (str/starts-with? result "---\n"))
+          (is (str/ends-with? result "---\n\n"))
+          (is (str/includes? result "description: Test desc"))
+          (is (str/includes? result "argument-hint: [task-id] [ctx...]"))))
+
+      (testing "includes only description when no argument-hint"
+        (let [result (build-fn {"description" "Just desc"})]
+          (is (str/starts-with? result "---\n"))
+          (is (str/includes? result "description: Just desc"))
+          (is (not (str/includes? result "argument-hint")))))
+
+      (testing "includes only argument-hint when no description"
+        (let [result (build-fn {"argument-hint" "[args]"})]
+          (is (str/starts-with? result "---\n"))
+          (is (not (str/includes? result "description:")))
+          (is (str/includes? result "argument-hint: [args]"))))
+
+      (testing "returns empty string when no relevant fields"
+        (let [result (build-fn {"title" "Just title"})]
+          (is (= "" result))))
+
+      (testing "returns empty string for empty metadata"
+        (let [result (build-fn {})]
+          (is (= "" result))))
+
+      (testing "supports keyword keys for backwards compatibility"
+        (let [result (build-fn {:description "Keyword desc"
+                                :argument-hint "[kw-args]"})]
+          (is (str/includes? result "description: Keyword desc"))
+          (is (str/includes? result "argument-hint: [kw-args]")))))))
+
 (deftest prompts-install-command-generates-slash-commands
   ;; Test prompts-install-command generates Claude Code slash command files
-  ;; with cli=true context for template conditionals.
+  ;; with cli=true context for template conditionals and proper frontmatter.
   ;; Contracts being tested:
   ;; - Generates files for all category and workflow prompts
   ;; - Skips infrastructure files (not actual prompts)
   ;; - Renders templates with {:cli true} context
+  ;; - Preserves argument-hint and description in frontmatter
   ;; - Returns correct metadata counts
   ;; - Files are named mcp-tasks-<prompt-name>.md
 
@@ -124,6 +164,55 @@
                 (doseq [fname file-names]
                   (is (str/starts-with? fname "mcp-tasks-"))
                   (is (str/ends-with? fname ".md")))))))
+
+        (testing "generates frontmatter with argument-hint"
+          (let [override-dir (str temp-dir "/.mcp-tasks/prompt-overrides")
+                commands-dir (str temp-dir "/commands-frontmatter")
+                test-prompt (str "---\n"
+                                 "description: Test with args\n"
+                                 "argument-hint: [task-id] [context...]\n"
+                                 "---\n"
+                                 "Parse $ARGUMENTS for task.\n")]
+            (fs/create-dirs override-dir)
+            (spit (str override-dir "/refine-task.md") test-prompt)
+            (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks")}
+                  parsed-args {:target-dir commands-dir}
+                  result (sut/prompts-install-command config parsed-args)
+                  refine-task (first (filter #(= "refine-task" (:name %))
+                                             (:results result)))]
+              (is (= :generated (:status refine-task)))
+              (let [content (slurp (:path refine-task))]
+                (is (str/starts-with? content "---\n")
+                    "Should start with frontmatter delimiter")
+                (is (str/includes? content "description: Test with args")
+                    "Should preserve description in frontmatter")
+                (is (str/includes? content "argument-hint: [task-id] [context...]")
+                    "Should preserve argument-hint in frontmatter")
+                (is (str/includes? content "Parse $ARGUMENTS")
+                    "Should preserve $ARGUMENTS placeholder in body")))))
+
+        (testing "generates frontmatter without argument-hint when not present"
+          (let [override-dir (str temp-dir "/.mcp-tasks2/category-prompts")
+                commands-dir (str temp-dir "/commands-no-args")
+                test-prompt (str "---\n"
+                                 "description: Simple task\n"
+                                 "---\n"
+                                 "Execute simple task.\n")]
+            (fs/create-dirs override-dir)
+            (spit (str override-dir "/simple.md") test-prompt)
+            (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks2")}
+                  parsed-args {:target-dir commands-dir}
+                  result (sut/prompts-install-command config parsed-args)
+                  simple (first (filter #(= "simple" (:name %))
+                                        (:results result)))]
+              (is (= :generated (:status simple)))
+              (let [content (slurp (:path simple))]
+                (is (str/starts-with? content "---\n")
+                    "Should start with frontmatter delimiter")
+                (is (str/includes? content "description: Simple task")
+                    "Should have description")
+                (is (not (str/includes? content "argument-hint:"))
+                    "Should not have argument-hint when not in source")))))
 
         (testing "renders templates with cli=true context"
           (let [override-dir (str temp-dir "/.mcp-tasks/prompt-overrides")
