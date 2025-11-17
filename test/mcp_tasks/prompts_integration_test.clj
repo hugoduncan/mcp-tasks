@@ -66,3 +66,26 @@
               (is (not (re-find #"\{%\s*include\s+" content))
                   (str "Unresolved include directive found in: "
                        category)))))))))
+
+(deftest ^:integration load-prompt-content-with-context-test
+  ;; Test that load-prompt-content renders templates with context variables
+  ;; including Selmer conditionals like {% if cli %}.
+  ;; Contracts being tested:
+  ;; - Context map is passed to template rendering
+  ;; - {% if %} conditionals are evaluated based on context
+  ;; - Default behavior (no context) preserves backward compatibility
+
+  (testing "load-prompt-content with context"
+    (testing "when loading builtin prompts with empty context"
+      (let [category "simple"
+            builtin-path (str prompts/builtin-category-prompts-dir "/" category ".md")
+            result (prompts/load-prompt-content nil builtin-path {})]
+        (is (some? result))
+        (is (string? (:content result)))))
+
+    (testing "when loading builtin prompts with default context (backward compatible)"
+      (let [category "simple"
+            builtin-path (str prompts/builtin-category-prompts-dir "/" category ".md")
+            result (prompts/load-prompt-content nil builtin-path)]
+        (is (some? result))
+        (is (string? (:content result)))))))

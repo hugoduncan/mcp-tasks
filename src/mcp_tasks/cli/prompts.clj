@@ -3,6 +3,8 @@
 
   Handles listing and installing built-in prompts."
   (:require
+    [babashka.fs :as fs]
+    [clojure.java.io :as io]
     [mcp-tasks.prompt-management :as pm]
     [mcp-tasks.prompts :as prompts]))
 
@@ -73,6 +75,63 @@
                    "Use 'mcp-tasks prompts list' to see available prompts.")
        :metadata {:prompt-name prompt-name}})))
 
+(defn- generate-slash-command
+  "Generate a single Claude Code slash command file from a prompt.
+
+  Parameters:
+  - config: Configuration map with :resolved-tasks-dir
+  - target-dir: Target directory for generated files
+  - prompt-info: Map with :name and :type from list-available-prompts
+
+  Returns a result map with:
+  - :name - prompt name
+  - :type - :category or :workflow
+  - :status - :generated | :failed | :skipped
+  - :path - path to generated file (when status is :generated)
+  - :error - error message (when status is :failed)
+  - :reason - skip reason (when status is :skipped)"
+  [config target-dir prompt-info]
+  (let [{:keys [name]} prompt-info
+        resolved-tasks-dir (:resolved-tasks-dir config)
+        ;; Use detect-prompt-type to correctly identify actual prompts
+        ;; vs infrastructure files (which return nil)
+        actual-type (prompts/detect-prompt-type name)]
+    (if (nil? actual-type)
+      ;; Skip infrastructure files that aren't actual prompts
+      {:name name
+       :type nil
+       :status :skipped
+       :reason "Infrastructure file, not a prompt"}
+      (let [[resolver-fn builtin-dir] (case actual-type
+                                        :category [prompts/resolve-category-prompt-path
+                                                   prompts/builtin-category-prompts-dir]
+                                        :workflow [prompts/resolve-workflow-prompt-path
+                                                   prompts/builtin-prompts-dir])
+            resolved-path (resolver-fn resolved-tasks-dir name)
+            builtin-resource-path (str builtin-dir "/" name ".md")
+            cli-context {:cli true}]
+        (try
+          (let [loaded (prompts/load-prompt-content resolved-path
+                                                    builtin-resource-path
+                                                    cli-context)]
+            (if loaded
+              (let [target-file (io/file target-dir (str "mcp-tasks-" name ".md"))]
+                (fs/create-dirs target-dir)
+                (spit target-file (:content loaded))
+                {:name name
+                 :type actual-type
+                 :status :generated
+                 :path (str target-file)})
+              {:name name
+               :type actual-type
+               :status :failed
+               :error (str "Prompt '" name "' not found")}))
+          (catch Exception e
+            {:name name
+             :type actual-type
+             :status :failed
+             :error (.getMessage e)}))))))
+
 (defn prompts-show-command
   "Execute the prompts show command.
 
@@ -131,18 +190,28 @@
   Generates Claude Code slash command files from available prompts.
   Files are written to the target directory with names: mcp-tasks-<prompt-name>.md
 
+  Templates are rendered with {:cli true} context, enabling {% if cli %} conditionals
+  to provide CLI-specific alternatives for MCP tool references.
+
   Takes config and parsed-args. Target directory defaults to .claude/commands/.
 
   Returns structured data with:
   - :results - vector of generation result maps
-  - :metadata - map with :generated-count, :failed-count, :target-dir
+  - :metadata - map with :generated-count, :failed-count, :skipped-count, :target-dir
 
   Example:
   {:results [{:name \"simple\" :status :generated :path \"...\"}]
-   :metadata {:generated-count 1 :failed-count 0 :target-dir \".claude/commands/\"}}"
-  [_config parsed-args]
-  (let [target-dir (:target-dir parsed-args)]
-    {:results []
-     :metadata {:generated-count 0
-                :failed-count 0
+   :metadata {:generated-count 1 :failed-count 0 :skipped-count 0 :target-dir \".claude/commands/\"}}"
+  [config parsed-args]
+  (let [target-dir (:target-dir parsed-args)
+        available-prompts (pm/list-available-prompts)
+        results (mapv (partial generate-slash-command config target-dir)
+                      available-prompts)
+        generated-count (count (filter #(= :generated (:status %)) results))
+        failed-count (count (filter #(= :failed (:status %)) results))
+        skipped-count (count (filter #(= :skipped (:status %)) results))]
+    {:results results
+     :metadata {:generated-count generated-count
+                :failed-count failed-count
+                :skipped-count skipped-count
                 :target-dir target-dir}}))
