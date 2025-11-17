@@ -10,7 +10,11 @@ Refine the task through an interactive process.
 
 ## Process
 
+{% if cli %}
+1. Find task via `mcp-tasks show --task-id N` or `mcp-tasks list --title-pattern "..." --limit 1`. Extract `id`, `title`, `description`, `design`, `type`.
+{% else %}
 1. Find task via `select-tasks` (unique). Extract `:id`, `:title`, `:description`, `:design`, `:type`.
+{% endif %}
 
 2. Analyze in project context: review description/design, research patterns/exemplars, examine codebase, identify forgotten aspects, check scope.
 
@@ -24,7 +28,12 @@ Refine the task through an interactive process.
 
 5. Save:
    - Show final task for approval
+{% if cli %}
+   - Call `mcp-tasks update --task-id <id> --description "..." --design "..." --meta '{"refined": "true"}'`
+   - Note: Preserve existing meta fields, add `"refined": "true"`
+{% else %}
    - Call `update-task`: `task-id`, `description`, `design`, `meta` (preserve existing, add `"refined": "true"`)
+{% endif %}
    - Confirm save
 
 ## Scope

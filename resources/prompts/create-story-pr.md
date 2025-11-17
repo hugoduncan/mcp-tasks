@@ -10,7 +10,11 @@ Create pull request for completed story.
 
 ## Process
 
+{% if cli %}
+1. Find story via `mcp-tasks show --task-id N` or `mcp-tasks list --title-pattern "..." --type story --limit 1`. Handle errors. Extract `id`, `title`, `description`, `design`.
+{% else %}
 1. Find story via `select-tasks` with `type: story, unique: true`. Handle errors. Extract `:id`, `:title`, `:description`, `:design`.
+{% endif %}
 
 2. Verify branch: not on master/main, on story branch per naming convention.
 

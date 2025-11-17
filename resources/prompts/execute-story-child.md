@@ -12,6 +12,16 @@ Execute the next incomplete task from the story.
 
 ### 1. Find first unblocked incomplete child
 
+{% if cli %}
+Call `mcp-tasks list --parent-id <story-id> --blocked false --limit 1`.
+
+Display progress using the metadata from the list command output.
+
+**If no unblocked tasks:** Call `mcp-tasks list --parent-id <story-id>`:
+- Incomplete tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
+- No incomplete tasks + completed count > 0: All tasks complete; suggest review/PR; stop
+- No incomplete tasks + completed count = 0: Suggest refining story or creating tasks; stop
+{% else %}
 Call `select-tasks` with `parent-id: <story-id>`, `blocked: false`, `limit: 1`.
 
 Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
@@ -20,6 +30,7 @@ Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open
 - Incomplete tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
 - No incomplete + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
 - No incomplete + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
+{% endif %}
 
 **If task lacks category:** Inform user; stop
 
@@ -27,13 +38,24 @@ Display task to user.
 
 ### 2. Set up environment
 
+{% if cli %}
+Set up your working environment:
+- Create or switch to story branch: `git checkout -b <story-id>-<story-title-slug>` (or `git checkout <branch>` if exists)
+- Track which task you're working on (note the task ID for later completion)
+- Display current branch and working directory status
+{% else %}
 Call `work-on` with `task-id: <child-task-id>`. Display environment:
 worktree name/path, branch (if present).
+{% endif %}
 
 ### 3. Display parent shared context
 
+{% if cli %}
+If the task has `parent-shared-context` in its data, display it to provide context from previous tasks:
+{% else %}
 If the parent story has `:parent-shared-context`, display it to provide
 context from previous tasks:
+{% endif %}
 
 ```
 **Shared Context from Previous Tasks:**
@@ -47,17 +69,25 @@ updates from previous task execution.
 
 ### 4. Retrieve Category Instructions
 
+{% if cli %}
+Use `mcp-tasks prompts show <category>` to retrieve the category-specific execution instructions. If missing, inform user and stop.
+{% else %}
 Use `ReadMcpResourceTool` with server "mcp-tasks", uri
 `prompt://category-<category>`. If missing, inform user and stop.
+{% endif %}
 
 ### 5. Execute task
 
 Skip refinement check.
 
+{% if cli %}
+Execute by strictly adhering to the category instructions retrieved above. The prompt steps must be followed in their defined order. These workflows are not suggestions—they are the required process for executing tasks in that category.
+{% else %}
 Execute by strictly adhering to the `prompt://category-<category>`
 resource instructions.  The prompt steps must be followed in their
 defined order. These workflows are not suggestions—they are the required
 process for executing tasks in that category.
+{% endif %}
 
 ### 6. Update shared context
 
@@ -78,6 +108,12 @@ tasks.
 tokens, PII) in shared context. Context is stored in task files and may
 appear in git history and PR descriptions.
 
+{% if cli %}
+**Example update:**
+```bash
+mcp-tasks update --task-id <story-id> --shared-context "Added :parent-shared-context field to Task schema"
+```
+{% else %}
 **Example update:**
 ```
 ;; After adding a new field
@@ -85,6 +121,7 @@ appear in git history and PR descriptions.
   {:task-id 604
    :shared-context "Added :parent-shared-context field to Task schema"})
 ```
+{% endif %}
 
 ### 7. Add tasks for out-of-scope-issues
 
@@ -92,7 +129,11 @@ appear in git history and PR descriptions.
 
 ### 8. Complete
 
+{% if cli %}
+Call `mcp-tasks complete --task-id <id>` with optional `--comment "..."`.
+{% else %}
 Call `complete-task` with `task-id`, optional `completion-comment`.
+{% endif %}
 
 **Never complete the parent story.** Only complete child tasks. User
 reviews before story completion.
