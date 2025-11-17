@@ -250,3 +250,80 @@
 
         (finally
           (fs/delete-tree temp-dir))))))
+
+(deftest prompts-install-overwrites-existing-files
+  ;; Test prompts-install-command overwrites existing files and tracks this
+  ;; behavior in the results and metadata. Contracts being tested:
+  ;; - Overwrites existing files without error
+  ;; - Sets :overwritten true in result when file existed
+  ;; - Sets :overwritten false when file is newly created
+  ;; - Tracks :overwritten-count in metadata
+
+  (testing "prompts-install-command overwrite behavior"
+    (let [temp-dir (str (fs/create-temp-dir {:prefix "overwrite-test"}))]
+      (try
+        (testing "marks files as overwritten when they exist"
+          (let [override-dir (str temp-dir "/.mcp-tasks/category-prompts")
+                commands-dir (str temp-dir "/commands")
+                test-prompt (str "---\n"
+                                 "description: Test prompt\n"
+                                 "---\n"
+                                 "Original content.\n")]
+            (fs/create-dirs override-dir)
+            (fs/create-dirs commands-dir)
+            (spit (str override-dir "/simple.md") test-prompt)
+            ;; Create an existing file that will be overwritten
+            (spit (str commands-dir "/mcp-tasks-simple.md") "old content")
+
+            (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks")}
+                  parsed-args {:target-dir commands-dir}
+                  result (sut/prompts-install-command config parsed-args)
+                  simple (first (filter #(= "simple" (:name %))
+                                        (:results result)))]
+              (is (= :generated (:status simple)))
+              (is (true? (:overwritten simple))
+                  "Should mark as overwritten when file existed")
+
+              (testing "new file content replaces old"
+                (let [content (slurp (:path simple))]
+                  (is (str/includes? content "Original content")
+                      "Should contain new content")
+                  (is (not (str/includes? content "old content"))
+                      "Should not contain old content"))))))
+
+        (testing "marks files as not overwritten when newly created"
+          (let [commands-dir (str temp-dir "/fresh-commands")
+                config {:resolved-tasks-dir ".mcp-tasks"}
+                parsed-args {:target-dir commands-dir}
+                result (sut/prompts-install-command config parsed-args)
+                generated (filter #(= :generated (:status %)) (:results result))]
+            (is (pos? (count generated)))
+            (doseq [res generated]
+              (is (false? (:overwritten res))
+                  (str "Should mark " (:name res) " as not overwritten")))))
+
+        (testing "tracks overwritten count in metadata"
+          (let [override-dir (str temp-dir "/.mcp-tasks2/category-prompts")
+                commands-dir (str temp-dir "/partial-overwrite")
+                test-prompt-1 (str "---\ndescription: P1\n---\nContent 1.\n")
+                test-prompt-2 (str "---\ndescription: P2\n---\nContent 2.\n")]
+            (fs/create-dirs override-dir)
+            (fs/create-dirs commands-dir)
+            (spit (str override-dir "/simple.md") test-prompt-1)
+            (spit (str override-dir "/medium.md") test-prompt-2)
+            ;; Create only one existing file
+            (spit (str commands-dir "/mcp-tasks-simple.md") "old simple")
+
+            (let [config {:resolved-tasks-dir (str temp-dir "/.mcp-tasks2")}
+                  parsed-args {:target-dir commands-dir}
+                  result (sut/prompts-install-command config parsed-args)
+                  metadata (:metadata result)
+                  simple (first (filter #(= "simple" (:name %)) (:results result)))
+                  medium (first (filter #(= "medium" (:name %)) (:results result)))]
+              (is (true? (:overwritten simple)))
+              (is (false? (:overwritten medium)))
+              (is (= 1 (:overwritten-count metadata))
+                  "Should count exactly one overwritten file"))))
+
+        (finally
+          (fs/delete-tree temp-dir))))))

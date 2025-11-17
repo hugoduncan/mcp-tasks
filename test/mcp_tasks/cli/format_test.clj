@@ -603,3 +603,88 @@
         (is (= "workflow" (:type parsed)))
         (is (= "Large workflow" (:content parsed)))
         (is (= "Execute large tasks" (get-in parsed [:metadata :description])))))))
+
+(deftest format-prompts-install-test
+  ;; Test format-prompts-install displays generation results with overwrite warnings.
+  ;; Contracts being tested:
+  ;; - Shows generated files with checkmark and path
+  ;; - Indicates overwritten files with (overwritten) suffix
+  ;; - Shows warning when files are overwritten
+  ;; - Displays summary with counts
+
+  (testing "format-prompts-install"
+    (testing "shows generated files without overwrites"
+      (let [results [{:name "simple"
+                      :type :category
+                      :status :generated
+                      :path "/path/simple.md"
+                      :overwritten false}]
+            metadata {:generated-count 1
+                      :skipped-count 0
+                      :failed-count 0
+                      :overwritten-count 0
+                      :target-dir ".claude/commands/"}
+            output (sut/format-prompts-install results metadata)]
+        (is (str/includes? output "✓ simple (category)"))
+        (is (str/includes? output "/path/simple.md"))
+        (is (not (str/includes? output "(overwritten)")))
+        (is (not (str/includes? output "Warning:")))
+        (is (str/includes? output "Summary: 1 generated"))))
+
+    (testing "shows overwritten files with indicator"
+      (let [results [{:name "medium"
+                      :type :workflow
+                      :status :generated
+                      :path "/path/medium.md"
+                      :overwritten true}]
+            metadata {:generated-count 1
+                      :skipped-count 0
+                      :failed-count 0
+                      :overwritten-count 1
+                      :target-dir ".claude/commands/"}
+            output (sut/format-prompts-install results metadata)]
+        (is (str/includes? output "✓ medium (workflow)"))
+        (is (str/includes? output "(overwritten)"))
+        (is (str/includes? output "Warning: 1 file overwritten"))))
+
+    (testing "shows warning for multiple overwrites"
+      (let [results [{:name "a" :type :category :status :generated
+                      :path "/a.md" :overwritten true}
+                     {:name "b" :type :workflow :status :generated
+                      :path "/b.md" :overwritten true}]
+            metadata {:generated-count 2
+                      :skipped-count 0
+                      :failed-count 0
+                      :overwritten-count 2
+                      :target-dir ".claude/commands/"}
+            output (sut/format-prompts-install results metadata)]
+        (is (str/includes? output "Warning: 2 files overwritten"))))
+
+    (testing "shows skipped files"
+      (let [results [{:name "infrastructure"
+                      :type nil
+                      :status :skipped
+                      :reason "Infrastructure file"}]
+            metadata {:generated-count 0
+                      :skipped-count 1
+                      :failed-count 0
+                      :overwritten-count 0
+                      :target-dir ".claude/commands/"}
+            output (sut/format-prompts-install results metadata)]
+        (is (str/includes? output "- infrastructure (skipped:"))
+        (is (str/includes? output "Summary: 0 generated, 1 skipped"))))
+
+    (testing "shows failed files with error"
+      (let [results [{:name "broken"
+                      :type :category
+                      :status :failed
+                      :error "File not found"}]
+            metadata {:generated-count 0
+                      :skipped-count 0
+                      :failed-count 1
+                      :overwritten-count 0
+                      :target-dir ".claude/commands/"}
+            output (sut/format-prompts-install results metadata)]
+        (is (str/includes? output "✗ broken (category)"))
+        (is (str/includes? output "Error: File not found"))
+        (is (str/includes? output "1 failed"))))))

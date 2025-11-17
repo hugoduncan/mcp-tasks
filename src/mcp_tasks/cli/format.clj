@@ -311,6 +311,47 @@
                        (str "Summary: " (:installed-count metadata) " installed, "
                             (:failed-count metadata) " failed")]))))
 
+(defn format-prompts-install
+  "Format prompts install response for human-readable output.
+
+  Shows generation results with status indicators and overwrite warnings."
+  [results metadata]
+  (let [format-result (fn [r]
+                        (case (:status r)
+                          :generated
+                          (let [base (str "✓ " (:name r) " (" (name (:type r)) ")\n"
+                                          "  → " (:path r))]
+                            (if (:overwritten r)
+                              (str base " (overwritten)")
+                              base))
+
+                          :skipped
+                          (str "- " (:name r) " (skipped: " (:reason r) ")")
+
+                          :failed
+                          (str "✗ " (:name r)
+                               (when (:type r)
+                                 (str " (" (name (:type r)) ")"))
+                               "\n  Error: " (:error r))
+
+                          (str "? " (:name r) "\n"
+                               "  Unknown status: " (:status r))))
+        overwritten-count (:overwritten-count metadata 0)
+        warning (when (pos? overwritten-count)
+                  (str "Warning: " overwritten-count " file"
+                       (when (> overwritten-count 1) "s")
+                       " overwritten"))]
+    (str/join "\n\n"
+              (filter some?
+                      ["Installing prompts as Claude Code slash commands..."
+                       ""
+                       (str/join "\n\n" (map format-result results))
+                       ""
+                       warning
+                       (str "Summary: " (:generated-count metadata) " generated, "
+                            (:skipped-count metadata) " skipped, "
+                            (:failed-count metadata) " failed")]))))
+
 (defn format-prompts-show
   "Format prompts show response for human-readable output.
 
@@ -420,9 +461,11 @@
     (:prompts data)
     (format-prompts-list (:prompts data) (:metadata data))
 
-    ;; Prompts install response
+    ;; Prompts install/customize response
     (:results data)
-    (format-prompts-customize (:results data) (:metadata data))
+    (if (contains? (:metadata data) :generated-count)
+      (format-prompts-install (:results data) (:metadata data))
+      (format-prompts-customize (:results data) (:metadata data)))
 
     ;; Prompts show response (has :name and :content)
     (and (:name data) (:content data))

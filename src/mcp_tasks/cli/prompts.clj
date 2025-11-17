@@ -117,6 +117,7 @@
   - :type - :category or :workflow
   - :status - :generated | :failed | :skipped
   - :path - path to generated file (when status is :generated)
+  - :overwritten - true if file existed and was overwritten (when status is :generated)
   - :error - error message (when status is :failed)
   - :reason - skip reason (when status is :skipped)"
   [config target-dir prompt-info]
@@ -143,13 +144,15 @@
             (if loaded
               (let [frontmatter (build-slash-command-frontmatter (:metadata loaded))
                     file-content (str frontmatter (:content loaded))
-                    target-file (io/file target-dir (str "mcp-tasks-" name ".md"))]
+                    target-file (io/file target-dir (str "mcp-tasks-" name ".md"))
+                    file-existed? (fs/exists? target-file)]
                 (fs/create-dirs target-dir)
                 (spit target-file file-content)
                 {:name name
                  :type actual-type
                  :status :generated
-                 :path (str target-file)})
+                 :path (str target-file)
+                 :overwritten file-existed?})
               {:name name
                :type actual-type
                :status :failed
@@ -225,21 +228,24 @@
 
   Returns structured data with:
   - :results - vector of generation result maps
-  - :metadata - map with :generated-count, :failed-count, :skipped-count, :target-dir
+  - :metadata - map with :generated-count, :failed-count, :skipped-count, :overwritten-count, :target-dir
 
   Example:
-  {:results [{:name \"simple\" :status :generated :path \"...\"}]
-   :metadata {:generated-count 1 :failed-count 0 :skipped-count 0 :target-dir \".claude/commands/\"}}"
+  {:results [{:name \"simple\" :status :generated :path \"...\" :overwritten false}]
+   :metadata {:generated-count 1 :failed-count 0 :skipped-count 0 :overwritten-count 0 :target-dir \".claude/commands/\"}}"
   [config parsed-args]
   (let [target-dir (:target-dir parsed-args)
         available-prompts (pm/list-available-prompts)
         results (mapv (partial generate-slash-command config target-dir)
                       available-prompts)
-        generated-count (count (filter #(= :generated (:status %)) results))
+        generated (filter #(= :generated (:status %)) results)
+        generated-count (count generated)
         failed-count (count (filter #(= :failed (:status %)) results))
-        skipped-count (count (filter #(= :skipped (:status %)) results))]
+        skipped-count (count (filter #(= :skipped (:status %)) results))
+        overwritten-count (count (filter :overwritten generated))]
     {:results results
      :metadata {:generated-count generated-count
                 :failed-count failed-count
                 :skipped-count skipped-count
+                :overwritten-count overwritten-count
                 :target-dir target-dir}}))
