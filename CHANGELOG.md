@@ -10,12 +10,12 @@ This changelog is automatically generated using [git-cliff](https://github.com/o
 
 ### Features
 
-- Add prompts CLI command with list and install subcommands
+- Add prompts CLI command with list and customize subcommands
   - `mcp-tasks prompts list` - List all available built-in prompts with type information
-  - `mcp-tasks prompts install <prompt1> [prompt2]...` - Install specific prompts to local directories
+  - `mcp-tasks prompts customize <prompt1> [prompt2]...` - Copy prompts to local directories for customization
   - Support for multiple output formats (human, json, edn) via --format flag
-  - Category prompts install to .mcp-tasks/category-prompts/
-  - Workflow prompts install to .mcp-tasks/prompt-overrides/
+  - Category prompts are copied to .mcp-tasks/category-prompts/
+  - Workflow prompts are copied to .mcp-tasks/prompt-overrides/
   - Replaces deprecated --list-prompts and --install-prompts server flags
 
 ### Changed

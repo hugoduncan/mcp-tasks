@@ -147,6 +147,132 @@ clojure -M:cli delete --task-id 42
 clojure -M:cli delete --title-pattern "^OLD:"
 ```
 
+### prompts - Manage prompt templates
+
+The prompts command provides subcommands for listing, viewing, customizing, and installing prompts.
+
+#### prompts list - List available prompts
+
+```bash
+# List all available prompts
+clojure -M:cli prompts list
+
+# Different output formats
+clojure -M:cli prompts list --format json
+clojure -M:cli prompts list --format edn
+```
+
+Example output:
+```
+Category Prompts:
+  simple           Execute simple tasks with basic workflow
+  medium           Execute medium complexity tasks with analysis...
+  large            Execute large tasks with detailed analysis...
+  clarify-task     Transform informal task instructions into clear...
+
+Workflow Prompts:
+  execute-task           Execute the current task
+  refine-task            Refine task requirements interactively
+  create-story-tasks     Create tasks for a story
+  ...
+
+Total: 11 prompts (4 category, 7 workflow)
+```
+
+#### prompts show - Display prompt content
+
+```bash
+# Show a specific prompt
+clojure -M:cli prompts show simple
+
+# Show with different formats
+clojure -M:cli prompts show execute-task --format json
+```
+
+#### prompts customize - Copy prompts for customization
+
+Copy built-in prompts to your project for customization:
+
+```bash
+# Copy a single prompt
+clojure -M:cli prompts customize simple
+
+# Copy multiple prompts
+clojure -M:cli prompts customize simple medium execute-task
+
+# JSON output for scripting
+clojure -M:cli prompts customize simple --format json
+```
+
+The customize command:
+- Detects prompt type (category vs workflow) automatically
+- Category prompts are copied to `.mcp-tasks/category-prompts/`
+- Workflow prompts are copied to `.mcp-tasks/prompt-overrides/`
+
+Example output:
+```
+Customizing prompts...
+
+✓ simple (category)
+  → .mcp-tasks/category-prompts/simple.md
+
+✓ execute-task (workflow)
+  → .mcp-tasks/prompt-overrides/execute-task.md
+
+Summary: 2 installed, 0 failed
+```
+
+#### prompts install - Generate Claude Code slash commands
+
+Generate Claude Code slash command files from available prompts. This allows using mcp-tasks workflows without the MCP server running.
+
+```bash
+# Install to default location (.claude/commands/)
+clojure -M:cli prompts install
+
+# Install to custom directory
+clojure -M:cli prompts install my-commands/
+
+# JSON output for scripting
+clojure -M:cli prompts install --format json
+```
+
+**What it does:**
+- Generates `.md` files in the target directory with names `mcp-tasks-<prompt-name>.md`
+- Renders templates with `cli=true` context, replacing MCP tool references with CLI equivalents
+- Preserves frontmatter (description, argument-hint) for Claude Code
+- Warns when overwriting existing files
+
+Example output:
+```
+Installing prompts as Claude Code slash commands...
+
+✓ simple (category)
+  → .claude/commands/mcp-tasks-simple.md
+
+✓ execute-task (workflow)
+  → .claude/commands/mcp-tasks-execute-task.md
+
+- file-metadata (skipped: Infrastructure file, not a prompt)
+
+Warning: 2 files overwritten
+
+Summary: 11 generated, 3 skipped, 0 failed
+```
+
+**Use cases:**
+- Work with mcp-tasks prompts without an MCP server
+- Use familiar Claude Code slash command interface
+- Access workflows directly from Claude Code's `/` menu
+
+**Generated command usage:**
+After installation, use the generated commands in Claude Code:
+```
+/mcp-tasks-simple           # Execute simple tasks
+/mcp-tasks-execute-task     # Execute current task
+/mcp-tasks-refine-task      # Refine task requirements
+```
+
 ## Output Formats
 
 The CLI supports three output formats via the `--format` option:

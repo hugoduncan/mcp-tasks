@@ -277,10 +277,10 @@
                             " prompts (" (:category-count metadata)
                             " category, " (:workflow-count metadata) " workflow)")]))))
 
-(defn format-prompts-install
-  "Format prompts install response for human-readable output.
+(defn format-prompts-customize
+  "Format prompts customize response for human-readable output.
 
-  Shows installation results with status indicators and paths."
+  Shows copy results with status indicators and paths."
   [results metadata]
   (let [format-result (fn [r]
                         (case (:status r)
@@ -304,12 +304,56 @@
                                "  Unknown status: " (:status r))))]
     (str/join "\n\n"
               (filter some?
-                      ["Installing prompts..."
+                      ["Customizing prompts..."
                        ""
                        (str/join "\n\n" (map format-result results))
                        ""
                        (str "Summary: " (:installed-count metadata) " installed, "
                             (:failed-count metadata) " failed")]))))
+
+(defn format-prompts-install
+  "Format prompts install response for human-readable output.
+
+  Shows generation results with status indicators. Skipped files are not displayed.
+  Only shows (overwritten) when an existing file was replaced."
+  [results metadata]
+  (let [displayable-results (remove #(= :skipped (:status %)) results)
+        format-result (fn [r]
+                        (case (:status r)
+                          :generated
+                          (let [base (str "✓ " (:name r) " (" (name (:type r)) ")\n"
+                                          "  → " (:path r))]
+                            (if (:overwritten r)
+                              (str base " (overwritten)")
+                              base))
+
+                          :failed
+                          (str "✗ " (:name r)
+                               (when (:type r)
+                                 (str " (" (name (:type r)) ")"))
+                               "\n  Error: " (:error r))
+
+                          (str "? " (:name r) "\n"
+                               "  Unknown status: " (:status r))))
+        overwritten-count (:overwritten-count metadata 0)
+        skipped-count (:skipped-count metadata 0)
+        warning (when (pos? overwritten-count)
+                  (str "Warning: " overwritten-count " file"
+                       (when (> overwritten-count 1) "s")
+                       " overwritten"))
+        summary-parts [(str (:generated-count metadata) " generated")
+                       (str (:failed-count metadata) " failed")
+                       (when (pos? skipped-count)
+                         (str skipped-count " skipped"))]]
+    (str/join "\n\n"
+              (filter some?
+                      ["Installing prompts as Claude Code slash commands..."
+                       ""
+                       (str/join "\n\n" (map format-result displayable-results))
+                       ""
+                       warning
+                       (str "Summary: "
+                            (str/join ", " (filter some? summary-parts)))]))))
 
 (defn format-prompts-show
   "Format prompts show response for human-readable output.
@@ -420,9 +464,11 @@
     (:prompts data)
     (format-prompts-list (:prompts data) (:metadata data))
 
-    ;; Prompts install response
+    ;; Prompts install/customize response
     (:results data)
-    (format-prompts-install (:results data) (:metadata data))
+    (if (contains? (:metadata data) :generated-count)
+      (format-prompts-install (:results data) (:metadata data))
+      (format-prompts-customize (:results data) (:metadata data)))
 
     ;; Prompts show response (has :name and :content)
     (and (:name data) (:content data))

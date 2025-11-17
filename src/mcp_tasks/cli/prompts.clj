@@ -3,8 +3,35 @@
 
   Handles listing and installing built-in prompts."
   (:require
+    [babashka.fs :as fs]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
     [mcp-tasks.prompt-management :as pm]
     [mcp-tasks.prompts :as prompts]))
+
+(defn- build-slash-command-frontmatter
+  "Build YAML frontmatter string for Claude Code slash command.
+
+  Extracts relevant fields from prompt metadata:
+  - description: Brief description shown in /help
+  - argument-hint: Expected arguments for auto-completion
+
+  Metadata may have string or keyword keys (from YAML parsing).
+
+  Returns frontmatter string with delimiters, or empty string if no relevant fields."
+  [metadata]
+  (let [;; Support both string and keyword keys
+        description (or (get metadata "description") (get metadata :description))
+        argument-hint (or (get metadata "argument-hint") (get metadata :argument-hint))
+        fields (cond-> []
+                 description
+                 (conj (str "description: " description))
+
+                 argument-hint
+                 (conj (str "argument-hint: " argument-hint)))]
+    (if (seq fields)
+      (str "---\n" (str/join "\n" fields) "\n---\n\n")
+      "")))
 
 (defn prompts-list-command
   "Execute the prompts list command.
@@ -26,13 +53,13 @@
                 :category-count category-count
                 :workflow-count workflow-count}}))
 
-(defn prompts-install-command
-  "Execute the prompts install command.
+(defn prompts-customize-command
+  "Execute the prompts customize command.
 
-  Takes config and parsed-args. Installs each prompt from :prompt-names.
+  Takes config and parsed-args. Copies each prompt from :prompt-names to local directories.
 
   Returns structured data with:
-  - :results - vector of installation result maps
+  - :results - vector of copy result maps
   - :metadata - map with :requested-count, :installed-count, :failed-count
 
   Example:
@@ -72,6 +99,76 @@
       {:error (str "Prompt '" prompt-name "' not found. "
                    "Use 'mcp-tasks prompts list' to see available prompts.")
        :metadata {:prompt-name prompt-name}})))
+
+(defn- generate-slash-command
+  "Generate a single Claude Code slash command file from a prompt.
+
+  Parameters:
+  - config: Configuration map with :resolved-tasks-dir
+  - target-dir: Target directory for generated files
+  - prompt-info: Map with :name and :type from list-available-prompts
+
+  The generated file includes:
+  - YAML frontmatter with description and argument-hint (if present in source)
+  - Rendered prompt content with {:cli true} context applied
+
+  For category prompts, the command name is prefixed with 'next-' to indicate
+  execution of the next task in that category.
+
+  Returns a result map with:
+  - :name - prompt name (with next- prefix for categories)
+  - :type - :category or :workflow
+  - :status - :generated | :failed | :skipped
+  - :path - path to generated file (when status is :generated)
+  - :overwritten - true if file existed and was overwritten (when status is :generated)
+  - :error - error message (when status is :failed)
+  - :reason - skip reason (when status is :skipped)"
+  [config target-dir prompt-info]
+  (let [{:keys [name]} prompt-info
+        resolved-tasks-dir (:resolved-tasks-dir config)
+        actual-type (prompts/detect-prompt-type name)]
+    (if (nil? actual-type)
+      {:name name
+       :type nil
+       :status :skipped
+       :reason "Infrastructure file, not a prompt"}
+      (let [[resolver-fn builtin-dir] (case actual-type
+                                        :category [prompts/resolve-category-prompt-path
+                                                   prompts/builtin-category-prompts-dir]
+                                        :workflow [prompts/resolve-workflow-prompt-path
+                                                   prompts/builtin-prompts-dir])
+            resolved-path (resolver-fn resolved-tasks-dir name)
+            builtin-resource-path (str builtin-dir "/" name ".md")
+            cli-context {:cli true}
+            ;; Category prompts get "next-" prefix for command name
+            command-name (if (= actual-type :category)
+                           (str "next-" name)
+                           name)]
+        (try
+          (let [loaded (prompts/load-prompt-content resolved-path
+                                                    builtin-resource-path
+                                                    cli-context)]
+            (if loaded
+              (let [frontmatter (build-slash-command-frontmatter (:metadata loaded))
+                    file-content (str frontmatter (:content loaded))
+                    target-file (io/file target-dir (str "mcp-tasks-" command-name ".md"))
+                    file-existed? (fs/exists? target-file)]
+                (fs/create-dirs target-dir)
+                (spit target-file file-content)
+                {:name command-name
+                 :type actual-type
+                 :status :generated
+                 :path (str target-file)
+                 :overwritten file-existed?})
+              {:name command-name
+               :type actual-type
+               :status :failed
+               :error (str "Prompt '" name "' not found")}))
+          (catch Exception e
+            {:name command-name
+             :type actual-type
+             :status :failed
+             :error (.getMessage e)}))))))
 
 (defn prompts-show-command
   "Execute the prompts show command.
@@ -124,3 +221,38 @@
           {:error (str "Prompt '" prompt-name "' not found. "
                        "Use 'mcp-tasks prompts list' to see available prompts.")
            :metadata {:prompt-name prompt-name}})))))
+
+(defn prompts-install-command
+  "Execute the prompts install command.
+
+  Generates Claude Code slash command files from available prompts.
+  Files are written to the target directory with names: mcp-tasks-<prompt-name>.md
+
+  Templates are rendered with {:cli true} context, enabling {% if cli %} conditionals
+  to provide CLI-specific alternatives for MCP tool references.
+
+  Takes config and parsed-args. Target directory defaults to .claude/commands/.
+
+  Returns structured data with:
+  - :results - vector of generation result maps
+  - :metadata - map with :generated-count, :failed-count, :skipped-count, :overwritten-count, :target-dir
+
+  Example:
+  {:results [{:name \"simple\" :status :generated :path \"...\" :overwritten false}]
+   :metadata {:generated-count 1 :failed-count 0 :skipped-count 0 :overwritten-count 0 :target-dir \".claude/commands/\"}}"
+  [config parsed-args]
+  (let [target-dir (:target-dir parsed-args)
+        available-prompts (pm/list-available-prompts)
+        results (mapv (partial generate-slash-command config target-dir)
+                      available-prompts)
+        generated (filter #(= :generated (:status %)) results)
+        generated-count (count generated)
+        failed-count (count (filter #(= :failed (:status %)) results))
+        skipped-count (count (filter #(= :skipped (:status %)) results))
+        overwritten-count (count (filter :overwritten generated))]
+    {:results results
+     :metadata {:generated-count generated-count
+                :failed-count failed-count
+                :skipped-count skipped-count
+                :overwritten-count overwritten-count
+                :target-dir target-dir}}))

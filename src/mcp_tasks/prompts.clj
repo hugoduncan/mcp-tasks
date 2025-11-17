@@ -497,6 +497,7 @@
   Parameters:
   - resolved-override: Map from resolve-*-prompt-path with :path and :location, or nil
   - builtin-resource-path: Path to builtin resource (e.g., \"category-prompts/simple.md\")
+  - context: Optional map of template context variables (default: {})
 
   Returns a map with:
   - :content - The prompt text (with frontmatter stripped and templates rendered)
@@ -506,28 +507,32 @@
 
   Returns nil if neither override nor builtin exists.
   
-  Template includes are resolved relative to prompts/ on the classpath."
-  [resolved-override builtin-resource-path]
-  (if resolved-override
-    ;; Load from override file
-    (let [file-content (slurp (:path resolved-override))
-          {:keys [metadata content]} (parse-frontmatter file-content)
-          rendered-content (templates/render-with-includes
-                             content {} {:resource-base "prompts"})]
-      {:content rendered-content
-       :metadata metadata
-       :source :override
-       :path (:path resolved-override)})
-    ;; Try builtin resource
-    (when-let [resource-url (io/resource builtin-resource-path)]
-      (let [file-content (slurp resource-url)
-            {:keys [metadata content]} (parse-frontmatter file-content)
-            rendered-content (templates/render-with-includes
-                               content {} {:resource-base "prompts"})]
-        {:content rendered-content
-         :metadata metadata
-         :source :builtin
-         :path (str resource-url)}))))
+  Template includes are resolved relative to prompts/ on the classpath.
+  Template conditionals (e.g., {% if cli %}...{% endif %}) are evaluated
+  using the provided context."
+  ([resolved-override builtin-resource-path]
+   (load-prompt-content resolved-override builtin-resource-path {}))
+  ([resolved-override builtin-resource-path context]
+   (if resolved-override
+     ;; Load from override file
+     (let [file-content (slurp (:path resolved-override))
+           {:keys [metadata content]} (parse-frontmatter file-content)
+           rendered-content (templates/render-with-includes
+                              content context {:resource-base "prompts"})]
+       {:content rendered-content
+        :metadata metadata
+        :source :override
+        :path (:path resolved-override)})
+     ;; Try builtin resource
+     (when-let [resource-url (io/resource builtin-resource-path)]
+       (let [file-content (slurp resource-url)
+             {:keys [metadata content]} (parse-frontmatter file-content)
+             rendered-content (templates/render-with-includes
+                                content context {:resource-base "prompts"})]
+         {:content rendered-content
+          :metadata metadata
+          :source :builtin
+          :path (str resource-url)})))))
 
 (defn list-builtin-workflows
   "List all built-in workflow prompts available in resources.

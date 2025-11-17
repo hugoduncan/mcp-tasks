@@ -10,9 +10,15 @@ Review the implementation of a story against its requirements and code quality s
 
 ## Process
 
+{% if cli %}
+1. Find the story task using `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --type story --limit 1 --format edn`
+   - Handle no match or multiple matches by informing user
+   - Extract the story's `id`, `title`, and `description` fields
+{% else %}
 1. Find the story task using `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true`
    - Handle no match or multiple matches by informing user
    - Extract the story's `:id`, `:title`, and `:description` fields
+{% endif %}
 
 2. Analyze the current branch against the description of the story:
    - Does the code implement the story correctly?
@@ -41,6 +47,17 @@ Review the implementation of a story against its requirements and code quality s
      "Would you like to create story tasks for any of these suggestions? (enter numbers separated by commas, e.g., '1,3' or 'all' for all suggestions, or 'none' to skip)"
 
    - If user selects suggestions:
+{% if cli %}
+     a) For each selected suggestion, use `mcp-tasks add`:
+        - `mcp-tasks add --category <category> --title "CR: <description>" --description "<details>" --parent-id <story-id>`
+
+        Example:
+        ```bash
+        mcp-tasks add --category medium --title "CR: Add error handling for edge cases" \
+          --description "throw exceptions if edge cases not supported" \
+          --parent-id 42
+        ```
+{% else %}
      a) For each selected suggestion, use the `add-task` tool for each task:
         - Use the `add-task` tool with these parameters:
           - `category`: pick an appropriate category based on the task complexity
@@ -59,6 +76,7 @@ Review the implementation of a story against its requirements and code quality s
           prepend=false
         )
         ```
+{% endif %}
 
      c) Confirm to user:
         "✓ Added N task(s) to tasks.ednl for story '<story-name>':"
@@ -71,4 +89,8 @@ Review the implementation of a story against its requirements and code quality s
 - All suggestions should be numbered from the start to make selection easy
 - Task descriptions can be refined by the user or used verbatim from suggestions
 - Categories help route tasks to appropriate execution workflows
+{% if cli %}
+- The `mcp-tasks add` command automatically handles file creation and formatting
+{% else %}
 - The `add-task` tool automatically handles file creation, formatting, and task preservation
+{% endif %}
