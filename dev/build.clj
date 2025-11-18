@@ -1,6 +1,7 @@
 (ns build
   (:require
     [babashka.fs :as fs]
+    [clojure.java.io :as io]
     [clojure.string]
     [clojure.tools.build.api :as b]
     [deps-deploy.deps-deploy :as dd]))
@@ -23,6 +24,29 @@
   [_]
   (println "Cleaning target directory...")
   (b/delete {:path target-dir}))
+
+(defn generate-prompt-manifest
+  "Generate manifest file listing all workflow prompts.
+
+  Scans resources/prompts/ directory and creates resources/prompts-manifest.edn
+  containing a vector of workflow prompt names (without .md extension).
+
+  This enables prompt discovery in GraalVM native images where directory
+  listing via io/resource is not supported."
+  []
+  (let [prompts-dir (io/file "resources/prompts")
+        workflow-files (->> (file-seq prompts-dir)
+                            (filter #(and (.isFile %)
+                                          (clojure.string/ends-with? (.getName %) ".md")
+                                          ;; Only root-level files, not infrastructure/
+                                          (= prompts-dir (.getParentFile %))))
+                            (map #(clojure.string/replace (.getName %) #"\.md$" ""))
+                            sort
+                            vec)
+        manifest-file (io/file "resources/prompts-manifest.edn")]
+    (spit manifest-file (pr-str workflow-files))
+    (println (format "Generated manifest with %d workflow prompts" (count workflow-files)))
+    (count workflow-files)))
 
 (defn jar
   "Build JAR file with Main-Class manifest
@@ -184,6 +208,8 @@
         basis (b/create-basis {:project "deps.edn"})
         jar-file (format "%s/%s-%s.jar" target-dir basename v)]
     (println (format "Building %s uberjar: %s" basename jar-file))
+    (println "Generating prompt manifest...")
+    (generate-prompt-manifest)
     (b/write-pom {:class-dir class-dir
                   :lib lib
                   :version v
@@ -244,6 +270,7 @@
                    "-jar" jar-file
                    "--no-fallback"
                    "-H:+ReportExceptionStackTraces"
+                   "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"
                    "--initialize-at-build-time"
                    "-o" output-path]
         ;; For amd64, prefix with arch -x86_64 to run x86_64 native-image under Rosetta
@@ -388,6 +415,7 @@
                            "-jar" jar-file
                            "--no-fallback"
                            "-H:+ReportExceptionStackTraces"
+                           "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"
                            "--initialize-at-build-time"
                            "-o" output-name-for-native-image]
                 ;; Add architecture flag for macOS cross-compilation

@@ -537,11 +537,24 @@
 (defn list-builtin-workflows
   "List all built-in workflow prompts available in resources.
 
-  Returns a sequence of prompt names (without .md extension) found in
-  resources/prompts directory."
+  Reads from generated manifest file (resources/prompts-manifest.edn) which is
+  created at build time. This approach works in both JAR and GraalVM native
+  images, avoiding the limitation that directory listing via io/resource +
+  file-seq doesn't work in native binaries.
+
+  Falls back to empty vector if manifest not found (shouldn't happen in production)."
   []
-  (when-let [prompts-url (io/resource builtin-prompts-dir)]
-    (discover-prompt-files (io/file (.toURI prompts-url)))))
+  (if-let [manifest-resource (io/resource "prompts-manifest.edn")]
+    (try
+      (let [manifest-content (slurp manifest-resource)
+            workflow-names (read-string manifest-content)]
+        (vec workflow-names))
+      (catch Exception e
+        (log/error :failed-to-read-manifest {:error (.getMessage e)})
+        []))
+    (do
+      (log/warn :manifest-not-found {:message "prompts-manifest.edn not found"})
+      [])))
 
 (defn detect-prompt-type
   "Detect whether a prompt name is a category or workflow prompt.
