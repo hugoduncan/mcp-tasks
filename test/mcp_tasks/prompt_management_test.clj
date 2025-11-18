@@ -99,6 +99,44 @@
         (is (every? #(string? (:description %)) prompts))
         (is (every? #(seq (:description %)) prompts))))))
 
+(deftest list-available-prompts-includes-user-categories
+  ;; Test that list-available-prompts includes user-added categories from
+  ;; .mcp-tasks/category-prompts/ when config is provided
+  (testing "list-available-prompts with user categories"
+    (let [test-config {:resolved-tasks-dir test-base-dir}
+          category-dir (str test-base-dir "/category-prompts")]
+      (fs/create-dirs category-dir)
+      (spit (str category-dir "/custom-category.md")
+            "---\ndescription: Custom category\n---\nCustom workflow\n")
+
+      (testing "includes user categories when config provided"
+        (let [prompts (sut/list-available-prompts test-config)
+              custom-prompt (first (filter #(= "custom-category" (:name %)) prompts))]
+          (is (some? custom-prompt)
+              "Should include user-added category")
+          (is (= :category (:type custom-prompt))
+              "User category should have :category type")))
+
+      (testing "includes both built-in and user categories"
+        (let [prompts (sut/list-available-prompts test-config)
+              prompt-names (set (map :name prompts))
+              simple-prompt (first (filter #(= "simple" (:name %)) prompts))
+              custom-prompt (first (filter #(= "custom-category" (:name %)) prompts))]
+          (is (contains? prompt-names "simple")
+              "Should include built-in categories")
+          (is (contains? prompt-names "custom-category")
+              "Should include user categories")
+          (is (= :category (:type simple-prompt)))
+          (is (= :category (:type custom-prompt)))))
+
+      (testing "without config uses only built-in categories"
+        (let [prompts (sut/list-available-prompts)
+              prompt-names (set (map :name prompts))]
+          (is (not (contains? prompt-names "custom-category"))
+              "Should not include user categories without config")
+          (is (contains? prompt-names "simple")
+              "Should still include built-in categories"))))))
+
 (deftest install-prompt-to-correct-directory
   ;; Test that install-prompt installs category and workflow prompts to
   ;; the correct directories based on type detection

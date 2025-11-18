@@ -44,8 +44,8 @@
   {:prompts [{:name \"simple\" :type :category :description \"...\"}
              {:name \"execute-task\" :type :workflow :description \"...\"}]
    :metadata {:total-count 11 :category-count 4 :workflow-count 7}}"
-  [_parsed-args]
-  (let [prompts (vec (pm/list-available-prompts))
+  [config _parsed-args]
+  (let [prompts (vec (pm/list-available-prompts config))
         category-count (count (filter #(= :category (:type %)) prompts))
         workflow-count (count (filter #(= :workflow (:type %)) prompts))]
     {:prompts prompts

@@ -9,7 +9,7 @@
   ;; Test prompts-list-command returns all available prompts with metadata
   (testing "prompts-list-command"
     (testing "returns all prompts with counts"
-      (let [result (sut/prompts-list-command {})]
+      (let [result (sut/prompts-list-command nil {})]
         (is (contains? result :prompts))
         (is (contains? result :metadata))
         (is (vector? (:prompts result)))

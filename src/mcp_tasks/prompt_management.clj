@@ -3,6 +3,7 @@
   (:require
     [babashka.fs :as fs]
     [clojure.java.io :as io]
+    [clojure.set :as set]
     [clojure.string :as str]
     [mcp-tasks.prompts :as prompts])
   (:import
@@ -97,7 +98,10 @@
   (prompts/list-builtin-categories))
 
 (defn list-available-prompts
-  "List all available built-in prompts with metadata.
+  "List all available prompts with metadata.
+
+  When config provided, includes user categories from .mcp-tasks/category-prompts/.
+  Without config, returns only built-in prompts.
 
   Returns a sequence of maps with:
   - :name - prompt name (string)
@@ -111,17 +115,34 @@
    {:name \"execute-task\"
     :type :workflow
     :description \"Execute a task following category-specific workflow\"}]"
-  []
-  (let [prompt-maps (get-prompt-vars)
-        builtin-categories (list-builtin-categories)]
-    (map (fn [prompt-map]
-           (let [prompt-name (:name prompt-map)
-                 is-category? (contains? builtin-categories prompt-name)
-                 docstring (or (:doc (:meta prompt-map)) "No description available")]
-             {:name prompt-name
-              :type (if is-category? :category :workflow)
-              :description docstring}))
-         prompt-maps)))
+  ([] (list-available-prompts nil))
+  ([config]
+   (let [prompt-maps (get-prompt-vars)
+         all-categories (if config
+                          (set (prompts/discover-categories config))
+                          (list-builtin-categories))
+         prompt-var-names (set (map :name prompt-maps))
+         ;; User categories that don't have corresponding prompt vars
+         user-only-categories (if config
+                                (set/difference all-categories prompt-var-names)
+                                #{})
+         ;; Create prompt maps for prompts from get-prompt-vars
+         var-based-prompts (map (fn [prompt-map]
+                                  (let [prompt-name (:name prompt-map)
+                                        is-category? (contains? all-categories prompt-name)
+                                        docstring (or (:doc (:meta prompt-map)) "No description available")]
+                                    {:name prompt-name
+                                     :type (if is-category? :category :workflow)
+                                     :description docstring}))
+                                prompt-maps)
+         ;; Create prompt maps for user-only categories
+         user-category-prompts (map (fn [category-name]
+                                      {:name category-name
+                                       :type :category
+                                       :description "User-defined category prompt"})
+                                    user-only-categories)]
+     ;; Combine both sources
+     (concat var-based-prompts user-category-prompts))))
 
 (defn install-prompt
   "Install a single prompt to appropriate directory.
