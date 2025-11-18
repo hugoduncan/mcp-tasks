@@ -70,13 +70,14 @@ jobs:
           fi
           echo "✓ prompts-manifest.edn found"
 
-          # Verify workflow prompts exist
+          # Verify workflow prompts exist (count derived from manifest)
+          EXPECTED_COUNT=$(jar xf "$JAR_FILE" prompts-manifest.edn && cat prompts-manifest.edn | grep -o '"[^"]*"' | wc -l && rm prompts-manifest.edn)
           WORKFLOW_COUNT=$(jar tf "$JAR_FILE" | grep "^prompts/.*\.md$" | wc -l)
-          if [ "$WORKFLOW_COUNT" -lt 7 ]; then
-            echo "Error: Expected at least 7 workflow prompts, found $WORKFLOW_COUNT"
+          if [ "$WORKFLOW_COUNT" -lt "$EXPECTED_COUNT" ]; then
+            echo "Error: Expected at least $EXPECTED_COUNT workflow prompts (from manifest), found $WORKFLOW_COUNT"
             exit 1
           fi
-          echo "✓ Found $WORKFLOW_COUNT workflow prompts"
+          echo "✓ Found $WORKFLOW_COUNT workflow prompts (expected: $EXPECTED_COUNT)"
 
           # Verify category prompts exist
           CATEGORY_COUNT=$(jar tf "$JAR_FILE" | grep "^category-prompts/.*\.md$" | wc -l)
@@ -109,13 +110,14 @@ jobs:
           fi
           echo "✓ prompts-manifest.edn found"
 
-          # Verify workflow prompts exist
+          # Verify workflow prompts exist (count derived from manifest)
+          EXPECTED_COUNT=$(jar xf "$JAR_FILE" prompts-manifest.edn && cat prompts-manifest.edn | grep -o '"[^"]*"' | wc -l && rm prompts-manifest.edn)
           WORKFLOW_COUNT=$(jar tf "$JAR_FILE" | grep "^prompts/.*\.md$" | wc -l)
-          if [ "$WORKFLOW_COUNT" -lt 7 ]; then
-            echo "Error: Expected at least 7 workflow prompts, found $WORKFLOW_COUNT"
+          if [ "$WORKFLOW_COUNT" -lt "$EXPECTED_COUNT" ]; then
+            echo "Error: Expected at least $EXPECTED_COUNT workflow prompts (from manifest), found $WORKFLOW_COUNT"
             exit 1
           fi
-          echo "✓ Found $WORKFLOW_COUNT workflow prompts"
+          echo "✓ Found $WORKFLOW_COUNT workflow prompts (expected: $EXPECTED_COUNT)"
 
           # Verify category prompts exist
           CATEGORY_COUNT=$(jar tf "$JAR_FILE" | grep "^category-prompts/.*\.md$" | wc -l)
