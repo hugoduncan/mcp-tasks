@@ -534,6 +534,25 @@
           :source :builtin
           :path (str resource-url)})))))
 
+(defn- read-manifest-resource
+  "Read and parse a manifest EDN resource with error handling.
+  
+  Returns parsed content as a vector on success, empty vector on failure.
+  Logs errors and warnings appropriately."
+  [resource-path]
+  (if-let [manifest-resource (io/resource resource-path)]
+    (try
+      (let [manifest-content (slurp manifest-resource)
+            parsed-data (read-string manifest-content)]
+        (vec parsed-data))
+      (catch Exception e
+        (log/error :failed-to-read-manifest {:resource resource-path
+                                             :error (.getMessage e)})
+        []))
+    (do
+      (log/warn :manifest-not-found {:resource resource-path})
+      [])))
+
 (defn list-builtin-workflows
   "List all built-in workflow prompts available in resources.
 
@@ -544,17 +563,7 @@
 
   Falls back to empty vector if manifest not found (shouldn't happen in production)."
   []
-  (if-let [manifest-resource (io/resource "prompts-manifest.edn")]
-    (try
-      (let [manifest-content (slurp manifest-resource)
-            workflow-names (read-string manifest-content)]
-        (vec workflow-names))
-      (catch Exception e
-        (log/error :failed-to-read-manifest {:error (.getMessage e)})
-        []))
-    (do
-      (log/warn :manifest-not-found {:message "prompts-manifest.edn not found"})
-      [])))
+  (read-manifest-resource "prompts-manifest.edn"))
 
 (defn detect-prompt-type
   "Detect whether a prompt name is a category or workflow prompt.
