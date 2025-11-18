@@ -270,6 +270,8 @@
                    "-jar" jar-file
                    "--no-fallback"
                    "-H:+ReportExceptionStackTraces"
+                   ;; GraalVM resource inclusion: Embed prompt markdown files in native binary
+                   ;; Without this flag, prompts accessed via io/resource would not be available
                    "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"
                    "--initialize-at-build-time"
                    "-o" output-path]
@@ -415,6 +417,8 @@
                            "-jar" jar-file
                            "--no-fallback"
                            "-H:+ReportExceptionStackTraces"
+                           ;; GraalVM resource inclusion: Embed prompt markdown files in native binary
+                           ;; Without this flag, prompts accessed via io/resource would not be available
                            "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"
                            "--initialize-at-build-time"
                            "-o" output-name-for-native-image]
