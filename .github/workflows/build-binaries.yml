@@ -58,6 +58,34 @@ jobs:
       - name: Build CLI JAR
         run: clojure -T:build jar-cli
 
+      - name: Validate CLI JAR contains manifest and prompts
+        run: |
+          JAR_FILE=$(ls target/mcp-tasks-cli-*.jar | head -1)
+          echo "Validating JAR: $JAR_FILE"
+
+          # Verify prompts-manifest.edn exists
+          if ! jar tf "$JAR_FILE" | grep -q "^prompts-manifest.edn$"; then
+            echo "Error: prompts-manifest.edn not found in JAR"
+            exit 1
+          fi
+          echo "✓ prompts-manifest.edn found"
+
+          # Verify workflow prompts exist
+          WORKFLOW_COUNT=$(jar tf "$JAR_FILE" | grep "^prompts/.*\.md$" | wc -l)
+          if [ "$WORKFLOW_COUNT" -lt 7 ]; then
+            echo "Error: Expected at least 7 workflow prompts, found $WORKFLOW_COUNT"
+            exit 1
+          fi
+          echo "✓ Found $WORKFLOW_COUNT workflow prompts"
+
+          # Verify category prompts exist
+          CATEGORY_COUNT=$(jar tf "$JAR_FILE" | grep "^category-prompts/.*\.md$" | wc -l)
+          if [ "$CATEGORY_COUNT" -lt 4 ]; then
+            echo "Error: Expected at least 4 category prompts, found $CATEGORY_COUNT"
+            exit 1
+          fi
+          echo "✓ Found $CATEGORY_COUNT category prompts"
+
       - name: Build native CLI binary
         run: |
           if [ "${{ matrix.arch }}" = "universal" ]; then
@@ -68,6 +96,34 @@ jobs:
 
       - name: Build Server JAR
         run: clojure -T:build jar-server
+
+      - name: Validate Server JAR contains manifest and prompts
+        run: |
+          JAR_FILE=$(ls target/mcp-tasks-server-*.jar | head -1)
+          echo "Validating JAR: $JAR_FILE"
+
+          # Verify prompts-manifest.edn exists
+          if ! jar tf "$JAR_FILE" | grep -q "^prompts-manifest.edn$"; then
+            echo "Error: prompts-manifest.edn not found in JAR"
+            exit 1
+          fi
+          echo "✓ prompts-manifest.edn found"
+
+          # Verify workflow prompts exist
+          WORKFLOW_COUNT=$(jar tf "$JAR_FILE" | grep "^prompts/.*\.md$" | wc -l)
+          if [ "$WORKFLOW_COUNT" -lt 7 ]; then
+            echo "Error: Expected at least 7 workflow prompts, found $WORKFLOW_COUNT"
+            exit 1
+          fi
+          echo "✓ Found $WORKFLOW_COUNT workflow prompts"
+
+          # Verify category prompts exist
+          CATEGORY_COUNT=$(jar tf "$JAR_FILE" | grep "^category-prompts/.*\.md$" | wc -l)
+          if [ "$CATEGORY_COUNT" -lt 4 ]; then
+            echo "Error: Expected at least 4 category prompts, found $CATEGORY_COUNT"
+            exit 1
+          fi
+          echo "✓ Found $CATEGORY_COUNT category prompts"
 
       - name: Build native server binary
         run: |
