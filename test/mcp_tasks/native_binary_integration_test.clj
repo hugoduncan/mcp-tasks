@@ -254,3 +254,53 @@
         (is (= 0 (:exit result)))
         (is (< elapsed-ms 500)
             (str "Help command should complete in under 500ms (took " elapsed-ms "ms)"))))))
+
+(deftest ^:native-binary ^:comprehensive comprehensive-prompts-discovery
+  ;; Test that workflow and category prompt discovery works in native binary
+  ;; This verifies the manifest-based approach for workflow prompts
+  (testing "comprehensive-prompts-discovery"
+
+    (testing "prompts list shows workflow prompts from manifest"
+      (let [result (call-binary "prompts" "list")]
+        (is (= 0 (:exit result))
+            "prompts list command should succeed")
+        (let [output (:out result)]
+          ;; Verify workflow prompts are listed
+          (is (str/includes? output "execute-task")
+              "Should list execute-task workflow")
+          (is (str/includes? output "refine-task")
+              "Should list refine-task workflow")
+          (is (str/includes? output "complete-story")
+              "Should list complete-story workflow")
+          (is (str/includes? output "create-story-tasks")
+              "Should list create-story-tasks workflow")
+          (is (str/includes? output "execute-story-child")
+              "Should list execute-story-child workflow")
+          (is (str/includes? output "review-story-implementation")
+              "Should list review-story-implementation workflow")
+          (is (str/includes? output "create-story-pr")
+              "Should list create-story-pr workflow")
+
+          ;; Verify category prompts are listed
+          (is (str/includes? output "simple")
+              "Should list simple category")
+          (is (str/includes? output "medium")
+              "Should list medium category")
+          (is (str/includes? output "large")
+              "Should list large category")
+          (is (str/includes? output "clarify-task")
+              "Should list clarify-task category"))))
+
+    (testing "prompts show displays workflow prompt content"
+      (let [result (call-binary "prompts" "show" "execute-task")]
+        (is (= 0 (:exit result))
+            "prompts show should succeed for workflow prompts")
+        (is (seq (:out result))
+            "Should return prompt content")))
+
+    (testing "prompts show displays category prompt content"
+      (let [result (call-binary "prompts" "show" "simple")]
+        (is (= 0 (:exit result))
+            "prompts show should succeed for category prompts")
+        (is (seq (:out result))
+            "Should return prompt content")))))
