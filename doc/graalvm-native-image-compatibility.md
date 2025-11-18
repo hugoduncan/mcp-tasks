@@ -242,6 +242,11 @@ This ensures all prompt markdown files are embedded in the binary and accessible
 
 **Build Integration**: The manifest is generated during `build-uberjar` before resources are copied, ensuring it's included in both JAR and native binaries. The manifest file is committed to git for reproducibility.
 
+**Development Workflow**: When adding or removing workflow prompts:
+1. Add/remove .md file in `resources/prompts/`
+2. Run `clojure -T:build jar-cli` or `jar-server` to regenerate manifest
+3. Commit both the prompt file and updated manifest to git
+
 **Category Prompt Discovery**: Category prompts use the existing `discover-categories` mechanism which reads from `.mcp-tasks/category-prompts/` in the filesystem (not embedded resources), so they don't require manifest-based discovery.
 
 ## Reflection Configuration

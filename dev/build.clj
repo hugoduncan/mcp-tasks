@@ -25,6 +25,15 @@
   (println "Cleaning target directory...")
   (b/delete {:path target-dir}))
 
+;; Prompt Manifest Generation
+
+;; NOTE FOR DEVELOPERS:
+;; The manifest is automatically regenerated during JAR builds (jar-cli, jar-server).
+;; If you add/remove workflow prompts in resources/prompts/, run one of:
+;;   - clojure -T:build jar-cli     (regenerates + builds CLI JAR)
+;;   - clojure -T:build jar-server  (regenerates + builds server JAR)
+;; The manifest should be committed to git after changes.
+
 (defn generate-prompt-manifest
   "Generate manifest file listing all workflow prompts.
 
