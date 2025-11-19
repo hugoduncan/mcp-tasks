@@ -229,7 +229,7 @@
         jar-file (format "%s/%s-%s.jar" target-dir basename v)]
     (println (format "Building %s uberjar: %s" basename jar-file))
     (println "Generating prompt manifest...")
-    (generate-prompt-manifest)
+    (generate-prompt-manifest nil)
     (b/write-pom {:class-dir class-dir
                   :lib lib
                   :version v
