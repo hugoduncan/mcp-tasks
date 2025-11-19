@@ -281,7 +281,7 @@
                    "-H:+ReportExceptionStackTraces"
                    ;; GraalVM resource inclusion: Embed prompt markdown files in native binary
                    ;; Without this flag, prompts accessed via io/resource would not be available
-                   "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"
+                   "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md,prompts-manifest\\.edn"
                    "--initialize-at-build-time"
                    "-o" output-path]
         ;; For amd64, prefix with arch -x86_64 to run x86_64 native-image under Rosetta
@@ -428,7 +428,7 @@
                            "-H:+ReportExceptionStackTraces"
                            ;; GraalVM resource inclusion: Embed prompt markdown files in native binary
                            ;; Without this flag, prompts accessed via io/resource would not be available
-                           "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"
+                           "-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md,prompts-manifest\\.edn"
                            "--initialize-at-build-time"
                            "-o" output-name-for-native-image]
                 ;; Add architecture flag for macOS cross-compilation
