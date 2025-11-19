@@ -651,3 +651,4 @@ For complete workflow documentation, job details, and binary testing instruction
 - the git repo in ~/.mcp-tasks does not have a remote
 - Use clojure-mcp edit tools for Clojure files to avoid syntax errors
 - Always configure git user identity in test repositories for CI compatibilit
+- Use dynaload instead of requiring-resolve for delayed loading of vats
