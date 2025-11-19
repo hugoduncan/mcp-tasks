@@ -173,6 +173,82 @@ Warning: Malformed EDN at line N: Could not locate malli/core__init.class...
 
 **Current behavior**: No warnings. Malli is properly loaded at compile time via dynaload AOT.
 
+## Resource Configuration and Prompt Discovery
+
+### Resource Inclusion
+
+Native binaries require explicit resource configuration to embed markdown files:
+
+```clojure
+;; In dev/build.clj native-image invocation
+["-H:IncludeResources=prompts/.*\\.md,category-prompts/.*\\.md"]
+```
+
+This ensures all prompt markdown files are embedded in the binary and accessible via `io/resource`.
+
+### Manifest-Based Prompt Discovery
+
+**Problem**: GraalVM native images don't support directory listing via `io/resource` + `file-seq`. This pattern works in JARs but fails in native binaries because resources are embedded directly in the binary without a traditional filesystem structure.
+
+**Solution**: Generate a manifest file at build time listing all workflow prompts.
+
+**Implementation**:
+
+1. **Manifest Generation** (`dev/build.clj`):
+   ```clojure
+   (defn generate-prompt-manifest
+     "Generate manifest file listing all workflow prompts.
+     
+     Scans resources/prompts/ directory and creates resources/prompts-manifest.edn
+     containing a vector of workflow prompt names (without .md extension).
+     
+     This enables prompt discovery in GraalVM native images where directory
+     listing via io/resource is not supported."
+     []
+     (let [prompts-dir (io/file "resources/prompts")
+           workflow-files (->> (file-seq prompts-dir)
+                              (filter #(and (.isFile %)
+                                           (str/ends-with? (.getName %) ".md")
+                                           (not (.isDirectory (.getParentFile %)))))
+                              (map #(str/replace (.getName %) #"\\.md$" ""))
+                              sort
+                              vec)]
+       (spit (io/file "resources/prompts-manifest.edn") (pr-str workflow-files))))
+   ```
+
+2. **Manifest Reading** (`src/mcp_tasks/prompts.clj`):
+   ```clojure
+   (defn list-builtin-workflows
+     "List all built-in workflow prompts.
+     
+     Reads from generated manifest file (resources/prompts-manifest.edn) which is
+     created at build time. This approach works in both JAR and GraalVM native
+     images, avoiding the limitation that directory listing via io/resource + 
+     file-seq doesn't work in native binaries."
+     []
+     (if-let [manifest-resource (io/resource "prompts-manifest.edn")]
+       (try
+         (read-string (slurp manifest-resource))
+         (catch Exception e
+           (log/error :failed-to-read-manifest {:error (.getMessage e)})
+           []))
+       []))
+   ```
+
+**Manifest Format**: Simple EDN vector of strings (prompt names without `.md` extension)
+```clojure
+["complete-story" "create-story-pr" "create-story-tasks" ...]
+```
+
+**Build Integration**: The manifest is generated during `build-uberjar` before resources are copied, ensuring it's included in both JAR and native binaries. The manifest file is committed to git for reproducibility.
+
+**Development Workflow**: When adding or removing workflow prompts:
+1. Add/remove .md file in `resources/prompts/`
+2. Run `clojure -T:build jar-cli` or `jar-server` to regenerate manifest
+3. Commit both the prompt file and updated manifest to git
+
+**Category Prompt Discovery**: Category prompts use the existing `discover-categories` mechanism which reads from `.mcp-tasks/category-prompts/` in the filesystem (not embedded resources), so they don't require manifest-based discovery.
+
 ## Reflection Configuration
 
 **Status**: Not required for current implementation

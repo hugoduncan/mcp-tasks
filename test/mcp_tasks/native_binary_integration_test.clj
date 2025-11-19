@@ -254,3 +254,201 @@
         (is (= 0 (:exit result)))
         (is (< elapsed-ms 500)
             (str "Help command should complete in under 500ms (took " elapsed-ms "ms)"))))))
+
+(deftest ^:native-binary ^:comprehensive comprehensive-prompts-discovery
+  ;; Test that workflow and category prompt discovery works in native binary
+  ;; This verifies the manifest-based approach for workflow prompts
+  (testing "comprehensive-prompts-discovery"
+
+    (testing "prompts list shows workflow prompts from manifest"
+      (let [result (call-binary "prompts" "list")]
+        (is (= 0 (:exit result))
+            (format "prompts list command should succeed. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+        (let [output (:out result)]
+          ;; Verify workflow prompts are listed
+          (is (str/includes? output "execute-task")
+              (format "Should list execute-task workflow. Output: %s" output))
+          (is (str/includes? output "refine-task")
+              (format "Should list refine-task workflow. Output: %s" output))
+          (is (str/includes? output "complete-story")
+              (format "Should list complete-story workflow. Output: %s" output))
+          (is (str/includes? output "create-story-tasks")
+              (format "Should list create-story-tasks workflow. Output: %s" output))
+          (is (str/includes? output "execute-story-child")
+              (format "Should list execute-story-child workflow. Output: %s" output))
+          (is (str/includes? output "review-story-implementation")
+              (format "Should list review-story-implementation workflow. Output: %s" output))
+          (is (str/includes? output "create-story-pr")
+              (format "Should list create-story-pr workflow. Output: %s" output))
+
+          ;; Verify category prompts are listed
+          (is (str/includes? output "simple")
+              (format "Should list simple category. Output: %s" output))
+          (is (str/includes? output "medium")
+              (format "Should list medium category. Output: %s" output))
+          (is (str/includes? output "large")
+              (format "Should list large category. Output: %s" output))
+          (is (str/includes? output "clarify-task")
+              (format "Should list clarify-task category. Output: %s" output)))))
+
+    (testing "prompts show displays workflow prompt content"
+      (let [result (call-binary "prompts" "show" "execute-task")]
+        (is (= 0 (:exit result))
+            (format "prompts show should succeed for workflow prompts. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+        (is (seq (:out result))
+            (format "Should return prompt content. Output: %s" (:out result)))))
+
+    (testing "prompts show displays category prompt content"
+      (let [result (call-binary "prompts" "show" "simple")]
+        (is (= 0 (:exit result))
+            (format "prompts show should succeed for category prompts. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+        (is (seq (:out result))
+            (format "Should return prompt content. Output: %s" (:out result)))))))
+
+(deftest ^:native-binary ^:comprehensive comprehensive-prompts-install
+  ;; Test that prompts install command generates slash commands correctly
+  ;; This verifies the manifest-based workflow discovery works end-to-end
+  (testing "comprehensive-prompts-install"
+
+    (testing "prompts install generates all slash command files"
+      (let [result (call-binary "prompts" "install")]
+        (is (= 0 (:exit result))
+            (format "prompts install should succeed. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+
+        ;; Verify .claude/commands directory exists
+        (let [commands-dir (io/file *test-dir* ".claude/commands")]
+          (is (.exists commands-dir)
+              (format ".claude/commands directory should be created. Path: %s, Exists: %s"
+                      commands-dir (.exists commands-dir)))
+          (is (.isDirectory commands-dir)
+              (format ".claude/commands should be a directory. Path: %s, Is directory: %s"
+                      commands-dir (.isDirectory commands-dir)))
+
+          ;; Verify workflow slash commands were generated
+          (let [workflow-names ["execute-task" "refine-task" "complete-story"
+                                "create-story-tasks" "execute-story-child"
+                                "review-story-implementation" "create-story-pr"]]
+            (doseq [workflow-name workflow-names]
+              (let [file-name (str "mcp-tasks-" workflow-name ".md")
+                    slash-file (io/file commands-dir file-name)]
+                (is (.exists slash-file)
+                    (format "Should generate %s. File path: %s, Exists: %s"
+                            file-name slash-file (.exists slash-file)))
+                (when (.exists slash-file)
+                  (let [content (slurp slash-file)]
+                    ;; Verify frontmatter exists
+                    (is (str/starts-with? content "---")
+                        (format "%s should start with frontmatter. First 50 chars: %s"
+                                file-name (subs content 0 (min 50 (count content)))))
+                    ;; Verify no MCP references
+                    (is (not (or (str/includes? content "mcp-tasks show")
+                                 (str/includes? content "mcp-tasks list")
+                                 (str/includes? content "mcp-tasks complete")
+                                 (str/includes? content "mcp-tasks add")
+                                 (str/includes? content "mcp-tasks update")))
+                        (format "%s should not contain mcp-tasks CLI commands. Content length: %s"
+                                file-name (count content)))
+                    ;; Verify has content beyond frontmatter
+                    (is (> (count content) 50)
+                        (format "%s should have substantial content. Actual length: %s"
+                                file-name (count content))))))))
+
+          ;; Verify category slash commands were generated
+          (let [category-names ["simple" "medium" "large" "clarify-task"]]
+            (doseq [category-name category-names]
+              (let [file-name (str "mcp-tasks-next-" category-name ".md")
+                    slash-file (io/file commands-dir file-name)]
+                (is (.exists slash-file)
+                    (format "Should generate %s. File path: %s, Exists: %s"
+                            file-name slash-file (.exists slash-file)))
+                (when (.exists slash-file)
+                  (let [content (slurp slash-file)]
+                    ;; Verify frontmatter exists
+                    (is (str/starts-with? content "---")
+                        (format "%s should start with frontmatter. First 50 chars: %s"
+                                file-name (subs content 0 (min 50 (count content)))))
+                    ;; Verify no MCP references
+                    (is (not (or (str/includes? content "mcp-tasks show")
+                                 (str/includes? content "mcp-tasks list")
+                                 (str/includes? content "mcp-tasks complete")
+                                 (str/includes? content "mcp-tasks add")
+                                 (str/includes? content "mcp-tasks update")))
+                        (format "%s should not contain mcp-tasks CLI commands. Content length: %s"
+                                file-name (count content)))
+                    ;; Verify has content beyond frontmatter
+                    (is (> (count content) 50)
+                        (format "%s should have substantial content. Actual length: %s"
+                                file-name (count content)))))))))))
+
+    (testing "prompts install reports correct count"
+      (let [result (call-binary "prompts" "install")]
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s" (:exit result)))
+        ;; Should report 11 files generated (7 workflows + 4 categories)
+        (is (str/includes? (:out result) "11")
+            (format "Should report generating 11 slash command files. Output: %s" (:out result)))))))
+
+(deftest ^:native-binary ^:comprehensive comprehensive-prompts-customize
+  ;; Test that prompts customize command copies prompts correctly
+  ;; This verifies both category and workflow prompt customization
+  (testing "comprehensive-prompts-customize"
+
+    (testing "prompts customize copies category prompt"
+      (let [result (call-binary "prompts" "customize" "simple")]
+        (is (= 0 (:exit result))
+            (format "prompts customize should succeed for category. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+
+        ;; Verify file was copied to correct location
+        (let [custom-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
+          (is (.exists custom-file)
+              (format "Should copy simple.md to category-prompts/. Path: %s, Exists: %s"
+                      custom-file (.exists custom-file)))
+          (when (.exists custom-file)
+            (let [content (slurp custom-file)]
+              ;; Verify frontmatter exists
+              (is (str/starts-with? content "---")
+                  (format "Customized category should have frontmatter. First 50 chars: %s"
+                          (subs content 0 (min 50 (count content)))))
+              ;; Verify has content
+              (is (> (count content) 20)
+                  (format "Customized category should have content. Actual length: %s"
+                          (count content))))))))
+
+    (testing "prompts customize copies workflow prompt"
+      (let [result (call-binary "prompts" "customize" "execute-task")]
+        (is (= 0 (:exit result))
+            (format "prompts customize should succeed for workflow. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+
+        ;; Verify file was copied to correct location
+        (let [custom-file (io/file *test-dir* ".mcp-tasks/prompt-overrides/execute-task.md")]
+          (is (.exists custom-file)
+              (format "Should copy execute-task.md to prompt-overrides/. Path: %s, Exists: %s"
+                      custom-file (.exists custom-file)))
+          (when (.exists custom-file)
+            (let [content (slurp custom-file)]
+              ;; Verify has content
+              (is (> (count content) 50)
+                  (format "Customized workflow should have content. Actual length: %s"
+                          (count content))))))))
+
+    (testing "prompts customize handles multiple prompts"
+      (let [result (call-binary "prompts" "customize" "medium" "refine-task")]
+        (is (= 0 (:exit result))
+            (format "prompts customize should succeed for multiple prompts. Exit: %s, Error: %s"
+                    (:exit result) (:err result)))
+
+        ;; Verify both files were copied
+        (let [medium-file (io/file *test-dir* ".mcp-tasks/category-prompts/medium.md")]
+          (is (.exists medium-file)
+              (format "Should copy medium.md. Path: %s, Exists: %s"
+                      medium-file (.exists medium-file))))
+        (let [refine-file (io/file *test-dir* ".mcp-tasks/prompt-overrides/refine-task.md")]
+          (is (.exists refine-file)
+              (format "Should copy refine-task.md. Path: %s, Exists: %s"
+                      refine-file (.exists refine-file))))))))

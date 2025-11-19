@@ -562,6 +562,38 @@ clj -T:build clean
 clj -T:build version
 ```
 
+**Prompt Commands:**
+
+The CLI provides commands to work with workflow and category prompts:
+
+```bash
+# List all available prompts (built-in workflows + categories + user categories)
+mcp-tasks prompts list
+
+# Show content of a specific prompt
+mcp-tasks prompts show <name>
+
+# Generate Claude Code slash commands in .claude/commands/
+# Creates slash command files for all workflow and category prompts
+mcp-tasks prompts install
+
+# Copy prompts to .mcp-tasks/ for project-level customization
+# - Category prompts → .mcp-tasks/category-prompts/
+# - Workflow prompts → .mcp-tasks/prompt-overrides/
+mcp-tasks prompts customize <name> [<name2> ...]
+```
+
+**Key distinctions:**
+
+- **`prompts install`**: Generates Claude Code slash commands (`.claude/commands/*.md`) that invoke MCP prompts. These are lightweight wrappers that call the MCP server to execute prompts.
+
+- **`prompts customize`**: Copies prompt markdown files to `.mcp-tasks/` directories for project-level customization. Modified prompts override built-in versions. This is for changing prompt content, not creating slash commands.
+
+**Typical workflow:**
+1. Use `prompts install` once to generate slash commands in `.claude/commands/`
+2. Use `prompts customize <name>` to modify specific prompts for your project
+3. Edit the copied files in `.mcp-tasks/category-prompts/` or `.mcp-tasks/prompt-overrides/`
+
 ## Changelog
 
 **Tool:** git-cliff (config: `cliff.toml`)
@@ -619,3 +651,4 @@ For complete workflow documentation, job details, and binary testing instruction
 - the git repo in ~/.mcp-tasks does not have a remote
 - Use clojure-mcp edit tools for Clojure files to avoid syntax errors
 - Always configure git user identity in test repositories for CI compatibilit
+- Use dynaload instead of requiring-resolve for delayed loading of vats

@@ -9,7 +9,7 @@
   ;; Test prompts-list-command returns all available prompts with metadata
   (testing "prompts-list-command"
     (testing "returns all prompts with counts"
-      (let [result (sut/prompts-list-command {})]
+      (let [result (sut/prompts-list-command nil {})]
         (is (contains? result :prompts))
         (is (contains? result :metadata))
         (is (vector? (:prompts result)))
@@ -107,11 +107,11 @@
 
 (deftest prompts-install-command-generates-slash-commands
   ;; Test prompts-install-command generates Claude Code slash command files
-  ;; with cli=true context for template conditionals and proper frontmatter.
+  ;; with MCP tool syntax (cli=false context) and proper frontmatter.
   ;; Contracts being tested:
   ;; - Generates files for all category and workflow prompts
   ;; - Skips infrastructure files (not actual prompts)
-  ;; - Renders templates with {:cli true} context
+  ;; - Renders templates with MCP tool syntax (not CLI commands)
   ;; - Preserves argument-hint and description in frontmatter
   ;; - Returns correct metadata counts
   ;; - Files are named mcp-tasks-<prompt-name>.md
@@ -215,7 +215,7 @@
                 (is (not (str/includes? content "argument-hint:"))
                     "Should not have argument-hint when not in source")))))
 
-        (testing "renders templates with cli=true context"
+        (testing "renders templates with MCP tool syntax for slash commands"
           (let [override-dir (str temp-dir "/.mcp-tasks/prompt-overrides")
                 commands-dir (str temp-dir "/commands")
                 ;; Create a test prompt with {% if cli %} conditionals
@@ -231,14 +231,14 @@
                                               (:results result)))]
               (is (= :generated (:status execute-task)))
               (let [content (slurp (:path execute-task))]
-                (is (str/includes? content "CLI commands")
-                    "Should render cli=true branch")
-                (is (not (str/includes? content "MCP tools"))
-                    "Should not render cli=false branch")
-                (is (str/includes? content "mcp-tasks list")
-                    "Should include CLI command")
-                (is (not (str/includes? content "select-tasks"))
-                    "Should not include MCP tool reference")))))
+                (is (str/includes? content "MCP tools")
+                    "Should render MCP tool syntax for slash commands")
+                (is (not (str/includes? content "CLI commands"))
+                    "Should not render CLI command syntax")
+                (is (str/includes? content "select-tasks")
+                    "Should include MCP tool reference")
+                (is (not (str/includes? content "mcp-tasks list"))
+                    "Should not include CLI command")))))
 
         (testing "uses custom target directory"
           (let [custom-dir (str temp-dir "/custom-commands")

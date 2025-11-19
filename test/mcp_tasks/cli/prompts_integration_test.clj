@@ -70,36 +70,54 @@
   ;; Test prompts list command with human-readable output
   (testing "prompts-list-human-format"
     (testing "can list prompts with default format"
-      (let [result (call-cli "prompts" "list")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "Available Prompts"))
-        (is (str/includes? (:out result) "Category Prompts"))
-        (is (str/includes? (:out result) "Workflow Prompts"))
+      (let [result (call-cli "prompts" "list")
+            output (:out result)]
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? output "Available Prompts")
+            (format "Should include 'Available Prompts'. Output: %s" output))
+        (is (str/includes? output "Category Prompts")
+            (format "Should include 'Category Prompts'. Output: %s" output))
+        (is (str/includes? output "Workflow Prompts")
+            (format "Should include 'Workflow Prompts'. Output: %s" output))
         ;; Check for known category prompts
-        (is (str/includes? (:out result) "simple"))
-        (is (str/includes? (:out result) "medium"))
-        (is (str/includes? (:out result) "large"))
+        (is (str/includes? output "simple")
+            (format "Should include 'simple'. Output: %s" output))
+        (is (str/includes? output "medium")
+            (format "Should include 'medium'. Output: %s" output))
+        (is (str/includes? output "large")
+            (format "Should include 'large'. Output: %s" output))
         ;; Check for known workflow prompts
-        (is (str/includes? (:out result) "execute-task"))
-        (is (str/includes? (:out result) "refine-task"))))
+        (is (str/includes? output "execute-task")
+            (format "Should include 'execute-task'. Output: %s" output))
+        (is (str/includes? output "refine-task")
+            (format "Should include 'refine-task'. Output: %s" output))))
 
     (testing "human format explicitly specified"
       (let [result (call-cli "--format" "human" "prompts" "list")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "Available Prompts"))))))
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? (:out result) "Available Prompts")
+            (format "Should include 'Available Prompts'. Output: %s" (:out result)))))))
 
 (deftest prompts-list-edn-format-test
   ;; Test prompts list with EDN output format
   (testing "prompts-list-edn-format"
     (testing "can list prompts in EDN format"
       (let [result (call-cli "--format" "edn" "prompts" "list")]
-        (is (= 0 (:exit result)))
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
         (let [parsed (edn/read-string (:out result))]
-          (is (map? parsed))
-          (is (contains? parsed :prompts))
-          (is (contains? parsed :metadata))
-          (is (vector? (:prompts parsed)))
-          (is (pos? (count (:prompts parsed))))
+          (is (map? parsed)
+              (format "Parsed result should be a map. Actual type: %s, Value: %s" (type parsed) parsed))
+          (is (contains? parsed :prompts)
+              (format "Should contain :prompts key. Actual keys: %s" (keys parsed)))
+          (is (contains? parsed :metadata)
+              (format "Should contain :metadata key. Actual keys: %s" (keys parsed)))
+          (is (vector? (:prompts parsed))
+              (format ":prompts should be a vector. Actual type: %s" (type (:prompts parsed))))
+          (is (pos? (count (:prompts parsed)))
+              (format ":prompts should have positive count. Actual count: %s" (count (:prompts parsed))))
 
           (testing "metadata contains counts"
             (let [metadata (:metadata parsed)]
@@ -193,20 +211,31 @@
     (testing "can install simple category prompt"
       (let [result (call-cli "prompts" "customize" "simple")
             target-file (io/file *test-dir* ".mcp-tasks/category-prompts/simple.md")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "simple"))
-        (is (str/includes? (:out result) "category"))
-        (is (.exists target-file))
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? (:out result) "simple")
+            (format "Output should include 'simple'. Output: %s" (:out result)))
+        (is (str/includes? (:out result) "category")
+            (format "Output should include 'category'. Output: %s" (:out result)))
+        (is (.exists target-file)
+            (format "File should exist. Path: %s, Exists: %s" target-file (.exists target-file)))
         (let [content (slurp target-file)]
-          (is (str/includes? content "---"))
-          (is (str/includes? content "description:")))))
+          (is (str/includes? content "---")
+              (format "Content should include frontmatter. First 100 chars: %s"
+                      (subs content 0 (min 100 (count content)))))
+          (is (str/includes? content "description:")
+              (format "Content should include description. First 200 chars: %s"
+                      (subs content 0 (min 200 (count content))))))))
 
     (testing "human format shows installation status"
       (let [result (call-cli "prompts" "customize" "medium")]
-        (is (= 0 (:exit result)))
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
         (is (or (str/includes? (:out result) "✓")
-                (str/includes? (:out result) "installed")))
-        (is (str/includes? (:out result) "category-prompts"))))))
+                (str/includes? (:out result) "installed"))
+            (format "Output should show success indicator. Output: %s" (:out result)))
+        (is (str/includes? (:out result) "category-prompts")
+            (format "Output should include 'category-prompts'. Output: %s" (:out result)))))))
 
 (deftest prompts-customize-single-workflow-test
   ;; Test installing a single workflow prompt
@@ -214,18 +243,28 @@
     (testing "can install execute-task workflow prompt"
       (let [result (call-cli "prompts" "customize" "execute-task")
             target-file (io/file *test-dir* ".mcp-tasks/prompt-overrides/execute-task.md")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "execute-task"))
-        (is (str/includes? (:out result) "workflow"))
-        (is (.exists target-file))
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? (:out result) "execute-task")
+            (format "Output should include 'execute-task'. Output: %s" (:out result)))
+        (is (str/includes? (:out result) "workflow")
+            (format "Output should include 'workflow'. Output: %s" (:out result)))
+        (is (.exists target-file)
+            (format "File should exist. Path: %s, Exists: %s" target-file (.exists target-file)))
         (let [content (slurp target-file)]
-          (is (str/includes? content "---"))
-          (is (str/includes? content "description:")))))
+          (is (str/includes? content "---")
+              (format "Content should include frontmatter. First 100 chars: %s"
+                      (subs content 0 (min 100 (count content)))))
+          (is (str/includes? content "description:")
+              (format "Content should include description. First 200 chars: %s"
+                      (subs content 0 (min 200 (count content))))))))
 
     (testing "human format shows installation path"
       (let [result (call-cli "prompts" "customize" "refine-task")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "prompt-overrides"))))))
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? (:out result) "prompt-overrides")
+            (format "Output should include 'prompt-overrides'. Output: %s" (:out result)))))))
 
 (deftest prompts-customize-multiple-test
   ;; Test installing multiple prompts at once
@@ -623,19 +662,30 @@
   ;; Test showing builtin category prompt with metadata verification
   (testing "prompts-show-builtin-category"
     (testing "can show builtin category prompt with default format"
-      (let [result (call-cli "prompts" "show" "simple")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "Source: builtin"))
-        (is (str/includes? (:out result) "Type: category"))
-        (is (str/includes? (:out result) "Prompt: simple"))
-        (is (str/includes? (:out result) "---"))
-        (is (str/includes? (:out result) "Description: Execute simple tasks with basic workflow"))))
+      (let [result (call-cli "prompts" "show" "simple")
+            output (:out result)]
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? output "Source: builtin")
+            (format "Should include 'Source: builtin'. Output: %s" output))
+        (is (str/includes? output "Type: category")
+            (format "Should include 'Type: category'. Output: %s" output))
+        (is (str/includes? output "Prompt: simple")
+            (format "Should include 'Prompt: simple'. Output: %s" output))
+        (is (str/includes? output "---")
+            (format "Should include frontmatter delimiter. Output: %s" output))
+        (is (str/includes? output "Description: Execute simple tasks with basic workflow")
+            (format "Should include description. Output: %s" output))))
 
     (testing "verifies metadata values in human format"
-      (let [result (call-cli "prompts" "show" "medium")]
-        (is (= 0 (:exit result)))
-        (is (str/includes? (:out result) "Description:"))
-        (is (str/includes? (:out result) "Execute medium complexity tasks"))))))
+      (let [result (call-cli "prompts" "show" "medium")
+            output (:out result)]
+        (is (= 0 (:exit result))
+            (format "Exit code should be 0. Actual: %s, Error: %s" (:exit result) (:err result)))
+        (is (str/includes? output "Description:")
+            (format "Should include 'Description:'. Output: %s" output))
+        (is (str/includes? output "Execute medium complexity tasks")
+            (format "Should include description text. Output: %s" output))))))
 
 (deftest prompts-show-builtin-workflow-test
   ;; Test showing builtin workflow prompt with metadata verification
@@ -990,42 +1040,38 @@
           (doseq [res (:results parsed)]
             (is (string? (:status res)))))))))
 
-(deftest prompts-install-no-mcp-references-test
-  ;; Test that generated slash commands contain NO MCP tool references.
-  ;; This verifies that CLI conditionals render correctly with cli=true.
-  (testing "prompts install no MCP references"
-    (testing "generated files use CLI commands not MCP tools"
-      (let [target-dir (io/file *test-dir* "no-mcp-commands")
+(deftest prompts-install-uses-mcp-tool-syntax-test
+  ;; Test that generated slash commands contain MCP tool references.
+  ;; This verifies that templates render with MCP tool syntax for agent use.
+  (testing "prompts install uses MCP tool syntax"
+    (testing "generated files use MCP tools not CLI commands"
+      (let [target-dir (io/file *test-dir* "mcp-tool-commands")
             result (call-cli "prompts" "install" (str target-dir))]
         (is (= 0 (:exit result)))
 
-        (let [files (vec (fs/list-dir target-dir))]
-          (doseq [f files]
-            (let [content (slurp (str f))
-                  fname (fs/file-name f)]
-              ;; Should NOT contain MCP tool references
-              (is (not (str/includes? content "select-tasks"))
-                  (str fname " should not reference select-tasks tool"))
-              (is (not (str/includes? content "complete-task"))
-                  (str fname " should not reference complete-task tool"))
-              (is (not (str/includes? content "add-task"))
-                  (str fname " should not reference add-task tool"))
-              (is (not (str/includes? content "update-task"))
-                  (str fname " should not reference update-task tool"))
-              (is (not (str/includes? content "ReadMcpResourceTool"))
-                  (str fname " should not reference ReadMcpResourceTool"))
-              (is (not (str/includes? content "work-on"))
-                  (str fname " should not reference work-on tool"))
-              (is (not (str/includes? content "execution-state"))
-                  (str fname " should not reference execution-state tool"))
-              (is (not (str/includes? content "AskUserQuestion"))
-                  (str fname " should not reference AskUserQuestion tool")))))))))
+        ;; Check a few key files for MCP tool references
+        (let [execute-task (io/file target-dir "mcp-tasks-execute-task.md")]
+          (when (fs/exists? execute-task)
+            (let [content (slurp execute-task)]
+              ;; Should contain MCP tool references
+              (is (str/includes? content "select-tasks")
+                  "execute-task should reference select-tasks tool")
+              (is (str/includes? content "complete-task")
+                  "execute-task should reference complete-task tool")
+              ;; Should NOT contain mcp-tasks CLI commands
+              (is (not (or (str/includes? content "mcp-tasks show")
+                           (str/includes? content "mcp-tasks list")
+                           (str/includes? content "mcp-tasks complete")
+                           (str/includes? content "mcp-tasks add")
+                           (str/includes? content "mcp-tasks update")))
+                  "execute-task should not reference mcp-tasks CLI commands"))))))))
 
-(deftest prompts-install-cli-alternatives-test
-  ;; Test that generated slash commands contain CLI alternatives
-  (testing "prompts install CLI alternatives"
-    (testing "generated files reference CLI commands"
-      (let [target-dir (io/file *test-dir* "cli-alt-commands")
+(deftest prompts-install-no-cli-commands-test
+  ;; Test that generated slash commands do NOT contain CLI command references.
+  ;; This verifies slash commands use MCP tool syntax, not CLI commands.
+  (testing "prompts install no CLI commands"
+    (testing "generated files do not reference CLI commands"
+      (let [target-dir (io/file *test-dir* "no-cli-commands")
             result (call-cli "prompts" "install" (str target-dir))]
         (is (= 0 (:exit result)))
 
@@ -1033,12 +1079,14 @@
         (let [execute-task-file (io/file target-dir "mcp-tasks-execute-task.md")]
           (when (fs/exists? execute-task-file)
             (let [content (slurp execute-task-file)]
-              (is (str/includes? content "mcp-tasks")
-                  "Should reference mcp-tasks CLI")
-              (is (or (str/includes? content "mcp-tasks show")
-                      (str/includes? content "mcp-tasks list")
-                      (str/includes? content "mcp-tasks complete"))
-                  "Should contain CLI command references"))))))))
+              (is (not (or (str/includes? content "mcp-tasks show")
+                           (str/includes? content "mcp-tasks list")
+                           (str/includes? content "mcp-tasks complete")
+                           (str/includes? content "mcp-tasks add")
+                           (str/includes? content "mcp-tasks update")))
+                  "Should not reference mcp-tasks CLI commands")
+              (is (str/includes? content "select-tasks")
+                  "Should contain MCP tool references"))))))))
 
 (deftest prompts-install-valid-frontmatter-test
   ;; Test that generated slash commands have valid YAML frontmatter

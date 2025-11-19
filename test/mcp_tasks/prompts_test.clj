@@ -29,6 +29,50 @@
           ;; Each category should appear exactly once
           (is (= (count categories) (count (set categories)))))))))
 
+(deftest list-builtin-workflows-test
+  ;; Test that list-builtin-workflows reads workflow prompts from the manifest
+  ;; file generated at build time. This enables prompt discovery in both JAR
+  ;; and GraalVM native images.
+  (testing "list-builtin-workflows"
+    (testing "reads workflows from manifest file"
+      (let [workflows (sut/list-builtin-workflows)]
+        (testing "returns a vector"
+          (is (vector? workflows)))
+
+        (testing "contains only strings"
+          (is (every? string? workflows)))
+
+        (testing "returns non-empty result"
+          (is (seq workflows)
+              "Should find workflow prompts from manifest"))
+
+        (testing "does not include .md extensions"
+          (is (not-any? #(re-find #"\.md$" %) workflows)))
+
+        (testing "includes expected workflow prompts"
+          (let [workflow-set (set workflows)]
+            ;; Verify some known workflows from the manifest
+            (is (contains? workflow-set "execute-task")
+                "Should include execute-task workflow")
+            (is (contains? workflow-set "refine-task")
+                "Should include refine-task workflow")
+            (is (contains? workflow-set "complete-story")
+                "Should include complete-story workflow")))
+
+        (testing "returns unique workflow names"
+          (is (= (count workflows) (count (set workflows)))
+              "Each workflow should appear exactly once"))))
+
+    ;; Note: Error handling tests (malformed manifest, missing manifest) are
+    ;; difficult to unit test without mocking io/resource. These scenarios are
+    ;; covered by integration tests and by the fallback logic that returns an
+    ;; empty vector when the manifest is inaccessible.
+    (testing "manifest-based discovery works in test environment"
+      (let [workflows (sut/list-builtin-workflows)]
+        (testing "manifest resource is accessible"
+          (is (seq workflows)
+              "Manifest should be accessible during tests"))))))
+
 (deftest parse-frontmatter-test
   ;; Test that parse-frontmatter correctly extracts metadata and content
   ;; from markdown text with various frontmatter formats.

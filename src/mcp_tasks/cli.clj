@@ -73,7 +73,7 @@
                      "reopen" (commands/reopen-command resolved-config parsed-args)
                      "why-blocked" (commands/why-blocked-command resolved-config parsed-args)
                      "prompts" (case (:subcommand parsed-args)
-                                 :list (prompts/prompts-list-command parsed-args)
+                                 :list (prompts/prompts-list-command resolved-config parsed-args)
                                  :customize (prompts/prompts-customize-command resolved-config parsed-args)
                                  :show (prompts/prompts-show-command resolved-config parsed-args)
                                  :install (prompts/prompts-install-command resolved-config parsed-args)))

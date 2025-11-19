@@ -7,6 +7,7 @@
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.prompts :as prompts]
+    [mcp-tasks.generated-workflows :as generated-workflows]
     [mcp-tasks.templates :as templates]))
 
 ;; Path constants for prompt resources and user overrides
@@ -260,9 +261,10 @@
 (defn list-builtin-categories
   "List all built-in category prompt names.
 
-  Returns a set of category names (strings) found in resources/category-prompts/."
+  Returns a set of category names (strings) from the generated workflows namespace.
+  The namespace is required at compile time, ensuring it's available in native images."
   []
-  (discover-builtin-categories))
+  generated-workflows/builtin-categories)
 
 (defn discover-categories
   "Discover task categories by reading category-prompts subdirectory from resolved tasks dir.
@@ -537,11 +539,13 @@
 (defn list-builtin-workflows
   "List all built-in workflow prompts available in resources.
 
-  Returns a sequence of prompt names (without .md extension) found in
-  resources/prompts directory."
+  Reads from generated source file (src/mcp_tasks/generated_workflows.clj) which is
+  created at build time. This approach works reliably in both JAR and GraalVM native
+  images by embedding the workflow list directly in compiled code.
+
+  The namespace is required at compile time, ensuring it's available in native images."
   []
-  (when-let [prompts-url (io/resource builtin-prompts-dir)]
-    (discover-prompt-files (io/file (.toURI prompts-url)))))
+  generated-workflows/builtin-workflows)
 
 (defn detect-prompt-type
   "Detect whether a prompt name is a category or workflow prompt.
