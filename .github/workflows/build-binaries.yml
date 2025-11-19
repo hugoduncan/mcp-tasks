@@ -63,12 +63,12 @@ jobs:
           JAR_FILE=$(ls target/mcp-tasks-cli-*.jar | head -1)
           echo "Validating JAR: $JAR_FILE"
 
-          # Verify generated_workflows.clj exists
-          if ! jar tf "$JAR_FILE" | grep -q "^mcp_tasks/generated_workflows.class$"; then
-            echo "Error: mcp_tasks/generated_workflows.class not found in JAR"
+          # Verify generated_workflows namespace exists
+          if ! jar tf "$JAR_FILE" | grep -q "^mcp_tasks/generated_workflows__init.class$"; then
+            echo "Error: mcp_tasks/generated_workflows__init.class not found in JAR"
             exit 1
           fi
-          echo "✓ mcp_tasks/generated_workflows.class found"
+          echo "✓ mcp_tasks/generated_workflows__init.class found"
 
           # Verify workflow prompts exist (expect 7)
           WORKFLOW_COUNT=$(jar tf "$JAR_FILE" | grep "^prompts/[^/]*\.md$" | wc -l)
@@ -102,12 +102,12 @@ jobs:
           JAR_FILE=$(ls target/mcp-tasks-server-*.jar | head -1)
           echo "Validating JAR: $JAR_FILE"
 
-          # Verify generated_workflows.clj exists
-          if ! jar tf "$JAR_FILE" | grep -q "^mcp_tasks/generated_workflows.class$"; then
-            echo "Error: mcp_tasks/generated_workflows.class not found in JAR"
+          # Verify generated_workflows namespace exists
+          if ! jar tf "$JAR_FILE" | grep -q "^mcp_tasks/generated_workflows__init.class$"; then
+            echo "Error: mcp_tasks/generated_workflows__init.class not found in JAR"
             exit 1
           fi
-          echo "✓ mcp_tasks/generated_workflows.class found"
+          echo "✓ mcp_tasks/generated_workflows__init.class found"
 
           # Verify workflow prompts exist (expect 7)
           WORKFLOW_COUNT=$(jar tf "$JAR_FILE" | grep "^prompts/[^/]*\.md$" | wc -l)
