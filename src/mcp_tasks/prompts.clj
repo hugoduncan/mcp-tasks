@@ -534,36 +534,25 @@
           :source :builtin
           :path (str resource-url)})))))
 
-(defn- read-manifest-resource
-  "Read and parse a manifest EDN resource with error handling.
-  
-  Returns parsed content as a vector on success, empty vector on failure.
-  Logs errors and warnings appropriately."
-  [resource-path]
-  (if-let [manifest-resource (io/resource resource-path)]
-    (try
-      (let [manifest-content (slurp manifest-resource)
-            parsed-data (read-string manifest-content)]
-        (vec parsed-data))
-      (catch Exception e
-        (log/error :failed-to-read-manifest {:resource resource-path
-                                             :error (.getMessage e)})
-        []))
-    (do
-      (log/warn :manifest-not-found {:resource resource-path})
-      [])))
-
 (defn list-builtin-workflows
   "List all built-in workflow prompts available in resources.
 
-  Reads from generated manifest file (resources/prompts-manifest.edn) which is
-  created at build time. This approach works in both JAR and GraalVM native
-  images, avoiding the limitation that directory listing via io/resource +
-  file-seq doesn't work in native binaries.
+  Reads from generated source file (src/mcp_tasks/generated_workflows.clj) which is
+  created at build time. This approach works reliably in both JAR and GraalVM native
+  images by embedding the workflow list directly in compiled code.
 
-  Falls back to empty vector if manifest not found (shouldn't happen in production)."
+  Falls back to empty vector if generated file not found (shouldn't happen in production)."
   []
-  (read-manifest-resource "prompts-manifest.edn"))
+  (try
+    (require 'mcp-tasks.generated-workflows)
+    (if-let [workflows (resolve 'mcp-tasks.generated-workflows/builtin-workflows)]
+      @workflows
+      (do
+        (log/warn :generated-workflows-not-resolved {})
+        []))
+    (catch Exception e
+      (log/error :failed-to-load-generated-workflows {:error (.getMessage e)})
+      [])))
 
 (defn detect-prompt-type
   "Detect whether a prompt name is a category or workflow prompt.
