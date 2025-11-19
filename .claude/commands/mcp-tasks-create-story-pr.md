@@ -9,10 +9,10 @@ Create pull request for completed story.
 Parse `$ARGUMENTS`: first token is story specification, rest is context.
 
 
-| Format | Example | CLI command |
-|--------|---------|-------------|
-| Numeric / #N / "story N" | 59, #59, story 59 | `mcp-tasks show --task-id N` (verify type is story) |
-| Text | "Make prompts flexible" | `mcp-tasks list --title-pattern "..." --type story --limit 1` |
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "story N" | 59, #59, story 59 | `task-id: N, type: story, unique: true` |
+| Text | "Make prompts flexible" | `title-pattern: "...", type: story, unique: true` |
 
 
 Handle no match or multiple matches by informing user.
@@ -21,7 +21,7 @@ Handle no match or multiple matches by informing user.
 ## Process
 
 
-1. Find story via `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --type story --limit 1 --format edn`. Handle errors. Extract `id`, `title`, `description`, `design`.
+1. Find story via `select-tasks` with `type: story, unique: true`. Handle errors. Extract `:id`, `:title`, `:description`, `:design`.
 
 
 2. Verify branch: not on master/main, on story branch per naming convention.

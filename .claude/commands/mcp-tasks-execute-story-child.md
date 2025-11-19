@@ -9,10 +9,10 @@ Execute the next incomplete task from the story.
 Parse `$ARGUMENTS`: first token is story specification, rest is context.
 
 
-| Format | Example | CLI command |
-|--------|---------|-------------|
-| Numeric / #N / "story N" | 59, #59, story 59 | `mcp-tasks show --task-id N` (verify type is story) |
-| Text | "Make prompts flexible" | `mcp-tasks list --title-pattern "..." --type story --limit 1` |
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "story N" | 59, #59, story 59 | `task-id: N, type: story, unique: true` |
+| Text | "Make prompts flexible" | `title-pattern: "...", type: story, unique: true` |
 
 
 Handle no match or multiple matches by informing user.
@@ -23,14 +23,14 @@ Handle no match or multiple matches by informing user.
 ### 1. Find first unblocked incomplete child
 
 
-Call `mcp-tasks list --parent-id <story-id> --blocked false --limit 1 --format edn`.
+Call `select-tasks` with `parent-id: <story-id>`, `blocked: false`, `limit: 1`.
 
-Display progress using the metadata from the list command output.
+Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
 
-**If no unblocked tasks:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
-- Incomplete tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
-- No incomplete tasks + completed count > 0: All tasks complete; suggest review/PR; stop
-- No incomplete tasks + completed count = 0: Suggest refining story or creating tasks; stop
+**If no unblocked tasks:** Call `select-tasks` with `parent-id` only:
+- Incomplete tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
+- No incomplete + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
+- No incomplete + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
 
 
 **If task lacks category:** Inform user; stop
@@ -40,16 +40,15 @@ Display task to user.
 ### 2. Set up environment
 
 
-Set up your working environment:
-- Create or switch to story branch: `git checkout -b <story-id>-<story-title-slug>` (or `git checkout <branch>` if exists)
-- Track which task you're working on (note the task ID for later completion)
-- Display current branch and working directory status
+Call `work-on` with `task-id: <child-task-id>`. Display environment:
+worktree name/path, branch (if present).
 
 
 ### 3. Display parent shared context
 
 
-If the task has `parent-shared-context` in its data, display it to provide context from previous tasks:
+If the parent story has `:parent-shared-context`, display it to provide
+context from previous tasks:
 
 
 ```
@@ -65,7 +64,8 @@ updates from previous task execution.
 ### 4. Retrieve Category Instructions
 
 
-Use `mcp-tasks prompts show <category>` to retrieve the category-specific execution instructions. If missing, inform user and stop.
+Use `ReadMcpResourceTool` with server "mcp-tasks", uri
+`prompt://category-<category>`. If missing, inform user and stop.
 
 
 ### 5. Execute task
@@ -73,7 +73,10 @@ Use `mcp-tasks prompts show <category>` to retrieve the category-specific execut
 Skip refinement check.
 
 
-Execute by strictly adhering to the category instructions retrieved above. The prompt steps must be followed in their defined order. These workflows are not suggestions—they are the required process for executing tasks in that category.
+Execute by strictly adhering to the `prompt://category-<category>`
+resource instructions.  The prompt steps must be followed in their
+defined order. These workflows are not suggestions—they are the required
+process for executing tasks in that category.
 
 
 ### 6. Update shared context
@@ -97,8 +100,11 @@ appear in git history and PR descriptions.
 
 
 **Example update:**
-```bash
-mcp-tasks update --task-id <story-id> --shared-context "Added :parent-shared-context field to Task schema"
+```
+;; After adding a new field
+(update-task
+  {:task-id 604
+   :shared-context "Added :parent-shared-context field to Task schema"})
 ```
 
 
@@ -107,9 +113,8 @@ mcp-tasks update --task-id <story-id> --shared-context "Added :parent-shared-con
 For each out-of-scope issue you discovered while executing the task,
 create a task describing the issue.
 
-Use `mcp-tasks add --category <category> --title "..." --description "..."` to create the task,
-then `mcp-tasks update --task-id <new-id> --relations '[{:id 1 :relates-to <current-task-id> :as-type :discovered-during}]'`
-to link with `:discovered-during` relation.
+Use `add-task`, link with
+`:discovered-during` relation via `update-task`.
 
 
 **Capture:** Unrelated bugs, technical debt, missing tests,
@@ -120,7 +125,7 @@ minor fixes.
 ### 8. Complete
 
 
-Call `mcp-tasks complete --task-id <id>` with optional `--comment "..."`.
+Call `complete-task` with `task-id`, optional `completion-comment`.
 
 
 **Never complete the parent story.** Only complete child tasks. User

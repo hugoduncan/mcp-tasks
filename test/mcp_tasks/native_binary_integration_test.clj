@@ -345,8 +345,12 @@
                         (format "%s should start with frontmatter. First 50 chars: %s"
                                 file-name (subs content 0 (min 50 (count content)))))
                     ;; Verify no MCP references
-                    (is (not (str/includes? content "mcp-tasks"))
-                        (format "%s should not contain mcp-tasks references. Content length: %s"
+                    (is (not (or (str/includes? content "mcp-tasks show")
+                                 (str/includes? content "mcp-tasks list")
+                                 (str/includes? content "mcp-tasks complete")
+                                 (str/includes? content "mcp-tasks add")
+                                 (str/includes? content "mcp-tasks update")))
+                        (format "%s should not contain mcp-tasks CLI commands. Content length: %s"
                                 file-name (count content)))
                     ;; Verify has content beyond frontmatter
                     (is (> (count content) 50)
@@ -368,8 +372,12 @@
                         (format "%s should start with frontmatter. First 50 chars: %s"
                                 file-name (subs content 0 (min 50 (count content)))))
                     ;; Verify no MCP references
-                    (is (not (str/includes? content "mcp-tasks"))
-                        (format "%s should not contain mcp-tasks references. Content length: %s"
+                    (is (not (or (str/includes? content "mcp-tasks show")
+                                 (str/includes? content "mcp-tasks list")
+                                 (str/includes? content "mcp-tasks complete")
+                                 (str/includes? content "mcp-tasks add")
+                                 (str/includes? content "mcp-tasks update")))
+                        (format "%s should not contain mcp-tasks CLI commands. Content length: %s"
                                 file-name (count content)))
                     ;; Verify has content beyond frontmatter
                     (is (> (count content) 50)

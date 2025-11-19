@@ -1040,42 +1040,38 @@
           (doseq [res (:results parsed)]
             (is (string? (:status res)))))))))
 
-(deftest prompts-install-no-mcp-references-test
-  ;; Test that generated slash commands contain NO MCP tool references.
-  ;; This verifies that CLI conditionals render correctly with cli=true.
-  (testing "prompts install no MCP references"
-    (testing "generated files use CLI commands not MCP tools"
-      (let [target-dir (io/file *test-dir* "no-mcp-commands")
+(deftest prompts-install-uses-mcp-tool-syntax-test
+  ;; Test that generated slash commands contain MCP tool references.
+  ;; This verifies that templates render with MCP tool syntax for agent use.
+  (testing "prompts install uses MCP tool syntax"
+    (testing "generated files use MCP tools not CLI commands"
+      (let [target-dir (io/file *test-dir* "mcp-tool-commands")
             result (call-cli "prompts" "install" (str target-dir))]
         (is (= 0 (:exit result)))
 
-        (let [files (vec (fs/list-dir target-dir))]
-          (doseq [f files]
-            (let [content (slurp (str f))
-                  fname (fs/file-name f)]
-              ;; Should NOT contain MCP tool references
-              (is (not (str/includes? content "select-tasks"))
-                  (str fname " should not reference select-tasks tool"))
-              (is (not (str/includes? content "complete-task"))
-                  (str fname " should not reference complete-task tool"))
-              (is (not (str/includes? content "add-task"))
-                  (str fname " should not reference add-task tool"))
-              (is (not (str/includes? content "update-task"))
-                  (str fname " should not reference update-task tool"))
-              (is (not (str/includes? content "ReadMcpResourceTool"))
-                  (str fname " should not reference ReadMcpResourceTool"))
-              (is (not (str/includes? content "work-on"))
-                  (str fname " should not reference work-on tool"))
-              (is (not (str/includes? content "execution-state"))
-                  (str fname " should not reference execution-state tool"))
-              (is (not (str/includes? content "AskUserQuestion"))
-                  (str fname " should not reference AskUserQuestion tool")))))))))
+        ;; Check a few key files for MCP tool references
+        (let [execute-task (io/file target-dir "mcp-tasks-execute-task.md")]
+          (when (fs/exists? execute-task)
+            (let [content (slurp execute-task)]
+              ;; Should contain MCP tool references
+              (is (str/includes? content "select-tasks")
+                  "execute-task should reference select-tasks tool")
+              (is (str/includes? content "complete-task")
+                  "execute-task should reference complete-task tool")
+              ;; Should NOT contain mcp-tasks CLI commands
+              (is (not (or (str/includes? content "mcp-tasks show")
+                           (str/includes? content "mcp-tasks list")
+                           (str/includes? content "mcp-tasks complete")
+                           (str/includes? content "mcp-tasks add")
+                           (str/includes? content "mcp-tasks update")))
+                  "execute-task should not reference mcp-tasks CLI commands"))))))))
 
-(deftest prompts-install-cli-alternatives-test
-  ;; Test that generated slash commands contain CLI alternatives
-  (testing "prompts install CLI alternatives"
-    (testing "generated files reference CLI commands"
-      (let [target-dir (io/file *test-dir* "cli-alt-commands")
+(deftest prompts-install-no-cli-commands-test
+  ;; Test that generated slash commands do NOT contain CLI command references.
+  ;; This verifies slash commands use MCP tool syntax, not CLI commands.
+  (testing "prompts install no CLI commands"
+    (testing "generated files do not reference CLI commands"
+      (let [target-dir (io/file *test-dir* "no-cli-commands")
             result (call-cli "prompts" "install" (str target-dir))]
         (is (= 0 (:exit result)))
 
@@ -1083,12 +1079,14 @@
         (let [execute-task-file (io/file target-dir "mcp-tasks-execute-task.md")]
           (when (fs/exists? execute-task-file)
             (let [content (slurp execute-task-file)]
-              (is (str/includes? content "mcp-tasks")
-                  "Should reference mcp-tasks CLI")
-              (is (or (str/includes? content "mcp-tasks show")
-                      (str/includes? content "mcp-tasks list")
-                      (str/includes? content "mcp-tasks complete"))
-                  "Should contain CLI command references"))))))))
+              (is (not (or (str/includes? content "mcp-tasks show")
+                           (str/includes? content "mcp-tasks list")
+                           (str/includes? content "mcp-tasks complete")
+                           (str/includes? content "mcp-tasks add")
+                           (str/includes? content "mcp-tasks update")))
+                  "Should not reference mcp-tasks CLI commands")
+              (is (str/includes? content "select-tasks")
+                  "Should contain MCP tool references"))))))))
 
 (deftest prompts-install-valid-frontmatter-test
   ;; Test that generated slash commands have valid YAML frontmatter

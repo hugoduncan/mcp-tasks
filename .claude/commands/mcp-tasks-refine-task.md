@@ -9,10 +9,10 @@ Refine the task through an interactive process.
 Parse `$ARGUMENTS`: first token is task specification, rest is context.
 
 
-| Format | Example | CLI command |
-|--------|---------|-------------|
-| Numeric / #N / "task N" | 59, #59, task 59 | `mcp-tasks show --task-id N` |
-| Text | "Update prompt file" | `mcp-tasks list --title-pattern "..." --limit 1` |
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "task N" | 59, #59, task 59 | `task-id: N, unique: true` |
+| Text | "Update prompt file" | `title-pattern: "...", unique: true` |
 
 
 Handle no match or multiple matches by informing user.
@@ -21,7 +21,7 @@ Handle no match or multiple matches by informing user.
 ## Process
 
 
-1. Find task via `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --limit 1 --format edn`. Extract `id`, `title`, `description`, `design`, `type`.
+1. Find task via `select-tasks` (unique). Extract `:id`, `:title`, `:description`, `:design`, `:type`.
 
 
 2. Analyze in project context: review description/design, research patterns/exemplars, examine codebase, identify forgotten aspects, check scope.
@@ -37,8 +37,7 @@ Handle no match or multiple matches by informing user.
 5. Save:
    - Show final task for approval
 
-   - Call `mcp-tasks update --task-id <id> --description "..." --design "..." --meta '{"refined": "true"}'`
-   - Note: Preserve existing meta fields, add `"refined": "true"`
+   - Call `update-task`: `task-id`, `description`, `design`, `meta` (preserve existing, add `"refined": "true"`)
 
    - Confirm save
 

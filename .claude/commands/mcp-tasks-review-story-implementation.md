@@ -9,10 +9,10 @@ Review the implementation of a story against its requirements and code quality s
 Parse `$ARGUMENTS`: first token is story specification, rest is context.
 
 
-| Format | Example | CLI command |
-|--------|---------|-------------|
-| Numeric / #N / "story N" | 59, #59, story 59 | `mcp-tasks show --task-id N` (verify type is story) |
-| Text | "Make prompts flexible" | `mcp-tasks list --title-pattern "..." --type story --limit 1` |
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "story N" | 59, #59, story 59 | `task-id: N, type: story, unique: true` |
+| Text | "Make prompts flexible" | `title-pattern: "...", type: story, unique: true` |
 
 
 Handle no match or multiple matches by informing user.
@@ -21,9 +21,9 @@ Handle no match or multiple matches by informing user.
 ## Process
 
 
-1. Find the story task using `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --type story --limit 1 --format edn`
+1. Find the story task using `select-tasks` with the appropriate filter (task-id or title-pattern) and `type: story, unique: true`
    - Handle no match or multiple matches by informing user
-   - Extract the story's `id`, `title`, and `description` fields
+   - Extract the story's `:id`, `:title`, and `:description` fields
 
 
 2. Analyze the current branch against the description of the story:
@@ -54,14 +54,23 @@ Handle no match or multiple matches by informing user.
 
    - If user selects suggestions:
 
-     a) For each selected suggestion, use `mcp-tasks add`:
-        - `mcp-tasks add --category <category> --title "CR: <description>" --description "<details>" --parent-id <story-id>`
+     a) For each selected suggestion, use the `add-task` tool for each task:
+        - Use the `add-task` tool with these parameters:
+          - `category`: pick an appropriate category based on the task complexity
+          - `title`: "CR: <task description>"
+          - `description`: the task description (can span multiple lines)
+          - `parent-id`: the story's task ID from step 1
+          - `prepend`: false (to append tasks)
 
         Example:
-        ```bash
-        mcp-tasks add --category medium --title "CR: Add error handling for edge cases" \
-          --description "throw exceptions if edge cases not supported" \
-          --parent-id 42
+        ```
+        add-task(
+          category="medium",
+          title="CR: Add error handling for edge cases",
+          description="throw exceptions if edge cases not supported",
+          parent-id=42,
+          prepend=false
+        )
         ```
 
 
@@ -77,4 +86,4 @@ Handle no match or multiple matches by informing user.
 - Task descriptions can be refined by the user or used verbatim from suggestions
 - Categories help route tasks to appropriate execution workflows
 
-- The `mcp-tasks add` command automatically handles file creation and formatting
+- The `add-task` tool automatically handles file creation, formatting, and task preservation

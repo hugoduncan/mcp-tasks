@@ -9,10 +9,10 @@ Create task breakdown for story. Don't implement.
 Parse `$ARGUMENTS`: first token is story specification, rest is context.
 
 
-| Format | Example | CLI command |
-|--------|---------|-------------|
-| Numeric / #N / "story N" | 59, #59, story 59 | `mcp-tasks show --task-id N` (verify type is story) |
-| Text | "Make prompts flexible" | `mcp-tasks list --title-pattern "..." --type story --limit 1` |
+| Format | Example | select-tasks params |
+|--------|---------|---------------------|
+| Numeric / #N / "story N" | 59, #59, story 59 | `task-id: N, type: story, unique: true` |
+| Text | "Make prompts flexible" | `title-pattern: "...", type: story, unique: true` |
 
 
 Handle no match or multiple matches by informing user.
@@ -21,9 +21,9 @@ Handle no match or multiple matches by informing user.
 ## Process
 
 
-1. Retrieve story via `mcp-tasks show --task-id N --format edn` or `mcp-tasks list --title-pattern "..." --type story --limit 1 --format edn`. Handle no match or multiple matches.
+1. Retrieve story via `select-tasks` with `type: story, unique: true`. Handle no match or multiple matches.
 
-2. Check `meta` field for `"refined": "true"`. If unrefined, warn user and ask: "Task has not been refined. Proceed anyway? (yes/no)". If user declines, suggest `/mcp-tasks-refine-task` and stop.
+2. Check `:meta` for `"refined": "true"`. If unrefined, warn and use `AskUserQuestion`. If user declines, suggest `/mcp-tasks:refine-task` and stop.
 
 
 3. Display story to user.
@@ -37,12 +37,15 @@ Handle no match or multiple matches by informing user.
 ## Task Categorization
 
 
-Use `mcp-tasks prompts list` to see available categories. Category prompts define execution workflows:
-- **simple**: Direct implementation tasks
-- **medium**: Tasks requiring some analysis and design
-- **large**: Complex tasks needing detailed analysis and user interaction
+Use `ReadMcpResourceTool` with server "mcp-tasks", uri
+"resource://categories" to retrieve the available categories. If
+missing, inform user and stop.
 
-**Examples:**
+Parse the JSON response to extract available categories and their
+descriptions. Use category descriptions to inform categorization
+decisions.
+
+**Examples** (if resource://categories returns simple, medium and large categories):
 - "Update README with installation instructions" → **simple** (direct documentation change)
 - "Add user profile editing with avatar upload" → **medium** (multiple fields, file handling, validation)
 - "Implement real-time notifications with WebSocket fallback" → **large** (architecture, multiple protocols, state management)
@@ -74,15 +77,10 @@ For story "Add user profile management":
 Use `blocked-by` relations when task B requires task A's output:
 
 **Example:** Task 2 (API endpoint) depends on Task 1 (data model):
-```bash
-# Create tasks first
-mcp-tasks add --category simple --title "Add user profile data model..." --parent-id <story-id>
-# Returns: task-id 1
-mcp-tasks add --category medium --title "Implement profile edit API endpoint..." --parent-id <story-id>
-# Returns: task-id 2
-
-# Add dependency
-mcp-tasks update --task-id 2 --relations '[{:id 1 :relates-to 1 :as-type :blocked-by}]'
+```
+add-task: task-id 1, category simple, title "Add user profile data model..."
+add-task: task-id 2, category medium, title "Implement profile edit API endpoint..."
+update-task: task-id 2, relations [{"id": 1, "relates-to": 1, "as-type": "blocked-by"}]
 ```
 
 
@@ -95,9 +93,8 @@ Common dependency patterns:
 
 
 6. Add in dependency order:
-   - `mcp-tasks add --category <cat> --title "..." --parent-id <story-id> --type task`
-   - Title should include "Part of story: <story-id> \"<story-title>\""
-   - After creating dependent tasks, add relations: `mcp-tasks update --task-id <id> --relations '[...]'`
+   - `category`, `title` (include "Part of story: task-id N \"title\""), `parent-id`, `type`
+   - `relations`: `[{"id": 1, "relates-to": <id>, "as-type": "blocked-by"}]` for dependencies
    - Create dependencies first, then dependent tasks
 
-7. Confirm: task count, dependency count, mention `/mcp-tasks-execute-story-child`.
+7. Confirm: task count, dependency count, mention `/mcp-tasks:execute-story-child`.
