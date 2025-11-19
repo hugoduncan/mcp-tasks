@@ -261,9 +261,10 @@
 (defn list-builtin-categories
   "List all built-in category prompt names.
 
-  Returns a set of category names (strings) found in resources/category-prompts/."
+  Returns a set of category names (strings) from the generated workflows namespace.
+  The namespace is required at compile time, ensuring it's available in native images."
   []
-  (discover-builtin-categories))
+  generated-workflows/builtin-categories)
 
 (defn discover-categories
   "Discover task categories by reading category-prompts subdirectory from resolved tasks dir.
