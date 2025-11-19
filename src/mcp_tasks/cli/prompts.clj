@@ -110,7 +110,7 @@
 
   The generated file includes:
   - YAML frontmatter with description and argument-hint (if present in source)
-  - Rendered prompt content with {:cli true} context applied
+  - Rendered prompt content with MCP tool syntax (cli=false context)
 
   For category prompts, the command name is prefixed with 'next-' to indicate
   execution of the next task in that category.
@@ -139,7 +139,7 @@
                                                    prompts/builtin-prompts-dir])
             resolved-path (resolver-fn resolved-tasks-dir name)
             builtin-resource-path (str builtin-dir "/" name ".md")
-            cli-context {:cli true}
+            cli-context {}
             ;; Category prompts get "next-" prefix for command name
             command-name (if (= actual-type :category)
                            (str "next-" name)
@@ -228,8 +228,8 @@
   Generates Claude Code slash command files from available prompts.
   Files are written to the target directory with names: mcp-tasks-<prompt-name>.md
 
-  Templates are rendered with {:cli true} context, enabling {% if cli %} conditionals
-  to provide CLI-specific alternatives for MCP tool references.
+  Templates are rendered without cli context (cli=false), showing MCP tool syntax
+  suitable for agent execution rather than CLI command examples.
 
   Takes config and parsed-args. Target directory defaults to .claude/commands/.
 
