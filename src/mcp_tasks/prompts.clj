@@ -7,6 +7,7 @@
     [clojure.string :as str]
     [mcp-clj.log :as log]
     [mcp-clj.mcp-server.prompts :as prompts]
+    [mcp-tasks.generated-workflows :as generated-workflows]
     [mcp-tasks.templates :as templates]))
 
 ;; Path constants for prompt resources and user overrides
@@ -541,18 +542,9 @@
   created at build time. This approach works reliably in both JAR and GraalVM native
   images by embedding the workflow list directly in compiled code.
 
-  Falls back to empty vector if generated file not found (shouldn't happen in production)."
+  The namespace is required at compile time, ensuring it's available in native images."
   []
-  (try
-    (require 'mcp-tasks.generated-workflows)
-    (if-let [workflows (resolve 'mcp-tasks.generated-workflows/builtin-workflows)]
-      @workflows
-      (do
-        (log/warn :generated-workflows-not-resolved {})
-        []))
-    (catch Exception e
-      (log/error :failed-to-load-generated-workflows {:error (.getMessage e)})
-      [])))
+  generated-workflows/builtin-workflows)
 
 (defn detect-prompt-type
   "Detect whether a prompt name is a category or workflow prompt.
