@@ -4,10 +4,10 @@ Task-based workflow management for AI agents via Model Context Protocol (MCP).
 
 ## What is mcp-tasks?
 
-mcp-tasks enables you to manage development tasks in markdown files and have AI agents execute them. Unlike todo tools, mcp-tasks integrates task planning with execution—agents don't just track tasks, they complete them.
+mcp-tasks enables you to manage development tasks in EDNL files and have AI agents execute them. Unlike todo tools, mcp-tasks integrates task planning with execution—agents don't just track tasks, they complete them.
 
 **Key Benefits:**
-- **Persistent Planning**: Tasks survive across chat sessions in markdown files
+- **Persistent Planning**: Tasks survive across chat sessions in EDNL files
 - **Category-Based Organization**: Group tasks by type (features, bugfixes, refactoring) with custom execution strategies
 - **Story-Based Development**: Break down epics into tasks with dedicated workflows
 - **Automatic Branch Creation**: Tasks automatically get isolated branches for clean development
