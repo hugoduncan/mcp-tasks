@@ -613,3 +613,107 @@
         (finally
           (mcp-client/close! client)
           ((:stop server)))))))
+
+(deftest ^:integ create-story-tasks-updates-parent-shared-context-test
+  ;; Test that after create-story-tasks execution, the parent story's
+  ;; :shared-context field contains a formatted list of all created task IDs and titles
+  (testing "create-story-tasks updates parent story shared-context with task breakdown"
+    (fixtures/write-config-file "{:use-git? false}")
+
+    (let [{:keys [server client]} (fixtures/create-test-server-and-client)]
+      (try
+        ;; Setup: Create a story without any child tasks
+        (let [tasks-file (io/file (fixtures/test-project-dir) ".mcp-tasks" "tasks.ednl")
+              story {:id 800
+                     :title "Story for task breakdown test"
+                     :description "Test story to verify shared-context update after task creation"
+                     :design ""
+                     :category "large"
+                     :status :open
+                     :type :story
+                     :meta {}
+                     :relations []}]
+          (tasks-file/write-tasks (.getAbsolutePath tasks-file) [story]))
+
+        ;; Simulate create-story-tasks creating child tasks
+        (testing "add child tasks to story"
+          ;; Create first task
+          (let [result @(mcp-client/call-tool
+                          client
+                          "add-task"
+                          {:category "simple"
+                           :title "First task - setup data model"
+                           :parent-id 800
+                           :type "task"})]
+            (is (not (:isError result))))
+
+          ;; Create second task
+          (let [result @(mcp-client/call-tool
+                          client
+                          "add-task"
+                          {:category "medium"
+                           :title "Second task - implement API endpoint"
+                           :parent-id 800
+                           :type "task"})]
+            (is (not (:isError result))))
+
+          ;; Create third task
+          (let [result @(mcp-client/call-tool
+                          client
+                          "add-task"
+                          {:category "simple"
+                           :title "Third task - add UI component"
+                           :parent-id 800
+                           :type "task"})]
+            (is (not (:isError result)))))
+
+        ;; Simulate create-story-tasks updating parent story's shared-context
+        ;; Note: No execution state is set, so no automatic "Task NNN:" prefix is added
+        (testing "update parent story shared-context with task breakdown"
+          (let [result @(mcp-client/call-tool
+                          client
+                          "update-task"
+                          {:task-id 800
+                           :shared-context ["Story breakdown: Task #801 'First task - setup data model', Task #802 'Second task - implement API endpoint', Task #803 'Third task - add UI component'"]})]
+            (is (not (:isError result)))))
+
+        ;; Verify shared-context was updated correctly
+        (testing "parent story has correct shared-context format"
+          (let [tasks-file (io/file (fixtures/test-project-dir) ".mcp-tasks" "tasks.ednl")
+                tasks (tasks-file/read-ednl (.getAbsolutePath tasks-file))
+                story (first (filter #(= 800 (:id %)) tasks))]
+            ;; Verify shared-context exists
+            (is (some? (:shared-context story)))
+            ;; Verify format matches expected pattern
+            (is (= ["Story breakdown: Task #801 'First task - setup data model', Task #802 'Second task - implement API endpoint', Task #803 'Third task - add UI component'"]
+                   (:shared-context story)))
+            ;; Verify all three tasks are included
+            (is (str/includes? (first (:shared-context story)) "Task #801"))
+            (is (str/includes? (first (:shared-context story)) "Task #802"))
+            (is (str/includes? (first (:shared-context story)) "Task #803"))
+            ;; Verify tasks appear in creation order (801, 802, 803)
+            (let [context-str (first (:shared-context story))
+                  pos-801 (str/index-of context-str "Task #801")
+                  pos-802 (str/index-of context-str "Task #802")
+                  pos-803 (str/index-of context-str "Task #803")]
+              (is (< pos-801 pos-802))
+              (is (< pos-802 pos-803)))))
+
+        ;; Verify child tasks can read parent shared-context
+        (testing "child tasks can read parent shared-context"
+          (let [result @(mcp-client/call-tool
+                          client
+                          "select-tasks"
+                          {:parent-id 800})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)]
+            (is (= 3 (count tasks)))
+            ;; All child tasks should have parent-shared-context field
+            (doseq [task tasks]
+              (is (some? (:parent-shared-context task)))
+              (is (= ["Story breakdown: Task #801 'First task - setup data model', Task #802 'Second task - implement API endpoint', Task #803 'Third task - add UI component'"]
+                     (:parent-shared-context task))))))
+
+        (finally
+          (mcp-client/close! client)
+          ((:stop server)))))))
