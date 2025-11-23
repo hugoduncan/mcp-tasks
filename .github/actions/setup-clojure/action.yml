@@ -108,7 +108,7 @@ runs:
         path: |
           ~/.m2/repository
           ~/.gitlibs
-        key: clojure-deps-${{ inputs.cache-key-suffix }}${{ hashFiles('**/deps.edn') }}
+        key: clojure-deps-${{ inputs.cache-key-suffix }}${{ runner.os }}
         restore-keys: |
           clojure-deps-${{ inputs.cache-key-suffix }}
           clojure-deps-
