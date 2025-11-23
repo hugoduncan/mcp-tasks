@@ -33,8 +33,8 @@ Add the following alias to your `~/.clojure/deps.edn` file:
   {:replace-paths []
    :replace-deps {org.hugpduncan/mcp-tasks
                   {:git/url "https://github.com/hugoduncan/mcp-tasks"
-                   :git/tag "v0.1.114"
-                   :git/sha "1c8017e"}
+                   :git/tag "v0.1.151"
+                   :git/sha "3e5a890fdee2badbbe7b1ae9ba268aec927e3cc0"}
                   org.clojure/clojure {:mvn/version "1.12.3"}}
    :exec-fn mcp-tasks.main/start}}}
 ```
