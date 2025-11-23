@@ -240,24 +240,6 @@
          vec)
     []))
 
-(defn- discover-builtin-categories
-  "Discover built-in category prompts from resources/category-prompts/.
-
-  Returns a set of category names (strings without .md extension) found in
-  the resources directory. Returns empty set if resource directory not found."
-  []
-  (if-let [resource-url (io/resource builtin-category-prompts-dir)]
-    (try
-      (let [resource-dir (io/file (.toURI resource-url))]
-        (->> (file-seq resource-dir)
-             (filter #(and (.isFile %)
-                           (str/ends-with? (.getName %) ".md")))
-             (map #(str/replace (.getName %) #"\.md$" ""))
-             set))
-      (catch Exception _e
-        #{}))
-    #{}))
-
 (defn list-builtin-categories
   "List all built-in category prompt names.
 
@@ -282,7 +264,7 @@
   (let [resolved-tasks-dir (:resolved-tasks-dir config)
         new-dir (str resolved-tasks-dir "/" user-category-prompts-dir)
         deprecated-dir (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir)
-        builtin-categories (discover-builtin-categories)
+        builtin-categories (list-builtin-categories)
         new-categories (set (discover-prompt-files new-dir))
         deprecated-categories (set (discover-prompt-files deprecated-dir))
         ;; Find categories that only exist in deprecated location
