@@ -282,7 +282,7 @@
   (let [resolved-tasks-dir (:resolved-tasks-dir config)
         new-dir (str resolved-tasks-dir "/" user-category-prompts-dir)
         deprecated-dir (str resolved-tasks-dir "/" deprecated-user-category-prompts-dir)
-        builtin-categories (discover-builtin-categories)
+        builtin-categories (list-builtin-categories)
         new-categories (set (discover-prompt-files new-dir))
         deprecated-categories (set (discover-prompt-files deprecated-dir))
         ;; Find categories that only exist in deprecated location
