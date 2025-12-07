@@ -138,5 +138,9 @@ Call `complete-task` with `task-id`, optional `completion-comment`.
 **Never complete the parent story.** Only complete child tasks. User
 reviews before story completion.
 
+**Never clear execution state.** The `complete-task` tool automatically
+preserves story-level tracking when completing child tasks. Do not call
+`execution-state action:"clear"`.
+
 **On failure:** Execution state persists. Starting new task overwrites
 automatically.
