@@ -97,4 +97,11 @@ Common dependency patterns:
    - `relations`: `[{"id": 1, "relates-to": <id>, "as-type": "blocked-by"}]` for dependencies
    - Create dependencies first, then dependent tasks
 
-7. Confirm: task count, dependency count, mention `/mcp-tasks:execute-story-child`.
+7. Update parent story shared context:
+   - After creating all tasks, update the parent story's shared-context with a list of created task IDs and titles
+   - Format: `"Story breakdown: Task #<id1> '<title1>', Task #<id2> '<title2>', ..."`
+   - Call `update-task` with `task-id: <story-id>`, `shared-context: ["Story breakdown: Task #<id1> '<title1>', Task #<id2> '<title2>', ..."]`
+   - Include all created tasks in creation order
+   - Use single quotes around titles to avoid escaping issues
+
+8. Confirm: task count, dependency count, mention `/mcp-tasks:execute-story-child`.
