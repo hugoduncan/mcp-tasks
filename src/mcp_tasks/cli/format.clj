@@ -328,6 +328,23 @@
                        (str "? " (:script s) " - unknown status")))
                    scripts))))
 
+(defn- format-support-files
+  "Format support files installation results."
+  [support-files]
+  (when (seq support-files)
+    (str/join "\n"
+              (map (fn [s]
+                     (case (:status s)
+                       :installed
+                       (let [base (str "✓ " (:file s))]
+                         (if (:overwritten s)
+                           (str base " (overwritten)")
+                           base))
+                       :failed
+                       (str "✗ " (:file s) " - " (:error s))
+                       (str "? " (:file s) " - unknown status")))
+                   support-files))))
+
 (defn- format-hooks-settings
   "Format hooks settings.json installation result."
   [settings]
@@ -382,9 +399,14 @@
                          (str skipped-count " skipped"))]
         ;; Hooks section
         hooks-scripts-output (when hooks (format-hook-scripts (:scripts hooks)))
+        hooks-support-output (when hooks (format-support-files (:support-files hooks)))
         hooks-settings-output (when hooks (format-hooks-settings (:settings hooks)))
         hooks-installed (:hooks-installed metadata 0)
-        hooks-failed (:hooks-failed metadata 0)]
+        hooks-failed (:hooks-failed metadata 0)
+        support-installed (:support-installed metadata 0)
+        support-failed (:support-failed metadata 0)
+        total-installed (+ hooks-installed support-installed)
+        total-failed (+ hooks-failed support-failed)]
     (str/join "\n\n"
               (filter some?
                       ["Installing prompts as Claude Code slash commands..."
@@ -399,11 +421,13 @@
                          (str "\nInstalling event capture hooks...\n\n"
                               "Hook Scripts:\n"
                               hooks-scripts-output
+                              "\n\nSupport Files:\n"
+                              hooks-support-output
                               "\n\nSettings:\n"
                               hooks-settings-output
-                              "\n\nHooks Summary: " hooks-installed " installed"
-                              (when (pos? hooks-failed)
-                                (str ", " hooks-failed " failed"))))]))))
+                              "\n\nHooks Summary: " total-installed " installed"
+                              (when (pos? total-failed)
+                                (str ", " total-failed " failed"))))]))))
 
 (defn format-prompts-show
   "Format prompts show response for human-readable output.

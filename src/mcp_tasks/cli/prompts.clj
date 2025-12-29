@@ -225,6 +225,10 @@
 
 ;; Hook Installation
 
+(def ^:private hook-support-files
+  "Support files to install alongside hook scripts."
+  ["common.bb"])
+
 (def ^:private hook-scripts
   "List of hook scripts to install with their event types."
   [{:event "UserPromptSubmit"
@@ -234,33 +238,46 @@
    {:event "SessionStart"
     :script "session-start.bb"}])
 
+(defn- copy-hook-file
+  "Copy a hook file from resources to target directory.
+
+  Takes a filename string. Returns a result map with :file, :status, :path, :overwritten."
+  [target-dir filename]
+  (let [resource-path (str "hooks/" filename)
+        resource (io/resource resource-path)
+        target-file (io/file target-dir filename)]
+    (if resource
+      (let [file-existed? (fs/exists? target-file)]
+        (fs/create-dirs target-dir)
+        (spit target-file (slurp resource))
+        {:file filename
+         :status :installed
+         :path (str target-file)
+         :overwritten file-existed?})
+      {:file filename
+       :status :failed
+       :error (str "Resource not found: " resource-path)})))
+
 (defn- copy-hook-script
   "Copy a hook script from resources to target directory.
 
   Returns a result map with :script, :status, :path, :overwritten."
   [target-dir {:keys [script]}]
-  (let [resource-path (str "hooks/" script)
-        resource (io/resource resource-path)
-        target-file (io/file target-dir script)]
-    (if resource
-      (let [file-existed? (fs/exists? target-file)]
-        (fs/create-dirs target-dir)
-        (spit target-file (slurp resource))
-        {:script script
-         :status :installed
-         :path (str target-file)
-         :overwritten file-existed?})
-      {:script script
-       :status :failed
-       :error (str "Resource not found: " resource-path)})))
+  (let [result (copy-hook-file target-dir script)]
+    (-> result
+        (dissoc :file)
+        (assoc :script script))))
 
 (defn- install-hook-scripts
-  "Copy all hook scripts to .mcp-tasks/hooks/.
+  "Copy all hook scripts and support files to .mcp-tasks/hooks/.
 
-  Returns vector of result maps."
+  Returns map with :scripts (hook script results) and :support-files results."
   [resolved-tasks-dir]
-  (let [hooks-dir (io/file resolved-tasks-dir "hooks")]
-    (mapv (partial copy-hook-script hooks-dir) hook-scripts)))
+  (let [hooks-dir (io/file resolved-tasks-dir "hooks")
+        script-results (mapv (partial copy-hook-script hooks-dir) hook-scripts)
+        support-results (mapv (partial copy-hook-file hooks-dir) hook-support-files)]
+    {:scripts script-results
+     :support-files support-results}))
 
 (defn- build-hook-command
   "Build the command string for a hook script."
@@ -390,14 +407,19 @@
         failed-count (count (filter #(= :failed (:status %)) results))
         skipped-count (count (filter #(= :skipped (:status %)) results))
         overwritten-count (count (filter :overwritten generated))
-        ;; Install hook scripts
-        hook-script-results (install-hook-scripts resolved-tasks-dir)
-        hooks-installed (count (filter #(= :installed (:status %)) hook-script-results))
-        hooks-failed (count (filter #(= :failed (:status %)) hook-script-results))
+        ;; Install hook scripts and support files
+        hook-install-results (install-hook-scripts resolved-tasks-dir)
+        script-results (:scripts hook-install-results)
+        support-results (:support-files hook-install-results)
+        hooks-installed (count (filter #(= :installed (:status %)) script-results))
+        hooks-failed (count (filter #(= :failed (:status %)) script-results))
+        support-installed (count (filter #(= :installed (:status %)) support-results))
+        support-failed (count (filter #(= :failed (:status %)) support-results))
         ;; Install hooks configuration
         hooks-config-result (install-hooks-config base-dir resolved-tasks-dir)]
     {:results results
-     :hooks {:scripts hook-script-results
+     :hooks {:scripts script-results
+             :support-files support-results
              :settings hooks-config-result}
      :metadata {:generated-count generated-count
                 :failed-count failed-count
@@ -405,4 +427,6 @@
                 :overwritten-count overwritten-count
                 :target-dir target-dir
                 :hooks-installed hooks-installed
-                :hooks-failed hooks-failed}}))
+                :hooks-failed hooks-failed
+                :support-installed support-installed
+                :support-failed support-failed}}))

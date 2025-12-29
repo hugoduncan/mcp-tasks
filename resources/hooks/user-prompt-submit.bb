@@ -16,61 +16,14 @@
 ;; Exit codes:
 ;; - 0: Success or graceful failure (non-blocking)
 
-(require '[babashka.process :as p]
-         '[cheshire.core :as json]
-         '[clojure.edn :as edn]
-         '[clojure.java.io :as io]
-         '[clojure.string :as str])
+(require '[clojure.java.io :as io]
+         '[cheshire.core :as json])
 
-(defn read-stdin
-  "Read all input from stdin."
-  []
-  (slurp *in*))
-
-(defn parse-json
-  "Parse JSON string, returning nil on error."
-  [s]
-  (try
-    (json/parse-string s keyword)
-    (catch Exception _
-      nil)))
-
-(defn read-execution-state
-  "Read .mcp-tasks-current.edn from the given directory.
-  Returns nil if file doesn't exist or can't be parsed."
-  [dir]
-  (let [f (io/file dir ".mcp-tasks-current.edn")]
-    (when (.exists f)
-      (try
-        (edn/read-string (slurp f))
-        (catch Exception _
-          nil)))))
-
-(defn call-mcp-tasks-update
-  "Call mcp-tasks update to append a session event.
-  Returns true on success, false on failure."
-  [dir story-id event-json]
-  (try
-    (let [result (p/shell {:dir dir
-                           :out :string
-                           :err :string
-                           :continue true}
-                          "mcp-tasks" "update"
-                          "--task-id" (str story-id)
-                          "--session-events" event-json)]
-      (zero? (:exit result)))
-    (catch Exception _
-      false)))
-
-(defn truncate-content
-  "Truncate content to max-chars if needed, appending ... if truncated."
-  [s max-chars]
-  (if (> (count s) max-chars)
-    (str (subs s 0 (- max-chars 3)) "...")
-    s))
+;; Load common utilities from the same directory
+(def script-dir (-> *file* io/file .getParent))
+(load-file (str script-dir "/common.bb"))
 
 (defn main []
-  ;; Read and parse hook input
   (let [input-str (read-stdin)
         input (parse-json input-str)]
     (when input
@@ -86,10 +39,4 @@
             ;; Call mcp-tasks to update the story
             (call-mcp-tasks-update cwd story-id event-json)))))))
 
-;; Run main and always exit 0
-(try
-  (main)
-  (catch Exception _
-    nil))
-
-(System/exit 0)
+(run-hook main)
