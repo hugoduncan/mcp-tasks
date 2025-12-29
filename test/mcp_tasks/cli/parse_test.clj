@@ -311,7 +311,30 @@
 
     (testing "uses aliases"
       (is (= {:task-id 99 :title "New" :description "Desc" :status :open :category "simple" :parent-id 5}
-             (sut/parse-update ["--id" "99" "-t" "New" "-d" "Desc" "-s" "open" "-c" "simple" "-p" "5"]))))))
+             (sut/parse-update ["--id" "99" "-t" "New" "-d" "Desc" "-s" "open" "-c" "simple" "-p" "5"]))))
+
+    (testing "parses session-events as JSON object"
+      (let [result (sut/parse-update ["--task-id" "42" "--session-events" "{\"event-type\":\"user-prompt\",\"content\":\"test\"}"])]
+        (is (= 42 (:task-id result)))
+        (is (map? (:session-events result)))
+        (is (= "user-prompt" (:event-type (:session-events result))))
+        (is (= "test" (:content (:session-events result))))))
+
+    (testing "parses session-events as JSON array"
+      (let [result (sut/parse-update ["--task-id" "42" "--session-events" "[{\"event-type\":\"user-prompt\",\"content\":\"test\"}]"])]
+        (is (= 42 (:task-id result)))
+        (is (vector? (:session-events result)))
+        (is (= 1 (count (:session-events result))))
+        (is (= {:event-type "user-prompt" :content "test"} (first (:session-events result))))))
+
+    (testing "returns error for invalid session-events JSON"
+      (let [result (sut/parse-update ["--task-id" "42" "--session-events" "{invalid}"])]
+        (is (contains? result :error))
+        (is (string? (:error result)))))
+
+    (testing "returns error for non-object/array session-events"
+      (let [result (sut/parse-update ["--task-id" "42" "--session-events" "\"just a string\""])]
+        (is (= "Expected JSON object or array for --session-events" (:error result)))))))
 
 (deftest parse-delete-test
   (testing "parse-delete"

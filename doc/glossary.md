@@ -44,6 +44,20 @@
 
 **Resource URI**: A unique identifier for an MCP resource, such as `prompt://next-simple` or `prompt://refine-task`.
 
+**Session Event**: A record of user interaction or system event captured during story execution. Stored in the `:session-events` field of story tasks. Each event contains:
+- `:timestamp` (required) - ISO-8601 timestamp (auto-generated if not provided)
+- `:event-type` (required) - One of `:user-prompt`, `:compaction`, or `:session-start`
+- `:content` (optional) - The user prompt text (for `:user-prompt` events)
+- `:trigger` (optional) - "auto" or "manual" (for `:compaction` events), or session source (for `:session-start` events)
+- `:session-id` (optional) - Session identifier (for `:session-start` events)
+
+**Session Event Hooks**: Claude Code hooks that capture events during story execution. Three hooks are installed via `prompts install`:
+- `UserPromptSubmit` - Captures user prompts when `:story-id` is present in execution state
+- `PreCompact` - Captures context compaction events
+- `SessionStart` - Captures new session starts
+
+Hooks are non-blocking (exit 0 even on failure) to avoid interrupting user workflow.
+
 **Shared Context**: A vector of strings stored in story tasks (`:shared-context` field) that enables inter-task communication during story execution. Child tasks read their parent story's shared context via the `:parent-shared-context` field returned by `select-tasks`. Tasks append to the parent story's shared context using `update-task`. The system automatically prefixes each entry with "Task NNN: " by reading the current `:task-id` from the execution state file (`.mcp-tasks-current.edn`). Shared context takes precedence over a task's static `:description` and `:design` fields when there are conflicts or new information. Limited to 50KB total size. See also: **Execution State**, **Task Schema**.
 
 **Task**: A task is a unot of work that can be executed in a single
@@ -53,7 +67,7 @@ EDN map with fields defined by the Task schema in
 
 **Task File**: The `tasks.ednl` or `complete.ednl` file containing tasks in EDNL format.
 
-**Task Schema**: Malli schema defining required task fields: `:id`, `:status`, `:title`, `:description`, `:design`, `:category`, `:type`, `:meta`, `:relations`, and optional `:parent-id`.
+**Task Schema**: Malli schema defining required task fields: `:id`, `:status`, `:title`, `:description`, `:design`, `:category`, `:type`, `:meta`, `:relations`, and optional fields `:parent-id`, `:shared-context`, and `:session-events`.
 
 **Task Tracking Repository**: The `.mcp-tasks/` directory as a separate git repository for version-controlling task history.
 
