@@ -42,16 +42,18 @@ The `mcp-tasks.templates` namespace wraps Selmer to provide include resolution w
 Tasks are stored in EDNL (EDN Lines) format where each line is a valid EDN map representing a Task record. The Task schema (defined in `src/mcp_tasks/schema.clj`) includes:
 
 ```clojure
-{:id            ;; int - unique task identifier
- :parent-id     ;; int or nil - optional parent task reference
- :status        ;; :open | :closed | :in-progress | :blocked
- :title         ;; string - task title
- :description   ;; string - detailed task description
- :design        ;; string - design notes
- :category      ;; string - execution category (simple, medium, large, etc.)
- :type          ;; :task | :bug | :feature | :story | :chore
- :meta          ;; map - arbitrary string key-value metadata
- :relations     ;; vector of Relation maps
+{:id              ;; int - unique task identifier
+ :parent-id       ;; int or nil - optional parent task reference
+ :status          ;; :open | :closed | :in-progress | :blocked
+ :title           ;; string - task title
+ :description     ;; string - detailed task description
+ :design          ;; string - design notes
+ :category        ;; string - execution category (simple, medium, large, etc.)
+ :type            ;; :task | :bug | :feature | :story | :chore
+ :meta            ;; map - arbitrary string key-value metadata
+ :relations       ;; vector of Relation maps
+ :shared-context  ;; vector of strings (optional) - inter-task communication
+ :session-events  ;; vector of SessionEvent maps (optional) - captured interactions
 }
 ```
 
@@ -260,6 +262,75 @@ Via MCP resource:
 - Resume work after interruptions
 - Coordinate between multiple agents or tools
 - Provide status visibility in dashboards or CLIs
+
+## Session Event Tracking
+
+The system captures user interactions and system events during story execution for analysis and prompt improvement.
+
+**Session Events Storage:**
+- Events are stored in the `:session-events` field of story tasks
+- Events are only captured when a story is being executed (`:story-id` present in execution state)
+- Events archive with the story when completed
+
+**SessionEvent Schema:**
+```clojure
+{:timestamp   ;; string - ISO-8601 timestamp (auto-generated if not provided)
+ :event-type  ;; :user-prompt | :compaction | :session-start
+ :content     ;; string (optional) - prompt text for :user-prompt events
+ :trigger     ;; string (optional) - "auto"/"manual" for :compaction, source for :session-start
+ :session-id  ;; string (optional) - session identifier for :session-start events
+}
+```
+
+**Event Types:**
+- `:user-prompt` - Captures user input during story execution. `:content` contains the prompt text.
+- `:compaction` - Captures context compaction events. `:trigger` indicates "auto" or "manual".
+- `:session-start` - Captures new session starts. `:trigger` indicates source (startup/resume/clear/compact), `:session-id` provides the session identifier.
+
+**Hook Scripts:**
+
+Three Claude Code hooks capture events during story execution:
+
+1. **UserPromptSubmit** (`resources/hooks/user-prompt-submit.bb`)
+   - Triggered when user submits a prompt
+   - Captures prompt text as `:content`
+
+2. **PreCompact** (`resources/hooks/pre-compact.bb`)
+   - Triggered before context compaction
+   - Captures compaction type as `:trigger` ("auto" or "manual")
+
+3. **SessionStart** (`resources/hooks/session-start.bb`)
+   - Triggered when a new session starts
+   - Captures session ID and source
+
+**Hook Behavior:**
+- Hooks read `.mcp-tasks-current.edn` to check for active story
+- Events are only recorded when `:story-id` is present
+- Hooks are non-blocking (exit 0 even on failure) to avoid interrupting user workflow
+- Hooks call `mcp-tasks update --session-events` to append events
+
+**Installing Hooks:**
+
+Hooks are installed via the CLI:
+```bash
+mcp-tasks prompts install
+```
+
+This copies hook scripts to `.mcp-tasks/hooks/` and configures them in `.claude/settings.json`.
+
+**Appending Events via Tool:**
+
+The `update-task` tool supports appending session events:
+- Accepts single event map or array of events
+- Automatically adds `:timestamp` if not provided
+- Validates against SessionEvent schema
+- Enforces 50KB size limit (same as `:shared-context`)
+
+**Use Cases:**
+- Analyze user interaction patterns during story execution
+- Identify prompts that led to context compaction
+- Track session restarts and their causes
+- Improve prompts based on captured interaction data
 
 ## Story-Based Workflow
 
