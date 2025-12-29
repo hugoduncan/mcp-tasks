@@ -311,13 +311,48 @@
                        (str "Summary: " (:installed-count metadata) " installed, "
                             (:failed-count metadata) " failed")]))))
 
+(defn- format-hook-scripts
+  "Format hook scripts installation results."
+  [scripts]
+  (when (seq scripts)
+    (str/join "\n"
+              (map (fn [s]
+                     (case (:status s)
+                       :installed
+                       (let [base (str "✓ " (:script s))]
+                         (if (:overwritten s)
+                           (str base " (overwritten)")
+                           base))
+                       :failed
+                       (str "✗ " (:script s) " - " (:error s))
+                       (str "? " (:script s) " - unknown status")))
+                   scripts))))
+
+(defn- format-hooks-settings
+  "Format hooks settings.json installation result."
+  [settings]
+  (when settings
+    (case (:status settings)
+      :installed
+      (if (:hooks-added settings)
+        (str "✓ " (:path settings)
+             (when (:settings-existed settings) " (merged with existing)"))
+        (str "✓ " (:path settings) " (hooks already configured)"))
+      :failed
+      (str "✗ " (:path settings) " - " (:error settings))
+      nil)))
+
 (defn format-prompts-install
   "Format prompts install response for human-readable output.
 
   Shows generation results with status indicators. Skipped files are not displayed.
-  Only shows (overwritten) when an existing file was replaced."
-  [results metadata]
-  (let [displayable-results (remove #(= :skipped (:status %)) results)
+  Only shows (overwritten) when an existing file was replaced.
+  Also shows hooks installation results if present."
+  [data]
+  (let [results (:results data)
+        metadata (:metadata data)
+        hooks (:hooks data)
+        displayable-results (remove #(= :skipped (:status %)) results)
         format-result (fn [r]
                         (case (:status r)
                           :generated
@@ -344,7 +379,12 @@
         summary-parts [(str (:generated-count metadata) " generated")
                        (str (:failed-count metadata) " failed")
                        (when (pos? skipped-count)
-                         (str skipped-count " skipped"))]]
+                         (str skipped-count " skipped"))]
+        ;; Hooks section
+        hooks-scripts-output (when hooks (format-hook-scripts (:scripts hooks)))
+        hooks-settings-output (when hooks (format-hooks-settings (:settings hooks)))
+        hooks-installed (:hooks-installed metadata 0)
+        hooks-failed (:hooks-failed metadata 0)]
     (str/join "\n\n"
               (filter some?
                       ["Installing prompts as Claude Code slash commands..."
@@ -353,7 +393,17 @@
                        ""
                        warning
                        (str "Summary: "
-                            (str/join ", " (filter some? summary-parts)))]))))
+                            (str/join ", " (filter some? summary-parts)))
+                       ;; Hooks section
+                       (when hooks
+                         (str "\nInstalling event capture hooks...\n\n"
+                              "Hook Scripts:\n"
+                              hooks-scripts-output
+                              "\n\nSettings:\n"
+                              hooks-settings-output
+                              "\n\nHooks Summary: " hooks-installed " installed"
+                              (when (pos? hooks-failed)
+                                (str ", " hooks-failed " failed"))))]))))
 
 (defn format-prompts-show
   "Format prompts show response for human-readable output.
@@ -467,7 +517,7 @@
     ;; Prompts install/customize response
     (:results data)
     (if (contains? (:metadata data) :generated-count)
-      (format-prompts-install (:results data) (:metadata data))
+      (format-prompts-install data)
       (format-prompts-customize (:results data) (:metadata data)))
 
     ;; Prompts show response (has :name and :content)

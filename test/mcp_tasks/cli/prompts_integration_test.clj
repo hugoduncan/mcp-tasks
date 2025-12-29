@@ -1150,3 +1150,185 @@
           (is (= 0 (:exit result)))
           (is (fs/exists? target-dir))
           (is (pos? (count (fs/list-dir target-dir)))))))))
+
+;; Hooks Installation Tests
+
+(deftest prompts-install-hooks-scripts-test
+  ;; Test that hook scripts are copied to .mcp-tasks/hooks/
+  (testing "prompts install hooks scripts"
+    (testing "copies hook scripts to .mcp-tasks/hooks/"
+      (let [target-dir (io/file *test-dir* "commands")
+            hooks-dir (io/file *test-dir* ".mcp-tasks/hooks")
+            result (call-cli "prompts" "install" (str target-dir))]
+        (is (= 0 (:exit result)))
+        (is (fs/exists? hooks-dir)
+            "hooks directory should be created")
+        (is (fs/exists? (io/file hooks-dir "user-prompt-submit.bb"))
+            "user-prompt-submit.bb should exist")
+        (is (fs/exists? (io/file hooks-dir "pre-compact.bb"))
+            "pre-compact.bb should exist")
+        (is (fs/exists? (io/file hooks-dir "session-start.bb"))
+            "session-start.bb should exist")))
+
+    (testing "hook scripts contain valid babashka code"
+      (let [target-dir (io/file *test-dir* "commands2")
+            hooks-dir (io/file *test-dir* ".mcp-tasks/hooks")]
+        (call-cli "prompts" "install" (str target-dir))
+        (let [content (slurp (io/file hooks-dir "user-prompt-submit.bb"))]
+          (is (str/includes? content "#!/usr/bin/env bb")
+              "Should have babashka shebang")
+          (is (str/includes? content "UserPromptSubmit")
+              "Should mention UserPromptSubmit"))))))
+
+(deftest prompts-install-hooks-settings-test
+  ;; Test that hooks configuration is installed in .claude/settings.json
+  (testing "prompts install hooks settings"
+    (testing "creates .claude/settings.json with hooks configuration"
+      (let [target-dir (io/file *test-dir* "commands")
+            settings-file (io/file *test-dir* ".claude/settings.json")
+            result (call-cli "prompts" "install" (str target-dir))]
+        (is (= 0 (:exit result)))
+        (is (fs/exists? settings-file)
+            ".claude/settings.json should be created")
+        (let [settings (json/parse-string (slurp settings-file) keyword)]
+          (is (contains? settings :hooks)
+              "settings should have hooks key")
+          (is (contains? (:hooks settings) :UserPromptSubmit)
+              "hooks should have UserPromptSubmit")
+          (is (contains? (:hooks settings) :PreCompact)
+              "hooks should have PreCompact")
+          (is (contains? (:hooks settings) :SessionStart)
+              "hooks should have SessionStart"))))
+
+    (testing "hook commands reference correct paths"
+      (let [settings-file (io/file *test-dir* ".claude/settings.json")
+            settings (json/parse-string (slurp settings-file) keyword)
+            user-prompt-hooks (get-in settings [:hooks :UserPromptSubmit 0 :hooks 0])]
+        (is (= "command" (:type user-prompt-hooks)))
+        (is (str/includes? (:command user-prompt-hooks) "bb")
+            "command should invoke bb")
+        (is (str/includes? (:command user-prompt-hooks) "user-prompt-submit.bb")
+            "command should reference user-prompt-submit.bb")))))
+
+(deftest prompts-install-hooks-merge-test
+  ;; Test that existing settings.json is merged correctly
+  (testing "prompts install hooks merge"
+    (testing "preserves existing settings when adding hooks"
+      (let [target-dir (io/file *test-dir* "commands")
+            claude-dir (io/file *test-dir* ".claude")
+            settings-file (io/file claude-dir "settings.json")
+            existing-settings {"includeCoAuthoredBy" false
+                               "customSetting" "value"}]
+        (fs/create-dirs claude-dir)
+        (spit settings-file (json/generate-string existing-settings))
+        (let [result (call-cli "prompts" "install" (str target-dir))]
+          (is (= 0 (:exit result)))
+          (let [settings (json/parse-string (slurp settings-file) keyword)]
+            (is (= false (:includeCoAuthoredBy settings))
+                "includeCoAuthoredBy should be preserved")
+            (is (= "value" (:customSetting settings))
+                "customSetting should be preserved")
+            (is (contains? settings :hooks)
+                "hooks should be added")))))
+
+    (testing "merges with existing hooks without duplicating"
+      (let [target-dir (io/file *test-dir* "commands2")
+            claude-dir (io/file *test-dir* ".claude")
+            settings-file (io/file claude-dir "settings.json")
+            existing-hooks {"SessionStart" [{"hooks" [{"type" "command"
+                                                       "command" "./scripts/web-session-start"}]}]}
+            existing-settings {"hooks" existing-hooks}]
+        (spit settings-file (json/generate-string existing-settings))
+        (let [result (call-cli "prompts" "install" (str target-dir))]
+          (is (= 0 (:exit result)))
+          (let [settings (json/parse-string (slurp settings-file) keyword)
+                session-hooks (get-in settings [:hooks :SessionStart])]
+            ;; Should have both the existing hook and the new one
+            (is (= 2 (count session-hooks))
+                "Should have both existing and new SessionStart hooks")
+            ;; Existing hook should still be there
+            (is (some #(= "./scripts/web-session-start"
+                          (get-in % [:hooks 0 :command]))
+                      session-hooks)
+                "Existing hook should be preserved")
+            ;; New hook should be added
+            (is (some #(str/includes? (get-in % [:hooks 0 :command] "")
+                                      "session-start.bb")
+                      session-hooks)
+                "New hook should be added")))))))
+
+(deftest prompts-install-hooks-edn-output-test
+  ;; Test that EDN output includes hooks data
+  (testing "prompts install hooks EDN output"
+    (testing "EDN output includes hooks section"
+      (let [target-dir (io/file *test-dir* "commands")
+            result (call-cli "prompts" "install" (str target-dir) "-f" "edn")
+            parsed (edn/read-string (:out result))]
+        (is (= 0 (:exit result)))
+        (is (contains? parsed :hooks)
+            "EDN output should have :hooks key")
+        (is (contains? (:hooks parsed) :scripts)
+            "hooks should have :scripts")
+        (is (contains? (:hooks parsed) :settings)
+            "hooks should have :settings")
+
+        (testing "scripts section has correct structure"
+          (let [scripts (:scripts (:hooks parsed))]
+            (is (= 3 (count scripts))
+                "Should have 3 hook scripts")
+            (doseq [script scripts]
+              (is (contains? script :script))
+              (is (contains? script :status))
+              (is (= :installed (:status script))))))
+
+        (testing "settings section has correct structure"
+          (let [settings (:settings (:hooks parsed))]
+            (is (= :installed (:status settings)))
+            (is (string? (:path settings)))))
+
+        (testing "metadata includes hooks counts"
+          (let [metadata (:metadata parsed)]
+            (is (= 3 (:hooks-installed metadata)))
+            (is (= 0 (:hooks-failed metadata)))))))))
+
+(deftest prompts-install-hooks-json-output-test
+  ;; Test that JSON output includes hooks data
+  (testing "prompts install hooks JSON output"
+    (testing "JSON output includes hooks section"
+      (let [target-dir (io/file *test-dir* "commands")
+            result (call-cli "prompts" "install" (str target-dir) "-f" "json")
+            parsed (json/parse-string (:out result) keyword)]
+        (is (= 0 (:exit result)))
+        (is (contains? parsed :hooks)
+            "JSON output should have :hooks key")
+
+        (testing "metadata uses camelCase"
+          (let [metadata (:metadata parsed)]
+            (is (contains? metadata :hooksInstalled))
+            (is (contains? metadata :hooksFailed))
+            (is (= 3 (:hooksInstalled metadata)))
+            (is (= 0 (:hooksFailed metadata)))))))))
+
+(deftest prompts-install-hooks-human-output-test
+  ;; Test that human-readable output includes hooks information
+  (testing "prompts install hooks human output"
+    (testing "human output shows hooks installation"
+      (let [target-dir (io/file *test-dir* "commands")
+            result (call-cli "prompts" "install" (str target-dir))]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Installing event capture hooks")
+            "Should show hooks installation header")
+        (is (str/includes? (:out result) "Hook Scripts")
+            "Should show Hook Scripts section")
+        (is (str/includes? (:out result) "user-prompt-submit.bb")
+            "Should show user-prompt-submit.bb")
+        (is (str/includes? (:out result) "pre-compact.bb")
+            "Should show pre-compact.bb")
+        (is (str/includes? (:out result) "session-start.bb")
+            "Should show session-start.bb")
+        (is (str/includes? (:out result) "Settings")
+            "Should show Settings section")
+        (is (str/includes? (:out result) "settings.json")
+            "Should mention settings.json")
+        (is (str/includes? (:out result) "Hooks Summary")
+            "Should show Hooks Summary")))))

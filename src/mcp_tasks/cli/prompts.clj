@@ -4,6 +4,7 @@
   Handles listing and installing built-in prompts."
   (:require
     [babashka.fs :as fs]
+    [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [mcp-tasks.prompt-management :as pm]
@@ -222,10 +223,141 @@
                        "Use 'mcp-tasks prompts list' to see available prompts.")
            :metadata {:prompt-name prompt-name}})))))
 
+;; Hook Installation
+
+(def ^:private hook-scripts
+  "List of hook scripts to install with their event types."
+  [{:event "UserPromptSubmit"
+    :script "user-prompt-submit.bb"}
+   {:event "PreCompact"
+    :script "pre-compact.bb"}
+   {:event "SessionStart"
+    :script "session-start.bb"}])
+
+(defn- copy-hook-script
+  "Copy a hook script from resources to target directory.
+
+  Returns a result map with :script, :status, :path, :overwritten."
+  [target-dir {:keys [script]}]
+  (let [resource-path (str "hooks/" script)
+        resource (io/resource resource-path)
+        target-file (io/file target-dir script)]
+    (if resource
+      (let [file-existed? (fs/exists? target-file)]
+        (fs/create-dirs target-dir)
+        (spit target-file (slurp resource))
+        {:script script
+         :status :installed
+         :path (str target-file)
+         :overwritten file-existed?})
+      {:script script
+       :status :failed
+       :error (str "Resource not found: " resource-path)})))
+
+(defn- install-hook-scripts
+  "Copy all hook scripts to .mcp-tasks/hooks/.
+
+  Returns vector of result maps."
+  [resolved-tasks-dir]
+  (let [hooks-dir (io/file resolved-tasks-dir "hooks")]
+    (mapv (partial copy-hook-script hooks-dir) hook-scripts)))
+
+(defn- build-hook-command
+  "Build the command string for a hook script."
+  [tasks-dir-name script]
+  (str "bb " tasks-dir-name "/hooks/" script))
+
+(defn- build-mcp-tasks-hooks
+  "Build the hooks configuration for mcp-tasks event capture."
+  [tasks-dir-name]
+  (reduce
+    (fn [acc {:keys [event script]}]
+      (assoc acc event [{:hooks [{:type "command"
+                                  :command (build-hook-command tasks-dir-name script)}]}]))
+    {}
+    hook-scripts))
+
+(defn- get-hook-command
+  "Get command from a hook, supporting both keyword and string keys."
+  [hook]
+  (or (:command hook) (get hook "command")))
+
+(defn- get-entry-hooks
+  "Get hooks from an entry, supporting both keyword and string keys."
+  [entry]
+  (or (:hooks entry) (get entry "hooks")))
+
+(defn- merge-hooks
+  "Merge new hooks into existing hooks configuration.
+
+  For each event type, appends new hook entries to existing ones.
+  Avoids duplicating hooks with identical commands.
+  Handles both keyword and string keys from JSON parsing."
+  [existing-hooks new-hooks]
+  (reduce-kv
+    (fn [acc event new-entries]
+      (let [existing-entries (get acc event [])
+            existing-commands (set (mapcat (fn [entry]
+                                             (map get-hook-command
+                                                  (get-entry-hooks entry)))
+                                           existing-entries))
+            ;; Filter out entries where any command already exists
+            unique-entries (filter
+                             (fn [entry]
+                               (not-any? #(existing-commands (get-hook-command %))
+                                         (get-entry-hooks entry)))
+                             new-entries)]
+        (if (seq unique-entries)
+          (assoc acc event (vec (concat existing-entries unique-entries)))
+          acc)))
+    existing-hooks
+    new-hooks))
+
+(defn- install-hooks-config
+  "Install hooks configuration into .claude/settings.json.
+
+  Merges mcp-tasks hooks with existing configuration.
+  Returns a result map with :status, :path, :hooks-added, :settings-existed.
+  Returns :skipped status if base-dir is nil."
+  [base-dir resolved-tasks-dir]
+  (if (nil? base-dir)
+    {:status :skipped
+     :reason "No base-dir configured"}
+    (let [claude-dir (io/file base-dir ".claude")
+          settings-file (io/file claude-dir "settings.json")
+          ;; Use relative path from base-dir to tasks-dir
+          tasks-dir-rel (if (fs/absolute? resolved-tasks-dir)
+                          (let [base-path (fs/path base-dir)
+                                tasks-path (fs/path resolved-tasks-dir)]
+                            (str (fs/relativize base-path tasks-path)))
+                          resolved-tasks-dir)
+          new-hooks (build-mcp-tasks-hooks tasks-dir-rel)]
+      (try
+        (fs/create-dirs claude-dir)
+        (let [settings-existed? (fs/exists? settings-file)
+              existing-settings (if settings-existed?
+                                  (json/parse-string (slurp settings-file))
+                                  {})
+              existing-hooks (get existing-settings "hooks" {})
+              merged-hooks (merge-hooks existing-hooks new-hooks)
+              hooks-added (not= existing-hooks merged-hooks)
+              updated-settings (assoc existing-settings "hooks" merged-hooks)]
+          (spit settings-file (json/generate-string updated-settings {:pretty true}))
+          {:status :installed
+           :path (str settings-file)
+           :hooks-added hooks-added
+           :settings-existed settings-existed?})
+        (catch Exception e
+          {:status :failed
+           :path (str settings-file)
+           :error (.getMessage e)})))))
+
 (defn prompts-install-command
   "Execute the prompts install command.
 
-  Generates Claude Code slash command files from available prompts.
+  Generates Claude Code slash command files from available prompts, installs
+  hook scripts to .mcp-tasks/hooks/, and configures hooks in .claude/settings.json.
+
   Files are written to the target directory with names: mcp-tasks-<prompt-name>.md
 
   Templates are rendered without cli context (cli=false), showing MCP tool syntax
@@ -235,13 +367,21 @@
 
   Returns structured data with:
   - :results - vector of generation result maps
-  - :metadata - map with :generated-count, :failed-count, :skipped-count, :overwritten-count, :target-dir
+  - :hooks - map with :scripts (vector), :settings (map)
+  - :metadata - map with counts and paths
 
   Example:
   {:results [{:name \"simple\" :status :generated :path \"...\" :overwritten false}]
-   :metadata {:generated-count 1 :failed-count 0 :skipped-count 0 :overwritten-count 0 :target-dir \".claude/commands/\"}}"
+   :hooks {:scripts [{:script \"user-prompt-submit.bb\" :status :installed :path \"...\"}]
+           :settings {:status :installed :path \"...\" :hooks-added true}}
+   :metadata {:generated-count 1 :failed-count 0 :skipped-count 0
+              :overwritten-count 0 :target-dir \".claude/commands/\"
+              :hooks-installed 3 :hooks-failed 0}}"
   [config parsed-args]
   (let [target-dir (:target-dir parsed-args)
+        resolved-tasks-dir (:resolved-tasks-dir config)
+        base-dir (:base-dir config)
+        ;; Generate slash commands
         available-prompts (pm/list-available-prompts)
         results (mapv (partial generate-slash-command config target-dir)
                       available-prompts)
@@ -249,10 +389,20 @@
         generated-count (count generated)
         failed-count (count (filter #(= :failed (:status %)) results))
         skipped-count (count (filter #(= :skipped (:status %)) results))
-        overwritten-count (count (filter :overwritten generated))]
+        overwritten-count (count (filter :overwritten generated))
+        ;; Install hook scripts
+        hook-script-results (install-hook-scripts resolved-tasks-dir)
+        hooks-installed (count (filter #(= :installed (:status %)) hook-script-results))
+        hooks-failed (count (filter #(= :failed (:status %)) hook-script-results))
+        ;; Install hooks configuration
+        hooks-config-result (install-hooks-config base-dir resolved-tasks-dir)]
     {:results results
+     :hooks {:scripts hook-script-results
+             :settings hooks-config-result}
      :metadata {:generated-count generated-count
                 :failed-count failed-count
                 :skipped-count skipped-count
                 :overwritten-count overwritten-count
-                :target-dir target-dir}}))
+                :target-dir target-dir
+                :hooks-installed hooks-installed
+                :hooks-failed hooks-failed}}))

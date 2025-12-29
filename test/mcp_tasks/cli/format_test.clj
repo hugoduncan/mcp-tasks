@@ -624,7 +624,7 @@
                       :failed-count 0
                       :overwritten-count 0
                       :target-dir ".claude/commands/"}
-            output (sut/format-prompts-install results metadata)]
+            output (sut/format-prompts-install {:results results :metadata metadata})]
         (is (str/includes? output "✓ simple (category)"))
         (is (str/includes? output "/path/simple.md"))
         (is (not (str/includes? output "(overwritten)")))
@@ -642,7 +642,7 @@
                       :failed-count 0
                       :overwritten-count 1
                       :target-dir ".claude/commands/"}
-            output (sut/format-prompts-install results metadata)]
+            output (sut/format-prompts-install {:results results :metadata metadata})]
         (is (str/includes? output "✓ medium (workflow)"))
         (is (str/includes? output "(overwritten)"))
         (is (str/includes? output "Warning: 1 file overwritten"))))
@@ -657,7 +657,7 @@
                       :failed-count 0
                       :overwritten-count 2
                       :target-dir ".claude/commands/"}
-            output (sut/format-prompts-install results metadata)]
+            output (sut/format-prompts-install {:results results :metadata metadata})]
         (is (str/includes? output "Warning: 2 files overwritten"))))
 
     (testing "hides skipped files from output but shows count in summary"
@@ -670,7 +670,7 @@
                       :failed-count 0
                       :overwritten-count 0
                       :target-dir ".claude/commands/"}
-            output (sut/format-prompts-install results metadata)]
+            output (sut/format-prompts-install {:results results :metadata metadata})]
         (is (not (str/includes? output "infrastructure")))
         (is (str/includes? output "Summary: 0 generated, 0 failed, 1 skipped"))))
 
@@ -684,7 +684,7 @@
                       :failed-count 1
                       :overwritten-count 0
                       :target-dir ".claude/commands/"}
-            output (sut/format-prompts-install results metadata)]
+            output (sut/format-prompts-install {:results results :metadata metadata})]
         (is (str/includes? output "✗ broken (category)"))
         (is (str/includes? output "Error: File not found"))
         (is (str/includes? output "1 failed"))))))
