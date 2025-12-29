@@ -9,6 +9,7 @@
   - meta: Key-value metadata map (replaces entire map)
   - relations: Task relationships vector (replaces entire vector)
   - shared-context: Story shared context vector (appends new entries with automatic prefixing)
+  - session-events: Session event vector (appends new events with auto-timestamp)
 
   The tool validates all field values and handles type conversions from
   JSON to EDN formats. Only provided fields are updated; others remain
@@ -20,10 +21,14 @@
     [cheshire.core :as json]
     [clojure.string :as str]
     [mcp-tasks.execution-state :as es]
+    [mcp-tasks.schema :as schema]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.git :as git]
     [mcp-tasks.tools.helpers :as helpers]
-    [mcp-tasks.tools.validation :as validation]))
+    [mcp-tasks.tools.validation :as validation])
+  (:import
+    (java.time
+      Instant)))
 
 (defn- convert-enum-field
   "Convert string enum value to keyword.
@@ -101,6 +106,28 @@
         (assoc task :shared-context combined-context)))
     task))
 
+(defn- apply-session-events-update
+  "Apply session-events update with append semantics and size validation.
+
+  Appends new events to existing session-events vector and validates that
+  the total serialized EDN size doesn't exceed 50KB.
+
+  Returns updated task map or error map if size limit exceeded."
+  [task updates]
+  (if (contains? updates :session-events)
+    (let [existing-events (get task :session-events [])
+          new-events (get updates :session-events)
+          combined-events (into existing-events new-events)
+          serialized (pr-str combined-events)
+          size-bytes (count (.getBytes serialized "UTF-8"))]
+      (if (> size-bytes 51200) ; 50KB = 50 * 1024 = 51200 bytes
+        {:error true
+         :message "Session events size limit (50KB) exceeded. Consider archiving old events."
+         :size-bytes size-bytes
+         :limit-bytes 51200}
+        (assoc task :session-events combined-events)))
+    task))
+
 (defn- convert-shared-context-field
   "Convert and prefix shared-context entries with task ID from execution state.
 
@@ -121,6 +148,62 @@
         (mapv #(str "Task " task-id ": " %) entries)
         (vec entries)))))
 
+(defn- current-iso-timestamp
+  "Return current time as ISO-8601 string."
+  []
+  (str (Instant/now)))
+
+(defn- convert-session-event
+  "Convert a single session event map, adding timestamp if missing.
+
+  Converts string keys to keywords and event-type to keyword.
+  Returns the converted event map."
+  [event]
+  (let [;; Handle both keyword and string keys from JSON
+        event-with-keywords (into {} (map (fn [[k v]] [(keyword k) v]) event))
+        ;; Convert event-type string to keyword if needed
+        event-type-val (:event-type event-with-keywords)
+        event-type-kw (if (string? event-type-val)
+                        (keyword event-type-val)
+                        event-type-val)]
+    (cond-> (assoc event-with-keywords :event-type event-type-kw)
+      (not (:timestamp event-with-keywords))
+      (assoc :timestamp (current-iso-timestamp)))))
+
+(defn- validate-session-events
+  "Validate a vector of session events against the SessionEvent schema.
+
+  Returns nil if all valid, or error map with details if any invalid."
+  [events]
+  (let [invalid-events (keep-indexed
+                         (fn [idx event]
+                           (when-not (schema/valid-session-event? event)
+                             {:index idx
+                              :event (pr-str event)
+                              :reason "Event does not match SessionEvent schema"}))
+                         events)]
+    (when (seq invalid-events)
+      {:error true
+       :message "Invalid session event(s)"
+       :invalid-events invalid-events})))
+
+(defn- convert-session-events-field
+  "Convert session-events input to vector of validated event maps.
+
+  Accepts either a single event map or a vector of event maps.
+  Adds timestamp to events that don't have one.
+  Returns {:events [...]} on success or {:error ...} on validation failure."
+  [value]
+  (when value
+    (let [events (if (and (map? value) (not (vector? value)))
+                   [value]
+                   (vec value))
+          converted-events (mapv convert-session-event events)
+          validation-error (validate-session-events converted-events)]
+      (if validation-error
+        validation-error
+        {:events converted-events}))))
+
 (defn- extract-provided-updates
   "Extract and convert provided fields from arguments map.
 
@@ -132,10 +215,13 @@
   - :meta - nil becomes {}, replaces entire map (does not merge)
   - :relations - nil becomes [], replaces entire vector (does not append)
   - :shared-context - appends to existing context with automatic prefixing
+  - :session-events - appends to existing events with auto-timestamp
 
   Note: The :meta and :relations fields use replacement semantics rather
-  than merge/append. The :shared-context field uses append semantics with
-  automatic task ID prefixing based on execution state."
+  than merge/append. The :shared-context and :session-events fields use
+  append semantics.
+
+  For :session-events, returns {:session-events-error ...} if validation fails."
   [base-dir arguments]
   (let [conversions {:status convert-enum-field
                      :type convert-enum-field
@@ -143,16 +229,24 @@
                      :relations helpers/convert-relations-field
                      :shared-context (partial convert-shared-context-field base-dir)}
         updatable-fields [:title :description :design :parent-id
-                          :status :category :type :meta :relations :shared-context]]
-    (reduce (fn [updates field-key]
-              (if (contains? arguments field-key)
-                (let [value (get arguments field-key)
-                      converter (get conversions field-key identity)
-                      converted-value (converter value)]
-                  (assoc updates field-key converted-value))
-                updates))
-            {}
-            updatable-fields)))
+                          :status :category :type :meta :relations :shared-context]
+        ;; Process standard fields
+        updates (reduce (fn [updates field-key]
+                          (if (contains? arguments field-key)
+                            (let [value (get arguments field-key)
+                                  converter (get conversions field-key identity)
+                                  converted-value (converter value)]
+                              (assoc updates field-key converted-value))
+                            updates))
+                        {}
+                        updatable-fields)]
+    ;; Handle session-events separately due to special validation
+    (if (contains? arguments :session-events)
+      (let [result (convert-session-events-field (:session-events arguments))]
+        (if (:error result)
+          (assoc updates :session-events-error result)
+          (assoc updates :session-events (:events result))))
+      updates)))
 
 (defn- update-task-impl
   "Implementation of update-task tool.
@@ -196,11 +290,19 @@
                                                                 (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
                                                               (when (contains? updates :relations)
                                                                 (validate-circular-dependencies task-id (:relations updates) tasks-file))
+                                                              ;; Check for session-events validation error
+                                                              (when-let [events-error (:session-events-error updates)]
+                                                                (helpers/build-tool-error-response
+                                                                  (:message events-error)
+                                                                  "update-task"
+                                                                  {:task-id task-id
+                                                                   :file tasks-file
+                                                                   :invalid-events (:invalid-events events-error)}))
                                                               (let [old-task (tasks/get-task task-id)
                                                                     ;; Apply shared-context with append semantics and size validation
                                                                     context-result (apply-shared-context-update old-task updates)]
                                                                 (if (:error context-result)
-                                                                  ;; Size limit exceeded
+                                                                  ;; Size limit exceeded for shared-context
                                                                   (helpers/build-tool-error-response
                                                                     (:message context-result)
                                                                     "update-task"
@@ -208,24 +310,35 @@
                                                                      :file tasks-file
                                                                      :size-bytes (:size-bytes context-result)
                                                                      :limit-bytes (:limit-bytes context-result)})
-                                                                  ;; Continue with validation and update
-                                                                  (let [task-with-context context-result
-                                                                        ;; Merge other updates (excluding :shared-context since it's already applied)
-                                                                        other-updates (dissoc updates :shared-context)
-                                                                        updated-task (merge task-with-context other-updates)]
-                                                                    (or (validation/validate-task-schema updated-task "update-task" task-id tasks-file)
-                                                                        (do
-                                                                          ;; Update with the fully merged task
-                                                                          (tasks/update-task task-id (dissoc updated-task :id))
-                                                                          (tasks/save-tasks! tasks-file :file-context file-context)
-                                                                          (let [final-task (tasks/get-task task-id)
-                                                                                tasks-path (helpers/task-path config ["tasks.ednl"])
-                                                                                tasks-rel-path (:relative tasks-path)]
-                                                                            ;; Return intermediate data for git operations
-                                                                            {:final-task final-task
-                                                                             :tasks-file tasks-file
-                                                                             :tasks-rel-path tasks-rel-path
-                                                                             :task-id task-id}))))))))))))))]
+                                                                  ;; Apply session-events with append semantics and size validation
+                                                                  (let [events-result (apply-session-events-update context-result updates)]
+                                                                    (if (:error events-result)
+                                                                      ;; Size limit exceeded for session-events
+                                                                      (helpers/build-tool-error-response
+                                                                        (:message events-result)
+                                                                        "update-task"
+                                                                        {:task-id task-id
+                                                                         :file tasks-file
+                                                                         :size-bytes (:size-bytes events-result)
+                                                                         :limit-bytes (:limit-bytes events-result)})
+                                                                      ;; Continue with validation and update
+                                                                      (let [task-with-appends events-result
+                                                                            ;; Merge other updates (excluding already applied fields)
+                                                                            other-updates (dissoc updates :shared-context :session-events :session-events-error)
+                                                                            updated-task (merge task-with-appends other-updates)]
+                                                                        (or (validation/validate-task-schema updated-task "update-task" task-id tasks-file)
+                                                                            (do
+                                                                              ;; Update with the fully merged task
+                                                                              (tasks/update-task task-id (dissoc updated-task :id))
+                                                                              (tasks/save-tasks! tasks-file :file-context file-context)
+                                                                              (let [final-task (tasks/get-task task-id)
+                                                                                    tasks-path (helpers/task-path config ["tasks.ednl"])
+                                                                                    tasks-rel-path (:relative tasks-path)]
+                                                                                ;; Return intermediate data for git operations
+                                                                                {:final-task final-task
+                                                                                 :tasks-file tasks-file
+                                                                                 :tasks-rel-path tasks-rel-path
+                                                                                 :task-id task-id}))))))))))))))))]
     ;; Check if locked section returned an error
     (if (:isError locked-result)
       locked-result
@@ -270,7 +383,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "update-task"
-   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, and shared-context. Pass nil for optional fields (parent-id, meta, relations) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing."
+   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, shared-context, and session-events. Pass nil for optional fields (parent-id, meta, relations) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing. The session-events field uses append semantics with automatic timestamp generation."
    :inputSchema
    {:type "object"
     :properties
@@ -315,6 +428,21 @@
      "shared-context"
      {:type ["string" "array"]
       :items {:type "string"}
-      :description "String or vector of strings to append to the task's shared context (optional). If a string is provided, it is wrapped in a vector. Entries are automatically prefixed with 'Task NNN: ' based on the current execution state. New entries are appended to existing context. Limited to 50KB total size."}}
+      :description "String or vector of strings to append to the task's shared context (optional). If a string is provided, it is wrapped in a vector. Entries are automatically prefixed with 'Task NNN: ' based on the current execution state. New entries are appended to existing context. Limited to 50KB total size."}
+     "session-events"
+     {:type ["object" "array"]
+      :items {:type "object"
+              :properties {"event-type" {:type "string"
+                                         :enum ["user-prompt" "compaction" "session-start"]}
+                           "timestamp" {:type "string"
+                                        :description "ISO-8601 timestamp (optional, auto-generated if not provided)"}
+                           "content" {:type "string"
+                                      :description "Content for user-prompt events"}
+                           "trigger" {:type "string"
+                                      :description "Trigger type for compaction events (auto/manual)"}
+                           "session-id" {:type "string"
+                                         :description "Session ID for session-start events"}}
+              :required ["event-type"]}
+      :description "Session event or array of events to append (optional). Each event requires event-type (:user-prompt, :compaction, :session-start). Timestamp is auto-generated if not provided. New events are appended to existing events. Limited to 50KB total size."}}
     :required ["task-id"]}
    :implementation (partial update-task-impl config)})

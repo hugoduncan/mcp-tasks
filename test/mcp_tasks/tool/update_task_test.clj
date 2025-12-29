@@ -722,3 +722,190 @@
           (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
                 story (first tasks)]
             (is (= ["Task 5: First entry" "Task 10: Second entry"] (:shared-context story)))))))))
+
+;; Session Events Tests
+
+(deftest update-task-appends-session-event
+  ;; Tests that session-events can be appended to a task
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "appends session event to task"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "user-prompt" "content" "test prompt"}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)
+                events (:session-events task)]
+            (is (= 1 (count events)))
+            (is (= :user-prompt (:event-type (first events))))
+            (is (= "test prompt" (:content (first events))))
+            ;; Timestamp should be auto-generated
+            (is (some? (:timestamp (first events))))))))))
+
+(deftest update-task-session-event-auto-generates-timestamp
+  ;; Tests that timestamp is auto-generated when not provided
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "auto-generates timestamp for session events"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "compaction" "trigger" "auto"}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)
+                event (first (:session-events task))]
+            (is (string? (:timestamp event)))
+            ;; Should be ISO-8601 format
+            (is (re-matches #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*" (:timestamp event)))))))))
+
+(deftest update-task-session-event-preserves-provided-timestamp
+  ;; Tests that provided timestamp is preserved
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "preserves provided timestamp"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [provided-ts "2025-01-15T10:30:00Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "session-start" "session-id" "abc123" "timestamp" provided-ts}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)
+                event (first (:session-events task))]
+            (is (= provided-ts (:timestamp event)))
+            (is (= :session-start (:event-type event)))
+            (is (= "abc123" (:session-id event)))))))))
+
+(deftest update-task-session-events-appends-to-existing
+  ;; Tests that new session events append to existing events
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "appends to existing session events"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []
+            :session-events [{:timestamp "2025-01-01T00:00:00Z" :event-type :user-prompt :content "first"}]}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "user-prompt" "content" "second"}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)
+                events (:session-events task)]
+            (is (= 2 (count events)))
+            (is (= "first" (:content (first events))))
+            (is (= "second" (:content (second events))))))))))
+
+(deftest update-task-session-events-validates-event-type
+  ;; Tests that invalid event-type is rejected
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "rejects invalid event-type"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "invalid-type"}]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Invalid session event")))))))
+
+(deftest update-task-session-events-enforces-size-limit
+  ;; Tests that session-events size is limited to 50KB
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "enforces 50KB size limit on session-events"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        ;; Create a large content that will exceed 50KB
+        (let [large-content (apply str (repeat 52000 "x"))
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "user-prompt" "content" large-content}]})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Session events size limit (50KB) exceeded")))))))
+
+(deftest update-task-session-events-accepts-single-event
+  ;; Tests that a single event map (not array) is accepted
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "accepts single event map"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events {"event-type" "user-prompt" "content" "single event"}})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)
+                events (:session-events task)]
+            (is (= 1 (count events)))
+            (is (= "single event" (:content (first events))))))))))
+
+(deftest update-task-session-events-with-other-fields
+  ;; Tests that session-events can be updated alongside other fields
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "updates session-events alongside other fields"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "old title" :description "old desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :title "new title" :session-events [{"event-type" "user-prompt" "content" "test"}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= "new title" (:title task)))
+            (is (= 1 (count (:session-events task))))))))))
+
+(deftest update-task-session-events-multiple-events
+  ;; Tests that multiple events can be appended in one call
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "appends multiple events in one call"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :session-events [{"event-type" "session-start" "session-id" "s1"}
+                                                   {"event-type" "user-prompt" "content" "prompt 1"}
+                                                   {"event-type" "compaction" "trigger" "auto"}]})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)
+                events (:session-events task)]
+            (is (= 3 (count events)))
+            (is (= :session-start (:event-type (first events))))
+            (is (= :user-prompt (:event-type (second events))))
+            (is (= :compaction (:event-type (nth events 2))))))))))
