@@ -163,6 +163,7 @@ OPTIONS:
   --parent-id, -p <id>      New parent task ID (pass empty string to remove)
   --meta <json>             New metadata as JSON object
   --relations <json>        New relations as JSON array
+  --session-events <json>   Session events as JSON (object or array)
   --format <format>         Output format: edn, json, human (default: edn)
 
 EXAMPLES:
@@ -349,6 +350,23 @@ EXAMPLES:
          :provided s}))
     (catch Exception e
       {:error (str "Invalid JSON for --relations: " (.getMessage e))
+       :provided s})))
+
+(defn coerce-session-events
+  "Parse JSON string to session events (map or vector) for :session-events field.
+
+  Accepts either a single event object or an array of events.
+  Returns the parsed data or an error map."
+  [s]
+  (try
+    (let [parsed (json/parse-string s keyword)]
+      (cond
+        (map? parsed) parsed
+        (sequential? parsed) (vec parsed)
+        :else {:error "Expected JSON object or array for --session-events"
+               :provided s}))
+    (catch Exception e
+      {:error (str "Invalid JSON for --session-events: " (.getMessage e))
        :provided s})))
 
 (defn coerce-parent-id
@@ -604,6 +622,7 @@ EXAMPLES:
                :desc "New parent task ID (or 'null' to remove)"}
    :meta {:desc "New metadata as JSON object"}
    :relations {:desc "New relations as JSON array"}
+   :session-events {:desc "Session events as JSON (object or array)"}
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
@@ -943,10 +962,30 @@ EXAMPLES:
       {:error (format-unknown-option-error (.getMessage e))
        :metadata {:args args}})))
 
+(defn- parse-json-fields
+  "Parse JSON string fields in a map, returning error on first failure.
+
+  Takes a map of field-key to coercion-fn pairs. For each field present
+  in parsed-map, applies the coercion function. Returns the updated map
+  or the first error encountered."
+  [parsed-map field-coercions]
+  (reduce
+    (fn [acc [field-key coerce-fn]]
+      (if (:error acc)
+        (reduced acc)
+        (if-let [json-str (get acc field-key)]
+          (let [result (coerce-fn json-str)]
+            (if (:error result)
+              (reduced result)
+              (assoc acc field-key result)))
+          acc)))
+    parsed-map
+    field-coercions))
+
 (defn parse-update
   "Parse arguments for the update command.
 
-  Handles JSON parsing for :meta and :relations fields.
+  Handles JSON parsing for :meta, :relations, and :session-events fields.
   Returns parsed options map or error map with :error key."
   [args]
   (try
@@ -963,39 +1002,16 @@ EXAMPLES:
       (if-not task-id
         {:error "Required option: --task-id (or --id)"
          :metadata {:args args}}
-        ;; Parse :meta if provided
-        (if-let [meta-str (:meta parsed)]
-          (let [meta-result (coerce-json-map meta-str)]
-            (if (:error meta-result)
-              meta-result
-              (let [parsed-with-meta (assoc parsed :meta meta-result)]
-                ;; Parse :relations if provided
-                (if-let [relations-str (:relations parsed-with-meta)]
-                  (let [relations-result (coerce-json-array relations-str)]
-                    (if (:error relations-result)
-                      relations-result
-                      (let [final-parsed (assoc parsed-with-meta :relations relations-result)
-                            format-validation (validate-format final-parsed)]
-                        (if (:valid? format-validation)
-                          final-parsed
-                          (dissoc format-validation :valid?)))))
-                  (let [format-validation (validate-format parsed-with-meta)]
-                    (if (:valid? format-validation)
-                      parsed-with-meta
-                      (dissoc format-validation :valid?)))))))
-          ;; No :meta, check :relations
-          (if-let [relations-str (:relations parsed)]
-            (let [relations-result (coerce-json-array relations-str)]
-              (if (:error relations-result)
-                relations-result
-                (let [final-parsed (assoc parsed :relations relations-result)
-                      format-validation (validate-format final-parsed)]
-                  (if (:valid? format-validation)
-                    final-parsed
-                    (dissoc format-validation :valid?)))))
-            (let [format-validation (validate-format parsed)]
+        ;; Parse JSON fields
+        (let [json-parsed (parse-json-fields parsed
+                                             [[:meta coerce-json-map]
+                                              [:relations coerce-json-array]
+                                              [:session-events coerce-session-events]])]
+          (if (:error json-parsed)
+            json-parsed
+            (let [format-validation (validate-format json-parsed)]
               (if (:valid? format-validation)
-                parsed
+                json-parsed
                 (dissoc format-validation :valid?)))))))
     (catch Exception e
       {:error (format-unknown-option-error (.getMessage e))
