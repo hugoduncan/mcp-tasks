@@ -10,6 +10,20 @@
 
 ;; Schema Definitions
 
+(def SessionEvent
+  "Schema for session events captured during story execution.
+
+  Events track user interactions and system events for analysis:
+  - :user-prompt - User input during story execution
+  - :compaction - Context compaction events (auto/manual)
+  - :session-start - New session starts"
+  [:map
+   [:timestamp :string]
+   [:event-type [:enum :user-prompt :compaction :session-start]]
+   [:content {:optional true} :string]
+   [:trigger {:optional true} :string]
+   [:session-id {:optional true} :string]])
+
 (def Relation
   "Schema for task relationships.
 
@@ -34,7 +48,8 @@
    [:type [:enum :task :bug :feature :story :chore]]
    [:meta [:map-of :string :string]]
    [:relations [:vector Relation]]
-   [:shared-context {:optional true} [:vector :string]]])
+   [:shared-context {:optional true} [:vector :string]]
+   [:session-events {:optional true} [:vector SessionEvent]]])
 
 (def blocking-statuses
   "Set of task statuses that prevent completion or deletion of parent tasks.
@@ -63,6 +78,10 @@
 ;; Compiled validators
 ;; dynaload handles lazy loading, so no delays needed
 
+(def session-event-validator
+  "Compiled validator for SessionEvent schema."
+  (malli-validator SessionEvent))
+
 (def relation-validator
   "Compiled validator for Relation schema."
   (malli-validator Relation))
@@ -71,6 +90,10 @@
   "Compiled validator for Task schema."
   (malli-validator Task))
 
+(def session-event-explainer
+  "Compiled explainer for SessionEvent schema."
+  (malli-explainer SessionEvent))
+
 (def relation-explainer
   "Compiled explainer for Relation schema."
   (malli-explainer Relation))
@@ -78,6 +101,11 @@
 (def task-explainer
   "Compiled explainer for Task schema."
   (malli-explainer Task))
+
+(defn valid-session-event?
+  "Validate an event map against the SessionEvent schema."
+  [event]
+  (session-event-validator event))
 
 (defn valid-relation?
   "Validate a relation map against the Relation schema."
@@ -88,6 +116,12 @@
   "Validate a task map against the Task schema."
   [task]
   (task-validator task))
+
+(defn explain-session-event
+  "Explain why a session event map is invalid.
+  Returns nil if valid, explanation map if invalid."
+  [event]
+  (session-event-explainer event))
 
 (defn explain-relation
   "Explain why a relation map is invalid.
@@ -102,6 +136,12 @@
   (task-explainer task))
 
 ;; Example Data
+
+(def example-session-event
+  "Example session event for testing and documentation."
+  {:timestamp "2025-01-15T10:30:00Z"
+   :event-type :user-prompt
+   :content "Add tests for the API"})
 
 (def example-relation
   "Example relation for testing and documentation."

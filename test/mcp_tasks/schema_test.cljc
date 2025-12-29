@@ -3,6 +3,54 @@
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.schema :as schema]))
 
+(deftest session-event-schema-validation
+  ;; Test SessionEvent schema for capturing user prompts and system events
+  (testing "SessionEvent schema"
+    (testing "validates events with all required fields"
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :user-prompt}))
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :compaction}))
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :session-start})))
+
+    (testing "validates events with optional fields"
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :user-prompt
+                                        :content "Add tests"}))
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :compaction
+                                        :trigger "auto"}))
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :session-start
+                                        :session-id "abc-123"}))
+      (is (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                        :event-type :user-prompt
+                                        :content "Fix bug"
+                                        :trigger "manual"
+                                        :session-id "xyz-789"})))
+
+    (testing "rejects events with missing required fields"
+      (is (not (schema/valid-session-event? {:event-type :user-prompt})))
+      (is (not (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"}))))
+
+    (testing "rejects events with invalid event-type"
+      (is (not (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                             :event-type :invalid-type})))
+      (is (not (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                             :event-type "user-prompt"}))))
+
+    (testing "rejects events with invalid field types"
+      (is (not (schema/valid-session-event? {:timestamp 12345
+                                             :event-type :user-prompt})))
+      (is (not (schema/valid-session-event? {:timestamp "2025-01-15T10:30:00Z"
+                                             :event-type :user-prompt
+                                             :content 123}))))
+
+    (testing "rejects empty maps and nil"
+      (is (not (schema/valid-session-event? {})))
+      (is (not (schema/valid-session-event? nil))))))
+
 (deftest relation-schema-validation
   ;; Test Relation schema validation with various valid and invalid inputs
   (testing "Relation schema"
@@ -128,6 +176,71 @@
                                     :relations []
                                     :shared-context [123 456]}))))
 
+    (testing "validates tasks with session-events field"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Story"
+                               :description "Desc"
+                               :design "Design"
+                               :category "large"
+                               :type :story
+                               :meta {}
+                               :relations []
+                               :session-events []}))
+      (is (schema/valid-task? {:id 2
+                               :parent-id nil
+                               :status :open
+                               :title "Story with events"
+                               :description "Desc"
+                               :design "Design"
+                               :category "large"
+                               :type :story
+                               :meta {}
+                               :relations []
+                               :session-events [{:timestamp "2025-01-15T10:30:00Z"
+                                                 :event-type :user-prompt
+                                                 :content "Add tests"}
+                                                {:timestamp "2025-01-15T11:00:00Z"
+                                                 :event-type :compaction
+                                                 :trigger "auto"}]})))
+
+    (testing "validates tasks without session-events (backward compatibility)"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Legacy task"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []})))
+
+    (testing "rejects tasks with invalid session-events types"
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :session-events "not a vector"})))
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :session-events [{:invalid "event"}]}))))
+
     (testing "validates all status values"
       (doseq [status [:open :closed :in-progress :blocked]]
         (is (schema/valid-task? {:id 1
@@ -211,6 +324,9 @@
 (deftest example-data
   ;; Test that example data passes validation
   (testing "example data"
+    (testing "example-session-event is valid"
+      (is (schema/valid-session-event? schema/example-session-event)))
+
     (testing "example-relation is valid"
       (is (schema/valid-relation? schema/example-relation)))
 
@@ -219,6 +335,16 @@
 
 (deftest explain-functions
   ;; Test explanation functions for invalid data
+  (testing "explain-session-event"
+    (testing "returns nil for valid event"
+      (is (nil? (schema/explain-session-event {:timestamp "2025-01-15T10:30:00Z"
+                                               :event-type :user-prompt}))))
+
+    (testing "returns explanation for invalid event"
+      (is (some? (schema/explain-session-event {:timestamp 12345
+                                                :event-type :user-prompt})))
+      (is (some? (schema/explain-session-event {:event-type :invalid})))))
+
   (testing "explain-relation"
     (testing "returns nil for valid relation"
       (is (nil? (schema/explain-relation {:id 1
