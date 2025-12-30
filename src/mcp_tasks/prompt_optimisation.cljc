@@ -73,6 +73,13 @@
   [state]
   (optimisation-state-explainer state))
 
+;; Formatting Constants
+
+(def ^:private sample-content-max-length
+  "Maximum length for sample content in findings display.
+  Content longer than this is truncated with '...' suffix."
+  60)
+
 ;; State File Path
 
 (defn state-file-path
@@ -468,8 +475,8 @@
   [finding index]
   (let [{:keys [story-id story-title category events]} finding
         sample-content (-> events first :content)
-        truncated (if (> (count sample-content) 60)
-                    (str (subs sample-content 0 57) "...")
+        truncated (if (> (count sample-content) sample-content-max-length)
+                    (str (subs sample-content 0 (- sample-content-max-length 3)) "...")
                     sample-content)]
     (format (str "**%d. Story #%d \"%s\" (category: %s)**\n"
                  "- Sample: \"%s\"\n"
