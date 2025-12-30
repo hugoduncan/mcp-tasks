@@ -853,3 +853,99 @@
         (is (str/includes? result "### Compactions (2)"))
         (is (str/includes? result "**1. Story #123"))
         (is (str/includes? result "**2. Story #124"))))))
+
+;; State Update Tests
+
+(deftest record-optimization-run-test
+  ;; Tests record-optimization-run! which atomically updates the state file
+  ;; with processed story IDs, modifications, and last-run timestamp.
+  (testing "record-optimization-run!"
+    (testing "creates state file if missing and records run"
+      (let [base-dir (temp-dir)
+            timestamp "2025-01-20T15:00:00Z"
+            story-ids [10 11]
+            modifications [valid-modification]]
+        (let [result (opt/record-optimization-run!
+                       base-dir timestamp story-ids modifications)]
+          (is (= timestamp (:last-run result)))
+          (is (= #{10 11} (:processed-story-ids result)))
+          (is (= [valid-modification] (:modifications result))))
+        (fs/delete-tree base-dir)))
+
+    (testing "merges story IDs with existing processed IDs"
+      (let [base-dir (temp-dir)
+            initial {:last-run "2025-01-19T10:00:00Z"
+                     :processed-story-ids #{1 2 3}
+                     :modifications []}]
+        (opt/write-state! base-dir initial)
+        (let [result (opt/record-optimization-run!
+                       base-dir "2025-01-20T15:00:00Z" [4 5] [])]
+          (is (= #{1 2 3 4 5} (:processed-story-ids result))))
+        (fs/delete-tree base-dir)))
+
+    (testing "appends modifications to existing modifications"
+      (let [base-dir (temp-dir)
+            existing-mod {:timestamp "2025-01-19T10:00:00Z"
+                          :prompt-path "a.md"
+                          :change-summary "First"}
+            new-mod {:timestamp "2025-01-20T15:00:00Z"
+                     :prompt-path "b.md"
+                     :change-summary "Second"}
+            initial {:last-run "2025-01-19T10:00:00Z"
+                     :processed-story-ids #{}
+                     :modifications [existing-mod]}]
+        (opt/write-state! base-dir initial)
+        (let [result (opt/record-optimization-run!
+                       base-dir "2025-01-20T15:00:00Z" [] [new-mod])]
+          (is (= 2 (count (:modifications result))))
+          (is (= "First" (:change-summary (first (:modifications result)))))
+          (is (= "Second" (:change-summary (second (:modifications result))))))
+        (fs/delete-tree base-dir)))
+
+    (testing "updates last-run timestamp"
+      (let [base-dir (temp-dir)
+            initial {:last-run "2025-01-19T10:00:00Z"
+                     :processed-story-ids #{}
+                     :modifications []}]
+        (opt/write-state! base-dir initial)
+        (let [result (opt/record-optimization-run!
+                       base-dir "2025-01-20T15:00:00Z" [] [])]
+          (is (= "2025-01-20T15:00:00Z" (:last-run result))))
+        (fs/delete-tree base-dir)))
+
+    (testing "persists changes to file"
+      (let [base-dir (temp-dir)
+            timestamp "2025-01-20T15:00:00Z"
+            story-ids [10]
+            modifications [valid-modification]]
+        (opt/record-optimization-run!
+          base-dir timestamp story-ids modifications)
+        (let [persisted (opt/read-state base-dir)]
+          (is (= timestamp (:last-run persisted)))
+          (is (= #{10} (:processed-story-ids persisted)))
+          (is (= [valid-modification] (:modifications persisted))))
+        (fs/delete-tree base-dir)))
+
+    (testing "handles empty collections"
+      (let [base-dir (temp-dir)]
+        (let [result (opt/record-optimization-run!
+                       base-dir "2025-01-20T15:00:00Z" [] [])]
+          (is (= "2025-01-20T15:00:00Z" (:last-run result)))
+          (is (= #{} (:processed-story-ids result)))
+          (is (= [] (:modifications result))))
+        (fs/delete-tree base-dir)))
+
+    (testing "throws on invalid modification in input"
+      (let [base-dir (temp-dir)
+            invalid-mod {:bad "data"}]
+        (is (thrown? Exception
+              (opt/record-optimization-run!
+                base-dir "2025-01-20T15:00:00Z" [] [invalid-mod])))
+        (fs/delete-tree base-dir)))
+
+    (testing "returns updated state"
+      (let [base-dir (temp-dir)
+            result (opt/record-optimization-run!
+                     base-dir "2025-01-20T15:00:00Z" [10 11] [valid-modification])]
+        (is (opt/valid-optimisation-state? result))
+        (fs/delete-tree base-dir)))))

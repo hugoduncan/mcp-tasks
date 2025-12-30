@@ -586,3 +586,30 @@
             [restart-md _] (format-findings-section "Restarts" restarts
                                                     format-restart-finding idx2)]
         (str summary compaction-md correction-md restart-md)))))
+
+;; State Update
+
+(defn record-optimization-run!
+  "Record the results of an optimization run to the state file.
+
+  Updates the state with:
+  - :last-run set to the provided timestamp
+  - :processed-story-ids merged with the new story IDs
+  - :modifications appended with new modifications
+
+  Parameters:
+  - config-dir: Directory containing .mcp-tasks/
+  - timestamp: ISO-8601 timestamp for :last-run
+  - story-ids: Collection of story IDs that were processed
+  - modifications: Vector of Modification maps to append
+
+  Returns the updated state map.
+  Throws ex-info if state validation fails."
+  [config-dir timestamp story-ids modifications]
+  (let [current-state (or (read-state config-dir) initial-state)
+        updated-state (-> current-state
+                          (assoc :last-run timestamp)
+                          (update :processed-story-ids into story-ids)
+                          (update :modifications into modifications))]
+    (write-state! config-dir updated-state)
+    updated-state))
