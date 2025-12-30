@@ -438,7 +438,7 @@
   (let [{:keys [story-id story-title category events]} finding
         event-summary (str (count events) " compaction(s) at "
                            (format-timestamp-list events))
-        triggers (->> events (map :trigger) distinct (clojure.string/join ", "))]
+        triggers (->> events (map :trigger) distinct (str/join ", "))]
     (format (str "**%d. Story #%d \"%s\" (category: %s)**\n"
                  "- Events: %s (triggers: %s)\n"
                  "- Diagnosis: %s\n"
@@ -519,7 +519,7 @@
   Returns markdown string for this finding."
   [finding index]
   (let [{:keys [story-id story-title category events]} finding
-        triggers (->> events (map :trigger) (clojure.string/join ", "))]
+        triggers (->> events (map :trigger) (str/join ", "))]
     (format (str "**%d. Story #%d \"%s\" (category: %s)**\n"
                  "- Restarts: %d (triggers: %s)\n"
                  "- Diagnosis: %s\n"
