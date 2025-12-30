@@ -268,11 +268,40 @@
    [#"(?i)\bdon'?t\s+do\s+that" "says 'don't do that'"]
    [#"(?i)\bstop\s+and" "says 'stop and'"]])
 
+(def ^:private combined-correction-pattern
+  "Pre-compiled combined regex for fast initial matching.
+
+  Combines all correction patterns using alternation for O(1) initial check.
+  If this matches, individual patterns are checked for specific descriptions."
+  (re-pattern
+    (str "(?i)"
+         (str/join "|"
+                   ["^no[,\\s]"
+                    "^wait[,\\s]"
+                    "^actually[,\\s]"
+                    "^instead[,\\s]"
+                    "\\bthat'?s\\s+(not\\s+)?(wrong|incorrect)"
+                    "\\bi\\s+meant"
+                    "\\bi\\s+said"
+                    "\\bnot\\s+what\\s+i"
+                    "\\bfix\\s+(that|this|it)"
+                    "\\bundo\\s+(that|this|it)"
+                    "\\brevert\\s+(that|this|it)"
+                    "\\bwrong\\s+(file|path|function|method)"
+                    "\\bshould\\s+(be|have\\s+been)"
+                    "\\bdon'?t\\s+do\\s+that"
+                    "\\bstop\\s+and"]))))
+
 (defn- matches-correction-pattern?
   "Check if content matches any correction pattern.
+
+  Uses pre-compiled combined pattern for fast initial check. Only iterates
+  through individual patterns when the combined pattern matches.
   Returns vector of matched pattern descriptions, or nil if no matches."
   [content]
-  (when (and content (string? content))
+  (when (and content (string? content)
+             (re-find combined-correction-pattern content))
+    ;; Combined pattern matched - identify specific patterns for descriptions
     (let [matches (->> correction-patterns
                        (keep (fn [[pattern description]]
                                (when (re-find pattern content)
