@@ -250,23 +250,23 @@
 (def ^:private correction-patterns
   "Patterns that suggest a user prompt is a correction or clarification.
 
-  Each pattern is a case-insensitive regex that matches common correction
-  phrases in user prompts."
-  [#"(?i)^no[,\s]"
-   #"(?i)^wait[,\s]"
-   #"(?i)^actually[,\s]"
-   #"(?i)^instead[,\s]"
-   #"(?i)\bthat'?s\s+(not\s+)?(wrong|incorrect)"
-   #"(?i)\bi\s+meant"
-   #"(?i)\bi\s+said"
-   #"(?i)\bnot\s+what\s+i"
-   #"(?i)\bfix\s+(that|this|it)"
-   #"(?i)\bundo\s+(that|this|it)"
-   #"(?i)\brevert\s+(that|this|it)"
-   #"(?i)\bwrong\s+(file|path|function|method)"
-   #"(?i)\bshould\s+(be|have\s+been)"
-   #"(?i)\bdon'?t\s+do\s+that"
-   #"(?i)\bstop\s+and"])
+  Each entry is a vector of [pattern description] where pattern is a
+  case-insensitive regex and description is a human-readable label."
+  [[#"(?i)^no[,\s]" "starts with 'no'"]
+   [#"(?i)^wait[,\s]" "starts with 'wait'"]
+   [#"(?i)^actually[,\s]" "starts with 'actually'"]
+   [#"(?i)^instead[,\s]" "starts with 'instead'"]
+   [#"(?i)\bthat'?s\s+(not\s+)?(wrong|incorrect)" "says 'that's wrong/incorrect'"]
+   [#"(?i)\bi\s+meant" "contains 'I meant'"]
+   [#"(?i)\bi\s+said" "contains 'I said'"]
+   [#"(?i)\bnot\s+what\s+i" "contains 'not what I'"]
+   [#"(?i)\bfix\s+(that|this|it)" "requests 'fix that/this/it'"]
+   [#"(?i)\bundo\s+(that|this|it)" "requests 'undo that/this/it'"]
+   [#"(?i)\brevert\s+(that|this|it)" "requests 'revert that/this/it'"]
+   [#"(?i)\bwrong\s+(file|path|function|method)" "mentions 'wrong file/path/function/method'"]
+   [#"(?i)\bshould\s+(be|have\s+been)" "contains 'should be/have been'"]
+   [#"(?i)\bdon'?t\s+do\s+that" "says 'don't do that'"]
+   [#"(?i)\bstop\s+and" "says 'stop and'"]])
 
 (defn- matches-correction-pattern?
   "Check if content matches any correction pattern.
@@ -274,9 +274,9 @@
   [content]
   (when (and content (string? content))
     (let [matches (->> correction-patterns
-                       (keep (fn [pattern]
+                       (keep (fn [[pattern description]]
                                (when (re-find pattern content)
-                                 (str pattern))))
+                                 description)))
                        vec)]
       (when (seq matches)
         matches))))
