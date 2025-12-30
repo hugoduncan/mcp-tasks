@@ -32,6 +32,15 @@
     (fs/create-dirs test-dir)
     test-dir))
 
+(defmacro with-temp-dir
+  "Execute body with a temp directory bound to sym, cleaning up afterward."
+  [[sym] & body]
+  `(let [~sym (temp-dir)]
+     (try
+       ~@body
+       (finally
+         (fs/delete-tree ~sym)))))
+
 (deftest modification-schema-validation
   (testing "Modification schema"
     (testing "validates valid modification"
@@ -136,110 +145,95 @@
 (deftest read-state-test
   (testing "read-state"
     (testing "returns nil for missing file"
-      (let [base-dir (temp-dir)]
-        (is (nil? (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (is (nil? (opt/read-state base-dir)))))
 
     (testing "reads valid state from file"
-      (let [base-dir (temp-dir)
-            state-file (opt/state-file-path base-dir)]
-        (fs/create-dirs (fs/parent state-file))
-        (spit state-file (pr-str valid-state-with-data))
-        (is (= valid-state-with-data (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [state-file (opt/state-file-path base-dir)]
+          (fs/create-dirs (fs/parent state-file))
+          (spit state-file (pr-str valid-state-with-data))
+          (is (= valid-state-with-data (opt/read-state base-dir))))))
 
     (testing "reads empty state from file"
-      (let [base-dir (temp-dir)
-            state-file (opt/state-file-path base-dir)]
-        (fs/create-dirs (fs/parent state-file))
-        (spit state-file (pr-str valid-state-empty))
-        (is (= valid-state-empty (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [state-file (opt/state-file-path base-dir)]
+          (fs/create-dirs (fs/parent state-file))
+          (spit state-file (pr-str valid-state-empty))
+          (is (= valid-state-empty (opt/read-state base-dir))))))
 
     (testing "returns nil for malformed EDN"
-      (let [base-dir (temp-dir)
-            state-file (opt/state-file-path base-dir)]
-        (fs/create-dirs (fs/parent state-file))
-        (spit state-file "{:invalid edn")
-        (is (nil? (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [state-file (opt/state-file-path base-dir)]
+          (fs/create-dirs (fs/parent state-file))
+          (spit state-file "{:invalid edn")
+          (is (nil? (opt/read-state base-dir))))))
 
     (testing "returns nil for invalid schema"
-      (let [base-dir (temp-dir)
-            state-file (opt/state-file-path base-dir)
-            invalid-state {:bad "data"}]
-        (fs/create-dirs (fs/parent state-file))
-        (spit state-file (pr-str invalid-state))
-        (is (nil? (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))))
+      (with-temp-dir [base-dir]
+        (let [state-file (opt/state-file-path base-dir)
+              invalid-state {:bad "data"}]
+          (fs/create-dirs (fs/parent state-file))
+          (spit state-file (pr-str invalid-state))
+          (is (nil? (opt/read-state base-dir))))))))
 
 (deftest write-state-test
   (testing "write-state!"
     (testing "writes valid state to file"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (opt/write-state! base-dir valid-state-with-data)
-        (is (= valid-state-with-data (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+        (is (= valid-state-with-data (opt/read-state base-dir)))))
 
     (testing "writes empty state to file"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (opt/write-state! base-dir valid-state-empty)
-        (is (= valid-state-empty (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+        (is (= valid-state-empty (opt/read-state base-dir)))))
 
     (testing "overwrites existing state"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (opt/write-state! base-dir valid-state-empty)
         (opt/write-state! base-dir valid-state-with-data)
-        (is (= valid-state-with-data (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+        (is (= valid-state-with-data (opt/read-state base-dir)))))
 
     (testing "creates parent directories if needed"
-      (let [base-dir (temp-dir)
-            nested-dir (str base-dir "/nested/path")]
-        (opt/write-state! nested-dir valid-state-with-data)
-        (is (= valid-state-with-data (opt/read-state nested-dir)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [nested-dir (str base-dir "/nested/path")]
+          (opt/write-state! nested-dir valid-state-with-data)
+          (is (= valid-state-with-data (opt/read-state nested-dir))))))
 
     (testing "throws on invalid state schema"
-      (let [base-dir (temp-dir)
-            invalid-state {:bad "data"}]
-        (is (thrown? Exception (opt/write-state! base-dir invalid-state)))
-        (fs/delete-tree base-dir)))))
+      (with-temp-dir [base-dir]
+        (let [invalid-state {:bad "data"}]
+          (is (thrown? Exception (opt/write-state! base-dir invalid-state))))))))
 
 (deftest init-state-test
   (testing "init-state!"
     (testing "creates new state file when missing"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (is (= opt/initial-state (opt/init-state! base-dir)))
-        (is (= opt/initial-state (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+        (is (= opt/initial-state (opt/read-state base-dir)))))
 
     (testing "returns existing state when file exists"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (opt/write-state! base-dir valid-state-with-data)
         (is (= valid-state-with-data (opt/init-state! base-dir)))
-        (is (= valid-state-with-data (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))
+        (is (= valid-state-with-data (opt/read-state base-dir)))))
 
     (testing "does not overwrite existing valid state"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (opt/write-state! base-dir valid-state-with-data)
         (opt/init-state! base-dir)
-        (is (= valid-state-with-data (opt/read-state base-dir)))
-        (fs/delete-tree base-dir)))))
+        (is (= valid-state-with-data (opt/read-state base-dir)))))))
 
 (deftest state-isolation-test
   (testing "state isolation"
     (testing "different directories have separate state files"
-      (let [base-dir-1 (temp-dir)
-            base-dir-2 (temp-dir)]
-        (opt/write-state! base-dir-1 valid-state-empty)
-        (opt/write-state! base-dir-2 valid-state-with-data)
-        (is (= valid-state-empty (opt/read-state base-dir-1)))
-        (is (= valid-state-with-data (opt/read-state base-dir-2)))
-        (fs/delete-tree base-dir-1)
-        (fs/delete-tree base-dir-2)))))
+      (with-temp-dir [base-dir-1]
+        (with-temp-dir [base-dir-2]
+          (opt/write-state! base-dir-1 valid-state-empty)
+          (opt/write-state! base-dir-2 valid-state-with-data)
+          (is (= valid-state-empty (opt/read-state base-dir-1)))
+          (is (= valid-state-with-data (opt/read-state base-dir-2))))))))
 
 (deftest example-data-test
   (testing "example data"
@@ -295,120 +289,104 @@
   ;; presence, and processed-story-ids exclusion.
   (testing "collect-unprocessed-stories"
     (testing "returns empty vector for missing file"
-      (let [base-dir (temp-dir)
-            state valid-state-empty]
-        (is (= [] (opt/collect-unprocessed-stories base-dir state)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (is (= [] (opt/collect-unprocessed-stories base-dir valid-state-empty)))))
 
     (testing "returns empty vector when file exists but has no stories"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            state valid-state-empty]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [(make-task 1) (make-task 2)])
-        (is (= [] (opt/collect-unprocessed-stories base-dir state)))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [(make-task 1) (make-task 2)])
+          (is (= [] (opt/collect-unprocessed-stories base-dir valid-state-empty))))))
 
     (testing "returns stories with session-events"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            story-with-events (make-story 10 :session-events [sample-session-event])
-            state valid-state-empty]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [story-with-events])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 1 (count result)))
-          (is (= 10 (:id (first result)))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              story-with-events (make-story 10 :session-events [sample-session-event])]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [story-with-events])
+          (let [result (opt/collect-unprocessed-stories base-dir valid-state-empty)]
+            (is (= 1 (count result)))
+            (is (= 10 (:id (first result))))))))
 
     (testing "excludes stories without session-events"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            story-no-events (make-story 10)
-            story-with-events (make-story 11 :session-events [sample-session-event])
-            state valid-state-empty]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [story-no-events story-with-events])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 1 (count result)))
-          (is (= 11 (:id (first result)))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              story-no-events (make-story 10)
+              story-with-events (make-story 11 :session-events [sample-session-event])]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [story-no-events story-with-events])
+          (let [result (opt/collect-unprocessed-stories base-dir valid-state-empty)]
+            (is (= 1 (count result)))
+            (is (= 11 (:id (first result))))))))
 
     (testing "excludes stories with empty session-events"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            story-empty-events (make-story 10 :session-events [])
-            story-with-events (make-story 11 :session-events [sample-session-event])
-            state valid-state-empty]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [story-empty-events story-with-events])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 1 (count result)))
-          (is (= 11 (:id (first result)))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              story-empty-events (make-story 10 :session-events [])
+              story-with-events (make-story 11 :session-events [sample-session-event])]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [story-empty-events story-with-events])
+          (let [result (opt/collect-unprocessed-stories base-dir valid-state-empty)]
+            (is (= 1 (count result)))
+            (is (= 11 (:id (first result))))))))
 
     (testing "excludes already processed stories"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            story-1 (make-story 10 :session-events [sample-session-event])
-            story-2 (make-story 11 :session-events [sample-session-event])
-            state {:last-run nil :processed-story-ids #{10} :modifications []}]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [story-1 story-2])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 1 (count result)))
-          (is (= 11 (:id (first result)))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              story-1 (make-story 10 :session-events [sample-session-event])
+              story-2 (make-story 11 :session-events [sample-session-event])
+              state {:last-run nil :processed-story-ids #{10} :modifications []}]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [story-1 story-2])
+          (let [result (opt/collect-unprocessed-stories base-dir state)]
+            (is (= 1 (count result)))
+            (is (= 11 (:id (first result))))))))
 
     (testing "excludes regular tasks even with session-events"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            ;; Regular tasks shouldn't have session-events, but test the filter
-            task-with-events (assoc (make-task 10)
-                                    :session-events [sample-session-event])
-            story-with-events (make-story 11 :session-events [sample-session-event])
-            state valid-state-empty]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [task-with-events story-with-events])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 1 (count result)))
-          (is (= 11 (:id (first result)))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              ;; Regular tasks shouldn't have session-events, but test the filter
+              task-with-events (assoc (make-task 10)
+                                      :session-events [sample-session-event])
+              story-with-events (make-story 11 :session-events [sample-session-event])]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [task-with-events story-with-events])
+          (let [result (opt/collect-unprocessed-stories base-dir valid-state-empty)]
+            (is (= 1 (count result)))
+            (is (= 11 (:id (first result))))))))
 
     (testing "returns multiple unprocessed stories"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            story-1 (make-story 10 :session-events [sample-session-event])
-            story-2 (make-story 11 :session-events [sample-session-event])
-            story-3 (make-story 12 :session-events [sample-session-event])
-            state valid-state-empty]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path [story-1 story-2 story-3])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 3 (count result)))
-          (is (= #{10 11 12} (set (map :id result)))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              story-1 (make-story 10 :session-events [sample-session-event])
+              story-2 (make-story 11 :session-events [sample-session-event])
+              story-3 (make-story 12 :session-events [sample-session-event])]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path [story-1 story-2 story-3])
+          (let [result (opt/collect-unprocessed-stories base-dir valid-state-empty)]
+            (is (= 3 (count result)))
+            (is (= #{10 11 12} (set (map :id result))))))))
 
     (testing "mixed scenario with all filter types"
-      (let [base-dir (temp-dir)
-            complete-path (opt/complete-file-path base-dir)
-            ;; Story with events, not processed - should be returned
-            story-unprocessed (make-story 10 :session-events [sample-session-event])
-            ;; Story with events, already processed - should be excluded
-            story-processed (make-story 11 :session-events [sample-session-event])
-            ;; Story without events - should be excluded
-            story-no-events (make-story 12)
-            ;; Regular task - should be excluded
-            task (make-task 13)
-            state {:last-run nil :processed-story-ids #{11} :modifications []}]
-        (fs/create-dirs (fs/parent complete-path))
-        (tasks-file/write-tasks complete-path
-                                [story-unprocessed story-processed
-                                 story-no-events task])
-        (let [result (opt/collect-unprocessed-stories base-dir state)]
-          (is (= 1 (count result)))
-          (is (= 10 (:id (first result)))))
-        (fs/delete-tree base-dir)))))
+      (with-temp-dir [base-dir]
+        (let [complete-path (opt/complete-file-path base-dir)
+              ;; Story with events, not processed - should be returned
+              story-unprocessed (make-story 10 :session-events [sample-session-event])
+              ;; Story with events, already processed - should be excluded
+              story-processed (make-story 11 :session-events [sample-session-event])
+              ;; Story without events - should be excluded
+              story-no-events (make-story 12)
+              ;; Regular task - should be excluded
+              task (make-task 13)
+              state {:last-run nil :processed-story-ids #{11} :modifications []}]
+          (fs/create-dirs (fs/parent complete-path))
+          (tasks-file/write-tasks complete-path
+                                  [story-unprocessed story-processed
+                                   story-no-events task])
+          (let [result (opt/collect-unprocessed-stories base-dir state)]
+            (is (= 1 (count result)))
+            (is (= 10 (:id (first result))))))))))
 
 ;; Session Event Analysis Tests
 
@@ -861,113 +839,104 @@
   ;; with processed story IDs, modifications, and last-run timestamp.
   (testing "record-optimization-run!"
     (testing "creates state file if missing and records run"
-      (let [base-dir (temp-dir)
-            timestamp "2025-01-20T15:00:00Z"
-            story-ids [10 11]
-            modifications [valid-modification]]
-        (let [result (opt/record-optimization-run!
+      (with-temp-dir [base-dir]
+        (let [timestamp "2025-01-20T15:00:00Z"
+              story-ids [10 11]
+              modifications [valid-modification]
+              result (opt/record-optimization-run!
                        base-dir timestamp story-ids modifications)]
           (is (= timestamp (:last-run result)))
           (is (= #{10 11} (:processed-story-ids result)))
-          (is (= [valid-modification] (:modifications result))))
-        (fs/delete-tree base-dir)))
+          (is (= [valid-modification] (:modifications result))))))
 
     (testing "merges story IDs with existing processed IDs"
-      (let [base-dir (temp-dir)
-            initial {:last-run "2025-01-19T10:00:00Z"
-                     :processed-story-ids #{1 2 3}
-                     :modifications []}]
-        (opt/write-state! base-dir initial)
-        (let [result (opt/record-optimization-run!
-                       base-dir "2025-01-20T15:00:00Z" [4 5] [])]
-          (is (= #{1 2 3 4 5} (:processed-story-ids result))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [initial {:last-run "2025-01-19T10:00:00Z"
+                       :processed-story-ids #{1 2 3}
+                       :modifications []}]
+          (opt/write-state! base-dir initial)
+          (let [result (opt/record-optimization-run!
+                         base-dir "2025-01-20T15:00:00Z" [4 5] [])]
+            (is (= #{1 2 3 4 5} (:processed-story-ids result)))))))
 
     (testing "appends modifications to existing modifications"
-      (let [base-dir (temp-dir)
-            existing-mod {:timestamp "2025-01-19T10:00:00Z"
-                          :prompt-path "a.md"
-                          :change-summary "First"}
-            new-mod {:timestamp "2025-01-20T15:00:00Z"
-                     :prompt-path "b.md"
-                     :change-summary "Second"}
-            initial {:last-run "2025-01-19T10:00:00Z"
-                     :processed-story-ids #{}
-                     :modifications [existing-mod]}]
-        (opt/write-state! base-dir initial)
-        (let [result (opt/record-optimization-run!
-                       base-dir "2025-01-20T15:00:00Z" [] [new-mod])]
-          (is (= 2 (count (:modifications result))))
-          (is (= "First" (:change-summary (first (:modifications result)))))
-          (is (= "Second" (:change-summary (second (:modifications result))))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [existing-mod {:timestamp "2025-01-19T10:00:00Z"
+                            :prompt-path "a.md"
+                            :change-summary "First"}
+              new-mod {:timestamp "2025-01-20T15:00:00Z"
+                       :prompt-path "b.md"
+                       :change-summary "Second"}
+              initial {:last-run "2025-01-19T10:00:00Z"
+                       :processed-story-ids #{}
+                       :modifications [existing-mod]}]
+          (opt/write-state! base-dir initial)
+          (let [result (opt/record-optimization-run!
+                         base-dir "2025-01-20T15:00:00Z" [] [new-mod])]
+            (is (= 2 (count (:modifications result))))
+            (is (= "First" (:change-summary (first (:modifications result)))))
+            (is (= "Second" (:change-summary (second (:modifications result)))))))))
 
     (testing "updates last-run timestamp"
-      (let [base-dir (temp-dir)
-            initial {:last-run "2025-01-19T10:00:00Z"
-                     :processed-story-ids #{}
-                     :modifications []}]
-        (opt/write-state! base-dir initial)
-        (let [result (opt/record-optimization-run!
-                       base-dir "2025-01-20T15:00:00Z" [] [])]
-          (is (= "2025-01-20T15:00:00Z" (:last-run result))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [initial {:last-run "2025-01-19T10:00:00Z"
+                       :processed-story-ids #{}
+                       :modifications []}]
+          (opt/write-state! base-dir initial)
+          (let [result (opt/record-optimization-run!
+                         base-dir "2025-01-20T15:00:00Z" [] [])]
+            (is (= "2025-01-20T15:00:00Z" (:last-run result)))))))
 
     (testing "persists changes to file"
-      (let [base-dir (temp-dir)
-            timestamp "2025-01-20T15:00:00Z"
-            story-ids [10]
-            modifications [valid-modification]]
-        (opt/record-optimization-run!
-          base-dir timestamp story-ids modifications)
-        (let [persisted (opt/read-state base-dir)]
-          (is (= timestamp (:last-run persisted)))
-          (is (= #{10} (:processed-story-ids persisted)))
-          (is (= [valid-modification] (:modifications persisted))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [timestamp "2025-01-20T15:00:00Z"
+              story-ids [10]
+              modifications [valid-modification]]
+          (opt/record-optimization-run!
+            base-dir timestamp story-ids modifications)
+          (let [persisted (opt/read-state base-dir)]
+            (is (= timestamp (:last-run persisted)))
+            (is (= #{10} (:processed-story-ids persisted)))
+            (is (= [valid-modification] (:modifications persisted)))))))
 
     (testing "handles empty collections"
-      (let [base-dir (temp-dir)]
+      (with-temp-dir [base-dir]
         (let [result (opt/record-optimization-run!
                        base-dir "2025-01-20T15:00:00Z" [] [])]
           (is (= "2025-01-20T15:00:00Z" (:last-run result)))
           (is (= #{} (:processed-story-ids result)))
-          (is (= [] (:modifications result))))
-        (fs/delete-tree base-dir)))
+          (is (= [] (:modifications result))))))
 
     (testing "throws on invalid modification in input with index info"
-      (let [base-dir (temp-dir)
-            invalid-mod {:bad "data"}]
-        (try
-          (opt/record-optimization-run!
-            base-dir "2025-01-20T15:00:00Z" [] [invalid-mod])
-          (is false "Expected exception not thrown")
-          (catch Exception e
-            (is (= "Invalid modification at index 0" (.getMessage e)))
-            (is (= 0 (:index (ex-data e))))
-            (is (= invalid-mod (:modification (ex-data e))))
-            (is (some? (:explanation (ex-data e))))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [invalid-mod {:bad "data"}]
+          (try
+            (opt/record-optimization-run!
+              base-dir "2025-01-20T15:00:00Z" [] [invalid-mod])
+            (is false "Expected exception not thrown")
+            (catch Exception e
+              (is (= "Invalid modification at index 0" (.getMessage e)))
+              (is (= 0 (:index (ex-data e))))
+              (is (= invalid-mod (:modification (ex-data e))))
+              (is (some? (:explanation (ex-data e)))))))))
 
     (testing "throws on second invalid modification with correct index"
-      (let [base-dir (temp-dir)
-            valid-mod {:timestamp "2025-01-20T15:00:00Z"
-                       :prompt-path "a.md"
-                       :change-summary "Valid"}
-            invalid-mod {:missing "required-keys"}]
-        (try
-          (opt/record-optimization-run!
-            base-dir "2025-01-20T15:00:00Z" [] [valid-mod invalid-mod])
-          (is false "Expected exception not thrown")
-          (catch Exception e
-            (is (= "Invalid modification at index 1" (.getMessage e)))
-            (is (= 1 (:index (ex-data e))))
-            (is (= invalid-mod (:modification (ex-data e))))))
-        (fs/delete-tree base-dir)))
+      (with-temp-dir [base-dir]
+        (let [valid-mod {:timestamp "2025-01-20T15:00:00Z"
+                         :prompt-path "a.md"
+                         :change-summary "Valid"}
+              invalid-mod {:missing "required-keys"}]
+          (try
+            (opt/record-optimization-run!
+              base-dir "2025-01-20T15:00:00Z" [] [valid-mod invalid-mod])
+            (is false "Expected exception not thrown")
+            (catch Exception e
+              (is (= "Invalid modification at index 1" (.getMessage e)))
+              (is (= 1 (:index (ex-data e))))
+              (is (= invalid-mod (:modification (ex-data e)))))))))
 
     (testing "returns updated state"
-      (let [base-dir (temp-dir)
-            result (opt/record-optimization-run!
-                     base-dir "2025-01-20T15:00:00Z" [10 11] [valid-modification])]
-        (is (opt/valid-optimisation-state? result))
-        (fs/delete-tree base-dir)))))
+      (with-temp-dir [base-dir]
+        (let [result (opt/record-optimization-run!
+                       base-dir "2025-01-20T15:00:00Z" [10 11] [valid-modification])]
+          (is (opt/valid-optimisation-state? result)))))))
