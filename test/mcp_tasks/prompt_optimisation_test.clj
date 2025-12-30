@@ -408,3 +408,260 @@
           (is (= 1 (count result)))
           (is (= 10 (:id (first result)))))
         (fs/delete-tree base-dir)))))
+
+;; Session Event Analysis Tests
+
+(def compaction-event
+  {:timestamp "2025-01-15T10:00:00Z"
+   :event-type :compaction
+   :trigger "auto"})
+
+(def manual-compaction-event
+  {:timestamp "2025-01-15T10:05:00Z"
+   :event-type :compaction
+   :trigger "manual"})
+
+(def user-prompt-event
+  {:timestamp "2025-01-15T10:01:00Z"
+   :event-type :user-prompt
+   :content "Add the tests"})
+
+(def correction-event
+  {:timestamp "2025-01-15T10:02:00Z"
+   :event-type :user-prompt
+   :content "No, I meant the unit tests"})
+
+(def session-start-event
+  {:timestamp "2025-01-15T09:00:00Z"
+   :event-type :session-start
+   :trigger "startup"
+   :session-id "sess-001"})
+
+(def session-restart-event
+  {:timestamp "2025-01-15T11:00:00Z"
+   :event-type :session-start
+   :trigger "resume"
+   :session-id "sess-002"})
+
+(defn make-story-with-events
+  "Create a story with specific session events for testing."
+  [id events]
+  {:id id
+   :status :closed
+   :type :story
+   :title (str "Test Story " id)
+   :description "Test story desc"
+   :design ""
+   :category "medium"
+   :meta {}
+   :relations []
+   :session-events events})
+
+(deftest analyze-story-events-test
+  ;; Tests analyze-story-events function which extracts and categorizes
+  ;; issues from a single story's session events.
+  (testing "analyze-story-events"
+    (testing "returns nil for story with no issues"
+      (let [story (make-story-with-events 1 [user-prompt-event])]
+        (is (nil? (opt/analyze-story-events story)))))
+
+    (testing "returns nil for story with empty events"
+      (let [story (make-story-with-events 1 [])]
+        (is (nil? (opt/analyze-story-events story)))))
+
+    (testing "returns nil for story with no events key"
+      (let [story (dissoc (make-story-with-events 1 []) :session-events)]
+        (is (nil? (opt/analyze-story-events story)))))
+
+    (testing "extracts compaction events"
+      (let [story (make-story-with-events 1 [compaction-event
+                                             manual-compaction-event])
+            result (opt/analyze-story-events story)]
+        (is (some? result))
+        (is (= 1 (:story-id result)))
+        (is (= "Test Story 1" (:story-title result)))
+        (is (= "medium" (:category result)))
+        (is (= 2 (count (:compactions result))))
+        (is (= "auto" (:trigger (first (:compactions result)))))
+        (is (= "manual" (:trigger (second (:compactions result)))))))
+
+    (testing "extracts correction events"
+      (let [story (make-story-with-events 1 [correction-event])
+            result (opt/analyze-story-events story)]
+        (is (some? result))
+        (is (= 1 (count (:corrections result))))
+        (is (= "No, I meant the unit tests"
+               (:content (first (:corrections result)))))
+        (is (seq (:matched-patterns (first (:corrections result)))))))
+
+    (testing "extracts restart events (skipping first session-start)"
+      (let [story (make-story-with-events 1 [session-start-event
+                                             user-prompt-event
+                                             session-restart-event])
+            result (opt/analyze-story-events story)]
+        (is (some? result))
+        (is (= 1 (count (:restarts result))))
+        (is (= "resume" (:trigger (first (:restarts result)))))
+        (is (= "sess-002" (:session-id (first (:restarts result)))))))
+
+    (testing "only first session-start is ignored"
+      (let [story (make-story-with-events 1 [session-start-event])
+            result (opt/analyze-story-events story)]
+        (is (nil? result))))
+
+    (testing "handles story with all issue types"
+      (let [story (make-story-with-events 1 [session-start-event
+                                             compaction-event
+                                             correction-event
+                                             session-restart-event])
+            result (opt/analyze-story-events story)]
+        (is (some? result))
+        (is (= 1 (count (:compactions result))))
+        (is (= 1 (count (:corrections result))))
+        (is (= 1 (count (:restarts result))))))))
+
+(deftest correction-pattern-detection-test
+  ;; Tests correction pattern matching for various phrases users might
+  ;; use when correcting or clarifying instructions.
+  (testing "correction pattern detection"
+    (testing "detects 'no' at start of prompt"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "No, not that file"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'wait' at start of prompt"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "Wait, let me explain"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'actually' at start of prompt"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "Actually, use the other approach"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'that's wrong'"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "That's wrong, fix it"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'I meant'"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "I meant the other function"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'fix this'"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "Please fix this"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'wrong file'"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "That's the wrong file"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "detects 'should be'"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "It should be in src/"}])
+            result (opt/analyze-story-events story)]
+        (is (= 1 (count (:corrections result))))))
+
+    (testing "does not match normal prompts"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "Add the authentication module"}])
+            result (opt/analyze-story-events story)]
+        (is (nil? result))))
+
+    (testing "does not match 'fix' in other contexts"
+      (let [story (make-story-with-events 1
+                                          [{:timestamp "t" :event-type :user-prompt
+                                            :content "Add a prefix to the output"}])
+            result (opt/analyze-story-events story)]
+        (is (nil? result))))))
+
+(deftest analyze-session-events-test
+  ;; Tests analyze-session-events function which aggregates findings
+  ;; from multiple stories into categorized results.
+  (testing "analyze-session-events"
+    (testing "returns empty results for empty input"
+      (let [result (opt/analyze-session-events [])]
+        (is (= {:compactions []
+                :corrections []
+                :restarts []
+                :story-count 0
+                :event-count 0}
+               result))))
+
+    (testing "returns empty findings for stories with no issues"
+      (let [stories [(make-story-with-events 1 [user-prompt-event])
+                     (make-story-with-events 2 [session-start-event])]
+            result (opt/analyze-session-events stories)]
+        (is (= [] (:compactions result)))
+        (is (= [] (:corrections result)))
+        (is (= [] (:restarts result)))
+        (is (= 2 (:story-count result)))
+        (is (= 2 (:event-count result)))))
+
+    (testing "categorizes compaction findings"
+      (let [stories [(make-story-with-events 1 [compaction-event])]
+            result (opt/analyze-session-events stories)]
+        (is (= 1 (count (:compactions result))))
+        (is (= :compaction (:finding-type (first (:compactions result)))))
+        (is (= 1 (:story-id (first (:compactions result)))))
+        (is (= "medium" (:category (first (:compactions result)))))))
+
+    (testing "categorizes correction findings"
+      (let [stories [(make-story-with-events 1 [correction-event])]
+            result (opt/analyze-session-events stories)]
+        (is (= 1 (count (:corrections result))))
+        (is (= :correction (:finding-type (first (:corrections result)))))))
+
+    (testing "categorizes restart findings"
+      (let [stories [(make-story-with-events 1 [session-start-event
+                                                session-restart-event])]
+            result (opt/analyze-session-events stories)]
+        (is (= 1 (count (:restarts result))))
+        (is (= :restart (:finding-type (first (:restarts result)))))))
+
+    (testing "aggregates findings from multiple stories"
+      (let [stories [(make-story-with-events 1 [compaction-event])
+                     (make-story-with-events 2 [correction-event])
+                     (make-story-with-events 3 [session-start-event
+                                                session-restart-event])]
+            result (opt/analyze-session-events stories)]
+        (is (= 1 (count (:compactions result))))
+        (is (= 1 (count (:corrections result))))
+        (is (= 1 (count (:restarts result))))
+        (is (= 3 (:story-count result)))
+        (is (= 4 (:event-count result)))))
+
+    (testing "multiple findings per category from different stories"
+      (let [stories [(make-story-with-events 1 [compaction-event])
+                     (make-story-with-events 2 [manual-compaction-event])]
+            result (opt/analyze-session-events stories)]
+        (is (= 2 (count (:compactions result))))
+        (is (= #{1 2} (set (map :story-id (:compactions result)))))))
+
+    (testing "includes story metadata in findings"
+      (let [story (assoc (make-story-with-events 1 [compaction-event])
+                         :title "Auth Feature"
+                         :category "large")
+            result (opt/analyze-session-events [story])
+            finding (first (:compactions result))]
+        (is (= "Auth Feature" (:story-title finding)))
+        (is (= "large" (:category finding)))))))
