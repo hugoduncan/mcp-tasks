@@ -1,6 +1,7 @@
 (ns mcp-tasks.prompt-optimisation-test
   (:require
     [babashka.fs :as fs]
+    [clojure.string :as str]
     [clojure.test :refer [deftest testing is]]
     [mcp-tasks.prompt-optimisation :as opt]
     [mcp-tasks.tasks-file :as tasks-file]))
@@ -665,3 +666,190 @@
             finding (first (:compactions result))]
         (is (= "Auth Feature" (:story-title finding)))
         (is (= "large" (:category finding)))))))
+
+;; Findings Presentation Tests
+
+(def sample-compaction-finding
+  {:finding-type :compaction
+   :story-id 123
+   :story-title "Auth Feature"
+   :category "large"
+   :events [{:timestamp "2025-01-15T10:30:00Z" :trigger "auto"}
+            {:timestamp "2025-01-15T11:00:00Z" :trigger "auto"}]})
+
+(def sample-correction-finding
+  {:finding-type :correction
+   :story-id 456
+   :story-title "User Profile"
+   :category "medium"
+   :events [{:timestamp "2025-01-15T10:00:00Z"
+             :content "No, I meant the unit tests"
+             :matched-patterns ["(?i)^no[,\\s]"]}]})
+
+(def sample-restart-finding
+  {:finding-type :restart
+   :story-id 789
+   :story-title "API Refactor"
+   :category "large"
+   :events [{:timestamp "2025-01-15T12:00:00Z"
+             :trigger "resume"
+             :session-id "sess-002"}]})
+
+(deftest format-compaction-finding-test
+  ;; Tests format-compaction-finding which formats a single compaction
+  ;; finding as markdown with diagnosis and proposed fix.
+  (testing "format-compaction-finding"
+    (testing "formats finding with story info and events"
+      (let [result (opt/format-compaction-finding sample-compaction-finding 1)]
+        (is (string? result))
+        (is (str/includes? result "**1."))
+        (is (str/includes? result "Story #123"))
+        (is (str/includes? result "Auth Feature"))
+        (is (str/includes? result "category: large"))))
+
+    (testing "includes event count and timestamps"
+      (let [result (opt/format-compaction-finding sample-compaction-finding 1)]
+        (is (str/includes? result "2 compaction(s)"))
+        (is (str/includes? result "10:30"))
+        (is (str/includes? result "11:00"))))
+
+    (testing "includes diagnosis for multiple auto-compactions"
+      (let [result (opt/format-compaction-finding sample-compaction-finding 1)]
+        (is (str/includes? result "Diagnosis:"))
+        (is (str/includes? result "Multiple auto-compactions"))))
+
+    (testing "includes proposed fix referencing category"
+      (let [result (opt/format-compaction-finding sample-compaction-finding 1)]
+        (is (str/includes? result "Proposed fix:"))
+        (is (str/includes? result "category-prompts/large.md"))))
+
+    (testing "uses correct index number"
+      (let [result (opt/format-compaction-finding sample-compaction-finding 5)]
+        (is (str/includes? result "**5."))))))
+
+(deftest format-correction-finding-test
+  ;; Tests format-correction-finding which formats a single correction
+  ;; finding as markdown with sample content and proposed fix.
+  (testing "format-correction-finding"
+    (testing "formats finding with story info"
+      (let [result (opt/format-correction-finding sample-correction-finding 1)]
+        (is (string? result))
+        (is (str/includes? result "Story #456"))
+        (is (str/includes? result "User Profile"))
+        (is (str/includes? result "category: medium"))))
+
+    (testing "includes sample content"
+      (let [result (opt/format-correction-finding sample-correction-finding 1)]
+        (is (str/includes? result "Sample:"))
+        (is (str/includes? result "unit tests"))))
+
+    (testing "truncates long content"
+      (let [long-finding (assoc-in sample-correction-finding
+                                   [:events 0 :content]
+                                   (apply str (repeat 100 "x")))
+            result (opt/format-correction-finding long-finding 1)]
+        (is (str/includes? result "..."))
+        (is (< (count (re-find #"Sample: \"[^\"]+\"" result)) 80))))
+
+    (testing "includes diagnosis and proposed fix"
+      (let [result (opt/format-correction-finding sample-correction-finding 1)]
+        (is (str/includes? result "Diagnosis:"))
+        (is (str/includes? result "Proposed fix:"))
+        (is (str/includes? result "category-prompts/medium.md"))))))
+
+(deftest format-restart-finding-test
+  ;; Tests format-restart-finding which formats a single restart
+  ;; finding as markdown with restart count and diagnosis.
+  (testing "format-restart-finding"
+    (testing "formats finding with story info"
+      (let [result (opt/format-restart-finding sample-restart-finding 1)]
+        (is (string? result))
+        (is (str/includes? result "Story #789"))
+        (is (str/includes? result "API Refactor"))
+        (is (str/includes? result "category: large"))))
+
+    (testing "includes restart count and triggers"
+      (let [result (opt/format-restart-finding sample-restart-finding 1)]
+        (is (str/includes? result "Restarts: 1"))
+        (is (str/includes? result "resume"))))
+
+    (testing "includes diagnosis and proposed fix"
+      (let [result (opt/format-restart-finding sample-restart-finding 1)]
+        (is (str/includes? result "Diagnosis:"))
+        (is (str/includes? result "Proposed fix:"))))))
+
+(deftest format-findings-test
+  ;; Tests format-findings which formats all findings grouped by type
+  ;; as markdown for user presentation.
+  (testing "format-findings"
+    (testing "returns no-findings message for empty results"
+      (let [empty-result {:compactions []
+                          :corrections []
+                          :restarts []
+                          :story-count 5
+                          :event-count 42}
+            result (opt/format-findings empty-result)]
+        (is (str/includes? result "No issues found"))
+        (is (str/includes? result "5 stories"))
+        (is (str/includes? result "42 events"))))
+
+    (testing "includes summary with counts"
+      (let [analysis {:compactions [sample-compaction-finding]
+                      :corrections [sample-correction-finding]
+                      :restarts [sample-restart-finding]
+                      :story-count 3
+                      :event-count 10}
+            result (opt/format-findings analysis)]
+        (is (str/includes? result "## Prompt Optimization Findings"))
+        (is (str/includes? result "3 stories"))
+        (is (str/includes? result "10 events"))
+        (is (str/includes? result "1 compaction(s)"))
+        (is (str/includes? result "1 correction(s)"))
+        (is (str/includes? result "1 restart(s)"))))
+
+    (testing "groups findings by type with section headers"
+      (let [analysis {:compactions [sample-compaction-finding]
+                      :corrections [sample-correction-finding]
+                      :restarts [sample-restart-finding]
+                      :story-count 3
+                      :event-count 10}
+            result (opt/format-findings analysis)]
+        (is (str/includes? result "### Compactions (1)"))
+        (is (str/includes? result "### Corrections (1)"))
+        (is (str/includes? result "### Restarts (1)"))))
+
+    (testing "numbers findings sequentially across sections"
+      (let [analysis {:compactions [sample-compaction-finding]
+                      :corrections [sample-correction-finding]
+                      :restarts [sample-restart-finding]
+                      :story-count 3
+                      :event-count 10}
+            result (opt/format-findings analysis)]
+        (is (str/includes? result "**1. Story #123"))
+        (is (str/includes? result "**2. Story #456"))
+        (is (str/includes? result "**3. Story #789"))))
+
+    (testing "omits empty sections"
+      (let [analysis {:compactions [sample-compaction-finding]
+                      :corrections []
+                      :restarts []
+                      :story-count 1
+                      :event-count 2}
+            result (opt/format-findings analysis)]
+        (is (str/includes? result "### Compactions"))
+        (is (not (str/includes? result "### Corrections")))
+        (is (not (str/includes? result "### Restarts")))))
+
+    (testing "handles multiple findings per category"
+      (let [compaction2 (assoc sample-compaction-finding
+                               :story-id 124
+                               :story-title "Other Feature")
+            analysis {:compactions [sample-compaction-finding compaction2]
+                      :corrections []
+                      :restarts []
+                      :story-count 2
+                      :event-count 4}
+            result (opt/format-findings analysis)]
+        (is (str/includes? result "### Compactions (2)"))
+        (is (str/includes? result "**1. Story #123"))
+        (is (str/includes? result "**2. Story #124"))))))

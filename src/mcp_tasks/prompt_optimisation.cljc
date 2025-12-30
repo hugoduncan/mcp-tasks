@@ -12,6 +12,7 @@
     [babashka.fs :as fs]
     [borkdude.dynaload :refer [dynaload]]
     [clojure.edn :as edn]
+    [clojure.string :as str]
     [mcp-tasks.tasks-file :as tasks-file]))
 
 ;; Schema Definitions
@@ -395,3 +396,193 @@
      :restarts restart-findings
      :story-count (count stories)
      :event-count total-events}))
+
+;; Findings Presentation
+
+(defn- format-timestamp-list
+  "Format a list of timestamps for display.
+  Returns comma-separated short time strings."
+  [events]
+  (->> events
+       (map :timestamp)
+       (map #(if (and (string? %) (> (count %) 11))
+               (subs % 11 16)  ; Extract HH:MM from ISO timestamp
+               %))
+       (str/join ", ")))
+
+(defn- format-compaction-diagnosis
+  "Generate diagnosis text for compaction events."
+  [events]
+  (let [auto-count (count (filter #(= "auto" (:trigger %)) events))
+        manual-count (count (filter #(= "manual" (:trigger %)) events))]
+    (cond
+      (> auto-count 1)
+      "Multiple auto-compactions suggest context exceeded limits repeatedly"
+
+      (and (pos? auto-count) (pos? manual-count))
+      "Mix of auto and manual compactions indicates context pressure"
+
+      (pos? auto-count)
+      "Auto-compaction indicates context limit reached"
+
+      :else
+      "Manual compaction may indicate user perceived context issues")))
+
+(defn- format-compaction-fix
+  "Generate proposed fix for compaction finding."
+  [category]
+  (format "Consider: (a) simplify category-prompts/%s.md, (b) break tasks into smaller pieces, (c) improve task specifications"
+          category))
+
+(defn format-compaction-finding
+  "Format a single compaction finding as markdown.
+
+  Parameters:
+  - finding: CompactionFinding map
+  - index: 1-based index for numbering
+
+  Returns markdown string for this finding."
+  [finding index]
+  (let [{:keys [story-id story-title category events]} finding
+        event-summary (str (count events) " compaction(s) at "
+                           (format-timestamp-list events))
+        triggers (->> events (map :trigger) distinct (clojure.string/join ", "))]
+    (format (str "**%d. Story #%d \"%s\" (category: %s)**\n"
+                 "- Events: %s (triggers: %s)\n"
+                 "- Diagnosis: %s\n"
+                 "- Proposed fix: %s\n")
+            index story-id story-title category
+            event-summary triggers
+            (format-compaction-diagnosis events)
+            (format-compaction-fix category))))
+
+(defn- format-correction-diagnosis
+  "Generate diagnosis text for correction events."
+  [events]
+  (let [pattern-count (->> events (mapcat :matched-patterns) distinct count)]
+    (if (> (count events) 1)
+      (format "Multiple corrections (%d) detected, suggesting unclear or ambiguous instructions"
+              (count events))
+      (format "User correction detected (matched %d pattern%s)"
+              pattern-count (if (> pattern-count 1) "s" "")))))
+
+(defn- format-correction-fix
+  "Generate proposed fix for correction finding."
+  [category]
+  (format "Review category-prompts/%s.md for ambiguous language; add explicit examples or constraints"
+          category))
+
+(defn format-correction-finding
+  "Format a single correction finding as markdown.
+
+  Parameters:
+  - finding: CorrectionFinding map
+  - index: 1-based index for numbering
+
+  Returns markdown string for this finding."
+  [finding index]
+  (let [{:keys [story-id story-title category events]} finding
+        sample-content (-> events first :content)
+        truncated (if (> (count sample-content) 60)
+                    (str (subs sample-content 0 57) "...")
+                    sample-content)]
+    (format (str "**%d. Story #%d \"%s\" (category: %s)**\n"
+                 "- Sample: \"%s\"\n"
+                 "- Diagnosis: %s\n"
+                 "- Proposed fix: %s\n")
+            index story-id story-title category
+            truncated
+            (format-correction-diagnosis events)
+            (format-correction-fix category))))
+
+(defn- format-restart-diagnosis
+  "Generate diagnosis text for restart events."
+  [events]
+  (let [triggers (->> events (map :trigger) frequencies)]
+    (cond
+      (get triggers "resume")
+      "Session resumed, possibly after interruption or context issues"
+
+      (get triggers "clear")
+      "Context was cleared, indicating workflow reset"
+
+      (get triggers "compact")
+      "Session restarted after compaction"
+
+      :else
+      (format "Session restarted %d time(s)" (count events)))))
+
+(defn- format-restart-fix
+  "Generate proposed fix for restart finding."
+  [_category]
+  "Investigate why restarts occurred; may indicate task too large or unclear workflow")
+
+(defn format-restart-finding
+  "Format a single restart finding as markdown.
+
+  Parameters:
+  - finding: RestartFinding map
+  - index: 1-based index for numbering
+
+  Returns markdown string for this finding."
+  [finding index]
+  (let [{:keys [story-id story-title category events]} finding
+        triggers (->> events (map :trigger) (clojure.string/join ", "))]
+    (format (str "**%d. Story #%d \"%s\" (category: %s)**\n"
+                 "- Restarts: %d (triggers: %s)\n"
+                 "- Diagnosis: %s\n"
+                 "- Proposed fix: %s\n")
+            index story-id story-title category
+            (count events) triggers
+            (format-restart-diagnosis events)
+            (format-restart-fix category))))
+
+(defn- format-findings-section
+  "Format a section of findings with header.
+
+  Parameters:
+  - title: Section title (e.g., \"Compactions\")
+  - findings: Vector of findings
+  - format-fn: Function to format each finding (takes finding and index)
+  - start-index: Starting index for numbering
+
+  Returns [markdown-string next-index]."
+  [title findings format-fn start-index]
+  (if (empty? findings)
+    ["" start-index]
+    (let [header (format "### %s (%d)\n\n" title (count findings))
+          formatted (->> findings
+                         (map-indexed (fn [i f]
+                                        (format-fn f (+ start-index i 1))))
+                         (str/join "\n"))]
+      [(str header formatted) (+ start-index (count findings))])))
+
+(defn format-findings
+  "Format all findings as markdown for presentation.
+
+  Takes an AnalysisResult map and returns a markdown string suitable
+  for display to the user. Findings are grouped by type and numbered
+  sequentially for interactive selection.
+
+  Parameters:
+  - analysis: AnalysisResult map from analyze-session-events
+
+  Returns markdown string with all findings, or a message if no findings."
+  [analysis]
+  (let [{:keys [compactions corrections restarts story-count event-count]} analysis
+        total-findings (+ (count compactions) (count corrections) (count restarts))]
+    (if (zero? total-findings)
+      (format "## Prompt Optimization Findings\n\nAnalyzed %d stories with %d events. No issues found.\n"
+              story-count event-count)
+      (let [summary (format (str "## Prompt Optimization Findings\n\n"
+                                 "Analyzed %d stories with %d events. "
+                                 "Found %d compaction(s), %d correction(s), %d restart(s).\n\n")
+                            story-count event-count
+                            (count compactions) (count corrections) (count restarts))
+            [compaction-md idx1] (format-findings-section "Compactions" compactions
+                                                          format-compaction-finding 0)
+            [correction-md idx2] (format-findings-section "Corrections" corrections
+                                                          format-correction-finding idx1)
+            [restart-md _] (format-findings-section "Restarts" restarts
+                                                    format-restart-finding idx2)]
+        (str summary compaction-md correction-md restart-md)))))
