@@ -574,6 +574,18 @@
 
 ;; State Update
 
+(defn- validate-modifications!
+  "Validate each modification individually.
+
+  Throws ex-info with specific error for the first invalid modification."
+  [modifications]
+  (doseq [[idx modification] (map-indexed vector modifications)]
+    (when-not (valid-modification? modification)
+      (throw (ex-info (format "Invalid modification at index %d" idx)
+                      {:index idx
+                       :modification modification
+                       :explanation (explain-modification modification)})))))
+
 (defn record-optimization-run!
   "Record the results of an optimization run to the state file.
 
@@ -589,8 +601,9 @@
   - modifications: Vector of Modification maps to append
 
   Returns the updated state map.
-  Throws ex-info if state validation fails."
+  Throws ex-info if any modification is invalid or state validation fails."
   [config-dir timestamp story-ids modifications]
+  (validate-modifications! modifications)
   (let [current-state (or (read-state config-dir) initial-state)
         updated-state (-> current-state
                           (assoc :last-run timestamp)

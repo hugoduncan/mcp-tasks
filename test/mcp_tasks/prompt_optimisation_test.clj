@@ -935,12 +935,34 @@
           (is (= [] (:modifications result))))
         (fs/delete-tree base-dir)))
 
-    (testing "throws on invalid modification in input"
+    (testing "throws on invalid modification in input with index info"
       (let [base-dir (temp-dir)
             invalid-mod {:bad "data"}]
-        (is (thrown? Exception
-              (opt/record-optimization-run!
-                base-dir "2025-01-20T15:00:00Z" [] [invalid-mod])))
+        (try
+          (opt/record-optimization-run!
+            base-dir "2025-01-20T15:00:00Z" [] [invalid-mod])
+          (is false "Expected exception not thrown")
+          (catch Exception e
+            (is (= "Invalid modification at index 0" (.getMessage e)))
+            (is (= 0 (:index (ex-data e))))
+            (is (= invalid-mod (:modification (ex-data e))))
+            (is (some? (:explanation (ex-data e))))))
+        (fs/delete-tree base-dir)))
+
+    (testing "throws on second invalid modification with correct index"
+      (let [base-dir (temp-dir)
+            valid-mod {:timestamp "2025-01-20T15:00:00Z"
+                       :prompt-path "a.md"
+                       :change-summary "Valid"}
+            invalid-mod {:missing "required-keys"}]
+        (try
+          (opt/record-optimization-run!
+            base-dir "2025-01-20T15:00:00Z" [] [valid-mod invalid-mod])
+          (is false "Expected exception not thrown")
+          (catch Exception e
+            (is (= "Invalid modification at index 1" (.getMessage e)))
+            (is (= 1 (:index (ex-data e))))
+            (is (= invalid-mod (:modification (ex-data e))))))
         (fs/delete-tree base-dir)))
 
     (testing "returns updated state"
