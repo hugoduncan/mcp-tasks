@@ -65,14 +65,20 @@
 ;; dynaload defers namespace loading until first call, with fallbacks for
 ;; environments without Malli (e.g., standalone uberscript).
 
-(def ^:private malli-validator
+(def malli-validator
   "Lazy reference to malli.core/validator.
-  Falls back to a function returning always-true validator when Malli unavailable."
+  Falls back to a function returning always-true validator when Malli unavailable.
+
+  Can be used directly to create validators for schemas:
+  (def my-validator (malli-validator MySchema))"
   (dynaload 'malli.core/validator {:default (constantly (fn [_] true))}))
 
-(def ^:private malli-explainer
+(def malli-explainer
   "Lazy reference to malli.core/explainer.
-  Falls back to a function returning always-nil explainer when Malli unavailable."
+  Falls back to a function returning always-nil explainer when Malli unavailable.
+
+  Can be used directly to create explainers for schemas:
+  (def my-explainer (malli-explainer MySchema))"
   (dynaload 'malli.core/explainer {:default (constantly (fn [_] nil))}))
 
 ;; Compiled validators

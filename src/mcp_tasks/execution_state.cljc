@@ -1,14 +1,9 @@
 (ns mcp-tasks.execution-state
-  "Management of current execution state for stories and tasks.
-
-  Uses lazy-loading via dynaload and compiled validators to avoid loading
-  Malli at namespace load time. When AOT-compiled with
-  -Dborkdude.dynaload.aot=true, dynaload enables direct linking for reduced
-  binary size."
+  "Management of current execution state for stories and tasks."
   (:require
     [babashka.fs :as fs]
-    [borkdude.dynaload :refer [dynaload]]
-    [clojure.edn :as edn]))
+    [clojure.edn :as edn]
+    [mcp-tasks.schema :as schema]))
 
 ;; Schema
 
@@ -38,23 +33,13 @@
 
 ;; Validation
 
-(def ^:private malli-validator
-  "Lazy reference to malli.core/validator.
-  Falls back to a function returning always-true validator when Malli unavailable."
-  (dynaload 'malli.core/validator {:default (constantly (fn [_] true))}))
-
-(def ^:private malli-explainer
-  "Lazy reference to malli.core/explainer.
-  Falls back to a function returning always-nil explainer when Malli unavailable."
-  (dynaload 'malli.core/explainer {:default (constantly (fn [_] nil))}))
-
 (def execution-state-validator
   "Compiled validator for ExecutionState schema."
-  (malli-validator ExecutionState))
+  (schema/malli-validator ExecutionState))
 
 (def execution-state-explainer
   "Compiled explainer for ExecutionState schema."
-  (malli-explainer ExecutionState))
+  (schema/malli-explainer ExecutionState))
 
 (defn valid-execution-state?
   "Validate an execution state map against the ExecutionState schema."

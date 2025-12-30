@@ -2,17 +2,12 @@
   "Management of prompt optimisation state.
 
   Tracks which stories have been analyzed for prompt improvement opportunities
-  and records modifications made to prompts.
-
-  Uses lazy-loading via dynaload and compiled validators to avoid loading
-  Malli at namespace load time. When AOT-compiled with
-  -Dborkdude.dynaload.aot=true, dynaload enables direct linking for reduced
-  binary size."
+  and records modifications made to prompts."
   (:require
     [babashka.fs :as fs]
-    [borkdude.dynaload :refer [dynaload]]
     [clojure.edn :as edn]
     [clojure.string :as str]
+    [mcp-tasks.schema :as schema]
     [mcp-tasks.tasks-file :as tasks-file]))
 
 ;; Schema Definitions
@@ -40,31 +35,21 @@
 
 ;; Validation
 
-(def ^:private malli-validator
-  "Lazy reference to malli.core/validator.
-  Falls back to a function returning always-true validator when Malli unavailable."
-  (dynaload 'malli.core/validator {:default (constantly (fn [_] true))}))
-
-(def ^:private malli-explainer
-  "Lazy reference to malli.core/explainer.
-  Falls back to a function returning always-nil explainer when Malli unavailable."
-  (dynaload 'malli.core/explainer {:default (constantly (fn [_] nil))}))
-
 (def modification-validator
   "Compiled validator for Modification schema."
-  (malli-validator Modification))
+  (schema/malli-validator Modification))
 
 (def optimisation-state-validator
   "Compiled validator for OptimisationState schema."
-  (malli-validator OptimisationState))
+  (schema/malli-validator OptimisationState))
 
 (def modification-explainer
   "Compiled explainer for Modification schema."
-  (malli-explainer Modification))
+  (schema/malli-explainer Modification))
 
 (def optimisation-state-explainer
   "Compiled explainer for OptimisationState schema."
-  (malli-explainer OptimisationState))
+  (schema/malli-explainer OptimisationState))
 
 (defn valid-modification?
   "Validate a modification map against the Modification schema."
