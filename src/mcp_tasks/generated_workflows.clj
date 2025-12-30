@@ -6,7 +6,7 @@
 
 (def builtin-workflows
   "Vector of built-in workflow prompt names (without .md extension)."
-  ["complete-story" "create-story-pr" "create-story-tasks" "execute-story-child" "execute-task" "refine-task" "review-story-implementation"])
+  ["complete-story" "create-story-pr" "create-story-tasks" "execute-story-child" "execute-task" "optimize-prompts" "refine-task" "review-story-implementation"])
 
 (def builtin-categories
   "Set of built-in category prompt names (without .md extension)."
