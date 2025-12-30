@@ -940,3 +940,123 @@
         (let [result (opt/record-optimization-run!
                        base-dir "2025-01-20T15:00:00Z" [10 11] [valid-modification])]
           (is (opt/valid-optimisation-state? result)))))))
+
+;; 50KB Session Events Boundary Tests
+
+(deftest session-events-size-boundary-test
+  ;; Tests that analysis functions handle session-events at the 50KB boundary.
+  ;; The 50KB limit is enforced by update_task, not prompt_optimisation.
+  ;; These tests verify analysis works correctly at boundary sizes.
+  (testing "session-events analysis at size boundaries"
+    (testing "handles events just under 50KB limit"
+      ;; Create events totaling ~49KB (under 50KB = 51200 bytes)
+      (let [;; Each event is about 100 bytes when serialized
+            event-count 490
+            events (mapv (fn [i]
+                           {:timestamp (format "2025-01-15T10:%02d:00Z" (mod i 60))
+                            :event-type :user-prompt
+                            :content (str "Test prompt " i " content")})
+                         (range event-count))
+            story (make-story-with-events 1 events)
+            result (opt/analyze-story-events story)]
+        ;; Should process all events without issues
+        (is (nil? result) "No corrections expected in normal prompts")
+        ;; Verify we processed all events by checking a mixed scenario
+        (let [events-with-correction (conj events correction-event)
+              story2 (make-story-with-events 2 events-with-correction)
+              result2 (opt/analyze-story-events story2)]
+          (is (= 1 (count (:corrections result2)))))))
+
+    (testing "handles events at exact 50KB limit"
+      ;; Create events totaling exactly ~50KB (51200 bytes)
+      (let [;; Create events that together are right at the limit
+            event-count 500
+            events (mapv (fn [i]
+                           {:timestamp (format "2025-01-15T10:%02d:00Z" (mod i 60))
+                            :event-type :user-prompt
+                            :content (str "Test content number " i " with more padding text here")})
+                         (range event-count))
+            story (make-story-with-events 1 events)
+            result (opt/analyze-story-events story)]
+        ;; Should process successfully
+        (is (nil? result) "No issues in normal prompts")))
+
+    (testing "handles events exceeding 50KB for analysis"
+      ;; In practice, update_task prevents >50KB from being stored
+      ;; But analysis should still work if data exists
+      (let [;; Create events totaling ~60KB (over limit)
+            event-count 600
+            events (mapv (fn [i]
+                           {:timestamp (format "2025-01-15T10:%02d:00Z" (mod i 60))
+                            :event-type :user-prompt
+                            :content (str "Extended test content " i " with lots of padding text here for size")})
+                         (range event-count))
+            story (make-story-with-events 1 events)
+            result (opt/analyze-story-events story)]
+        ;; Should still analyze without error
+        (is (nil? result) "No corrections expected")))
+
+    (testing "handles many small compaction events near limit"
+      ;; Test compaction detection with many events
+      (let [event-count 400
+            compaction-events (mapv (fn [i]
+                                      {:timestamp (format "2025-01-15T%02d:00:00Z" (mod i 24))
+                                       :event-type :compaction
+                                       :trigger (if (even? i) "auto" "manual")})
+                                    (range event-count))
+            story (make-story-with-events 1 compaction-events)
+            result (opt/analyze-story-events story)]
+        (is (some? result))
+        (is (= event-count (count (:compactions result))))))
+
+    (testing "handles many session-start events near limit"
+      ;; Test restart detection with many events
+      (let [event-count 400
+            session-events (mapv (fn [i]
+                                   {:timestamp (format "2025-01-15T%02d:00:00Z" (mod i 24))
+                                    :event-type :session-start
+                                    :trigger (if (even? i) "resume" "clear")
+                                    :session-id (str "sess-" i)})
+                                 (range event-count))
+            story (make-story-with-events 1 session-events)
+            result (opt/analyze-story-events story)]
+        ;; First session-start is not counted as restart
+        (is (some? result))
+        (is (= (dec event-count) (count (:restarts result))))))))
+
+(deftest analyze-session-events-large-scale-test
+  ;; Tests analyze-session-events with multiple stories containing large event vectors.
+  (testing "analyze-session-events with large event vectors"
+    (testing "aggregates findings from multiple stories with many events"
+      (let [;; Create 10 stories, each with 100 events
+            stories (mapv (fn [story-id]
+                            (let [events (into [{:timestamp "2025-01-15T09:00:00Z"
+                                                 :event-type :session-start
+                                                 :trigger "startup"}]
+                                               (for [i (range 99)]
+                                                 {:timestamp (format "2025-01-15T%02d:%02d:00Z"
+                                                                     (+ 10 (quot i 60)) (mod i 60))
+                                                  :event-type (case (mod i 10)
+                                                                0 :compaction
+                                                                1 :session-start
+                                                                :user-prompt)
+                                                  :content (when (= :user-prompt
+                                                                    (case (mod i 10)
+                                                                      0 :compaction
+                                                                      1 :session-start
+                                                                      :user-prompt))
+                                                             (str "Prompt " i))
+                                                  :trigger (case (mod i 10)
+                                                             0 "auto"
+                                                             1 "resume"
+                                                             nil)}))]
+                              (make-story-with-events story-id events)))
+                          (range 1 11))
+            result (opt/analyze-session-events stories)]
+        ;; Verify aggregation works with large data
+        (is (= 10 (:story-count result)))
+        (is (= 1000 (:event-count result)))
+        ;; Each story has ~10 compaction events (i where mod i 10 = 0)
+        (is (pos? (count (:compactions result))))
+        ;; Each story has ~9 restarts (i where mod i 10 = 1, minus first session-start)
+        (is (pos? (count (:restarts result))))))))
