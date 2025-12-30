@@ -2,7 +2,8 @@
   (:require
     [babashka.fs :as fs]
     [clojure.test :refer [deftest testing is]]
-    [mcp-tasks.prompt-optimisation :as opt]))
+    [mcp-tasks.prompt-optimisation :as opt]
+    [mcp-tasks.tasks-file :as tasks-file]))
 
 ;; Test prompt optimisation state management functions including validation,
 ;; reading, writing, and initialization with proper error handling.
@@ -246,3 +247,164 @@
 
     (testing "example-state is valid"
       (is (opt/valid-optimisation-state? opt/example-state)))))
+
+;; Story Collection Tests
+
+(defn make-story
+  "Create a minimal valid story task for testing."
+  [id & {:keys [session-events] :or {session-events []}}]
+  {:id id
+   :status :closed
+   :type :story
+   :title (str "Story " id)
+   :description "Test story"
+   :design ""
+   :category "large"
+   :meta {}
+   :relations []
+   :session-events session-events})
+
+(defn make-task
+  "Create a minimal valid task for testing."
+  [id]
+  {:id id
+   :status :closed
+   :type :task
+   :title (str "Task " id)
+   :description "Test task"
+   :design ""
+   :category "simple"
+   :meta {}
+   :relations []})
+
+(def sample-session-event
+  {:timestamp "2025-01-15T10:00:00Z"
+   :event-type :user-prompt
+   :content "Fix the test"})
+
+(deftest complete-file-path-test
+  (testing "complete-file-path"
+    (testing "returns correct path"
+      (is (= "/project/.mcp-tasks/complete.ednl"
+             (opt/complete-file-path "/project"))))))
+
+(deftest collect-unprocessed-stories-test
+  ;; Tests collect-unprocessed-stories function which filters completed stories
+  ;; for session-event analysis. Verifies filtering by type, session-events
+  ;; presence, and processed-story-ids exclusion.
+  (testing "collect-unprocessed-stories"
+    (testing "returns empty vector for missing file"
+      (let [base-dir (temp-dir)
+            state valid-state-empty]
+        (is (= [] (opt/collect-unprocessed-stories base-dir state)))
+        (fs/delete-tree base-dir)))
+
+    (testing "returns empty vector when file exists but has no stories"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            state valid-state-empty]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [(make-task 1) (make-task 2)])
+        (is (= [] (opt/collect-unprocessed-stories base-dir state)))
+        (fs/delete-tree base-dir)))
+
+    (testing "returns stories with session-events"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            story-with-events (make-story 10 :session-events [sample-session-event])
+            state valid-state-empty]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [story-with-events])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 1 (count result)))
+          (is (= 10 (:id (first result)))))
+        (fs/delete-tree base-dir)))
+
+    (testing "excludes stories without session-events"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            story-no-events (make-story 10)
+            story-with-events (make-story 11 :session-events [sample-session-event])
+            state valid-state-empty]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [story-no-events story-with-events])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 1 (count result)))
+          (is (= 11 (:id (first result)))))
+        (fs/delete-tree base-dir)))
+
+    (testing "excludes stories with empty session-events"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            story-empty-events (make-story 10 :session-events [])
+            story-with-events (make-story 11 :session-events [sample-session-event])
+            state valid-state-empty]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [story-empty-events story-with-events])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 1 (count result)))
+          (is (= 11 (:id (first result)))))
+        (fs/delete-tree base-dir)))
+
+    (testing "excludes already processed stories"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            story-1 (make-story 10 :session-events [sample-session-event])
+            story-2 (make-story 11 :session-events [sample-session-event])
+            state {:last-run nil :processed-story-ids #{10} :modifications []}]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [story-1 story-2])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 1 (count result)))
+          (is (= 11 (:id (first result)))))
+        (fs/delete-tree base-dir)))
+
+    (testing "excludes regular tasks even with session-events"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            ;; Regular tasks shouldn't have session-events, but test the filter
+            task-with-events (assoc (make-task 10)
+                                    :session-events [sample-session-event])
+            story-with-events (make-story 11 :session-events [sample-session-event])
+            state valid-state-empty]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [task-with-events story-with-events])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 1 (count result)))
+          (is (= 11 (:id (first result)))))
+        (fs/delete-tree base-dir)))
+
+    (testing "returns multiple unprocessed stories"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            story-1 (make-story 10 :session-events [sample-session-event])
+            story-2 (make-story 11 :session-events [sample-session-event])
+            story-3 (make-story 12 :session-events [sample-session-event])
+            state valid-state-empty]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path [story-1 story-2 story-3])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 3 (count result)))
+          (is (= #{10 11 12} (set (map :id result)))))
+        (fs/delete-tree base-dir)))
+
+    (testing "mixed scenario with all filter types"
+      (let [base-dir (temp-dir)
+            complete-path (opt/complete-file-path base-dir)
+            ;; Story with events, not processed - should be returned
+            story-unprocessed (make-story 10 :session-events [sample-session-event])
+            ;; Story with events, already processed - should be excluded
+            story-processed (make-story 11 :session-events [sample-session-event])
+            ;; Story without events - should be excluded
+            story-no-events (make-story 12)
+            ;; Regular task - should be excluded
+            task (make-task 13)
+            state {:last-run nil :processed-story-ids #{11} :modifications []}]
+        (fs/create-dirs (fs/parent complete-path))
+        (tasks-file/write-tasks complete-path
+                                [story-unprocessed story-processed
+                                 story-no-events task])
+        (let [result (opt/collect-unprocessed-stories base-dir state)]
+          (is (= 1 (count result)))
+          (is (= 10 (:id (first result)))))
+        (fs/delete-tree base-dir)))))

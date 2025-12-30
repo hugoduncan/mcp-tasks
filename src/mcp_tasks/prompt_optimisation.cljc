@@ -11,7 +11,8 @@
   (:require
     [babashka.fs :as fs]
     [borkdude.dynaload :refer [dynaload]]
-    [clojure.edn :as edn]))
+    [clojure.edn :as edn]
+    [mcp-tasks.tasks-file :as tasks-file]))
 
 ;; Schema Definitions
 
@@ -167,3 +168,34 @@
   {:last-run "2025-01-15T10:30:00Z"
    :processed-story-ids #{100 101 102}
    :modifications [example-modification]})
+
+;; Story Collection
+
+(defn complete-file-path
+  "Returns path to complete.ednl file for the given config directory."
+  [config-dir]
+  (str config-dir "/.mcp-tasks/complete.ednl"))
+
+(defn collect-unprocessed-stories
+  "Collect stories from complete.ednl that need analysis.
+
+  Returns stories that:
+  - Have :type :story
+  - Have non-empty :session-events
+  - Are not in the state's :processed-story-ids
+
+  Parameters:
+  - config-dir: Directory containing .mcp-tasks/
+  - state: OptimisationState map (from read-state or init-state!)
+
+  Returns vector of story task maps ready for analysis.
+  Returns empty vector if no unprocessed stories found."
+  [config-dir state]
+  (let [complete-path (complete-file-path config-dir)
+        processed-ids (:processed-story-ids state #{})
+        all-tasks (tasks-file/read-ednl complete-path)]
+    (->> all-tasks
+         (filter #(= :story (:type %)))
+         (filter #(seq (:session-events %)))
+         (remove #(contains? processed-ids (:id %)))
+         vec)))
