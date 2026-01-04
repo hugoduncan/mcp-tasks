@@ -84,6 +84,37 @@ Each activity can be invoked via slash command or by programmatically accessing 
 - MCP resource: `prompt://complete-story`
 - Implementation: Use slash command OR read resource and follow prompt instructions
 
+### Story Creation Guidelines
+
+**Story creation and task breakdown are separate workflow steps.**
+
+When creating a story via `add-task`:
+- Create ONLY the story record itself
+- Do NOT automatically invoke `create-story-tasks`
+- Wait for explicit user request to break down the story into tasks
+
+This separation ensures the user can:
+1. Review and refine the story before breakdown
+2. Control when task breakdown occurs
+3. Provide additional context or constraints before tasks are created
+
+**Correct workflow:**
+```
+1. User requests story creation
+2. Agent creates story with add-task (type: story)
+3. Agent stops and informs user story is created
+4. User reviews story, optionally requests refinement
+5. User explicitly requests task breakdown
+6. Agent invokes create-story-tasks
+```
+
+**Incorrect workflow (never do this):**
+```
+1. User requests story creation
+2. Agent creates story with add-task
+3. Agent immediately invokes create-story-tasks ← WRONG
+```
+
 ### Story Shared Context
 
 Stories maintain a **shared context** (`:shared-context` field) that
