@@ -16,17 +16,33 @@ Refine the task through an interactive process.
 1. Find task via `select-tasks` (unique). Extract `:id`, `:title`, `:description`, `:design`, `:type`.
 {% endif %}
 
-2. Analyze in project context: review description/design, research patterns/exemplars, examine codebase, identify forgotten aspects, check scope.
+2. **Clarify user intention**: Before analyzing implementation details, confirm the user's purpose. What problem are they solving? What outcome do they want? Ensure the "why" is clear before addressing the "how".
 
-3. Display task (type, title, description, design) and analysis (context findings, affected files, patterns, forgotten aspects, scope concerns).
+3. Analyze in project context: review description/design, research patterns/exemplars, examine codebase, identify forgotten aspects, check scope.
 
-4. Interactive refinement:
+4. Display task (type, title, description, design) and analysis (context findings, affected files, patterns, forgotten aspects, scope concerns).
+
+5. **Identify assumptions**: Systematically check for implicit decisions across categories:
+   - **Technical approach**: Libraries, patterns, architectures not specified
+   - **Scope boundaries**: What's implicitly in/out of scope
+   - **User preferences**: Implementation details, naming, structure
+   - **Requirements**: Inferred but not explicitly stated requirements
+   - **Context**: Assumed codebase knowledge, environment, constraints
+
+6. **Resolve assumptions**: For each assumption found:
+   - State the assumption explicitly
+   - Ask user to confirm or provide direction
+   - Update working copy with explicit decision
+   - Continue until no implicit decisions remain
+
+7. Interactive refinement:
    - Suggest improvements: clarify requirements, remove ambiguity, reduce complexity, add acceptance criteria, describe implementation
    - Get user feedback, update working copy if approved
    - Continue until satisfied
    - Don't expand scope without explicit intent
 
-5. Save:
+8. Save:
+   - Verify all assumptions from step 6 have been resolved with explicit user input
    - Show final task for approval
 {% if cli %}
    - Call `mcp-tasks update --task-id <id> --description "..." --design "..." --meta '{"refined": "true"}'`
