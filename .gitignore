@@ -6,3 +6,4 @@
 /.mcp.json
 /mcp-tasks
 /target/
+.cpcache/
