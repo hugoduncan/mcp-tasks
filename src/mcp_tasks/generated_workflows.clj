@@ -10,4 +10,4 @@
 
 (def builtin-categories
   "Set of built-in category prompt names (without .md extension)."
-  #{"medium" "large" "clarify-task" "simple"})
+  #{"bugfix" "medium" "large" "clarify-task" "simple"})

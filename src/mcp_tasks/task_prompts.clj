@@ -21,3 +21,7 @@
 (def large
   "Execute large tasks with detailed analysis, design, and user interaction"
   (slurp (io/resource "category-prompts/large.md")))
+
+(def bugfix
+  "Fix bugs through systematic debugging workflow"
+  (slurp (io/resource "category-prompts/bugfix.md")))
