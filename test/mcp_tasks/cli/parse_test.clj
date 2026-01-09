@@ -342,7 +342,17 @@
 
     (testing "parses -C alias for --shared-context"
       (is (= {:task-id 42 :shared-context "Important note"}
-             (sut/parse-update ["--task-id" "42" "-C" "Important note"]))))))
+             (sut/parse-update ["--task-id" "42" "-C" "Important note"]))))
+
+    (testing "combines --shared-context with other update options"
+      (is (= {:task-id 42
+              :title "New title"
+              :status :in-progress
+              :shared-context "Progress note"}
+             (sut/parse-update ["--task-id" "42"
+                                "--title" "New title"
+                                "--status" "in-progress"
+                                "--shared-context" "Progress note"]))))))
 
 (deftest parse-delete-test
   (testing "parse-delete"
