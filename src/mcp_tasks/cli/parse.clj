@@ -3,9 +3,9 @@
 
   Uses babashka.cli to parse command-line arguments."
   (:require
-   [babashka.cli :as cli]
-   [cheshire.core :as json]
-   [clojure.string :as str]))
+    [babashka.cli :as cli]
+    [cheshire.core :as json]
+    [clojure.string :as str]))
 
 ;; Help Text
 
@@ -414,12 +414,12 @@ EXAMPLES:
   Returns a set of keywords representing all valid option keys."
   [spec]
   (reduce
-   (fn [acc [k v]]
-     (if-let [alias (:alias v)]
-       (conj acc k alias)
-       (conj acc k)))
-   #{}
-   spec))
+    (fn [acc [k v]]
+      (if-let [alias (:alias v)]
+        (conj acc k alias)
+        (conj acc k)))
+    #{}
+    spec))
 
 ;; Validation Functions
 
@@ -975,17 +975,17 @@ EXAMPLES:
   or the first error encountered."
   [parsed-map field-coercions]
   (reduce
-   (fn [acc [field-key coerce-fn]]
-     (if (:error acc)
-       (reduced acc)
-       (if-let [json-str (get acc field-key)]
-         (let [result (coerce-fn json-str)]
-           (if (:error result)
-             (reduced result)
-             (assoc acc field-key result)))
-         acc)))
-   parsed-map
-   field-coercions))
+    (fn [acc [field-key coerce-fn]]
+      (if (:error acc)
+        (reduced acc)
+        (if-let [json-str (get acc field-key)]
+          (let [result (coerce-fn json-str)]
+            (if (:error result)
+              (reduced result)
+              (assoc acc field-key result)))
+          acc)))
+    parsed-map
+    field-coercions))
 
 (defn parse-update
   "Parse arguments for the update command.

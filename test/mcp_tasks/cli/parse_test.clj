@@ -1,8 +1,8 @@
 (ns mcp-tasks.cli.parse-test
   "Tests for CLI argument parsing."
   (:require
-   [clojure.test :refer [deftest testing is]]
-   [mcp-tasks.cli.parse :as sut]))
+    [clojure.test :refer [deftest testing is]]
+    [mcp-tasks.cli.parse :as sut]))
 
 (deftest coerce-json-map-test
   (testing "coerce-json-map"

@@ -723,6 +723,44 @@
                 story (first tasks)]
             (is (= ["Task 5: First entry" "Task 10: Second entry"] (:shared-context story)))))))))
 
+(deftest update-task-shared-context-empty-string-is-no-op
+  ;; Tests that empty string for shared-context is treated as a no-op
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "empty string for shared-context is a no-op"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :shared-context ["Task 5: Existing entry"]}])
+        ;; Pass empty string for shared-context
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :title "new title" :shared-context ""})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                story (first tasks)]
+            ;; Title should be updated, but shared-context unchanged
+            (is (= "new title" (:title story)))
+            (is (= ["Task 5: Existing entry"] (:shared-context story)))))))))
+
+(deftest update-task-shared-context-empty-string-alone-returns-error
+  ;; Tests that empty string shared-context alone returns "No fields to update"
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "empty string shared-context alone returns no-fields-to-update error"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        ;; Pass only empty string for shared-context
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :shared-context ""})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "No fields to update")))))))
+
 ;; Session Events Tests
 
 (deftest update-task-appends-session-event

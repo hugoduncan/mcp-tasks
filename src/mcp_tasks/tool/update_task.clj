@@ -236,7 +236,10 @@
                             (let [value (get arguments field-key)
                                   converter (get conversions field-key identity)
                                   converted-value (converter value)]
-                              (assoc updates field-key converted-value))
+                              ;; Skip :shared-context when converted value is nil (empty string case)
+                              (if (and (= :shared-context field-key) (nil? converted-value))
+                                updates
+                                (assoc updates field-key converted-value)))
                             updates))
                         {}
                         updatable-fields)]
