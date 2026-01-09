@@ -88,6 +88,32 @@ clojure -M:cli update \
 
 # Change task category
 clojure -M:cli update --task-id 42 --category large
+
+# Append to shared context
+clojure -M:cli update --task-id 42 --shared-context "Added validation"
+
+# Short form alias
+clojure -M:cli update --task-id 42 -C "Implementation note"
+```
+
+**Shared context (`--shared-context` / `-C`):**
+
+The `--shared-context` option appends an entry to the task's shared context, which enables inter-task communication during story execution. Child tasks can read context from their parent story.
+
+- Accepts a single string value per invocation
+- Appends to existing `:shared-context` vector (does not replace)
+- Automatically prefixes with "Task NNN: " when execution state exists (from `.mcp-tasks-current.edn`)
+- No prefix added when no execution state file exists
+- Enforces 50KB total size limit
+
+```bash
+# Example: Add context during task execution
+clojure -M:cli update --task-id 42 -C "Refactored auth to use JWT tokens"
+# → Entry stored as "Task 42: Refactored auth to use JWT tokens"
+
+# Multiple context entries (call multiple times)
+clojure -M:cli update --task-id 42 -C "Added new API endpoint"
+clojure -M:cli update --task-id 42 -C "Schema migration required"
 ```
 
 ### complete - Mark tasks as complete

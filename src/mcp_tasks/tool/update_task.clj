@@ -236,7 +236,10 @@
                             (let [value (get arguments field-key)
                                   converter (get conversions field-key identity)
                                   converted-value (converter value)]
-                              (assoc updates field-key converted-value))
+                              ;; Skip :shared-context when converted value is nil (empty string case)
+                              (if (and (= :shared-context field-key) (nil? converted-value))
+                                updates
+                                (assoc updates field-key converted-value)))
                             updates))
                         {}
                         updatable-fields)]
@@ -354,7 +357,7 @@
             task-data-json (json/generate-string
                              {:task (select-keys
                                       final-task
-                                      [:id :title :category :type :status :parent-id])
+                                      [:id :title :category :type :status :parent-id :shared-context])
                               :metadata {:file tasks-file
                                          :operation "update-task"}})]
         (if use-git?
