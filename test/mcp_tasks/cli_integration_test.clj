@@ -1021,3 +1021,106 @@
         (is (= 1 (:exit result)))
         (is (not (str/blank? (:err result))))
         (is (str/includes? (:err result) "task-id"))))))
+
+(deftest shared-context-cli-workflow-test
+  ;; Test end-to-end shared-context behavior via CLI, verifying entry appending
+  ;; and automatic prefixing based on execution state.
+  (testing "shared-context-cli-workflow"
+    (testing "setup: add a story task"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "add"
+                     "--category" "simple"
+                     "--title" "Story with context"
+                     "--type" "story")]
+        (is (= 0 (:exit result)))))
+
+    (testing "update with --shared-context appends entry (no prefix without execution state)"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "update"
+                     "--task-id" "1"
+                     "--shared-context" "First context entry")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))
+              task (:task parsed)]
+          (is (= ["First context entry"] (:shared-context task))))))
+
+    (testing "update with -C alias appends to existing context"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "update"
+                     "--task-id" "1"
+                     "-C" "Second context entry")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))
+              task (:task parsed)]
+          (is (= ["First context entry" "Second context entry"]
+                 (:shared-context task))))))
+
+    (testing "shared-context respects execution state for prefixing"
+      (let [state {:story-id 1
+                   :task-id 42
+                   :task-start-time "2025-01-01T12:00:00Z"}
+            state-file (io/file *test-dir* ".mcp-tasks-current.edn")]
+        (spit state-file (pr-str state)))
+      (let [result (call-cli
+                     "--format" "edn"
+                     "update"
+                     "--task-id" "1"
+                     "--shared-context" "Entry with task prefix")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))
+              task (:task parsed)]
+          (is (= ["First context entry"
+                  "Second context entry"
+                  "Task 42: Entry with task prefix"]
+                 (:shared-context task))))))
+
+    (testing "can combine --shared-context with other update options"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "update"
+                     "--task-id" "1"
+                     "--title" "Updated story title"
+                     "--shared-context" "Context with title change")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))
+              task (:task parsed)]
+          (is (= "Updated story title" (:title task)))
+          (is (= ["First context entry"
+                  "Second context entry"
+                  "Task 42: Entry with task prefix"
+                  "Task 42: Context with title change"]
+                 (:shared-context task))))))))
+
+(deftest shared-context-size-limit-cli-test
+  ;; Test that 50KB size limit is enforced via CLI
+  (testing "shared-context-size-limit-cli"
+    (testing "setup: add a task"
+      (let [result (call-cli
+                     "add"
+                     "--category" "simple"
+                     "--title" "Size limit test")]
+        (is (= 0 (:exit result)))))
+
+    (testing "rejects context exceeding 50KB limit"
+      (let [large-entry (apply str (repeat 52000 "x"))
+            result (call-cli
+                     "--format" "edn"
+                     "update"
+                     "--task-id" "1"
+                     "--shared-context" large-entry)]
+        (is (= 1 (:exit result)))
+        (is (str/includes? (:err result) "Shared context size limit (50KB) exceeded"))))
+
+    (testing "task shared-context unchanged after failed update"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "show"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))
+              task (:task parsed)]
+          (is (or (nil? (:shared-context task))
+                  (empty? (:shared-context task)))))))))

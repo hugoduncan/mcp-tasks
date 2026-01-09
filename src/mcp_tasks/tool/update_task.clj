@@ -354,7 +354,7 @@
             task-data-json (json/generate-string
                              {:task (select-keys
                                       final-task
-                                      [:id :title :category :type :status :parent-id])
+                                      [:id :title :category :type :status :parent-id :shared-context])
                               :metadata {:file tasks-file
                                          :operation "update-task"}})]
         (if use-git?
