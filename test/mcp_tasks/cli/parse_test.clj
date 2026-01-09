@@ -1,8 +1,8 @@
 (ns mcp-tasks.cli.parse-test
   "Tests for CLI argument parsing."
   (:require
-    [clojure.test :refer [deftest testing is]]
-    [mcp-tasks.cli.parse :as sut]))
+   [clojure.test :refer [deftest testing is]]
+   [mcp-tasks.cli.parse :as sut]))
 
 (deftest coerce-json-map-test
   (testing "coerce-json-map"
@@ -334,7 +334,15 @@
 
     (testing "returns error for non-object/array session-events"
       (let [result (sut/parse-update ["--task-id" "42" "--session-events" "\"just a string\""])]
-        (is (= "Expected JSON object or array for --session-events" (:error result)))))))
+        (is (= "Expected JSON object or array for --session-events" (:error result)))))
+
+    (testing "parses --shared-context option"
+      (is (= {:task-id 42 :shared-context "Key discovery"}
+             (sut/parse-update ["--task-id" "42" "--shared-context" "Key discovery"]))))
+
+    (testing "parses -C alias for --shared-context"
+      (is (= {:task-id 42 :shared-context "Important note"}
+             (sut/parse-update ["--task-id" "42" "-C" "Important note"]))))))
 
 (deftest parse-delete-test
   (testing "parse-delete"

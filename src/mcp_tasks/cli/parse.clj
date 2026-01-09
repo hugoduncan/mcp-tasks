@@ -3,9 +3,9 @@
 
   Uses babashka.cli to parse command-line arguments."
   (:require
-    [babashka.cli :as cli]
-    [cheshire.core :as json]
-    [clojure.string :as str]))
+   [babashka.cli :as cli]
+   [cheshire.core :as json]
+   [clojure.string :as str]))
 
 ;; Help Text
 
@@ -164,12 +164,14 @@ OPTIONS:
   --meta <json>             New metadata as JSON object
   --relations <json>        New relations as JSON array
   --session-events <json>   Session events as JSON (object or array)
+  --shared-context, -C <text>  Append entry to task's shared context
   --format <format>         Output format: edn, json, human (default: edn)
 
 EXAMPLES:
   clojure -M:cli update --task-id 42 --status in-progress
   clojure -M:cli update --id 42 --title \"New title\" --description \"New desc\"
-  clojure -M:cli update --task-id 42 --meta '{\"priority\":\"high\"}'")
+  clojure -M:cli update --task-id 42 --meta '{\"priority\":\"high\"}'
+  clojure -M:cli update --task-id 42 -C \"Key discovery from this task\"")
 
 (def delete-help
   "Help text for the delete command."
@@ -412,12 +414,12 @@ EXAMPLES:
   Returns a set of keywords representing all valid option keys."
   [spec]
   (reduce
-    (fn [acc [k v]]
-      (if-let [alias (:alias v)]
-        (conj acc k alias)
-        (conj acc k)))
-    #{}
-    spec))
+   (fn [acc [k v]]
+     (if-let [alias (:alias v)]
+       (conj acc k alias)
+       (conj acc k)))
+   #{}
+   spec))
 
 ;; Validation Functions
 
@@ -597,6 +599,7 @@ EXAMPLES:
   - :parent-id -> long integer or nil (via coerce-parent-id)
   - :meta -> parsed from JSON string to Clojure map
   - :relations -> parsed from JSON array to Clojure vector
+  - :shared-context -> string (passed directly to update-task tool)
   - :format -> keyword (edn, json, human)
 
   Validation:
@@ -623,6 +626,8 @@ EXAMPLES:
    :meta {:desc "New metadata as JSON object"}
    :relations {:desc "New relations as JSON array"}
    :session-events {:desc "Session events as JSON (object or array)"}
+   :shared-context {:alias :C
+                    :desc "Append entry to task's shared context"}
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
@@ -970,17 +975,17 @@ EXAMPLES:
   or the first error encountered."
   [parsed-map field-coercions]
   (reduce
-    (fn [acc [field-key coerce-fn]]
-      (if (:error acc)
-        (reduced acc)
-        (if-let [json-str (get acc field-key)]
-          (let [result (coerce-fn json-str)]
-            (if (:error result)
-              (reduced result)
-              (assoc acc field-key result)))
-          acc)))
-    parsed-map
-    field-coercions))
+   (fn [acc [field-key coerce-fn]]
+     (if (:error acc)
+       (reduced acc)
+       (if-let [json-str (get acc field-key)]
+         (let [result (coerce-fn json-str)]
+           (if (:error result)
+             (reduced result)
+             (assoc acc field-key result)))
+         acc)))
+   parsed-map
+   field-coercions))
 
 (defn parse-update
   "Parse arguments for the update command.
@@ -992,13 +997,14 @@ EXAMPLES:
     (let [raw-parsed (cli/parse-opts args {:spec update-spec :restrict (get-allowed-keys update-spec)})
           task-id (or (:task-id raw-parsed) (:id raw-parsed))
           parsed (-> raw-parsed
-                     (dissoc :id :t :d :s :c :p)
+                     (dissoc :id :t :d :s :c :p :C)
                      (cond-> task-id (assoc :task-id task-id))
                      (cond-> (:t raw-parsed) (assoc :title (:t raw-parsed)))
                      (cond-> (:d raw-parsed) (assoc :description (:d raw-parsed)))
                      (cond-> (:s raw-parsed) (assoc :status (:s raw-parsed)))
                      (cond-> (:c raw-parsed) (assoc :category (:c raw-parsed)))
-                     (cond-> (contains? raw-parsed :p) (assoc :parent-id (:p raw-parsed))))]
+                     (cond-> (contains? raw-parsed :p) (assoc :parent-id (:p raw-parsed)))
+                     (cond-> (:C raw-parsed) (assoc :shared-context (:C raw-parsed))))]
       (if-not task-id
         {:error "Required option: --task-id (or --id)"
          :metadata {:args args}}
