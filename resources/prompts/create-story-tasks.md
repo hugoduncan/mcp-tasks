@@ -70,6 +70,8 @@ Each task must be executable in a single agent session. Include both implementat
 **Good:** "Refactor database queries to use connection pooling and verify performance improvement"
 **Bad:** "Refactor database queries" (missing verification step)
 
+Beyond structure, the content of task descriptions matters—specifically, the decisions you make during breakdown.
+
 ## Documenting Implementation Decisions
 
 When breaking down stories, you will encounter choices not explicitly covered by the story. Make these decisions and document them in task descriptions rather than leaving them TBD or expecting the executing agent to decide.
