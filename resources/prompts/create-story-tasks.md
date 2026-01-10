@@ -57,7 +57,12 @@ decisions.
 
 ## Self-Contained Tasks
 
-Each task must be executable in a single agent session. Include both implementation and verification:
+Each task must be executable in a single agent session. Include both implementation and verification.
+
+**Task Descriptions Should Include:**
+- **Explicit intent**: Why this task exists—the goal or problem being solved, not just the action
+- **Implementation decisions**: Choices made during breakdown (e.g., which library, naming conventions, approach) so the executing agent doesn't need to guess or ask
+- **Context from story**: Relevant constraints, requirements, or dependencies from the parent story
 
 **Good:** "Add user authentication with password hashing and write unit tests"
 **Bad:** Split into "Implement authentication" and "Test authentication" (creates unnecessary dependency)
@@ -65,15 +70,49 @@ Each task must be executable in a single agent session. Include both implementat
 **Good:** "Refactor database queries to use connection pooling and verify performance improvement"
 **Bad:** "Refactor database queries" (missing verification step)
 
+Beyond structure, the content of task descriptions matters—specifically, the decisions you make during breakdown.
+
+## Documenting Implementation Decisions
+
+When breaking down stories, you will encounter choices not explicitly covered by the story. Make these decisions and document them in task descriptions rather than leaving them TBD or expecting the executing agent to decide.
+
+**Types of decisions to document:**
+- **Naming conventions**: Function names, file names, variable patterns
+- **Data formats**: JSON structure, field names, data types
+- **Validation rules**: What to validate, error messages, edge cases
+- **Error handling**: How to handle failures, retry logic, user feedback
+- **Technology choices**: Which library or approach when multiple exist
+- **Boundaries**: What's in scope vs out of scope for this specific task
+
+**Example:** Story says "add user settings storage"
+
+Instead of: "Add settings storage" (forces executing agent to decide everything)
+
+Write: "Add user settings storage using localStorage with key 'user_settings'. Store as JSON object with schema {theme: 'light'|'dark', language: string}. Include migration function for future schema changes. Validate settings on load, reset to defaults if corrupted."
+
 ## Task Breakdown Example
 
-For story "Add user profile management":
+For story "Add user profile management", here are example tasks. The blockquoted text (Intent and Decisions) is what goes in the task's `description` field when calling `add-task`.
 
-1. **simple**: "Add user profile data model with fields (name, email, avatar_url) and write unit tests" (Part of story: 42 "Add user profile management")
-2. **medium**: "Implement profile edit API endpoint with validation and integration tests" (Part of story: 42 "Add user profile management")
-   - Relations: `[{"id": 1, "relates-to": 1, "as-type": "blocked-by"}]`
-3. **simple**: "Add profile display component with avatar and edit button" (Part of story: 42 "Add user profile management")
-   - Relations: `[{"id": 1, "relates-to": 2, "as-type": "blocked-by"}]`
+**Task 1** (simple): "Add user profile data model" (Part of story: 42 "Add user profile management")
+
+> **Intent:** Establish the data foundation for user profiles. Without a clear schema, the API and UI tasks cannot proceed consistently.
+>
+> **Decisions:** Use fields `name` (string, required, max 100 chars), `email` (string, required, validated format), `avatar_url` (string, optional, must be valid URL or null). Store in `user_profiles` table with foreign key to `users.id`. Include `created_at` and `updated_at` timestamps. Write unit tests covering validation rules and edge cases (empty name, invalid email format, malformed URL).
+
+**Task 2** (medium): "Implement profile edit API endpoint" (Part of story: 42 "Add user profile management")
+- Relations: `[{"id": 1, "relates-to": 1, "as-type": "blocked-by"}]`
+
+> **Intent:** Enable users to update their profile information through a secure API. This is the core functionality that the UI will consume.
+>
+> **Decisions:** Create `PUT /api/users/:id/profile` endpoint. Require authentication; users can only edit their own profile (return 403 otherwise). Accept JSON body with optional fields (partial updates allowed). Validate all fields per data model rules. Return 200 with updated profile on success, 400 with field-specific errors on validation failure. Write integration tests covering: successful update, partial update, unauthorized access, validation errors.
+
+**Task 3** (simple): "Add profile display component" (Part of story: 42 "Add user profile management")
+- Relations: `[{"id": 1, "relates-to": 2, "as-type": "blocked-by"}]`
+
+> **Intent:** Provide users with a visual interface to view and initiate editing of their profile. Completes the user-facing feature.
+>
+> **Decisions:** Create `ProfileCard` component showing avatar (with fallback to initials), name, and email. Add "Edit" button that opens `ProfileEditModal`. Use existing `Avatar` component for display. Fetch profile data via `useProfile` hook on mount. Show loading skeleton while fetching. Write component tests for render states (loading, loaded, edit mode).
 
 ## Dependency Modeling
 
