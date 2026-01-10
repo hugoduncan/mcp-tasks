@@ -44,3 +44,7 @@
 (def refine-task
   "Refine a task to improve clarity and completeness."
   (slurp (io/resource "prompts/refine-task.md")))
+
+(def optimize-prompts
+  "Optimize prompts based on session event analysis."
+  (load-and-render-prompt "prompts/optimize-prompts.md"))
