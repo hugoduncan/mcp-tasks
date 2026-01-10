@@ -92,11 +92,25 @@ Write: "Add user settings storage using localStorage with key 'user_settings'. S
 
 For story "Add user profile management":
 
-1. **simple**: "Add user profile data model with fields (name, email, avatar_url) and write unit tests" (Part of story: 42 "Add user profile management")
-2. **medium**: "Implement profile edit API endpoint with validation and integration tests" (Part of story: 42 "Add user profile management")
-   - Relations: `[{"id": 1, "relates-to": 1, "as-type": "blocked-by"}]`
-3. **simple**: "Add profile display component with avatar and edit button" (Part of story: 42 "Add user profile management")
-   - Relations: `[{"id": 1, "relates-to": 2, "as-type": "blocked-by"}]`
+**Task 1** (simple): "Add user profile data model" (Part of story: 42 "Add user profile management")
+
+> **Intent:** Establish the data foundation for user profiles. Without a clear schema, the API and UI tasks cannot proceed consistently.
+>
+> **Decisions:** Use fields `name` (string, required, max 100 chars), `email` (string, required, validated format), `avatar_url` (string, optional, must be valid URL or null). Store in `user_profiles` table with foreign key to `users.id`. Include `created_at` and `updated_at` timestamps. Write unit tests covering validation rules and edge cases (empty name, invalid email format, malformed URL).
+
+**Task 2** (medium): "Implement profile edit API endpoint" (Part of story: 42 "Add user profile management")
+- Relations: `[{"id": 1, "relates-to": 1, "as-type": "blocked-by"}]`
+
+> **Intent:** Enable users to update their profile information through a secure API. This is the core functionality that the UI will consume.
+>
+> **Decisions:** Create `PUT /api/users/:id/profile` endpoint. Require authentication; users can only edit their own profile (return 403 otherwise). Accept JSON body with optional fields (partial updates allowed). Validate all fields per data model rules. Return 200 with updated profile on success, 400 with field-specific errors on validation failure. Write integration tests covering: successful update, partial update, unauthorized access, validation errors.
+
+**Task 3** (simple): "Add profile display component" (Part of story: 42 "Add user profile management")
+- Relations: `[{"id": 1, "relates-to": 2, "as-type": "blocked-by"}]`
+
+> **Intent:** Provide users with a visual interface to view and initiate editing of their profile. Completes the user-facing feature.
+>
+> **Decisions:** Create `ProfileCard` component showing avatar (with fallback to initials), name, and email. Add "Edit" button that opens `ProfileEditModal`. Use existing `Avatar` component for display. Fetch profile data via `useProfile` hook on mount. Show loading skeleton while fetching. Write component tests for render states (loading, loaded, edit mode).
 
 ## Dependency Modeling
 
