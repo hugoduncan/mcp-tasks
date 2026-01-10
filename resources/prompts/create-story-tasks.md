@@ -70,6 +70,24 @@ Each task must be executable in a single agent session. Include both implementat
 **Good:** "Refactor database queries to use connection pooling and verify performance improvement"
 **Bad:** "Refactor database queries" (missing verification step)
 
+## Documenting Implementation Decisions
+
+When breaking down stories, you will encounter choices not explicitly covered by the story. Make these decisions and document them in task descriptions rather than leaving them TBD or expecting the executing agent to decide.
+
+**Types of decisions to document:**
+- **Naming conventions**: Function names, file names, variable patterns
+- **Data formats**: JSON structure, field names, data types
+- **Validation rules**: What to validate, error messages, edge cases
+- **Error handling**: How to handle failures, retry logic, user feedback
+- **Technology choices**: Which library or approach when multiple exist
+- **Boundaries**: What's in scope vs out of scope for this specific task
+
+**Example:** Story says "add user settings storage"
+
+Instead of: "Add settings storage" (forces executing agent to decide everything)
+
+Write: "Add user settings storage using localStorage with key 'user_settings'. Store as JSON object with schema {theme: 'light'|'dark', language: string}. Include migration function for future schema changes. Validate settings on load, reset to defaults if corrupted."
+
 ## Task Breakdown Example
 
 For story "Add user profile management":
