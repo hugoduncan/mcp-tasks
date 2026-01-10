@@ -57,7 +57,12 @@ decisions.
 
 ## Self-Contained Tasks
 
-Each task must be executable in a single agent session. Include both implementation and verification:
+Each task must be executable in a single agent session. Include both implementation and verification.
+
+**Task Descriptions Should Include:**
+- **Explicit intent**: Why this task exists—the goal or problem being solved, not just the action
+- **Implementation decisions**: Choices made during breakdown (e.g., which library, naming conventions, approach) so the executing agent doesn't need to guess or ask
+- **Context from story**: Relevant constraints, requirements, or dependencies from the parent story
 
 **Good:** "Add user authentication with password hashing and write unit tests"
 **Bad:** Split into "Implement authentication" and "Test authentication" (creates unnecessary dependency)
