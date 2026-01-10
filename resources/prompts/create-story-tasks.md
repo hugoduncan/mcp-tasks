@@ -90,7 +90,7 @@ Write: "Add user settings storage using localStorage with key 'user_settings'. S
 
 ## Task Breakdown Example
 
-For story "Add user profile management":
+For story "Add user profile management", here are example tasks. The blockquoted text (Intent and Decisions) is what goes in the task's `description` field when calling `add-task`.
 
 **Task 1** (simple): "Add user profile data model" (Part of story: 42 "Add user profile management")
 
