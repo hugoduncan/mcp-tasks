@@ -166,7 +166,7 @@ OPTIONS:
   --session-events <json>   Session events as JSON (object or array)
   --shared-context, -C <text>  Append entry to task's shared context
   --code-reviewed <timestamp>  ISO-8601 timestamp when code review completed
-  --pr-num <integer>        GitHub pull request number
+  --pr-num <integer>        GitHub pull request number (displayed as #N)
   --format <format>         Output format: edn, json, human (default: edn)
 
 EXAMPLES:
