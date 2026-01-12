@@ -30,6 +30,26 @@
     (java.time
       Instant)))
 
+(defn- validate-iso-8601-utc
+  "Validate that a string is a valid ISO-8601 timestamp in UTC format (Z suffix).
+
+  Returns nil if valid, or an error map if invalid."
+  [value field-name]
+  (when (and value (not (nil? value)))
+    (try
+      (Instant/parse value)
+      ;; Instant/parse accepts any valid ISO-8601 - verify it ends with Z
+      (when-not (str/ends-with? value "Z")
+        {:error true
+         :message (str "Invalid " field-name " format: must use UTC timezone (Z suffix)")
+         :provided value
+         :expected "ISO-8601 UTC format, e.g., 2025-01-15T10:30:00Z"})
+      (catch Exception _
+        {:error true
+         :message (str "Invalid " field-name " format: not a valid ISO-8601 timestamp")
+         :provided value
+         :expected "ISO-8601 UTC format, e.g., 2025-01-15T10:30:00Z"}))))
+
 (defn- convert-enum-field
   "Convert string enum value to keyword.
 
@@ -294,6 +314,16 @@
                                                                 (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
                                                               (when (contains? updates :relations)
                                                                 (validate-circular-dependencies task-id (:relations updates) tasks-file))
+                                                              ;; Validate code-reviewed timestamp format
+                                                              (when (contains? updates :code-reviewed)
+                                                                (when-let [validation-error (validate-iso-8601-utc (:code-reviewed updates) "code-reviewed")]
+                                                                  (helpers/build-tool-error-response
+                                                                    (:message validation-error)
+                                                                    "update-task"
+                                                                    {:task-id task-id
+                                                                     :file tasks-file
+                                                                     :provided (:provided validation-error)
+                                                                     :expected (:expected validation-error)})))
                                                               ;; Check for session-events validation error
                                                               (when-let [events-error (:session-events-error updates)]
                                                                 (helpers/build-tool-error-response

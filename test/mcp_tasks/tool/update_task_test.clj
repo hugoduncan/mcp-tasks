@@ -1083,3 +1083,95 @@
             (is (= :closed (:status task)))
             (is (= timestamp (:code-reviewed task)))
             (is (= 789 (:pr-num task)))))))))
+
+;; ISO-8601 timestamp validation tests
+
+(deftest update-task-rejects-invalid-code-reviewed-format
+  ;; Tests that non-ISO-8601 strings are rejected for code-reviewed
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "rejects invalid timestamp format"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed "not-a-timestamp"})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Invalid code-reviewed format"))
+          (is (str/includes? (get-in result [:content 0 :text]) "not a valid ISO-8601 timestamp")))))))
+
+(deftest update-task-rejects-code-reviewed-with-offset
+  ;; Tests that timestamps with timezone offset (non-UTC) are rejected
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "rejects timestamp with timezone offset"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed "2025-01-15T10:30:00+05:00"})]
+          (is (true? (:isError result)))
+          (is (str/includes? (get-in result [:content 0 :text]) "Invalid code-reviewed format"))
+          (is (str/includes? (get-in result [:content 0 :text]) "must use UTC timezone")))))))
+
+(deftest update-task-accepts-valid-utc-code-reviewed
+  ;; Tests that valid UTC timestamps are accepted
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "accepts valid UTC timestamp"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [timestamp "2025-01-15T10:30:00Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed timestamp})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= timestamp (:code-reviewed task)))))))))
+
+(deftest update-task-accepts-code-reviewed-with-milliseconds
+  ;; Tests that UTC timestamps with milliseconds are accepted
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "accepts UTC timestamp with milliseconds"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [timestamp "2025-01-15T10:30:00.123Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed timestamp})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= timestamp (:code-reviewed task)))))))))
+
+(deftest update-task-allows-nil-code-reviewed-to-clear
+  ;; Tests that nil clears code-reviewed without validation error
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "allows nil to clear code-reviewed"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :code-reviewed "2025-01-15T10:30:00Z"}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed nil})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (nil? (:code-reviewed task)))))))))
