@@ -947,3 +947,139 @@
             (is (= :session-start (:event-type (first events))))
             (is (= :user-prompt (:event-type (second events))))
             (is (= :compaction (:event-type (nth events 2))))))))))
+
+;; Code-reviewed and pr-num field tests
+
+(deftest update-task-sets-code-reviewed-field
+  ;; Tests setting the code-reviewed field with an ISO-8601 timestamp
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "sets code-reviewed timestamp"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [timestamp "2025-01-15T10:30:00Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed timestamp})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= timestamp (:code-reviewed task)))))))))
+
+(deftest update-task-sets-pr-num-field
+  ;; Tests setting the pr-num field with a PR number
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "sets pr-num field"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :pr-num 123})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= 123 (:pr-num task)))))))))
+
+(deftest update-task-clears-code-reviewed-with-nil
+  ;; Tests clearing code-reviewed field by passing nil
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "clears code-reviewed when nil is provided"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :code-reviewed "2025-01-15T10:30:00Z"}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed nil})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (nil? (:code-reviewed task)))))))))
+
+(deftest update-task-clears-pr-num-with-nil
+  ;; Tests clearing pr-num field by passing nil
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "clears pr-num when nil is provided"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :pr-num 42}])
+        (let [result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :pr-num nil})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (nil? (:pr-num task)))))))))
+
+(deftest update-task-sets-both-code-reviewed-and-pr-num
+  ;; Tests setting both fields in a single update
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "sets both code-reviewed and pr-num together"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [timestamp "2025-01-15T14:00:00Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed timestamp :pr-num 456})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= timestamp (:code-reviewed task)))
+            (is (= 456 (:pr-num task)))))))))
+
+(deftest update-task-overwrites-code-reviewed-timestamp
+  ;; Tests that updating code-reviewed overwrites the previous value
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "overwrites existing code-reviewed timestamp"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "story" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations [] :code-reviewed "2025-01-10T08:00:00Z"}])
+        (let [new-timestamp "2025-01-15T16:30:00Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :code-reviewed new-timestamp})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= new-timestamp (:code-reviewed task)))))))))
+
+(deftest update-task-code-reviewed-and-pr-num-with-other-fields
+  ;; Tests updating code-reviewed and pr-num alongside other fields
+  (h/with-test-setup [test-dir]
+    (testing "update-task"
+      (testing "updates code-reviewed and pr-num alongside other fields"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "old title" :description "desc" :design "" :category "test" :type :story :status :open :meta {} :relations []}])
+        (let [timestamp "2025-01-15T18:00:00Z"
+              result (#'sut/update-task-impl
+                      (h/test-config test-dir)
+                      nil
+                      {:task-id 1 :title "new title" :status "closed" :code-reviewed timestamp :pr-num 789})]
+          (is (false? (:isError result)))
+          (let [tasks (h/read-ednl-test-file test-dir "tasks.ednl")
+                task (first tasks)]
+            (is (= "new title" (:title task)))
+            (is (= :closed (:status task)))
+            (is (= timestamp (:code-reviewed task)))
+            (is (= 789 (:pr-num task)))))))))

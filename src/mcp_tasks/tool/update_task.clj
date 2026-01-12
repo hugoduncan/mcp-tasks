@@ -229,7 +229,8 @@
                      :relations helpers/convert-relations-field
                      :shared-context (partial convert-shared-context-field base-dir)}
         updatable-fields [:title :description :design :parent-id
-                          :status :category :type :meta :relations :shared-context]
+                          :status :category :type :meta :relations :shared-context
+                          :code-reviewed :pr-num]
         ;; Process standard fields
         updates (reduce (fn [updates field-key]
                           (if (contains? arguments field-key)
@@ -386,7 +387,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "update-task"
-   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, shared-context, and session-events. Pass nil for optional fields (parent-id, meta, relations) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing. The session-events field uses append semantics with automatic timestamp generation."
+   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, shared-context, session-events, code-reviewed, and pr-num. Pass nil for optional fields (parent-id, meta, relations, code-reviewed, pr-num) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing. The session-events field uses append semantics with automatic timestamp generation."
    :inputSchema
    {:type "object"
     :properties
@@ -446,6 +447,12 @@
                            "session-id" {:type "string"
                                          :description "Session ID for session-start events"}}
               :required ["event-type"]}
-      :description "Session event or array of events to append (optional). Each event requires event-type (:user-prompt, :compaction, :session-start). Timestamp is auto-generated if not provided. New events are appended to existing events. Limited to 50KB total size."}}
+      :description "Session event or array of events to append (optional). Each event requires event-type (:user-prompt, :compaction, :session-start). Timestamp is auto-generated if not provided. New events are appended to existing events. Limited to 50KB total size."}
+     "code-reviewed"
+     {:type ["string" "null"]
+      :description "ISO-8601 timestamp when code review was completed (optional). Pass null to clear."}
+     "pr-num"
+     {:type ["integer" "null"]
+      :description "GitHub pull request number (optional). Pass null to clear."}}
     :required ["task-id"]}
    :implementation (partial update-task-impl config)})
