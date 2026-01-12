@@ -352,7 +352,25 @@
              (sut/parse-update ["--task-id" "42"
                                 "--title" "New title"
                                 "--status" "in-progress"
-                                "--shared-context" "Progress note"]))))))
+                                "--shared-context" "Progress note"]))))
+
+    (testing "parses --code-reviewed option"
+      (is (= {:task-id 42 :code-reviewed "2025-01-11T10:30:00Z"}
+             (sut/parse-update ["--task-id" "42" "--code-reviewed" "2025-01-11T10:30:00Z"]))))
+
+    (testing "parses --pr-num option"
+      (is (= {:task-id 42 :pr-num 123}
+             (sut/parse-update ["--task-id" "42" "--pr-num" "123"]))))
+
+    (testing "combines --code-reviewed and --pr-num with other options"
+      (is (= {:task-id 42
+              :status :closed
+              :code-reviewed "2025-01-11T12:00:00Z"
+              :pr-num 456}
+             (sut/parse-update ["--task-id" "42"
+                                "--status" "closed"
+                                "--code-reviewed" "2025-01-11T12:00:00Z"
+                                "--pr-num" "456"]))))))
 
 (deftest parse-delete-test
   (testing "parse-delete"

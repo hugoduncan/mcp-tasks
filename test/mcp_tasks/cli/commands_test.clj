@@ -512,6 +512,70 @@
             (is (= "Updated description" (:description task)))
             (is (= :in-progress (:status task)))))))))
 
+(deftest update-command-updates-code-reviewed-field
+  ;; Test update-command sets the code-reviewed timestamp
+  (testing "update-command"
+    (h/with-test-setup [test-dir]
+      (testing "sets code-reviewed timestamp"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+
+        (let [result (sut/update-command
+                       (h/test-config test-dir)
+                       {:task-id 1
+                        :code-reviewed "2025-01-11T10:30:00Z"})]
+          (is (= 1 (:id (:task result)))))
+
+        (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
+              tasks (tasks-file/read-ednl tasks-file-path)
+              task (first tasks)]
+          (is (= "2025-01-11T10:30:00Z" (:code-reviewed task))))))))
+
+(deftest update-command-updates-pr-num-field
+  ;; Test update-command sets the pr-num field
+  (testing "update-command"
+    (h/with-test-setup [test-dir]
+      (testing "sets pr-num field"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+
+        (let [result (sut/update-command
+                       (h/test-config test-dir)
+                       {:task-id 1
+                        :pr-num 123})]
+          (is (= 1 (:id (:task result)))))
+
+        (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
+              tasks (tasks-file/read-ednl tasks-file-path)
+              task (first tasks)]
+          (is (= 123 (:pr-num task))))))))
+
+(deftest update-command-updates-both-review-fields
+  ;; Test update-command sets both code-reviewed and pr-num
+  (testing "update-command"
+    (h/with-test-setup [test-dir]
+      (testing "sets both code-reviewed and pr-num"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+
+        (sut/update-command
+          (h/test-config test-dir)
+          {:task-id 1
+           :code-reviewed "2025-01-11T12:00:00Z"
+           :pr-num 456})
+
+        (let [tasks-file-path (str test-dir "/.mcp-tasks/tasks.ednl")
+              tasks (tasks-file/read-ednl tasks-file-path)
+              task (first tasks)]
+          (is (= "2025-01-11T12:00:00Z" (:code-reviewed task)))
+          (is (= 456 (:pr-num task))))))))
+
 ;; complete-command tests
 
 (deftest complete-command-completes-task-with-task-id

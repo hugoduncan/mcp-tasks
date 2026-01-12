@@ -165,6 +165,8 @@ OPTIONS:
   --relations <json>        New relations as JSON array
   --session-events <json>   Session events as JSON (object or array)
   --shared-context, -C <text>  Append entry to task's shared context
+  --code-reviewed <timestamp>  ISO-8601 timestamp when code review completed
+  --pr-num <integer>        GitHub pull request number
   --format <format>         Output format: edn, json, human (default: edn)
 
 EXAMPLES:
@@ -600,6 +602,8 @@ EXAMPLES:
   - :meta -> parsed from JSON string to Clojure map
   - :relations -> parsed from JSON array to Clojure vector
   - :shared-context -> string (passed directly to update-task tool)
+  - :code-reviewed -> string (ISO-8601 timestamp, passed directly)
+  - :pr-num -> long integer (GitHub PR number, passed directly)
   - :format -> keyword (edn, json, human)
 
   Validation:
@@ -628,6 +632,9 @@ EXAMPLES:
    :session-events {:desc "Session events as JSON (object or array)"}
    :shared-context {:alias :C
                     :desc "Append entry to task's shared context"}
+   :code-reviewed {:desc "ISO-8601 timestamp when code review completed"}
+   :pr-num {:coerce :long
+            :desc "GitHub pull request number"}
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
