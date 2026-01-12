@@ -176,6 +176,14 @@
                 (seq (:meta task))
                 (conj (str "Meta: " (pr-str (:meta task))))
 
+                ;; Add code-reviewed timestamp if present
+                (:code-reviewed task)
+                (conj (str "Code Reviewed: " (:code-reviewed task)))
+
+                ;; Add PR number if present
+                (:pr-num task)
+                (conj (str "PR Number: #" (:pr-num task)))
+
                 ;; Add description if non-empty
                 (and (:description task) (not (str/blank? (:description task))))
                 (conj "Description:"

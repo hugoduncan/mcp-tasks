@@ -688,3 +688,114 @@
         (is (str/includes? output "✗ broken (category)"))
         (is (str/includes? output "Error: File not found"))
         (is (str/includes? output "1 failed"))))))
+
+;; Tests for code-reviewed and pr-num display in format-single-task.
+;; These fields should appear in detail view when present and be hidden when nil.
+;; Table output should remain unchanged (not show these fields).
+
+(deftest format-single-task-code-reviewed-test
+  (testing "format-single-task"
+    (testing "displays code-reviewed when set"
+      (let [task {:id 42
+                  :status :open
+                  :title "Reviewed task"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []
+                  :code-reviewed "2025-01-10T14:30:00Z"}
+            output (sut/format-single-task task)]
+        (is (str/includes? output "Code Reviewed: 2025-01-10T14:30:00Z"))))
+
+    (testing "hides code-reviewed when nil"
+      (let [task {:id 42
+                  :status :open
+                  :title "Unreviewed task"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []
+                  :code-reviewed nil}
+            output (sut/format-single-task task)]
+        (is (not (str/includes? output "Code Reviewed:")))))
+
+    (testing "hides code-reviewed when not present"
+      (let [task {:id 42
+                  :status :open
+                  :title "Unreviewed task"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []}
+            output (sut/format-single-task task)]
+        (is (not (str/includes? output "Code Reviewed:")))))))
+
+(deftest format-single-task-pr-num-test
+  (testing "format-single-task"
+    (testing "displays pr-num with # prefix when set"
+      (let [task {:id 42
+                  :status :open
+                  :title "Task with PR"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []
+                  :pr-num 123}
+            output (sut/format-single-task task)]
+        (is (str/includes? output "PR Number: #123"))))
+
+    (testing "hides pr-num when nil"
+      (let [task {:id 42
+                  :status :open
+                  :title "Task without PR"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []
+                  :pr-num nil}
+            output (sut/format-single-task task)]
+        (is (not (str/includes? output "PR Number:")))))
+
+    (testing "hides pr-num when not present"
+      (let [task {:id 42
+                  :status :open
+                  :title "Task without PR"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []}
+            output (sut/format-single-task task)]
+        (is (not (str/includes? output "PR Number:")))))))
+
+(deftest format-single-task-both-fields-test
+  (testing "format-single-task"
+    (testing "displays both fields when both are set"
+      (let [task {:id 42
+                  :status :closed
+                  :title "Completed story"
+                  :category "large"
+                  :type :story
+                  :meta {}
+                  :relations []
+                  :code-reviewed "2025-01-10T14:30:00Z"
+                  :pr-num 456}
+            output (sut/format-single-task task)]
+        (is (str/includes? output "Code Reviewed: 2025-01-10T14:30:00Z"))
+        (is (str/includes? output "PR Number: #456"))))))
+
+(deftest table-output-unchanged-test
+  (testing "format-table"
+    (testing "does not include code-reviewed in table output"
+      (let [task {:id 42
+                  :status :open
+                  :title "Task"
+                  :category "simple"
+                  :type :task
+                  :meta {}
+                  :relations []
+                  :is-blocked false
+                  :code-reviewed "2025-01-10T14:30:00Z"
+                  :pr-num 123}
+            output (sut/format-table [task])]
+        (is (not (str/includes? output "Code Reviewed")))
+        (is (not (str/includes? output "PR Number")))))))
