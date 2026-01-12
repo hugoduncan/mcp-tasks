@@ -241,6 +241,128 @@
                                     :relations []
                                     :session-events [{:invalid "event"}]}))))
 
+    (testing "validates tasks with code-reviewed field"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Reviewed task"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []
+                               :code-reviewed "2025-01-15T10:30:00Z"}))
+      (is (schema/valid-task? {:id 2
+                               :parent-id nil
+                               :status :open
+                               :title "Unreviewed task"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []
+                               :code-reviewed nil})))
+
+    (testing "validates tasks with pr-num field"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Task with PR"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []
+                               :pr-num 123}))
+      (is (schema/valid-task? {:id 2
+                               :parent-id nil
+                               :status :open
+                               :title "Task without PR"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []
+                               :pr-num nil})))
+
+    (testing "validates tasks with both code-reviewed and pr-num"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :closed
+                               :title "Completed story"
+                               :description "Desc"
+                               :design "Design"
+                               :category "large"
+                               :type :story
+                               :meta {}
+                               :relations []
+                               :code-reviewed "2025-01-15T10:30:00Z"
+                               :pr-num 456})))
+
+    (testing "validates tasks without code-reviewed or pr-num (backward compatibility)"
+      (is (schema/valid-task? {:id 1
+                               :parent-id nil
+                               :status :open
+                               :title "Legacy task"
+                               :description "Desc"
+                               :design "Design"
+                               :category "simple"
+                               :type :task
+                               :meta {}
+                               :relations []})))
+
+    (testing "rejects tasks with invalid code-reviewed types"
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :code-reviewed 12345})))
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :code-reviewed true}))))
+
+    (testing "rejects tasks with invalid pr-num types"
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :pr-num "123"})))
+      (is (not (schema/valid-task? {:id 1
+                                    :parent-id nil
+                                    :status :open
+                                    :title "Test"
+                                    :description "Desc"
+                                    :design "Design"
+                                    :category "simple"
+                                    :type :task
+                                    :meta {}
+                                    :relations []
+                                    :pr-num 12.5}))))
+
     (testing "validates all status values"
       (doseq [status [:open :closed :in-progress :blocked]]
         (is (schema/valid-task? {:id 1

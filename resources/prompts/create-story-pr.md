@@ -26,4 +26,13 @@ Create pull request for completed story.
 
 5. Create PR targeting default branch. Handle errors (no remote, creation failure, missing tools).
 
-6. Return PR URL.
+6. Record PR number on story:
+   - Extract PR number from `gh pr create` output (URL contains the number, e.g., `.../pull/123`)
+{% if cli %}
+   - Call `mcp-tasks update --task-id <story-id> --pr-num <number>` to record it
+{% else %}
+   - Call `update-task` with `task-id: <story-id>, pr-num: <number>` to record it
+{% endif %}
+   - Only set after confirmed PR creation success
+
+7. Return PR URL.

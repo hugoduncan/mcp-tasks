@@ -49,7 +49,9 @@
    [:meta [:map-of :string :string]]
    [:relations [:vector Relation]]
    [:shared-context {:optional true} [:vector :string]]
-   [:session-events {:optional true} [:vector SessionEvent]]])
+   [:session-events {:optional true} [:vector SessionEvent]]
+   [:code-reviewed {:optional true} [:maybe :string]]
+   [:pr-num {:optional true} [:maybe :int]]])
 
 (def blocking-statuses
   "Set of task statuses that prevent completion or deletion of parent tasks.

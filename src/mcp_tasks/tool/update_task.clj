@@ -30,6 +30,26 @@
     (java.time
       Instant)))
 
+(defn- validate-iso-8601-utc
+  "Validate that a string is a valid ISO-8601 timestamp in UTC format (Z suffix).
+
+  Returns nil if valid, or an error map if invalid."
+  [value field-name]
+  (when (and value (not (nil? value)))
+    (try
+      (Instant/parse value)
+      ;; Instant/parse accepts any valid ISO-8601 - verify it ends with Z
+      (when-not (str/ends-with? value "Z")
+        {:error true
+         :message (str "Invalid " field-name " format: must use UTC timezone (Z suffix)")
+         :provided value
+         :expected "ISO-8601 UTC format, e.g., 2025-01-15T10:30:00Z"})
+      (catch Exception _
+        {:error true
+         :message (str "Invalid " field-name " format: not a valid ISO-8601 timestamp")
+         :provided value
+         :expected "ISO-8601 UTC format, e.g., 2025-01-15T10:30:00Z"}))))
+
 (defn- convert-enum-field
   "Convert string enum value to keyword.
 
@@ -229,7 +249,8 @@
                      :relations helpers/convert-relations-field
                      :shared-context (partial convert-shared-context-field base-dir)}
         updatable-fields [:title :description :design :parent-id
-                          :status :category :type :meta :relations :shared-context]
+                          :status :category :type :meta :relations :shared-context
+                          :code-reviewed :pr-num]
         ;; Process standard fields
         updates (reduce (fn [updates field-key]
                           (if (contains? arguments field-key)
@@ -293,6 +314,16 @@
                                                                 (validation/validate-parent-id-exists (:parent-id updates) "update-task" task-id tasks-file "Parent task not found"))
                                                               (when (contains? updates :relations)
                                                                 (validate-circular-dependencies task-id (:relations updates) tasks-file))
+                                                              ;; Validate code-reviewed timestamp format
+                                                              (when (contains? updates :code-reviewed)
+                                                                (when-let [validation-error (validate-iso-8601-utc (:code-reviewed updates) "code-reviewed")]
+                                                                  (helpers/build-tool-error-response
+                                                                    (:message validation-error)
+                                                                    "update-task"
+                                                                    {:task-id task-id
+                                                                     :file tasks-file
+                                                                     :provided (:provided validation-error)
+                                                                     :expected (:expected validation-error)})))
                                                               ;; Check for session-events validation error
                                                               (when-let [events-error (:session-events-error updates)]
                                                                 (helpers/build-tool-error-response
@@ -386,7 +417,7 @@
   Accepts config parameter for future git-aware functionality."
   [config]
   {:name "update-task"
-   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, shared-context, and session-events. Pass nil for optional fields (parent-id, meta, relations) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing. The session-events field uses append semantics with automatic timestamp generation."
+   :description "Update fields of an existing task by ID. Only provided fields will be updated. Supports updating: title, description, design, parent-id, status, category, type, meta, relations, shared-context, session-events, code-reviewed, and pr-num. Pass nil for optional fields (parent-id, meta, relations, code-reviewed, pr-num) to clear their values. The shared-context field uses append semantics with automatic task ID prefixing. The session-events field uses append semantics with automatic timestamp generation."
    :inputSchema
    {:type "object"
     :properties
@@ -446,6 +477,12 @@
                            "session-id" {:type "string"
                                          :description "Session ID for session-start events"}}
               :required ["event-type"]}
-      :description "Session event or array of events to append (optional). Each event requires event-type (:user-prompt, :compaction, :session-start). Timestamp is auto-generated if not provided. New events are appended to existing events. Limited to 50KB total size."}}
+      :description "Session event or array of events to append (optional). Each event requires event-type (:user-prompt, :compaction, :session-start). Timestamp is auto-generated if not provided. New events are appended to existing events. Limited to 50KB total size."}
+     "code-reviewed"
+     {:type ["string" "null"]
+      :description "ISO-8601 timestamp when code review was completed (optional). Pass null to clear."}
+     "pr-num"
+     {:type ["integer" "null"]
+      :description "GitHub pull request number (optional). Pass null to clear."}}
     :required ["task-id"]}
    :implementation (partial update-task-impl config)})
