@@ -105,6 +105,8 @@
         (is (= "Invalid status value 'foo'. Must be one of: open, closed, in-progress, blocked, any" (:error result)))))))
 
 (deftest parse-list-test
+  ;; Tests for parse-list command parsing, validating filter options,
+  ;; conditional defaults for limit/unique, type coercion, and error handling.
   (testing "parse-list"
     (testing "parses basic arguments"
       (is (= {:limit 30}
@@ -137,6 +139,22 @@
     (testing "uses defaults"
       (is (= {:limit 30}
              (sut/parse-list []))))
+
+    (testing "conditional limit default"
+      (testing "when --unique alone"
+        (is (= {:unique true :limit 1}
+               (sut/parse-list ["--unique"]))
+            "--unique without --limit defaults to limit 1"))
+
+      (testing "when --unique with explicit --limit"
+        (is (= {:unique true :limit 5}
+               (sut/parse-list ["--unique" "--limit" "5"]))
+            "explicit --limit takes precedence over unique default"))
+
+      (testing "when no --unique"
+        (is (= {:limit 30}
+               (sut/parse-list []))
+            "defaults to limit 30 without --unique")))
 
     (testing "coerces types correctly"
       (let [result (sut/parse-list ["--status" "in-progress" "--limit" "20" "--unique"])]
