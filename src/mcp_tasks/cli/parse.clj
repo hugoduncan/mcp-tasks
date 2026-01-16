@@ -76,7 +76,7 @@ OPTIONS:
   --title-pattern, --title <pattern>  Filter by title pattern (regex or substring)
   --blocked <true|false>        Filter by dependency-blocked status (based on :blocked-by relations)
   --show-blocking               Append blocking details section showing which task IDs block each task
-  --limit <n>                   Maximum tasks to return (default: 30)
+  --limit <n>                   Maximum tasks to return (default: 1 when --unique, otherwise 30)
   --unique                      Enforce 0 or 1 match (error if >1)
   --format <format>             Output format: edn, json, human (default: edn)
 
@@ -505,8 +505,7 @@ EXAMPLES:
    :show-blocking {:coerce :boolean
                    :desc "Show which tasks are blocking each listed task"}
    :limit {:coerce :long
-           :default 30
-           :desc "Maximum number of tasks to return"}
+           :desc "Maximum number of tasks to return (default: 1 when --unique, otherwise 30)"}
    :unique {:coerce :boolean
             :desc "Enforce that 0 or 1 task matches (error if >1)"}
    :format {:coerce :keyword
@@ -861,6 +860,17 @@ EXAMPLES:
 
 ;; Parse Functions
 
+(defn- apply-limit-default
+  "Apply conditional default for :limit based on :unique flag.
+
+  When :limit is not explicitly provided:
+  - If :unique is truthy, default to 1
+  - Otherwise default to 30"
+  [parsed]
+  (if (contains? parsed :limit)
+    parsed
+    (assoc parsed :limit (if (:unique parsed) 1 30))))
+
 (defn parse-list
   "Parse arguments for the list command.
 
@@ -874,7 +884,8 @@ EXAMPLES:
                      (cond-> (:c raw-parsed) (assoc :category (:c raw-parsed)))
                      (cond-> (:t raw-parsed) (assoc :type (:t raw-parsed)))
                      (cond-> (contains? raw-parsed :p) (assoc :parent-id (:p raw-parsed)))
-                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed))))
+                     (cond-> (:title raw-parsed) (assoc :title-pattern (:title raw-parsed)))
+                     apply-limit-default)
           format-validation (validate-format parsed)
           status-validation (validate-status parsed)]
       (cond
