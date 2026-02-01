@@ -24,6 +24,7 @@ COMMANDS:
   update       Update task fields
   delete       Delete a task
   reopen       Reopen a closed task
+  work-on      Set up environment for a task
   why-blocked  Show why a task is blocked
   prompts      Manage prompt templates
 
