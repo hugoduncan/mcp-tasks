@@ -54,6 +54,9 @@
 (def ^:private reopen-task-tool-fn
   (dynaload 'mcp-tasks.tool.reopen-task/reopen-task-tool))
 
+(def ^:private work-on-tool-fn
+  (dynaload 'mcp-tasks.tool.work-on/work-on-tool))
+
 (def ^:private tool-map
   "Map of command names to their tool functions.
 
@@ -65,7 +68,8 @@
    :update update-task-tool-fn
    :delete delete-task-tool-fn
    :reopen reopen-task-tool-fn
-   :why-blocked select-tasks-tool-fn})
+   :why-blocked select-tasks-tool-fn
+   :work-on work-on-tool-fn})
 
 (defn- execute-command
   "Execute a command by calling its corresponding tool implementation.
@@ -164,3 +168,11 @@
     (if (seq tasks)
       (assoc response :why-blocked (first tasks))
       response)))
+
+(defn work-on-command
+  "Execute the work-on command.
+
+  Calls tools/work-on-tool with :task-id from parsed options.
+  Returns the parsed response data for formatting."
+  [config parsed-args]
+  (execute-command config :work-on parsed-args))

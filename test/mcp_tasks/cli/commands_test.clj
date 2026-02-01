@@ -1,7 +1,9 @@
 (ns mcp-tasks.cli.commands-test
   (:require
+    [babashka.fs :as fs]
     [clojure.test :refer [deftest is testing]]
     [mcp-tasks.cli.commands :as sut]
+    [mcp-tasks.execution-state :as execution-state]
     [mcp-tasks.tasks-file :as tasks-file]
     [mcp-tasks.test-helpers :as h]))
 
@@ -763,3 +765,93 @@
           (is (= 1 (count complete)))
           (is (= "Task to delete" (:title (first complete))))
           (is (= :deleted (:status (first complete)))))))))
+
+;; work-on-command tests
+
+(deftest work-on-command-returns-task-details
+  ;; Test work-on-command returns task details for a valid task
+  (testing "work-on-command"
+    (h/with-test-setup [test-dir]
+      (testing "returns task details"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Task to work on" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}
+           {:id 2 :status :open :title "Other task" :description "" :design ""
+            :category "medium" :type :bug :meta {} :relations []}])
+
+        (let [result (sut/work-on-command (h/test-config test-dir) {:task-id 1})]
+          (is (= 1 (:task-id result)))
+          (is (= "Task to work on" (:title result)))
+          (is (= "simple" (:category result)))
+          (is (= "task" (:type result)))
+          (is (= "open" (:status result)))
+          (is (some? (:execution-state-file result)))
+          (is (some? (:message result))))))))
+
+(deftest work-on-command-creates-execution-state
+  ;; Test work-on-command creates execution state file
+  (testing "work-on-command"
+    (h/with-test-setup [test-dir]
+      (testing "creates execution state file"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 42 :status :open :title "Test task" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+
+        (sut/work-on-command (h/test-config test-dir) {:task-id 42})
+
+        (let [state-file (str test-dir "/.mcp-tasks-current.edn")]
+          (is (fs/exists? state-file))
+          (let [state (execution-state/read-execution-state test-dir)]
+            (is (= 42 (:task-id state)))
+            (is (some? (:task-start-time state)))))))))
+
+(deftest work-on-command-handles-story-task
+  ;; Test work-on-command handles child task with parent-id
+  (testing "work-on-command"
+    (h/with-test-setup [test-dir]
+      (testing "handles story child task"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 100 :status :open :title "Parent Story" :description "" :design ""
+            :category "large" :type :story :meta {} :relations []}
+           {:id 101 :status :open :title "Child Task" :description "" :design ""
+            :category "simple" :type :task :parent-id 100 :meta {} :relations []}])
+
+        (let [result (sut/work-on-command (h/test-config test-dir) {:task-id 101})]
+          (is (= 101 (:task-id result)))
+          (is (= "Child Task" (:title result))))
+
+        (let [state (execution-state/read-execution-state test-dir)]
+          (is (= 101 (:task-id state)))
+          (is (= 100 (:story-id state))))))))
+
+(deftest work-on-command-error-task-not-found
+  ;; Test work-on-command returns error for non-existent task
+  (testing "work-on-command"
+    (h/with-test-setup [test-dir]
+      (testing "returns error when task not found"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+
+        (let [result (sut/work-on-command (h/test-config test-dir) {:task-id 999})]
+          (is (some? (:error result)))
+          (is (re-find #"No task found" (:error result))))))))
+
+(deftest work-on-command-strips-format-option
+  ;; Test work-on-command removes :format from tool args
+  (testing "work-on-command"
+    (h/with-test-setup [test-dir]
+      (testing "strips format option"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Task One" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+
+        ;; Should not error even with :format in parsed-args
+        (let [result (sut/work-on-command (h/test-config test-dir) {:task-id 1 :format :json})]
+          (is (= 1 (:task-id result)))
+          (is (= "Task One" (:title result))))))))
