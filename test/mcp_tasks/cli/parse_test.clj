@@ -479,6 +479,35 @@
         (is (contains? result :error))
         (is (= "Required option: --task-id (or --id)" (:error result)))))))
 
+(deftest parse-work-on-test
+  ;; Tests for parse-work-on with --task-id option
+  (testing "parse-work-on"
+    (testing "parses task-id successfully"
+      (is (= {:task-id 42}
+             (sut/parse-work-on ["--task-id" "42"]))))
+
+    (testing "uses id alias"
+      (is (= {:task-id 99}
+             (sut/parse-work-on ["--id" "99"]))))
+
+    (testing "parses with format option"
+      (is (= {:task-id 42 :format :human}
+             (sut/parse-work-on ["--task-id" "42" "--format" "human"]))))
+
+    (testing "requires task-id"
+      (let [result (sut/parse-work-on ["--format" "json"])]
+        (is (contains? result :error))
+        (is (= "Required option: --task-id (or --id)" (:error result)))))
+
+    (testing "returns error for invalid format"
+      (let [result (sut/parse-work-on ["--task-id" "42" "--format" "csv"])]
+        (is (contains? result :error))
+        (is (= "Invalid format: csv. Must be one of: edn, json, human" (:error result)))))
+
+    (testing "returns error for non-integer task-id"
+      (let [result (sut/parse-work-on ["--task-id" "abc"])]
+        (is (contains? result :error))))))
+
 (deftest parse-prompts-test
   ;; Tests for parse-prompts with list, customize, show, and install subcommands
   (testing "parse-prompts"
