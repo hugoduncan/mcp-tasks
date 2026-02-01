@@ -1,10 +1,10 @@
 (ns mcp-tasks.cli.format-test
   "Tests for CLI output formatting."
   (:require
-    [cheshire.core :as json]
-    [clojure.string :as str]
-    [clojure.test :refer [deftest testing is]]
-    [mcp-tasks.cli.format :as sut]))
+   [cheshire.core :as json]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest testing is]]
+   [mcp-tasks.cli.format :as sut]))
 
 ;; Test fixtures
 
@@ -522,9 +522,9 @@
 (deftest unknown-format-test
   (testing "render with unknown format"
     (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"Unknown format type"
-          (sut/render :xml task-list-response)))))
+         clojure.lang.ExceptionInfo
+         #"Unknown format type"
+         (sut/render :xml task-list-response)))))
 
 (deftest format-prompts-show-test
   ;; Test formatting prompts show response for human output
@@ -799,3 +799,88 @@
             output (sut/format-table [task])]
         (is (not (str/includes? output "Code Reviewed")))
         (is (not (str/includes? output "PR Number")))))))
+
+;; Work-on formatting tests
+
+(deftest format-work-on-test
+  ;; Tests format-work-on function for human-readable output.
+  ;; Contracts:
+  ;; - Shows "Working on task N: title" as first line
+  ;; - Shows message on second line
+  ;; - Shows "Switch to worktree: cd path" when worktree-path present
+  (testing "format-work-on"
+    (testing "shows task ID, title, and message"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :message "Task validated successfully"}
+            output (sut/format-work-on data)]
+        (is (str/includes? output "Working on task 42: Fix bug"))
+        (is (str/includes? output "Task validated successfully"))))
+
+    (testing "shows worktree switch hint when worktree-path present"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :message "Worktree created"
+                  :worktree-path "/path/to/worktree"}
+            output (sut/format-work-on data)]
+        (is (str/includes? output "Working on task 42: Fix bug"))
+        (is (str/includes? output "Worktree created"))
+        (is (str/includes? output "Switch to worktree: cd /path/to/worktree"))))
+
+    (testing "omits worktree hint when worktree-path not present"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :message "Task validated successfully"
+                  :worktree-path nil}
+            output (sut/format-work-on data)]
+        (is (str/includes? output "Working on task 42: Fix bug"))
+        (is (not (str/includes? output "Switch to worktree")))))))
+
+(deftest render-work-on-test
+  ;; Tests that render :human dispatches correctly for work-on responses.
+  ;; Recognizes work-on data by presence of :task-id and :message without :tasks.
+  (testing "render for work-on response"
+    (testing "renders human format for work-on"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :category "simple"
+                  :message "Task validated successfully"}
+            output (sut/render :human data)]
+        (is (str/includes? output "Working on task 42: Fix bug"))
+        (is (str/includes? output "Task validated successfully"))))
+
+    (testing "renders human format with worktree hint"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :category "simple"
+                  :message "Worktree created"
+                  :worktree-path "/path/to/worktree"}
+            output (sut/render :human data)]
+        (is (str/includes? output "Switch to worktree: cd /path/to/worktree"))))
+
+    (testing "renders JSON format with camelCase keys"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :worktree-path "/path/to/worktree"
+                  :message "Task validated"}
+            output (sut/render :json data)
+            parsed (json/parse-string output)]
+        (is (contains? parsed "taskId"))
+        (is (contains? parsed "worktreePath"))
+        (is (= 42 (get parsed "taskId")))))
+
+    (testing "renders EDN format unchanged"
+      (let [data {:task-id 42
+                  :title "Fix bug"
+                  :message "Task validated"}
+            output (sut/render :edn data)
+            parsed (read-string output)]
+        (is (= 42 (:task-id parsed)))
+        (is (= "Fix bug" (:title parsed)))))
+
+    (testing "renders error response for work-on error"
+      (let [data {:error "Task not found"
+                  :metadata {:task-id 999}}
+            output (sut/render :human data)]
+        (is (str/includes? output "Error: Task not found"))
+        (is (str/includes? output "task-id: 999"))))))
