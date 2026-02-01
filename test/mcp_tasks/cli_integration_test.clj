@@ -1124,3 +1124,105 @@
               task (:task parsed)]
           (is (or (nil? (:shared-context task))
                   (empty? (:shared-context task)))))))))
+
+(deftest work-on-workflow-test
+  ;; Test work-on command end-to-end
+  (testing "work-on-workflow"
+    (testing "add a task to work on"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "add"
+                     "--category" "simple"
+                     "--title" "Test work-on task")]
+        (is (= 0 (:exit result)))))
+
+    (testing "work-on returns task details in human format"
+      (let [result (call-cli
+                     "--format" "human"
+                     "work-on"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "Working on task 1"))
+        (is (str/includes? (:out result) "Test work-on task"))))
+
+    (testing "work-on returns task details in edn format"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "work-on"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 1 (:task-id parsed)))
+          (is (= "Test work-on task" (:title parsed)))
+          (is (= "simple" (:category parsed)))
+          (is (some? (:execution-state-file parsed))))))
+
+    (testing "work-on returns task details in json format"
+      (let [result (call-cli
+                     "--format" "json"
+                     "work-on"
+                     "--task-id" "1")]
+        (is (= 0 (:exit result)))
+        (let [parsed (json/parse-string (:out result) keyword)]
+          (is (= 1 (:taskId parsed)))
+          (is (= "Test work-on task" (:title parsed))))))
+
+    (testing "work-on creates execution state file"
+      (let [state-file (io/file *test-dir* ".mcp-tasks-current.edn")]
+        (is (.exists state-file))
+        (let [state (read-string (slurp state-file))]
+          (is (= 1 (:task-id state)))
+          (is (some? (:task-start-time state))))))
+
+    (testing "work-on with non-existent task returns error"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "work-on"
+                     "--task-id" "999")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "No task found"))))
+
+    (testing "work-on without task-id returns error"
+      (let [result (call-cli "work-on")]
+        (is (= 1 (:exit result)))
+        (is (not (str/blank? (:err result))))
+        (is (str/includes? (:err result) "task-id"))))))
+
+(deftest work-on-story-child-workflow-test
+  ;; Test work-on with story child tasks
+  (testing "work-on-story-child-workflow"
+    (testing "add parent story and child task"
+      (call-cli
+        "add"
+        "--category" "large"
+        "--title" "Parent story"
+        "--type" "story")
+      (call-cli
+        "add"
+        "--category" "simple"
+        "--title" "Child task"
+        "--parent-id" "1"))
+
+    (testing "work-on child task sets story-id in execution state"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "work-on"
+                     "--task-id" "2")]
+        (is (= 0 (:exit result)))
+        (let [parsed (read-string (:out result))]
+          (is (= 2 (:task-id parsed)))
+          (is (= "Child task" (:title parsed)))))
+      (let [state-file (io/file *test-dir* ".mcp-tasks-current.edn")
+            state (read-string (slurp state-file))]
+        (is (= 2 (:task-id state)))
+        (is (= 1 (:story-id state)))))))
+
+(deftest work-on-help-test
+  ;; Test work-on help functionality
+  (testing "work-on-help"
+    (testing "work-on --help shows usage"
+      (let [result (call-cli "work-on" "--help")]
+        (is (= 0 (:exit result)))
+        (is (str/includes? (:out result) "work-on"))
+        (is (str/includes? (:out result) "--task-id"))))))
