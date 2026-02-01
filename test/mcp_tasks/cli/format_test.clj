@@ -1,10 +1,10 @@
 (ns mcp-tasks.cli.format-test
   "Tests for CLI output formatting."
   (:require
-   [cheshire.core :as json]
-   [clojure.string :as str]
-   [clojure.test :refer [deftest testing is]]
-   [mcp-tasks.cli.format :as sut]))
+    [cheshire.core :as json]
+    [clojure.string :as str]
+    [clojure.test :refer [deftest testing is]]
+    [mcp-tasks.cli.format :as sut]))
 
 ;; Test fixtures
 
@@ -522,9 +522,9 @@
 (deftest unknown-format-test
   (testing "render with unknown format"
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo
-         #"Unknown format type"
-         (sut/render :xml task-list-response)))))
+          clojure.lang.ExceptionInfo
+          #"Unknown format type"
+          (sut/render :xml task-list-response)))))
 
 (deftest format-prompts-show-test
   ;; Test formatting prompts show response for human output
