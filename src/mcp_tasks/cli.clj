@@ -12,7 +12,8 @@
     [mcp-tasks.config :as config]))
 
 (def valid-commands
-  #{"list" "show" "add" "complete" "update" "delete" "reopen" "why-blocked" "prompts"})
+  #{"list" "show" "add" "complete" "update" "delete" "reopen" "why-blocked"
+    "prompts" "work-on"})
 
 (defn exit
   "Exit the program with the given status code.
@@ -47,7 +48,8 @@
                       "delete" (parse/parse-delete command-args)
                       "reopen" (parse/parse-reopen command-args)
                       "why-blocked" (parse/parse-why-blocked command-args)
-                      "prompts" (parse/parse-prompts command-args))]
+                      "prompts" (parse/parse-prompts command-args)
+                      "work-on" (parse/parse-work-on command-args))]
     (cond
       ;; Check for help request
       (:help parsed-args)
@@ -72,6 +74,7 @@
                      "delete" (commands/delete-command resolved-config parsed-args)
                      "reopen" (commands/reopen-command resolved-config parsed-args)
                      "why-blocked" (commands/why-blocked-command resolved-config parsed-args)
+                     "work-on" (commands/work-on-command resolved-config parsed-args)
                      "prompts" (case (:subcommand parsed-args)
                                  :list (prompts/prompts-list-command resolved-config parsed-args)
                                  :customize (prompts/prompts-customize-command resolved-config parsed-args)
@@ -135,6 +138,7 @@
                             "delete" parse/delete-help
                             "reopen" parse/reopen-help
                             "why-blocked" parse/why-blocked-help
+                            "work-on" parse/work-on-help
                             "prompts" parse/prompts-help)}
 
                    ;; Handle unknown command

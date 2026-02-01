@@ -24,6 +24,7 @@ COMMANDS:
   update       Update task fields
   delete       Delete a task
   reopen       Reopen a closed task
+  work-on      Set up environment for a task
   why-blocked  Show why a task is blocked
   prompts      Manage prompt templates
 
@@ -227,6 +228,21 @@ OPTIONS:
 EXAMPLES:
   clojure -M:cli why-blocked --task-id 42
   clojure -M:cli why-blocked --id 42 --format human")
+
+(def work-on-help
+  "Help text for the work-on command."
+  "Set up the environment for working on a task
+
+USAGE:
+  clojure -M:cli work-on --task-id <id> [options]
+
+OPTIONS:
+  --task-id, --id <id>  Task ID to work on (required)
+  --format <format>     Output format: edn, json, human (default: edn)
+
+EXAMPLES:
+  clojure -M:cli work-on --task-id 42
+  clojure -M:cli work-on --id 42 --format human")
 
 (def prompts-help
   "Help text for the prompts command."
@@ -697,6 +713,24 @@ EXAMPLES:
    :format {:coerce :keyword
             :desc "Output format (edn, json, human)"}})
 
+(def work-on-spec
+  "Spec for the work-on command.
+
+  Validates and coerces arguments for setting up task environment.
+
+  Coercion rules:
+  - :task-id -> long integer
+  - :format -> keyword (edn, json, human)
+
+  Validation:
+  - Post-parse validation checks format is valid (edn, json, human)
+  - Requires :task-id to be present"
+  {:task-id {:coerce :long
+             :alias :id
+             :desc "Task ID to work on"}
+   :format {:coerce :keyword
+            :desc "Output format (edn, json, human)"}})
+
 (def prompts-list-spec
   "Spec for the prompts list subcommand.
 
@@ -1096,6 +1130,31 @@ EXAMPLES:
   [args]
   (try
     (let [parsed (cli/parse-opts args {:spec why-blocked-spec :restrict (get-allowed-keys why-blocked-spec)})
+          task-id (resolve-alias parsed :task-id :id)]
+      (cond
+        (not task-id)
+        {:error "Required option: --task-id (or --id)"
+         :metadata {:args args}}
+
+        :else
+        (let [result (-> parsed
+                         (dissoc :id)
+                         (assoc :task-id task-id))
+              format-validation (validate-format result)]
+          (if (:valid? format-validation)
+            result
+            (dissoc format-validation :valid?)))))
+    (catch Exception e
+      {:error (format-unknown-option-error (.getMessage e))
+       :metadata {:args args}})))
+
+(defn parse-work-on
+  "Parse arguments for the work-on command.
+
+  Returns parsed options map or error map with :error key."
+  [args]
+  (try
+    (let [parsed (cli/parse-opts args {:spec work-on-spec :restrict (get-allowed-keys work-on-spec)})
           task-id (resolve-alias parsed :task-id :id)]
       (cond
         (not task-id)

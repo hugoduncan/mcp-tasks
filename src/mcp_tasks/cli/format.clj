@@ -468,6 +468,25 @@
                        ""
                        content]))))
 
+;; Work-on formatting
+
+(defn format-work-on
+  "Format work-on response for human-readable output.
+
+  Displays task ID, title, and message. If worktree-path is present,
+  includes a hint to switch to the worktree directory."
+  [data]
+  (let [task-id (:task-id data)
+        title (:title data)
+        message (:message data)
+        worktree-path (:worktree-path data)
+        lines [(str "Working on task " task-id ": " title)
+               message]]
+    (str/join "\n"
+              (if worktree-path
+                (conj lines (str "Switch to worktree: cd " worktree-path))
+                lines))))
+
 ;; Multimethod for format dispatch
 
 (defmulti render
@@ -541,6 +560,10 @@
     ;; Why-blocked response
     (:why-blocked data)
     (format-why-blocked (:why-blocked data))
+
+    ;; Work-on response (has :task-id and :message, but not :tasks)
+    (and (:task-id data) (:message data) (not (:tasks data)))
+    (format-work-on data)
 
     ;; Prompts list response
     (:prompts data)
