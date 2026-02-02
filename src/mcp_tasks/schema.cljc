@@ -40,7 +40,7 @@
   [:map
    [:id :int]
    [:parent-id {:optional true} [:maybe :int]]
-   [:status [:enum :open :closed :in-progress :blocked :deleted]]
+   [:status [:enum :open :closed :in-progress :blocked :deleted :done]]
    [:title :string]
    [:description :string]
    [:design :string]
