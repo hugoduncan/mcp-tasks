@@ -13,23 +13,23 @@ Execute the next incomplete task from the story.
 ### 1. Find first unblocked incomplete child
 
 {% if cli %}
-Call `mcp-tasks list --parent-id <story-id> --blocked false --limit 1 --format edn`.
+Call `mcp-tasks list --parent-id <story-id> --status open --blocked false --limit 1 --format edn`.
 
 Display progress using the metadata from the list command output.
 
-**If no unblocked tasks:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
-- Incomplete tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
-- No incomplete tasks + completed count > 0: All tasks complete; suggest review/PR; stop
-- No incomplete tasks + completed count = 0: Suggest refining story or creating tasks; stop
+**If no tasks found:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
+- `:open` tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
+- No `:open` tasks + completed count > 0: All tasks complete; suggest review/PR; stop
+- No `:open` tasks + completed count = 0: Suggest refining story or creating tasks; stop
 {% else %}
-Call `select-tasks` with `parent-id: <story-id>`, `blocked: false`, `limit: 1`.
+Call `select-tasks` with `parent-id: <story-id>`, `status: "open"`, `blocked: false`, `limit: 1`.
 
 Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
 
-**If no unblocked tasks:** Call `select-tasks` with `parent-id` only:
-- Incomplete tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
-- No incomplete + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
-- No incomplete + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
+**If no tasks found:** Call `select-tasks` with `parent-id` only:
+- `:open` tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
+- No `:open` tasks + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
+- No `:open` tasks + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
 {% endif %}
 
 **If task lacks category:** Inform user; stop
