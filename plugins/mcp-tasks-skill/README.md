@@ -32,8 +32,8 @@ If you haven't installed the mcp-tasks server yet:
   {:replace-paths []
    :replace-deps {org.hugoduncan/mcp-tasks
                   {:git/url "https://github.com/hugoduncan/mcp-tasks"
-                   :git/tag "v0.1.114"
-                   :git/sha "1c8017e"}
+                   :git/tag "v0.1.164"
+                   :git/sha "8344197f55e1de6af2c8e6512d3da1b72f664aac"}
                   org.clojure/clojure {:mvn/version "1.12.3"}}
    :exec-fn mcp-tasks.main/start}}}
 ```
