@@ -44,7 +44,7 @@ Tasks are stored in EDNL (EDN Lines) format where each line is a valid EDN map r
 ```clojure
 {:id              ;; int - unique task identifier
  :parent-id       ;; int or nil - optional parent task reference
- :status          ;; :open | :closed | :in-progress | :blocked
+ :status          ;; :open | :in-progress | :done | :closed | :blocked
  :title           ;; string - task title
  :description     ;; string - detailed task description
  :design          ;; string - design notes
@@ -77,7 +77,7 @@ The system supports task dependencies through `:blocked-by` relationships, enabl
 
 **Blocking Logic:**
 
-A task is **blocked** if ANY of its `:blocked-by` relations reference an incomplete task (status `:open`, `:in-progress`, or `:blocked`). A task is **unblocked** if ALL of its `:blocked-by` relations reference completed tasks (status `:closed` or `:deleted`), or if it has no `:blocked-by` relations.
+A task is **blocked** if ANY of its `:blocked-by` relations reference an incomplete task (status `:open`, `:in-progress`, or `:blocked`). A task is **unblocked** if ALL of its `:blocked-by` relations reference completed tasks (status `:closed`, `:done`, or `:deleted`), or if it has no `:blocked-by` relations. Note that `:done` tasks do NOT block dependent tasks—they have finished implementation and are awaiting merge.
 
 **Status Field vs. blocked-by Relations:**
 
@@ -705,7 +705,7 @@ For complete workflow documentation, job details, and binary testing instruction
 
 - **Categories**: Organize tasks by type/purpose, each with custom execution instructions
 - **Default Categories**: Server provides defaults, but system is fully configurable
-- **Task Lifecycle**: Tasks move from incomplete → complete → archived
+- **Task Lifecycle**: Tasks progress `:open` → `:in-progress` → `:done` → `:closed` (archived)
 
 
 ## Other
