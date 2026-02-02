@@ -47,9 +47,12 @@ Set up your working environment:
 - Create or switch to story branch: `git checkout -b <story-id>-<story-title-slug>` (or `git checkout <branch>` if exists)
 - Track which task you're working on (note the task ID for later completion)
 - Display current branch and working directory status
+- Mark the task as in-progress: `mcp-tasks update --task-id <id> --status in-progress`
 {% else %}
 Call `work-on` with `task-id: <child-task-id>`. Display environment:
 worktree name/path, branch (if present).
+
+Mark the task as in-progress: call `update-task` with `task-id` and `status: "in-progress"`.
 {% endif %}
 
 ### 3. Display parent shared context

@@ -64,8 +64,11 @@ Set up your working environment:
 - Create a feature branch if not already on one: `git checkout -b <task-id>-<task-title-slug>`
 - Track which task you're working on (note the task ID for later completion)
 - Ensure working directory is clean
+- Mark the task as in-progress: `mcp-tasks update --task-id <id> --status in-progress`
 {% else %}
 Call `work-on` with `task-id`. Display environment: worktree name/directory, branch (if present).
+
+Mark the task as in-progress: call `update-task` with `task-id` and `status: "in-progress"`.
 {% endif %}
 
 ### 5. Discovering Issues
