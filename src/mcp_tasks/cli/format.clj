@@ -71,6 +71,7 @@
     :open "○ open"
     :closed "✓ closed"
     :in-progress "◐ in-progress"
+    :done "● done"
     :blocked "✗ blocked"
     :deleted "⊗ deleted"
     nil "○ open"

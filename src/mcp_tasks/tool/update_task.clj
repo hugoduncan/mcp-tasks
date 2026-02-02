@@ -438,7 +438,7 @@
       :description "New parent task ID (optional). Pass null to remove parent relationship."}
      "status"
      {:type "string"
-      :enum ["open" "closed" "in-progress" "blocked"]
+      :enum ["open" "closed" "in-progress" "blocked" "done"]
       :description "New task status (optional)"}
      "category"
      {:type "string"

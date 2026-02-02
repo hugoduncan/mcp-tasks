@@ -104,7 +104,7 @@
             (is (str/includes? content "Check Refinement"))
             (is (str/includes? content "Retrieve Category Instructions"))
             (is (str/includes? content "Execute"))
-            (is (str/includes? content "Complete"))
+            (is (str/includes? content "Mark Done"))
             (is (str/includes? content "select-tasks"))
             (is (str/includes? content "prompt://category-"))
             (is (str/includes? content "complete-task"))))

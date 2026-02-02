@@ -40,7 +40,7 @@
   [:map
    [:id :int]
    [:parent-id {:optional true} [:maybe :int]]
-   [:status [:enum :open :closed :in-progress :blocked :deleted]]
+   [:status [:enum :open :in-progress :done :closed :blocked :deleted]]
    [:title :string]
    [:description :string]
    [:design :string]
@@ -57,8 +57,10 @@
   "Set of task statuses that prevent completion or deletion of parent tasks.
 
   Tasks with these statuses are considered 'blocking' because they represent
-  incomplete or problematic work. Tasks with :status :closed or :status :deleted
-  are considered non-blocking as they represent completed or removed work."
+  incomplete or problematic work. Non-blocking statuses:
+  - :done - Implementation complete, awaiting merge (unblocks dependent tasks)
+  - :closed - Fully merged and archived
+  - :deleted - Removed work"
   #{:open :in-progress :blocked})
 
 ;; Validation Helpers

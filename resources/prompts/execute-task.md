@@ -64,8 +64,11 @@ Set up your working environment:
 - Create a feature branch if not already on one: `git checkout -b <task-id>-<task-title-slug>`
 - Track which task you're working on (note the task ID for later completion)
 - Ensure working directory is clean
+- Mark the task as in-progress: `mcp-tasks update --task-id <id> --status in-progress`
 {% else %}
 Call `work-on` with `task-id`. Display environment: worktree name/directory, branch (if present).
+
+Mark the task as in-progress: call `update-task` with `task-id` and `status: "in-progress"`.
 {% endif %}
 
 ### 5. Discovering Issues
@@ -78,10 +81,14 @@ Before completion, verify all discoveries captured.
 
 Follow category instructions with task context (ID, title, description, design, type, relations). Execute workflow steps in order.
 
-### 7. Complete
+### 7. Mark Done
+
+Mark the task as `:done` to indicate implementation is complete but awaiting merge.
 
 {% if cli %}
-Call `mcp-tasks complete --task-id <id>` with optional `--comment "..."`. Don't complete if execution failed.
+Call `mcp-tasks update --task-id <id> --status done`. Don't mark done if execution failed.
 {% else %}
-Call `complete-task` with `task-id`, `title`, optional `completion-comment`. Don't complete if execution failed.
+Call `update-task` with `task-id` and `status: "done"`. Don't mark done if execution failed.
 {% endif %}
+
+**Note:** The `:done` status indicates the implementation is complete and a PR has been created, but the changes haven't been merged yet. Call `complete-task` manually after the PR is merged to move the task to `:closed`.

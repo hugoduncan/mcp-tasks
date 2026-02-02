@@ -13,23 +13,27 @@ Execute the next incomplete task from the story.
 ### 1. Find first unblocked incomplete child
 
 {% if cli %}
-Call `mcp-tasks list --parent-id <story-id> --blocked false --limit 1 --format edn`.
+Call `mcp-tasks list --parent-id <story-id> --status open --blocked false --limit 1 --format edn`.
 
-Display progress using the metadata from the list command output.
+Display progress using metadata: "Task N remaining" where N = `:open-task-count` (count of `:open` status tasks).
 
-**If no unblocked tasks:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
-- Incomplete tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
-- No incomplete tasks + completed count > 0: All tasks complete; suggest review/PR; stop
-- No incomplete tasks + completed count = 0: Suggest refining story or creating tasks; stop
+**Note:** The `:open-task-count` reflects only `:open` tasks. Tasks in `:in-progress`, `:done`, or `:blocked` status are not included in this count.
+
+**If no tasks found:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
+- `:open` tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
+- No `:open` tasks + completed count > 0: All tasks complete; suggest review/PR; stop
+- No `:open` tasks + completed count = 0: Suggest refining story or creating tasks; stop
 {% else %}
-Call `select-tasks` with `parent-id: <story-id>`, `blocked: false`, `limit: 1`.
+Call `select-tasks` with `parent-id: <story-id>`, `status: "open"`, `blocked: false`, `limit: 1`.
 
-Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
+Display progress using metadata: "Task N remaining" where N = `:open-task-count` (count of `:open` status tasks).
 
-**If no unblocked tasks:** Call `select-tasks` with `parent-id` only:
-- Incomplete tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
-- No incomplete + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
-- No incomplete + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
+**Note:** The `:open-task-count` reflects only `:open` tasks. Tasks in `:in-progress`, `:done`, or `:blocked` status are not included in this count.
+
+**If no tasks found:** Call `select-tasks` with `parent-id` only:
+- `:open` tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
+- No `:open` tasks + `:completed-task-count` > 0: All tasks complete; suggest review/PR; stop
+- No `:open` tasks + `:completed-task-count` = 0: Suggest refining story or creating tasks; stop
 {% endif %}
 
 **If task lacks category:** Inform user; stop
@@ -43,9 +47,12 @@ Set up your working environment:
 - Create or switch to story branch: `git checkout -b <story-id>-<story-title-slug>` (or `git checkout <branch>` if exists)
 - Track which task you're working on (note the task ID for later completion)
 - Display current branch and working directory status
+- Mark the task as in-progress: `mcp-tasks update --task-id <id> --status in-progress`
 {% else %}
 Call `work-on` with `task-id: <child-task-id>`. Display environment:
 worktree name/path, branch (if present).
+
+Mark the task as in-progress: call `update-task` with `task-id` and `status: "in-progress"`.
 {% endif %}
 
 ### 3. Display parent shared context
@@ -127,20 +134,20 @@ mcp-tasks update --task-id <story-id> --shared-context "Added :parent-shared-con
 
 {% include "infrastructure/out-of-scope-issues.md" %}
 
-### 8. Complete
+### 8. Mark Done
+
+Mark the task as `:done` to indicate implementation is complete but awaiting merge.
 
 {% if cli %}
-Call `mcp-tasks complete --task-id <id>` with optional `--comment "..."`.
+Call `mcp-tasks update --task-id <id> --status done`. Don't mark done if execution failed.
 {% else %}
-Call `complete-task` with `task-id`, optional `completion-comment`.
+Call `update-task` with `task-id` and `status: "done"`. Don't mark done if execution failed.
 {% endif %}
 
-**Never complete the parent story.** Only complete child tasks. User
-reviews before story completion.
+**Note:** The `:done` status indicates the implementation is complete and a PR has been created, but the changes haven't been merged yet. Call `complete-task` manually after the PR is merged to move the task to `:closed`.
 
-**Never clear execution state.** The `complete-task` tool automatically
-preserves story-level tracking when completing child tasks. Do not call
-`execution-state action:"clear"`.
+**Never mark the parent story as done.** Only mark child tasks. User
+reviews before story completion.
 
 **On failure:** Execution state persists. Starting new task overwrites
 automatically.

@@ -8,7 +8,7 @@
   - parent-id: Child tasks of a specific parent
   - title-pattern: Regex or substring matching
   - type: Task type (:task, :bug, :feature, :story, :chore)
-  - status: Task status (:open, :closed, :in-progress, :blocked)
+  - status: Task status (:open, :closed, :in-progress, :blocked, :done)
 
   Results are returned with metadata including count and pagination info.
   Supports both single-task lookup (unique: true) and multi-task queries
@@ -223,7 +223,7 @@
   - parent-id: Parent task ID for filtering children
   - title-pattern: Pattern to match task titles (regex or substring)
   - type: Task type (task, bug, feature, story, chore)
-  - status: Task status (open, closed, in-progress, blocked)
+  - status: Task status (open, closed, in-progress, blocked, done)
   - blocked: Filter by blocked status (true = only blocked, false = only unblocked, nil = all)
   - limit: Maximum number of tasks to return (default: 5, must be > 0)
   - unique: If true, enforce that 0 or 1 task matches (error if >1)
@@ -257,7 +257,7 @@
       :description "Task type to filter by"}
      "status"
      {:type "string"
-      :enum ["open" "closed" "in-progress" "blocked"]
+      :enum ["open" "closed" "in-progress" "blocked" "done"]
       :description "Task status to filter by"}
      "blocked"
      {:type "boolean"

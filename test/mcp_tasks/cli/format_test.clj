@@ -137,6 +137,7 @@
       (is (= "○ open" (sut/format-status :open)))
       (is (= "✓ closed" (sut/format-status :closed)))
       (is (= "◐ in-progress" (sut/format-status :in-progress)))
+      (is (= "● done" (sut/format-status :done)))
       (is (= "✗ blocked" (sut/format-status :blocked)))
       (is (= "⊗ deleted" (sut/format-status :deleted))))
 

@@ -904,6 +904,45 @@
             (is (= "Blocked bug" (:title (first tasks))))
             (is (true? (:is-blocked (first tasks))))))))))
 
+(deftest select-tasks-blocked-by-done-task-is-not-blocked
+  ;; Test that a task blocked-by a :done task is not considered blocked.
+  ;; :done status means implementation complete, awaiting merge - should not block dependents.
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks blocked status with done blocking task"
+      (testing "task blocked-by done task is not blocked"
+        (let [done-task {:id 1
+                         :type :task
+                         :title "Done blocking task"
+                         :description ""
+                         :design ""
+                         :category "test"
+                         :status :done
+                         :meta {}
+                         :relations []}
+              task2 {:id 2
+                     :type :task
+                     :title "Task blocked by done"
+                     :description ""
+                     :design ""
+                     :category "test"
+                     :status :open
+                     :meta {}
+                     :relations [{:id 1 :relates-to 1 :as-type :blocked-by}]}]
+          ;; Both tasks in tasks.ednl - :done tasks are not archived
+          (write-tasks-ednl test-dir [done-task task2])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:category "test"})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)
+                tasks (:tasks response)
+                blocked-task (first (filter #(= 2 (:id %)) tasks))]
+            (is (false? (:isError result)))
+            ;; Should return both tasks
+            (is (= 2 (count tasks)))
+            ;; Task 2 should NOT be blocked since task 1 has :done status
+            (is (false? (:is-blocked blocked-task))
+                ":done task should not block dependent tasks")
+            (is (= [] (:blocking-task-ids blocked-task)))))))))
+
 (deftest select-tasks-blocked-by-completed-task-is-not-blocked
   ;; Test that a task blocked-by a completed task is not considered blocked
   (h/with-test-setup [test-dir]
@@ -1116,3 +1155,25 @@
             (is (= 2 (:id task)))
             (is (= ["Completed task context"]
                    (:parent-shared-context task)))))))))
+
+(deftest select-tasks-status-done
+  ;; Verifies select-tasks correctly filters tasks by status:"done"
+  ;; This tests the tool schema change that added "done" to the status enum.
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks :status filter"
+      (testing "filters by status done"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "Open task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+           {:id 2 :parent-id nil :title "Done task 1" :description "" :design "" :category "test" :type :task :status :done :meta {} :relations []}
+           {:id 3 :parent-id nil :title "Done task 2" :description "" :design "" :category "test" :type :task :status :done :meta {} :relations []}
+           {:id 4 :parent-id nil :title "In progress task" :description "" :design "" :category "test" :type :task :status :in-progress :meta {} :relations []}])
+
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "done"})
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+          (is (false? (:isError result)))
+          (is (= 2 (count (:tasks response))))
+          (is (= #{"Done task 1" "Done task 2"}
+                 (set (map :title (:tasks response)))))
+          (is (every? #(= "done" (name (:status %))) (:tasks response))))))))
