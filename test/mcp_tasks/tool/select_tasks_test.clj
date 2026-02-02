@@ -1155,3 +1155,25 @@
             (is (= 2 (:id task)))
             (is (= ["Completed task context"]
                    (:parent-shared-context task)))))))))
+
+(deftest select-tasks-status-done
+  ;; Verifies select-tasks correctly filters tasks by status:"done"
+  ;; This tests the tool schema change that added "done" to the status enum.
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks :status filter"
+      (testing "filters by status done"
+        (h/write-ednl-test-file
+          test-dir
+          "tasks.ednl"
+          [{:id 1 :parent-id nil :title "Open task" :description "" :design "" :category "test" :type :task :status :open :meta {} :relations []}
+           {:id 2 :parent-id nil :title "Done task 1" :description "" :design "" :category "test" :type :task :status :done :meta {} :relations []}
+           {:id 3 :parent-id nil :title "Done task 2" :description "" :design "" :category "test" :type :task :status :done :meta {} :relations []}
+           {:id 4 :parent-id nil :title "In progress task" :description "" :design "" :category "test" :type :task :status :in-progress :meta {} :relations []}])
+
+        (let [result (#'sut/select-tasks-impl (h/test-config test-dir) nil {:status "done"})
+              response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+          (is (false? (:isError result)))
+          (is (= 2 (count (:tasks response))))
+          (is (= #{"Done task 1" "Done task 2"}
+                 (set (map :title (:tasks response)))))
+          (is (every? #(= "done" (name (:status %))) (:tasks response))))))))
