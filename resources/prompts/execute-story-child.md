@@ -15,7 +15,9 @@ Execute the next incomplete task from the story.
 {% if cli %}
 Call `mcp-tasks list --parent-id <story-id> --status open --blocked false --limit 1 --format edn`.
 
-Display progress using the metadata from the list command output.
+Display progress using metadata: "Task N remaining" where N = `:open-task-count` (count of `:open` status tasks).
+
+**Note:** The `:open-task-count` reflects only `:open` tasks. Tasks in `:in-progress`, `:done`, or `:blocked` status are not included in this count.
 
 **If no tasks found:** Call `mcp-tasks list --parent-id <story-id> --format edn`:
 - `:open` tasks exist (all blocked): List ID, title, `blocking-task-ids`; suggest completing blockers; stop
@@ -24,7 +26,9 @@ Display progress using the metadata from the list command output.
 {% else %}
 Call `select-tasks` with `parent-id: <story-id>`, `status: "open"`, `blocked: false`, `limit: 1`.
 
-Display progress: "Task X of Y" where X = `:completed-task-count`, Y = `(+ :open-task-count :completed-task-count)`
+Display progress using metadata: "Task N remaining" where N = `:open-task-count` (count of `:open` status tasks).
+
+**Note:** The `:open-task-count` reflects only `:open` tasks. Tasks in `:in-progress`, `:done`, or `:blocked` status are not included in this count.
 
 **If no tasks found:** Call `select-tasks` with `parent-id` only:
 - `:open` tasks exist (all blocked): List ID, title, `:blocking-task-ids`; suggest completing blockers; stop
