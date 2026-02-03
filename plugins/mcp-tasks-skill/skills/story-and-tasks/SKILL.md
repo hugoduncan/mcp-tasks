@@ -52,6 +52,12 @@ Each activity can be invoked via slash command or by programmatically accessing 
 - MCP resource: `prompt://refine-task`
 - Implementation: Use slash command OR read resource and follow prompt instructions
 
+**Review task implementation**
+- Slash command: `/mcp-tasks:review-task-implementation [task-spec]`
+- Arguments: Task ID ("#59", "59", "task 59") or none (uses current execution state)
+- MCP resource: `prompt://review-task-implementation`
+- Implementation: Use slash command OR read resource and follow prompt instructions
+
 ### Story Activities
 
 **Create story tasks**
