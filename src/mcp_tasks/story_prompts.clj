@@ -29,6 +29,10 @@
   "Review the implementation of a story."
   (load-and-render-prompt "prompts/review-story-implementation.md"))
 
+(def review-task-implementation
+  "Review the implementation of a task before completion."
+  (load-and-render-prompt "prompts/review-task-implementation.md"))
+
 (def complete-story
   "Mark a story as complete and archive it."
   (load-and-render-prompt "prompts/complete-story.md"))
