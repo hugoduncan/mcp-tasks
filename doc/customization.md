@@ -223,9 +223,18 @@ resources/prompts/
 ├── execute-story-child.md
 └── infrastructure/
     ├── story-parsing.md
+    ├── task-parsing.md
     ├── out-of-scope-issues.md
     └── branch-management.md
 ```
+
+**Available infrastructure templates:**
+
+- **`story-parsing.md`** - Argument parsing for story-based prompts (numeric ID, `#N`, or text matching)
+- **`task-parsing.md`** - Argument parsing for task-based prompts (same format as story-parsing but for individual tasks)
+- **`out-of-scope-issues.md`** - Instructions for handling issues discovered during task execution
+- **`branch-management.md`** - Git branch workflow instructions
+- **`worktree-management.md`** - Git worktree setup and cleanup instructions
 
 Example infrastructure file (`infrastructure/story-parsing.md`):
 ```markdown
