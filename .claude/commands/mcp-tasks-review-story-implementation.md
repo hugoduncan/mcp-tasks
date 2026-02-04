@@ -80,6 +80,20 @@ Handle no match or multiple matches by informing user.
 
    - If user selects 'none' or provides no selections, skip task creation
 
+7. Record the review completion:
+
+   - After the review is complete, call `update-task` to record the review timestamp:
+     - `task-id`: the story's ID from step 1
+     - `code-reviewed`: current timestamp in ISO-8601 format (e.g., "2025-01-15T14:30:00Z")
+
+   Example:
+   ```
+   update-task(task-id=42, code-reviewed="2025-01-15T14:30:00Z")
+   ```
+
+
+   Note: If the story is reviewed multiple times, the timestamp is overwritten to reflect the most recent review.
+
 ## Notes
 
 - All suggestions should be numbered from the start to make selection easy

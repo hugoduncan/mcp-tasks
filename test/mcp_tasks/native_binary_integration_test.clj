@@ -279,6 +279,8 @@
               (format "Should list execute-story-child workflow. Output: %s" output))
           (is (str/includes? output "review-story-implementation")
               (format "Should list review-story-implementation workflow. Output: %s" output))
+          (is (str/includes? output "review-task-implementation")
+              (format "Should list review-task-implementation workflow. Output: %s" output))
           (is (str/includes? output "create-story-pr")
               (format "Should list create-story-pr workflow. Output: %s" output))
 
@@ -331,7 +333,8 @@
           ;; Verify workflow slash commands were generated
           (let [workflow-names ["execute-task" "refine-task" "complete-story"
                                 "create-story-tasks" "execute-story-child"
-                                "review-story-implementation" "create-story-pr"]]
+                                "review-story-implementation" "review-task-implementation"
+                                "create-story-pr"]]
             (doseq [workflow-name workflow-names]
               (let [file-name (str "mcp-tasks-" workflow-name ".md")
                     slash-file (io/file commands-dir file-name)]

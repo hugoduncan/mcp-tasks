@@ -272,11 +272,12 @@
                                    "execute-story-child"
                                    "create-story-tasks"
                                    "review-story-implementation"
+                                   "review-task-implementation"
                                    "complete-story"
                                    "create-story-pr"}
                 missing-prompts (clojure.set/difference expected-prompts prompt-names)
                 unexpected-prompts (clojure.set/difference prompt-names expected-prompts)]
-            (is (>= (count prompt-names) 11)
+            (is (>= (count prompt-names) 12)
                 (str "Expected at least 11 prompts, got " (count prompt-names)))
             (is (empty? missing-prompts)
                 (str "Missing expected prompts:\n"
