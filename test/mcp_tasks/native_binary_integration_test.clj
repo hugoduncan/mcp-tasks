@@ -391,9 +391,9 @@
       (let [result (call-binary "prompts" "install")]
         (is (= 0 (:exit result))
             (format "Exit code should be 0. Actual: %s" (:exit result)))
-        ;; Should report 13 files generated (8 workflows + 5 categories)
-        (is (str/includes? (:out result) "13")
-            (format "Should report generating 13 slash command files. Output: %s" (:out result)))))))
+        ;; Should report 14 files generated (9 workflows + 5 categories)
+        (is (str/includes? (:out result) "14")
+            (format "Should report generating 14 slash command files. Output: %s" (:out result)))))))
 
 (deftest ^:native-binary ^:comprehensive comprehensive-prompts-customize
   ;; Test that prompts customize command copies prompts correctly
