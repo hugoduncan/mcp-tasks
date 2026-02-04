@@ -9,6 +9,9 @@
       },
       {
         "pattern": "prompts/infrastructure/.*\\.md"
+      },
+      {
+        "pattern": "hooks/.*\\.bb"
       }
     ]
   }
