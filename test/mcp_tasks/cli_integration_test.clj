@@ -38,28 +38,31 @@
 
 (use-fixtures :each cli-test-fixture)
 
-(defn- call-cli
+(defn- call-cli-in-dir
   "Call CLI main function capturing stdout and exit code.
-  Changes working directory to *test-dir* for config discovery.
+  Changes working directory to `dir` for config discovery.
   Returns {:exit exit-code :out output-string :err error-string}"
-  [& args]
+  [dir & args]
   (let [out (java.io.StringWriter.)
         err (java.io.StringWriter.)
         exit-code (atom nil)
         original-dir (System/getProperty "user.dir")]
     (try
-      ;; Change to test directory for config discovery
-      (System/setProperty "user.dir" *test-dir*)
+      (System/setProperty "user.dir" dir)
       (binding [*out* out
                 *err* err]
         (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
           (apply cli/-main args)))
       (finally
-        ;; Restore original directory
         (System/setProperty "user.dir" original-dir)))
     {:exit @exit-code
      :out (str out)
      :err (str err)}))
+
+(defn- call-cli
+  "Call CLI main function from *test-dir*."
+  [& args]
+  (apply call-cli-in-dir *test-dir* args))
 
 (defn- read-tasks-file
   []
@@ -1248,26 +1251,14 @@
         (sh/sh "git" "config" "user.email" "test@test.com" :dir child-dir)
         (sh/sh "git" "config" "user.name" "Test" :dir child-dir)
 
-        (let [out (java.io.StringWriter.)
-              err (java.io.StringWriter.)
-              exit-code (atom nil)
-              original-dir (System/getProperty "user.dir")]
-          (try
-            (System/setProperty "user.dir" child-dir)
-            (binding [*out* out *err* err]
-              (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
-                (cli/-main "--format" "edn" "work-on" "--task-id" "1")))
-            (finally
-              (System/setProperty "user.dir" original-dir)))
-          (let [result {:exit @exit-code
-                        :out (str out)
-                        :err (str err)}]
-            (is (= 0 (:exit result))
-                (str "work-on failed: " (:err result)))
-            (let [parsed (read-string (:out result))]
-              (is (= 1 (:task-id parsed)))
-              (is (= "Child dir task" (:title parsed)))
-              (is (some? (:execution-state-file parsed))))))
+        (let [result (call-cli-in-dir child-dir
+                                      "--format" "edn" "work-on" "--task-id" "1")]
+          (is (= 0 (:exit result))
+              (str "work-on failed: " (:err result)))
+          (let [parsed (read-string (:out result))]
+            (is (= 1 (:task-id parsed)))
+            (is (= "Child dir task" (:title parsed)))
+            (is (some? (:execution-state-file parsed)))))
 
         (testing "writes execution state to child directory"
           (let [state-file (io/file child-dir ".mcp-tasks-current.edn")]
