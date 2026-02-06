@@ -1258,11 +1258,11 @@
           (let [parsed (read-string (:out result))]
             (is (= 1 (:task-id parsed)))
             (is (= "Child dir task" (:title parsed)))
-            (is (some? (:execution-state-file parsed)))))
+            (is (some? (:execution-state-file parsed))))
 
-        (testing "writes execution state to child directory"
-          (let [state-file (io/file child-dir ".mcp-tasks-current.edn")]
-            (is (.exists state-file)
-                "Execution state should be in child directory")
-            (let [state (read-string (slurp state-file))]
-              (is (= 1 (:task-id state))))))))))
+          (testing "writes execution state to child directory"
+            (let [state-file (io/file child-dir ".mcp-tasks-current.edn")]
+              (is (.exists state-file)
+                  "Execution state should be in child directory")
+              (let [state (read-string (slurp state-file))]
+                (is (= 1 (:task-id state)))))))))))
