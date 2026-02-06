@@ -149,8 +149,8 @@
 
                    ;; Execute valid command
                    :else
-                   (let [{:keys [raw-config config-dir]} (config/read-config)
-                         resolved-config (config/resolve-config config-dir raw-config)
+                   (let [{:keys [raw-config config-dir start-dir]} (config/read-config)
+                         resolved-config (config/resolve-config config-dir raw-config start-dir)
                          _ (config/validate-startup config-dir resolved-config)]
                      (execute-command resolved-config command command-args format)))]
 

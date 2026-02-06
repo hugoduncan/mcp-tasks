@@ -7,6 +7,7 @@
     [babashka.fs :as fs]
     [cheshire.core :as json]
     [clojure.java.io :as io]
+    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.cli :as cli]
@@ -37,28 +38,31 @@
 
 (use-fixtures :each cli-test-fixture)
 
-(defn- call-cli
+(defn- call-cli-in-dir
   "Call CLI main function capturing stdout and exit code.
-  Changes working directory to *test-dir* for config discovery.
+  Changes working directory to `dir` for config discovery.
   Returns {:exit exit-code :out output-string :err error-string}"
-  [& args]
+  [dir & args]
   (let [out (java.io.StringWriter.)
         err (java.io.StringWriter.)
         exit-code (atom nil)
         original-dir (System/getProperty "user.dir")]
     (try
-      ;; Change to test directory for config discovery
-      (System/setProperty "user.dir" *test-dir*)
+      (System/setProperty "user.dir" dir)
       (binding [*out* out
                 *err* err]
         (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
           (apply cli/-main args)))
       (finally
-        ;; Restore original directory
         (System/setProperty "user.dir" original-dir)))
     {:exit @exit-code
      :out (str out)
      :err (str err)}))
+
+(defn- call-cli
+  "Call CLI main function from *test-dir*."
+  [& args]
+  (apply call-cli-in-dir *test-dir* args))
 
 (defn- read-tasks-file
   []
@@ -1226,3 +1230,39 @@
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "work-on"))
         (is (str/includes? (:out result) "--task-id"))))))
+
+(deftest work-on-from-child-git-dir-test
+  ;; Verify work-on succeeds when config is in parent dir and CLI runs
+  ;; from a child directory with its own git repo. Regression test for
+  ;; the fix where CLI passes start-dir to resolve-config.
+  (testing "work-on-from-child-git-dir"
+    (testing "adds a task from parent dir"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "add"
+                     "--category" "simple"
+                     "--title" "Child dir task")]
+        (is (= 0 (:exit result)))))
+
+    (testing "succeeds when called from child git directory"
+      (let [child-dir (str *test-dir* "/child-project")]
+        (fs/create-dirs child-dir)
+        (sh/sh "git" "init" :dir child-dir)
+        (sh/sh "git" "config" "user.email" "test@test.com" :dir child-dir)
+        (sh/sh "git" "config" "user.name" "Test" :dir child-dir)
+
+        (let [result (call-cli-in-dir child-dir
+                                      "--format" "edn" "work-on" "--task-id" "1")]
+          (is (= 0 (:exit result))
+              (str "work-on failed: " (:err result)))
+          (let [parsed (read-string (:out result))]
+            (is (= 1 (:task-id parsed)))
+            (is (= "Child dir task" (:title parsed)))
+            (is (some? (:execution-state-file parsed))))
+
+          (testing "writes execution state to child directory"
+            (let [state-file (io/file child-dir ".mcp-tasks-current.edn")]
+              (is (.exists state-file)
+                  "Execution state should be in child directory")
+              (let [state (read-string (slurp state-file))]
+                (is (= 1 (:task-id state)))))))))))
