@@ -7,6 +7,7 @@
     [babashka.fs :as fs]
     [cheshire.core :as json]
     [clojure.java.io :as io]
+    [clojure.java.shell :as sh]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [mcp-tasks.cli :as cli]
@@ -1226,3 +1227,51 @@
         (is (= 0 (:exit result)))
         (is (str/includes? (:out result) "work-on"))
         (is (str/includes? (:out result) "--task-id"))))))
+
+(deftest work-on-from-child-git-dir-test
+  ;; Verify work-on succeeds when config is in parent dir and CLI runs
+  ;; from a child directory with its own git repo. Regression test for
+  ;; the fix where CLI passes start-dir to resolve-config.
+  (testing "work-on-from-child-git-dir"
+    (testing "adds a task from parent dir"
+      (let [result (call-cli
+                     "--format" "edn"
+                     "add"
+                     "--category" "simple"
+                     "--title" "Child dir task")]
+        (is (= 0 (:exit result)))))
+
+    (testing "succeeds when called from child git directory"
+      (let [child-dir (str *test-dir* "/child-project")]
+        (fs/create-dirs child-dir)
+        (sh/sh "git" "init" :dir child-dir)
+        (sh/sh "git" "config" "user.email" "test@test.com" :dir child-dir)
+        (sh/sh "git" "config" "user.name" "Test" :dir child-dir)
+
+        (let [out (java.io.StringWriter.)
+              err (java.io.StringWriter.)
+              exit-code (atom nil)
+              original-dir (System/getProperty "user.dir")]
+          (try
+            (System/setProperty "user.dir" child-dir)
+            (binding [*out* out *err* err]
+              (with-redefs [cli/exit (fn [code] (reset! exit-code code))]
+                (cli/-main "--format" "edn" "work-on" "--task-id" "1")))
+            (finally
+              (System/setProperty "user.dir" original-dir)))
+          (let [result {:exit @exit-code
+                        :out (str out)
+                        :err (str err)}]
+            (is (= 0 (:exit result))
+                (str "work-on failed: " (:err result)))
+            (let [parsed (read-string (:out result))]
+              (is (= 1 (:task-id parsed)))
+              (is (= "Child dir task" (:title parsed)))
+              (is (some? (:execution-state-file parsed))))))
+
+        (testing "writes execution state to child directory"
+          (let [state-file (io/file child-dir ".mcp-tasks-current.edn")]
+            (is (.exists state-file)
+                "Execution state should be in child directory")
+            (let [state (read-string (slurp state-file))]
+              (is (= 1 (:task-id state))))))))))
