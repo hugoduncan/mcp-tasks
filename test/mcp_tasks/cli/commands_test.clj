@@ -370,6 +370,33 @@
           ;; Should not have :tasks key
           (is (nil? (:tasks result))))))))
 
+(deftest show-command-falls-back-to-complete-ednl
+  ;; Test show-command finds completed tasks via fallback lookup
+  (testing "show-command"
+    (h/with-test-setup [test-dir]
+      (testing "returns task from complete.ednl"
+        (h/write-ednl-test-file
+          test-dir "tasks.ednl"
+          [{:id 1 :status :open :title "Active" :description "" :design ""
+            :category "simple" :type :task :meta {} :relations []}])
+        (h/write-ednl-test-file
+          test-dir "complete.ednl"
+          [{:id 5 :status :closed :title "Done Task" :description "" :design ""
+            :category "medium" :type :bug :meta {} :relations []}])
+
+        (let [result (sut/show-command (h/test-config test-dir) {:task-id 5})
+              task (:task result)]
+          (is (some? task) "should find task in complete.ednl")
+          (is (= "Done Task" (:title task)))
+          (is (= 5 (:id task)))
+          (is (= "closed" (:status task)))))
+
+      (testing "errors when not found in either file"
+        (let [result (sut/show-command (h/test-config test-dir) {:task-id 999})]
+          (is (contains? result :error))
+          (is (= "No task found with the specified task-id"
+                 (:error result))))))))
+
 ;; add-command tests
 
 (deftest add-command-creates-task-with-required-fields

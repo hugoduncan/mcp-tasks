@@ -66,6 +66,7 @@
   "Reset all task state atoms to empty values."
   []
   (reset! tasks/task-ids [])
+  (reset! tasks/complete-task-ids [])
   (reset! tasks/tasks {})
   (reset! tasks/parent-children {})
   (reset! tasks/child-parent {})
@@ -1045,3 +1046,34 @@
                              :relations [{:id 1 :relates-to 1 :as-type :related}
                                          {:id 2 :relates-to 1 :as-type :discovered-during}]))
       (is (= [] (tasks/get-blocking-tasks 2))))))
+
+(deftest get-task-with-complete-file-test
+  ;; Integration test: verifies get-task finds tasks in both active and complete files
+  ;; via load-tasks! with :complete-file, exercising the actual file-loading path
+  ;; rather than direct atom manipulation.
+  (testing "get-task after load-tasks! with :complete-file"
+    (testing "finds task only in complete-file"
+      (reset-state!)
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)
+            completed-task (assoc test-task-1 :status :closed)]
+        (tasks-file/append-task complete-file-path completed-task)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= completed-task (tasks/get-task (:id completed-task))))))
+
+    (testing "finds task in active tasks when :complete-file also loaded"
+      (reset-state!)
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks-file/append-task complete-file-path (assoc test-task-2 :status :closed))
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= test-task-1 (tasks/get-task (:id test-task-1))))))
+
+    (testing "returns nil for task not in either file"
+      (reset-state!)
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (nil? (tasks/get-task 999)))))))

@@ -135,7 +135,10 @@
 
         ;; Get all matching tasks
         ;; When parent-id is provided, we need to count completed child tasks separately
-        (let [query-result (if (and parent-id (nil? status-keyword))
+        ;; When task-id is provided without parent-id, use fallback lookup to find
+        ;; tasks in complete.ednl as well as tasks.ednl
+        (let [query-result (cond
+                             (and parent-id (nil? status-keyword))
                              ;; Parent-id case without explicit status: query :any, count completed separately
                              (let [all-matching (tasks/get-tasks
                                                   :task-id task-id
@@ -150,6 +153,18 @@
                                    completed-count (count closed)]
                                {:tasks (or non-closed [])
                                 :completed-task-count completed-count})
+
+                             (and task-id (nil? parent-id))
+                             ;; task-id case without parent-id: search both active and completed tasks
+                             {:tasks (tasks/get-tasks
+                                       :task-id task-id
+                                       :category category
+                                       :title-pattern title-pattern
+                                       :type type-keyword
+                                       :status (or status-keyword :any))
+                              :completed-task-count nil}
+
+                             :else
                              ;; Normal case or explicit status: use status filter directly
                              {:tasks (tasks/get-tasks
                                        :task-id task-id
