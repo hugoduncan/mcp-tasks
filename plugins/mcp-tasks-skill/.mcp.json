@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "mcp-tasks": {
+      "type": "stdio",
       "command": "${CLAUDE_PLUGIN_ROOT}/bin/mcp-tasks-server-wrapper"
     }
   }
