@@ -128,4 +128,5 @@
      {:type "string"
       :description "Exact task title to match"}}
     :required []}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial reopen-task-impl config)})
