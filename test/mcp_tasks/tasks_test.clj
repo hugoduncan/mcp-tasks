@@ -1067,3 +1067,34 @@
     (testing "with task not in either file"
       (reset-state!)
       (is (nil? (tasks/find-task-by-id-with-fallback 999))))))
+
+(deftest find-task-by-id-with-fallback-via-load-tasks-test
+  ;; Integration test: verifies find-task-by-id-with-fallback works end-to-end
+  ;; via load-tasks! with :complete-file, exercising the actual file-loading path
+  ;; rather than direct atom manipulation.
+  (testing "find-task-by-id-with-fallback after load-tasks! with :complete-file"
+    (testing "finds task only in complete-file"
+      (reset-state!)
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)
+            completed-task (assoc test-task-1 :status :closed)]
+        (tasks-file/append-task complete-file-path completed-task)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= completed-task (tasks/find-task-by-id-with-fallback (:id completed-task))))))
+
+    (testing "finds task in active tasks when :complete-file also loaded"
+      (reset-state!)
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks-file/append-task complete-file-path (assoc test-task-2 :status :closed))
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (= test-task-1 (tasks/find-task-by-id-with-fallback (:id test-task-1))))))
+
+    (testing "returns nil for task not in either file"
+      (reset-state!)
+      (let [tasks-file-path (temp-file)
+            complete-file-path (temp-file)]
+        (tasks-file/append-task tasks-file-path test-task-1)
+        (tasks/load-tasks! tasks-file-path :complete-file complete-file-path)
+        (is (nil? (tasks/find-task-by-id-with-fallback 999)))))))
