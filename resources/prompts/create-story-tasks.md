@@ -63,12 +63,16 @@ Each task must be executable in a single agent session. Include both implementat
 - **Explicit intent**: Why this task exists—the goal or problem being solved, not just the action
 - **Implementation decisions**: Choices made during breakdown (e.g., which library, naming conventions, approach) so the executing agent doesn't need to guess or ask
 - **Context from story**: Relevant constraints, requirements, or dependencies from the parent story
+- **Verification**: How to objectively confirm the task is complete — tests to run, observable outcomes, or acceptance criteria
 
 **Good:** "Add user authentication with password hashing and write unit tests"
 **Bad:** Split into "Implement authentication" and "Test authentication" (creates unnecessary dependency)
 
 **Good:** "Refactor database queries to use connection pooling and verify performance improvement"
 **Bad:** "Refactor database queries" (missing verification step)
+
+**Good:** "Add input validation for the registration form and verify by running unit tests covering empty fields, invalid email format, and password length, confirming the endpoint returns 400 with field-specific error messages"
+**Bad:** "Add input validation" (no verification criteria — impossible to objectively confirm completion)
 
 Beyond structure, the content of task descriptions matters—specifically, the decisions you make during breakdown.
 
@@ -92,13 +96,15 @@ Write: "Add user settings storage using localStorage with key 'user_settings'. S
 
 ## Task Breakdown Example
 
-For story "Add user profile management", here are example tasks. The blockquoted text (Intent and Decisions) is what goes in the task's `description` field when calling `add-task`.
+For story "Add user profile management", here are example tasks. The blockquoted text (Intent, Decisions, and Verification) is what goes in the task's `description` field when calling `add-task`.
 
 **Task 1** (simple): "Add user profile data model" (Part of story: 42 "Add user profile management")
 
 > **Intent:** Establish the data foundation for user profiles. Without a clear schema, the API and UI tasks cannot proceed consistently.
 >
 > **Decisions:** Use fields `name` (string, required, max 100 chars), `email` (string, required, validated format), `avatar_url` (string, optional, must be valid URL or null). Store in `user_profiles` table with foreign key to `users.id`. Include `created_at` and `updated_at` timestamps. Write unit tests covering validation rules and edge cases (empty name, invalid email format, malformed URL).
+>
+> **Verification:** Unit tests pass covering all validation rules and edge cases. The `user_profiles` table exists with the correct columns, types, and constraints. The migration runs cleanly against the existing schema without errors.
 
 **Task 2** (medium): "Implement profile edit API endpoint" (Part of story: 42 "Add user profile management")
 - Relations: `[{"id": 1, "relates-to": 1, "as-type": "blocked-by"}]`
@@ -106,6 +112,8 @@ For story "Add user profile management", here are example tasks. The blockquoted
 > **Intent:** Enable users to update their profile information through a secure API. This is the core functionality that the UI will consume.
 >
 > **Decisions:** Create `PUT /api/users/:id/profile` endpoint. Require authentication; users can only edit their own profile (return 403 otherwise). Accept JSON body with optional fields (partial updates allowed). Validate all fields per data model rules. Return 200 with updated profile on success, 400 with field-specific errors on validation failure. Write integration tests covering: successful update, partial update, unauthorized access, validation errors.
+>
+> **Verification:** Integration tests pass covering successful update (200 with updated profile), partial update (fields not in the request are unchanged), unauthorized access (403), and validation errors (400 with field-specific messages). The endpoint is reachable and behaves correctly when exercised manually with a REST client.
 
 **Task 3** (simple): "Add profile display component" (Part of story: 42 "Add user profile management")
 - Relations: `[{"id": 1, "relates-to": 2, "as-type": "blocked-by"}]`
@@ -113,6 +121,8 @@ For story "Add user profile management", here are example tasks. The blockquoted
 > **Intent:** Provide users with a visual interface to view and initiate editing of their profile. Completes the user-facing feature.
 >
 > **Decisions:** Create `ProfileCard` component showing avatar (with fallback to initials), name, and email. Add "Edit" button that opens `ProfileEditModal`. Use existing `Avatar` component for display. Fetch profile data via `useProfile` hook on mount. Show loading skeleton while fetching. Write component tests for render states (loading, loaded, edit mode).
+>
+> **Verification:** Component tests pass for all render states: loading skeleton displays while fetching, loaded state shows correct name, email, and avatar, and clicking "Edit" opens `ProfileEditModal`. Verify in the browser that the avatar fallback shows initials when `avatar_url` is null.
 
 ## Dependency Modeling
 
