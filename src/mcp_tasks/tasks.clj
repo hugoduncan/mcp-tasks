@@ -99,17 +99,6 @@
   [id]
   (get @tasks id))
 
-(defn find-task-by-id-with-fallback
-  "Find a task by ID, falling back to complete.ednl when not found in tasks.ednl.
-
-  Searches active tasks (tasks.ednl) first, then completed tasks (complete.ednl).
-  Returns task map if found in either, nil if not found in either.
-
-  Requires that load-tasks! was called with :complete-file to include completed
-  tasks in the in-memory state."
-  [id]
-  (get @tasks id))
-
 ;; Blocking Logic
 
 (defn- detect-circular-dependency

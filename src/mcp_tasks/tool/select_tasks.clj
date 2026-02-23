@@ -18,7 +18,6 @@
   namespace under mcp-tasks.tool.*, with the main tools.clj acting as a facade."
   (:require
     [cheshire.core :as json]
-    [clojure.string :as str]
     [mcp-tasks.response :as response]
     [mcp-tasks.tasks :as tasks]
     [mcp-tasks.tools.helpers :as helpers]))
@@ -156,26 +155,14 @@
                                 :completed-task-count completed-count})
 
                              (and task-id (nil? parent-id))
-                             ;; task-id case without parent-id: use fallback to find in both files
-                             (let [found (tasks/find-task-by-id-with-fallback task-id)
-                                   title-match? (cond
-                                                  (nil? title-pattern) true
-                                                  :else
-                                                  (let [t (:title found "")
-                                                        matcher (try (re-pattern title-pattern)
-                                                                     (catch Exception _ nil))]
-                                                    (if matcher
-                                                      (re-find matcher t)
-                                                      (str/includes? t title-pattern))))
-                                   matches (cond-> []
-                                             (and found
-                                                  title-match?
-                                                  (or (nil? category) (= (:category found) category))
-                                                  (or (nil? type-keyword) (= (:type found) type-keyword))
-                                                  (or (nil? status-keyword) (= (:status found) status-keyword)))
-                                             (conj found))]
-                               {:tasks matches
-                                :completed-task-count nil})
+                             ;; task-id case without parent-id: search both active and completed tasks
+                             {:tasks (tasks/get-tasks
+                                       :task-id task-id
+                                       :category category
+                                       :title-pattern title-pattern
+                                       :type type-keyword
+                                       :status (or status-keyword :any))
+                              :completed-task-count nil}
 
                              :else
                              ;; Normal case or explicit status: use status filter directly
