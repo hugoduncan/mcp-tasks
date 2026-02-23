@@ -6,7 +6,7 @@
 #
 # All diagnostic output goes to stderr — stdout is reserved for MCP stdio transport.
 
-set -e
+set -eo pipefail
 
 GITHUB_REPO="hugoduncan/mcp-tasks"
 INSTALL_DIR="${HOME}/.local/bin"

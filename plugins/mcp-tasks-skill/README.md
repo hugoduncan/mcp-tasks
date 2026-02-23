@@ -49,8 +49,16 @@ cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracki
 If you prefer to install the server binary explicitly rather than relying on auto-install:
 
 ```bash
-# Download and install the latest release
-curl -fsSL https://github.com/hugoduncan/mcp-tasks/releases/latest/download/mcp-tasks-server-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) -o ~/.local/bin/mcp-tasks-server
+# Detect platform (assets use linux-amd64 or macos-universal)
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64)           PLATFORM="linux-amd64" ;;
+  Darwin:x86_64|Darwin:arm64|Darwin:aarch64) PLATFORM="macos-universal" ;;
+  *) echo "Unsupported platform: $(uname -s) $(uname -m)"; exit 1 ;;
+esac
+
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/hugoduncan/mcp-tasks/releases/latest/download/mcp-tasks-server-${PLATFORM}" \
+  -o ~/.local/bin/mcp-tasks-server
 chmod +x ~/.local/bin/mcp-tasks-server
 ```
 
