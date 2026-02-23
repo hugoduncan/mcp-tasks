@@ -448,4 +448,5 @@
      {:type "string"
       :description "Optional comment to append to the completed task"}}
     :required []}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial complete-task-impl config)})

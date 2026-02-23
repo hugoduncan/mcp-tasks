@@ -165,4 +165,5 @@
      {:type "string"
       :description "Pattern for fuzzy title matching"}}
     :required []}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial delete-task-impl config)})

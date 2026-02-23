@@ -264,4 +264,5 @@
                                         :description "Type of relationship"}}
                 :required ["id" "relates-to" "as-type"]}}}
       :required ["category" "title"]}
+     :allowed_callers ["code_execution_20260120"]
      :implementation (partial add-task-impl config)}))

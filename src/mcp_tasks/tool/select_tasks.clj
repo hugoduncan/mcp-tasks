@@ -284,4 +284,5 @@
      {:type "boolean"
       :description "If true, enforce that 0 or 1 task matches (error if >1)"}}
     :required []}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial select-tasks-impl config)})

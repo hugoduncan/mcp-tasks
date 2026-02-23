@@ -138,4 +138,5 @@
      {:type "integer"
       :description "(Optional) ID of the story containing this task"}}
     :required ["action"]}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial execution-state-impl config)})

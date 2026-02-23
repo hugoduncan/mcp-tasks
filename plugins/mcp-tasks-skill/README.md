@@ -11,49 +11,7 @@ This Claude Code skill plugin provides comprehensive documentation and usage pat
 - Reference for available prompts (execute-task, create-story-tasks, refine-task, etc.)
 - Common workflow examples
 - Best practices for task and story management
-
-**Important:** This is a *skill plugin* that provides guidance and documentation. It requires the separate mcp-tasks MCP server to be installed and configured.
-
-## Prerequisites
-
-**Required:** The mcp-tasks MCP server must be installed and configured before using this plugin.
-
-See the [mcp-tasks Installation Guide](https://github.com/hugoduncan/mcp-tasks#installation) for complete setup instructions.
-
-### Quick Server Setup
-
-If you haven't installed the mcp-tasks server yet:
-
-1. **Add to `~/.clojure/deps.edn`:**
-
-```clojure
-{:aliases
- {:mcp-tasks
-  {:replace-paths []
-   :replace-deps {org.hugoduncan/mcp-tasks
-                  {:git/url "https://github.com/hugoduncan/mcp-tasks"
-                   :git/tag "v0.1.114"
-                   :git/sha "1c8017e"}
-                  org.clojure/clojure {:mvn/version "1.12.3"}}
-   :exec-fn mcp-tasks.main/start}}}
-```
-
-2. **Configure Claude Code:**
-
-```bash
-claude mcp add mcp-tasks -- $(which clojure) -X:mcp-tasks
-```
-
-3. **Initialize task directories in your project:**
-
-```bash
-mkdir -p .mcp-tasks/prompts
-
-# Optional: Initialize as git repository for version control
-cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
-```
-
-For detailed installation instructions and configuration options, see the [mcp-tasks README](https://github.com/hugoduncan/mcp-tasks).
+- Automatic MCP server configuration and installation
 
 ## Installation
 
@@ -63,15 +21,48 @@ For detailed installation instructions and configuration options, see the [mcp-t
 /plugin install hugoduncan/mcp-tasks
 ```
 
-This installs the mcp-tasks-skill plugin, which provides comprehensive documentation for the mcp-tasks MCP server.
+Installing the plugin automatically configures the mcp-tasks MCP server in Claude Code — no separate `claude mcp add` step needed.
 
-**Note:** This plugin is part of the mcp-tasks marketplace package. Installing via `/plugin install hugoduncan/mcp-tasks` automatically includes this skill plugin.
+**First use:** If `mcp-tasks-server` is not already on your PATH, it is automatically downloaded and installed to `~/.local/bin/mcp-tasks-server` when the server first starts.
+
+**Supported platforms:** Linux (amd64), macOS (x86_64 and Apple Silicon via universal binary). Windows is not supported.
 
 ### From Local Path (Development/Testing)
 
 ```bash
 /plugin install /path/to/mcp-tasks/plugins/mcp-tasks-skill
 ```
+
+## Initialize Task Directories
+
+After installing the plugin, initialize task directories in your project:
+
+```bash
+mkdir -p .mcp-tasks/category-prompts
+
+# Optional: Initialize as git repository for version control
+cd .mcp-tasks && git init && git commit --allow-empty -m "Initialize task tracking" && cd ..
+```
+
+## Manual Server Installation (Alternative)
+
+If you prefer to install the server binary explicitly rather than relying on auto-install:
+
+```bash
+# Detect platform (assets use linux-amd64 or macos-universal)
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64)           PLATFORM="linux-amd64" ;;
+  Darwin:x86_64|Darwin:arm64|Darwin:aarch64) PLATFORM="macos-universal" ;;
+  *) echo "Unsupported platform: $(uname -s) $(uname -m)"; exit 1 ;;
+esac
+
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/hugoduncan/mcp-tasks/releases/latest/download/mcp-tasks-server-${PLATFORM}" \
+  -o ~/.local/bin/mcp-tasks-server
+chmod +x ~/.local/bin/mcp-tasks-server
+```
+
+See the [mcp-tasks Installation Guide](https://github.com/hugoduncan/mcp-tasks#installation) for complete setup instructions.
 
 ## Usage
 
@@ -142,6 +133,10 @@ See the full skill content for detailed documentation of each tool, prompt, and 
 /mcp-tasks:refine-task 123
 /mcp-tasks:execute-task task-id=123
 ```
+
+## Programmatic Tool Calling (PTC)
+
+This plugin's MCP server tools are configured with `allowed_callers` for Programmatic Tool Calling readiness. When Anthropic enables PTC for MCP connector tools, the server will support automated tool invocation without additional configuration.
 
 ## Documentation & Support
 

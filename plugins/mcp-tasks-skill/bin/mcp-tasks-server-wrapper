@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+# Wrapper script for mcp-tasks-server.
+# Checks if mcp-tasks-server is on PATH; if not, downloads and installs it
+# from GitHub releases before exec'ing it.
+#
+# All diagnostic output goes to stderr — stdout is reserved for MCP stdio transport.
+
+set -eo pipefail
+
+GITHUB_REPO="hugoduncan/mcp-tasks"
+INSTALL_DIR="${HOME}/.local/bin"
+BINARY_NAME="mcp-tasks-server"
+SUPPORTED_PLATFORMS="linux-amd64, macos-universal (Windows not supported)"
+
+# Detect platform, echoing the platform string (e.g. "linux-amd64").
+detect_platform() {
+  local os
+
+  case "$(uname -s)" in
+    Linux*)  os="linux" ;;
+    Darwin*) os="macos" ;;
+    *)
+      echo "Error: Unsupported operating system: $(uname -s)" >&2
+      echo "Supported platforms: $SUPPORTED_PLATFORMS" >&2
+      return 1
+      ;;
+  esac
+
+  # macOS ships a universal binary; Linux only has amd64.
+  case "$os:$(uname -m)" in
+    linux:x86_64)
+      echo "linux-amd64"
+      ;;
+    macos:x86_64|macos:arm64|macos:aarch64)
+      echo "macos-universal"
+      ;;
+    *)
+      echo "Error: Unsupported platform: ${os} $(uname -m)" >&2
+      echo "Supported platforms: $SUPPORTED_PLATFORMS" >&2
+      return 1
+      ;;
+  esac
+}
+
+install_server() {
+  local platform
+  if ! platform=$(detect_platform); then
+    exit 1
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "Error: curl is required to auto-install ${BINARY_NAME}" >&2
+    echo "Please install curl or manually install mcp-tasks-server." >&2
+    exit 1
+  fi
+
+  # Resolve the latest release download URL via GitHub API.
+  local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+  local remote_name="${BINARY_NAME}-${platform}"
+
+  echo "Fetching latest release info from GitHub..." >&2
+  local download_url
+  download_url=$(curl -fsSL "$api_url" \
+    | grep '"browser_download_url"' \
+    | grep "${remote_name}" \
+    | head -1 \
+    | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')
+
+  if [ -z "$download_url" ]; then
+    echo "Error: Could not find download URL for ${remote_name} in latest release." >&2
+    echo "Please install mcp-tasks-server manually: https://github.com/${GITHUB_REPO}" >&2
+    exit 1
+  fi
+
+  mkdir -p "$INSTALL_DIR"
+
+  local install_path="${INSTALL_DIR}/${BINARY_NAME}"
+  echo "Downloading ${BINARY_NAME} from ${download_url}..." >&2
+  if ! curl -fsSL -o "$install_path" "$download_url"; then
+    echo "Error: Failed to download ${BINARY_NAME}." >&2
+    exit 1
+  fi
+
+  chmod +x "$install_path"
+  echo "${BINARY_NAME} installed to ${install_path}" >&2
+}
+
+main() {
+  if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    exec "$BINARY_NAME" "$@"
+  fi
+
+  # Not on PATH — check the user install location directly.
+  local local_bin="${INSTALL_DIR}/${BINARY_NAME}"
+  if [ -x "$local_bin" ]; then
+    exec "$local_bin" "$@"
+  fi
+
+  echo "${BINARY_NAME} not found. Installing..." >&2
+  install_server
+
+  exec "${INSTALL_DIR}/${BINARY_NAME}" "$@"
+}
+
+main "$@"

@@ -815,4 +815,5 @@
      {:type "integer"
       :description "The ID of the task to work on"}}
     :required ["task-id"]}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial work-on-impl config)})

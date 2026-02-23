@@ -485,4 +485,5 @@
      {:type ["integer" "null"]
       :description "GitHub pull request number (optional). Pass null to clear."}}
     :required ["task-id"]}
+   :allowed_callers ["code_execution_20260120"]
    :implementation (partial update-task-impl config)})
