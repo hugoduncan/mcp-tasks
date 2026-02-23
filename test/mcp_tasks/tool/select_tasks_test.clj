@@ -1177,3 +1177,61 @@
           (is (= #{"Done task 1" "Done task 2"}
                  (set (map :title (:tasks response)))))
           (is (every? #(= "done" (name (:status %))) (:tasks response))))))))
+
+(deftest select-tasks-task-id-finds-completed-task-in-complete-ednl
+  ;; Verifies select-tasks with task-id falls back to complete.ednl
+  ;; when the task is not found in tasks.ednl
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with task-id"
+      (testing "returns task found only in complete.ednl"
+        (let [active-task {:id 1 :parent-id nil :title "Active task"
+                           :description "" :design "" :category "test"
+                           :type :task :status :open :meta {} :relations []}
+              completed-task {:id 2 :parent-id nil :title "Completed task"
+                              :description "" :design "" :category "test"
+                              :type :task :status :closed :meta {} :relations []}]
+          (h/write-ednl-test-file test-dir "tasks.ednl" [active-task])
+          (h/write-ednl-test-file test-dir "complete.ednl" [completed-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 2})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+            (is (false? (:isError result)))
+            (is (= 1 (count (:tasks response))))
+            (is (= 2 (get-in response [:tasks 0 :id])))
+            (is (= "Completed task" (get-in response [:tasks 0 :title])))
+            (is (= "closed" (name (get-in response [:tasks 0 :status]))))))))))
+
+(deftest select-tasks-task-id-not-found-in-either-file-returns-empty
+  ;; Verifies select-tasks with task-id returns empty results when not found
+  ;; in either tasks.ednl or complete.ednl
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with task-id"
+      (testing "returns empty when task not in either file"
+        (let [active-task {:id 1 :parent-id nil :title "Active task"
+                           :description "" :design "" :category "test"
+                           :type :task :status :open :meta {} :relations []}]
+          (h/write-ednl-test-file test-dir "tasks.ednl" [active-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 99999})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+            (is (false? (:isError result)))
+            (is (= 0 (count (:tasks response))))
+            (is (= 0 (get-in response [:metadata :open-task-count])))
+            (is (= 0 (get-in response [:metadata :total-matches])))))))))
+
+(deftest select-tasks-task-id-not-found-with-unique-returns-not-found-error
+  ;; Verifies select-tasks with task-id and unique=true returns a not-found error
+  ;; when the task is not in either file
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with task-id and unique"
+      (testing "returns not-found error when task not in either file"
+        (let [active-task {:id 1 :parent-id nil :title "Active task"
+                           :description "" :design "" :category "test"
+                           :type :task :status :open :meta {} :relations []}]
+          (h/write-ednl-test-file test-dir "tasks.ednl" [active-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 99999 :unique true})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+            (is (false? (:isError result)))
+            (is (contains? response :error))
+            (is (clojure.string/includes? (:error response) "No task found"))))))))
