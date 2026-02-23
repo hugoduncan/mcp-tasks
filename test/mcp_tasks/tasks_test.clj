@@ -66,6 +66,7 @@
   "Reset all task state atoms to empty values."
   []
   (reset! tasks/task-ids [])
+  (reset! tasks/complete-task-ids [])
   (reset! tasks/tasks {})
   (reset! tasks/parent-children {})
   (reset! tasks/child-parent {})
@@ -1045,3 +1046,24 @@
                              :relations [{:id 1 :relates-to 1 :as-type :related}
                                          {:id 2 :relates-to 1 :as-type :discovered-during}]))
       (is (= [] (tasks/get-blocking-tasks 2))))))
+
+(deftest find-task-by-id-with-fallback-test
+  ;; Tests the fallback lookup that checks complete.ednl when not found
+  ;; in tasks.ednl. Contracts: returns task from active tasks, returns task
+  ;; from completed tasks, returns nil when not found in either.
+  (testing "find-task-by-id-with-fallback"
+    (testing "with task in active tasks"
+      (reset-state!)
+      (let [task (tasks/add-task (dissoc test-task-1 :id))]
+        (is (= task (tasks/find-task-by-id-with-fallback (:id task))))))
+
+    (testing "with task only in completed tasks"
+      (reset-state!)
+      (let [completed-task (assoc test-task-1 :status :closed)]
+        (swap! tasks/tasks assoc (:id completed-task) completed-task)
+        (swap! tasks/complete-task-ids conj (:id completed-task))
+        (is (= completed-task (tasks/find-task-by-id-with-fallback (:id completed-task))))))
+
+    (testing "with task not in either file"
+      (reset-state!)
+      (is (nil? (tasks/find-task-by-id-with-fallback 999))))))
