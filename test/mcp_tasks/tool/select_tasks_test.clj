@@ -1235,3 +1235,27 @@
             (is (false? (:isError result)))
             (is (contains? response :error))
             (is (clojure.string/includes? (:error response) "No task found"))))))))
+
+(deftest select-tasks-task-id-found-in-complete-ednl-with-unique
+  ;; Verifies select-tasks with task-id and unique=true returns the task
+  ;; when it is found in complete.ednl (fallback from tasks.ednl)
+  (h/with-test-setup [test-dir]
+    (testing "select-tasks with task-id and unique"
+      (testing "returns completed task found in complete.ednl"
+        (let [active-task {:id 1 :parent-id nil :title "Active task"
+                           :description "" :design "" :category "test"
+                           :type :task :status :open :meta {} :relations []}
+              completed-task {:id 2 :parent-id nil :title "Completed task"
+                              :description "" :design "" :category "test"
+                              :type :task :status :closed :meta {} :relations []}]
+          (h/write-ednl-test-file test-dir "tasks.ednl" [active-task])
+          (h/write-ednl-test-file test-dir "complete.ednl" [completed-task])
+          (let [config (h/test-config test-dir)
+                result (#'sut/select-tasks-impl config nil {:task-id 2 :unique true})
+                response (json/parse-string (get-in result [:content 0 :text]) keyword)]
+            (is (false? (:isError result)))
+            (is (not (contains? response :error)))
+            (is (= 1 (count (:tasks response))))
+            (is (= 2 (get-in response [:tasks 0 :id])))
+            (is (= "Completed task" (get-in response [:tasks 0 :title])))
+            (is (= "closed" (name (get-in response [:tasks 0 :status]))))))))))
