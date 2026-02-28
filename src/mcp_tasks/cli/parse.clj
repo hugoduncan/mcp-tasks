@@ -310,12 +310,14 @@ Displays the effective (resolved) content of a prompt, following override preced
 - Workflow prompts: .mcp-tasks/prompt-overrides/<name>.md → built-in
 
 OPTIONS:
+  --cli                 Render CLI-oriented variants (mcp-tasks commands)
   --format, -f <format>  Output format: human, json, edn (default: human)
   --help, -h             Show this help message
 
 EXAMPLES:
   mcp-tasks prompts show simple
   mcp-tasks prompts show execute-task
+  mcp-tasks prompts show execute-task --cli
   mcp-tasks prompts show simple --format json")
 
 (def prompts-install-help
@@ -771,7 +773,8 @@ EXAMPLES:
   Validation:
   - Post-parse validation checks format is valid (edn, json, human)
   - Requires exactly one prompt name in args"
-  {:format {:coerce :keyword
+  {:cli {:desc "Render CLI-oriented prompt content"}
+   :format {:coerce :keyword
             :alias :f
             :desc "Output format (edn, json, human)"}})
 

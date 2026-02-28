@@ -570,6 +570,12 @@
           (is (= "execute-task" (:prompt-name result)))
           (is (= :json (:format result)))))
 
+      (testing "with --cli option"
+        (let [result (sut/parse-prompts ["show" "execute-task" "--cli"])]
+          (is (= :show (:subcommand result)))
+          (is (= "execute-task" (:prompt-name result)))
+          (is (= true (:cli result)))))
+
       (testing "returns error when no prompt name provided"
         (let [result (sut/parse-prompts ["show"])]
           (is (= "Prompt name is required" (:error result)))))
