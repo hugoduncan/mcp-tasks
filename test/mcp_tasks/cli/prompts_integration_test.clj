@@ -704,6 +704,17 @@
         (is (str/includes? (:out result) "Description: Execute a task based on selection criteria or context"))
         (is (str/includes? (:out result) "Argument hint: [selection-criteria...]"))))))
 
+(deftest prompts-show-cli-variant-test
+  ;; Test rendering workflow prompt content for CLI usage
+  (testing "prompts-show-cli-variant"
+    (let [result (call-cli "prompts" "show" "execute-task" "--cli")
+          output (:out result)]
+      (is (= 0 (:exit result)))
+      (is (str/includes? output "mcp-tasks list --category X --status open --limit 1 --format edn"))
+      (is (str/includes? output "mcp-tasks prompts show <category>"))
+      (is (not (str/includes? output "Call `select-tasks`")))
+      (is (not (str/includes? output "ReadMcpResourceTool"))))))
+
 (deftest prompts-show-override-category-test
   ;; Test showing overridden category prompt
   (testing "prompts-show-override-category"

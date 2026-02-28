@@ -89,10 +89,10 @@
 
   Returns structured data with :name, :type, :content, :source, :path
   or error map with :error and :metadata."
-  [prompt-type resolver-fn builtin-dir resolved-tasks-dir prompt-name]
+  [prompt-type resolver-fn builtin-dir resolved-tasks-dir prompt-name context]
   (let [resolved-path (resolver-fn resolved-tasks-dir prompt-name)
         builtin-resource-path (str builtin-dir "/" prompt-name ".md")
-        loaded (prompts/load-prompt-content resolved-path builtin-resource-path)]
+        loaded (prompts/load-prompt-content resolved-path builtin-resource-path context)]
     (if loaded
       (assoc loaded
              :name prompt-name
@@ -203,6 +203,7 @@
       {:error "Prompt name is required"
        :metadata {:prompt-name nil}}
       (let [resolved-tasks-dir (:resolved-tasks-dir config)
+            context {:cli (boolean (:cli parsed-args))}
             prompt-type (prompts/detect-prompt-type prompt-name)]
         (case prompt-type
           :category
@@ -210,14 +211,16 @@
                                prompts/resolve-category-prompt-path
                                prompts/builtin-category-prompts-dir
                                resolved-tasks-dir
-                               prompt-name)
+                               prompt-name
+                               context)
 
           :workflow
           (load-prompt-by-type :workflow
                                prompts/resolve-workflow-prompt-path
                                prompts/builtin-prompts-dir
                                resolved-tasks-dir
-                               prompt-name)
+                               prompt-name
+                               context)
 
           {:error (str "Prompt '" prompt-name "' not found. "
                        "Use 'mcp-tasks prompts list' to see available prompts.")
